@@ -70,6 +70,8 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
         origenLng: (args['origen_lng'] as num)?.toDouble() ?? 0.0,
         destinoLat: (args['destino_lat'] as num)?.toDouble() ?? 0.0,
         destinoLng: (args['destino_lng'] as num)?.toDouble() ?? 0.0,
+        descuento: (args['descuento'] as num)?.toDouble() ?? 0.0,
+        codigoDescuento: args['codigo_descuento'] as String ?? '',
       );
       print('>>> [RideCompleted] Viaje guardado. viaje_id=${args['viaje_id']}, calificacion=$_calificacion');
     } catch (e) {
@@ -77,7 +79,9 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
     } finally {
       if (mounted) {
         setState(() => _guardando = false);
-        Navigator.of(context).pop();
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        }
       }
     }
   }
@@ -97,6 +101,9 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
     final double tarifaBase      = (args['tarifa_base']  as num)?.toDouble() ?? 0.0;
     final double precioKm        = (args['precio_km']    as num)?.toDouble() ?? 0.0;
     final double precioMin       = (args['precio_minuto'] as num)?.toDouble() ?? 0.0;
+    // Descuento aplicado (puede ser 0 si no hubo cupón)
+    final double descuento       = (args['descuento'] as num)?.toDouble() ?? 0.0;
+    final String codigoDescuento = args['codigo_descuento'] as String ?? '';
     // Componentes del precio
     final double costoBase = tarifaBase;
     final double costoKm   = precioKm  * distancia;
@@ -316,6 +323,40 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
                           '${distancia.toStringAsFixed(1)} km × \$$precioKm', costoKm),
                       _buildDesglose(
                           '$duracion min × \$$precioMin', costoMin),
+                      // ── Línea de descuento (solo si se aplicó un cupón) ──
+                      if (descuento > 0) ...[
+                        SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.local_offer_rounded,
+                                    color: Colors.green, size: 14),
+                                SizedBox(width: 6),
+                                Text(
+                                  codigoDescuento.isNotEmpty
+                                      ? 'Cupón $codigoDescuento'
+                                      : 'Descuento aplicado',
+                                  style: TextStyle(
+                                    color: Colors.green,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Text(
+                              '-\$${descuento.toStringAsFixed(2)}',
+                              style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       Divider(color: ConstantColors.dividerColor, height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

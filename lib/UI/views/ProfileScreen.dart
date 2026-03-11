@@ -6,6 +6,7 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:fu_uber/UI/views/EditProfileScreen.dart';
+import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
 import 'package:fu_uber/UI/views/SignIn.dart';
@@ -343,6 +344,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       'Lugares favoritos',
                       () => Navigator.pushNamed(context, FavoritePlacesScreen.route),
                       color: Colors.pinkAccent,
+                    ),
+                    Divider(color: ConstantColors.dividerColor, height: 1),
+                    _accionTile(
+                      Icons.warning,
+                      'Contactos de emergencia',
+                      () => Navigator.pushNamed(context, EmergencyContactsScreen.route),
+                      color: Colors.redAccent,
                     ),
                     Divider(color: ConstantColors.dividerColor, height: 1),
                     _accionTile(Icons.settings, 'Configuración', () {}),

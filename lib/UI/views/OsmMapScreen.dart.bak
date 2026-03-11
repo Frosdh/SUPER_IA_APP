@@ -172,6 +172,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         duracionMin: _rutaInfo?.duracionMin ?? 0,
         precio: _precioCalculado,
         onConfirmar: () {
+          Navigator.pop(sheetContext); // Cierra el sheet
           _solicitarViaje();
         },
         onCuponAplicado: (codigo, descuento, precioFinal) {
@@ -1828,8 +1829,17 @@ class _ConfirmacionSheetState extends State<_ConfirmacionSheet> {
 
   // Confirmar viaje guardando el cupón
   Future<void> _confirmarConCupon() async {
-    Navigator.of(context).pop(); // Cerrar el modal
-    widget.onConfirmar();
+    // Guardar cupón en las variables de estado de OsmMapScreenState
+    // Estas variables se usan cuando se llama a _solicitarViaje
+    if (_codigoActual.isNotEmpty) {
+      // Acceder al estado padre (OsmMapScreenState) a través del Navigator
+      Navigator.of(context).pop(); // Cerrar el modal
+      // El callback onConfirmar va a procesar el viaje
+      widget.onConfirmar();
+    } else {
+      Navigator.of(context).pop();
+      widget.onConfirmar();
+    }
   }
 
   @override
@@ -1868,10 +1878,10 @@ class _ConfirmacionSheetState extends State<_ConfirmacionSheet> {
             ]),
             SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.origen, style: TextStyle(color: ConstantColors.textGrey, fontSize: 13),
+              Text(origen, style: TextStyle(color: ConstantColors.textGrey, fontSize: 13),
                 maxLines: 1, overflow: TextOverflow.ellipsis),
               SizedBox(height: 18),
-              Text(widget.destino, style: TextStyle(color: ConstantColors.textWhite, fontSize: 14, fontWeight: FontWeight.w600),
+              Text(destino, style: TextStyle(color: ConstantColors.textWhite, fontSize: 14, fontWeight: FontWeight.w600),
                 maxLines: 1, overflow: TextOverflow.ellipsis),
             ])),
           ]),
@@ -1895,19 +1905,19 @@ class _ConfirmacionSheetState extends State<_ConfirmacionSheet> {
                 color: ConstantColors.primaryViolet.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Center(child: Text(widget.categoria.icono, style: TextStyle(fontSize: 24))),
+              child: Center(child: Text(categoria.icono, style: TextStyle(fontSize: 24))),
             ),
             SizedBox(width: 14),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(widget.categoria.nombre,
+              Text(categoria.nombre,
                 style: TextStyle(color: ConstantColors.textWhite, fontSize: 15, fontWeight: FontWeight.w700)),
               SizedBox(height: 4),
-              Text('${widget.distanciaKm.toStringAsFixed(1)} km  ·  $widget.duracionMin min',
+              Text('${distanciaKm.toStringAsFixed(1)} km  ·  $duracionMin min',
                 style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
             ])),
             // Precio destacado
             Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Text('\$${widget.precio.toStringAsFixed(2)}',
+              Text('\$${precio.toStringAsFixed(2)}',
                 style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 22, fontWeight: FontWeight.w800)),
               Text('Estimado', style: TextStyle(color: ConstantColors.textSubtle, fontSize: 11)),
             ]),
@@ -1920,23 +1930,23 @@ class _ConfirmacionSheetState extends State<_ConfirmacionSheet> {
           padding: EdgeInsets.symmetric(horizontal: 4),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
             Text('Tarifa base', style: TextStyle(color: ConstantColors.textSubtle, fontSize: 12)),
-            Text('\$${widget.categoria.tarifaBase.toStringAsFixed(2)}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+            Text('\$${categoria.tarifaBase.toStringAsFixed(2)}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
           ]),
         ),
         SizedBox(height: 4),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 4),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Por distancia (${widget.distanciaKm.toStringAsFixed(1)} km)', style: TextStyle(color: ConstantColors.textSubtle, fontSize: 12)),
-            Text('\$${(widget.categoria.precioKm * widget.distanciaKm).toStringAsFixed(2)}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+            Text('Por distancia (${distanciaKm.toStringAsFixed(1)} km)', style: TextStyle(color: ConstantColors.textSubtle, fontSize: 12)),
+            Text('\$${(categoria.precioKm * distanciaKm).toStringAsFixed(2)}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
           ]),
         ),
         SizedBox(height: 4),
         Padding(
           padding: EdgeInsets.symmetric(horizontal: 4),
           child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            Text('Por tiempo ($widget.duracionMin min)', style: TextStyle(color: ConstantColors.textSubtle, fontSize: 12)),
-            Text('\$${(widget.categoria.precioMinuto * widget.duracionMin).toStringAsFixed(2)}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+            Text('Por tiempo ($duracionMin min)', style: TextStyle(color: ConstantColors.textSubtle, fontSize: 12)),
+            Text('\$${(categoria.precioMinuto * duracionMin).toStringAsFixed(2)}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
           ]),
         ),
 

@@ -17,9 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$viaje_id     = isset($_POST['viaje_id'])     ? intval($_POST['viaje_id'])      : 0;
-$calificacion = isset($_POST['calificacion']) ? floatval($_POST['calificacion']) : null;
-$comentario   = isset($_POST['comentario'])   ? trim($_POST['comentario'])       : '';
+$viaje_id         = isset($_POST['viaje_id'])         ? intval($_POST['viaje_id'])           : 0;
+$calificacion     = isset($_POST['calificacion'])     ? floatval($_POST['calificacion'])      : null;
+$comentario       = isset($_POST['comentario'])       ? trim($_POST['comentario'])            : '';
+$descuento        = isset($_POST['descuento'])        ? floatval($_POST['descuento'])         : 0.0;
+$codigo_descuento = isset($_POST['codigo_descuento']) ? strtoupper(trim($_POST['codigo_descuento'])) : '';
 
 if ($viaje_id <= 0) {
     echo json_encode(["status" => "error", "message" => "viaje_id requerido"]);
@@ -32,18 +34,20 @@ if ($conn->connect_error) {
     exit;
 }
 
-// Actualizar calificacion, comentario y fecha_fin
+// Actualizar calificacion, comentario, descuento y fecha_fin
 // No actualizamos conductor_id porque el conductor es simulado (sin FK real)
 $stmt = $conn->prepare("
     UPDATE viajes
     SET estado = 'terminado',
         fecha_fin = NOW(),
         calificacion = ?,
-        comentario = ?
+        comentario = ?,
+        descuento = ?,
+        codigo_descuento = ?
     WHERE id = ?
 ");
 
-$stmt->bind_param("dsi", $calificacion, $comentario, $viaje_id);
+$stmt->bind_param("dsdsi", $calificacion, $comentario, $descuento, $codigo_descuento, $viaje_id);
 
 if ($stmt->execute()) {
     echo json_encode([

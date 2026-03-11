@@ -9,6 +9,7 @@ import 'package:fu_uber/Core/ProviderModels/RideBookedModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UINotifiersModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
+import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:fu_uber/UI/views/MainScreen.dart';
 import 'package:fu_uber/UI/views/OnboardingScreen.dart';
@@ -119,6 +120,7 @@ class MyApp extends StatelessWidget {
           RideHistoryScreen.route: (context) => RideHistoryScreen(),
           EditProfileScreen.route: (context) => EditProfileScreen(),
           FavoritePlacesScreen.route: (context) => FavoritePlacesScreen(),
+          EmergencyContactsScreen.route: (context) => EmergencyContactsScreen(),
         },
         home: SplashScreen(),
       ),

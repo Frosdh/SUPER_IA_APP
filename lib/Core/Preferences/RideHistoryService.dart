@@ -40,6 +40,8 @@ class RideHistoryService {
     double origenLng,
     double destinoLat,
     double destinoLng,
+    double descuento,
+    String codigoDescuento,
   }) async {
 
     // 1. Actualizar el viaje en el servidor (UPDATE, no INSERT)
@@ -48,10 +50,12 @@ class RideHistoryService {
       for (final url in _urlsGuardar()) {
         try {
           final response = await http.post(url, body: {
-            'viaje_id':     viajeId.toString(),
-            'calificacion': (calificacion ?? 0).toString(),
-            'conductor_id': (conductorId ?? '').toString(),
-            'comentario':   comentario ?? '',
+            'viaje_id':         viajeId.toString(),
+            'calificacion':     (calificacion ?? 0).toString(),
+            'conductor_id':     (conductorId ?? '').toString(),
+            'comentario':       comentario ?? '',
+            'descuento':        (descuento ?? 0.0).toString(),
+            'codigo_descuento': codigoDescuento ?? '',
           }).timeout(const Duration(seconds: 10));
 
           if (response.statusCode == 200) {
@@ -77,6 +81,8 @@ class RideHistoryService {
       conductorNombre: conductorNombre,
       conductorAuto: conductorAuto,
       conductorPlaca: conductorPlaca,
+      descuento: descuento,
+      codigoDescuento: codigoDescuento,
     );
 
     print(guardadoEnServidor
@@ -127,6 +133,8 @@ class RideHistoryService {
     String conductorNombre,
     String conductorAuto,
     String conductorPlaca,
+    double descuento,
+    String codigoDescuento,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final clave = await _claveLocal();
@@ -144,6 +152,8 @@ class RideHistoryService {
       'conductor_nombre':  conductorNombre  ?? '',
       'conductor_auto':    conductorAuto    ?? '',
       'conductor_placa':   conductorPlaca   ?? '',
+      'descuento':         descuento        ?? 0.0,
+      'codigo_descuento':  codigoDescuento  ?? '',
     });
 
     if (lista.length > 50) lista.removeLast();
