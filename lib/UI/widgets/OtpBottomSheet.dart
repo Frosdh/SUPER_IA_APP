@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
+import 'package:fu_uber/Core/Services/PushNotificationService.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:fu_uber/UI/views/RegisterScreen.dart';
 import 'package:provider/provider.dart';
@@ -13,10 +14,9 @@ class OtpBottomSheet extends StatefulWidget {
 }
 
 class _OtpBottomSheetState extends State<OtpBottomSheet> {
-  // 4 controladores individuales para cada dígito OTP
   final List<TextEditingController> _controllers =
-      List.generate(4, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
   bool _hasError = false;
 
   @override
@@ -26,11 +26,10 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
     super.dispose();
   }
 
-  String get _otpCode =>
-      _controllers.map((c) => c.text).join();
+  String get _otpCode => _controllers.map((c) => c.text).join();
 
   void _onDigitChanged(int index, String value) {
-    if (value.isNotEmpty && index < 3) {
+    if (value.isNotEmpty && index < 5) {
       _focusNodes[index + 1].requestFocus();
     }
     if (value.isEmpty && index > 0) {
@@ -43,7 +42,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
 
   Future<void> _verifyOtp(VerificationModel verificationModel) async {
     final otp = _otpCode;
-    if (otp.length < 4) {
+    if (!verificationModel.otpAutoVerified && otp.length < 6) {
       setState(() => _hasError = true);
       return;
     }
@@ -51,8 +50,6 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
     verificationModel.setOtp(otp);
     verificationModel.updateCircularLoadingOtp(true);
 
-    await Future.delayed(Duration(seconds: 1));
-    if (!mounted) return;
     final response = await verificationModel.oTPVerification();
     if (!mounted) return;
     verificationModel.updateCircularLoadingOtp(false);
@@ -65,8 +62,6 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
     }
 
     final phone = verificationModel.phoneNumber ?? '';
-
-    // Intentar verificar si el usuario ya existe en el servidor
     final userCheck = await verificationModel.checkUserByPhone(phone);
     if (!mounted) return;
 
@@ -74,32 +69,51 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
     final exists = userCheck["exists"] == true;
 
     if (checkSuccess && exists) {
-      // Usuario ya registrado en el servidor → guardar sesión e ir al mapa
       await AuthPrefs.saveUserSession(
         nombre: userCheck["nombre"] ?? '',
         telefono: phone,
         email: userCheck["email"] ?? '',
       );
+      await PushNotificationService.syncTokenWithBackend(force: true);
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
       return;
     }
 
-    // Si el servidor no respondió, revisar si ya hay sesión guardada localmente
     if (!checkSuccess) {
       final sesionValida = await AuthPrefs.hasValidSession();
       final telefonoGuardado = await AuthPrefs.getUserPhone();
       if (sesionValida && telefonoGuardado == phone) {
-        // Ya tiene sesión → ir directo al mapa
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
         return;
       }
     }
 
-    // Usuario nuevo → ir a registrarse
     if (!mounted) return;
     Navigator.pushReplacementNamed(context, RegisterScreen.route);
+  }
+
+  Future<void> _resendOtp(VerificationModel verificationModel) async {
+    verificationModel.updateCircularLoadingOtp(true);
+    final response = await verificationModel.resendOtp();
+    if (!mounted) return;
+    verificationModel.updateCircularLoadingOtp(false);
+
+    if (response == 1) {
+      for (var c in _controllers) c.clear();
+      setState(() => _hasError = false);
+      _focusNodes[0].requestFocus();
+      Scaffold.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Codigo reenviado correctamente'),
+          backgroundColor: ConstantColors.primaryViolet,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _hasError = true);
   }
 
   @override
@@ -117,7 +131,6 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle bar
           Center(
             child: Container(
               width: 40,
@@ -128,10 +141,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
               ),
             ),
           ),
-
           SizedBox(height: 24),
-
-          // Ícono WhatsApp
           Container(
             width: 56,
             height: 56,
@@ -148,25 +158,19 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
               size: 28,
             ),
           ),
-
           SizedBox(height: 20),
-
-          // Título
           Text(
-            'Verificación',
+            'Verificacion',
             style: TextStyle(
               color: ConstantColors.textWhite,
               fontSize: 24,
               fontWeight: FontWeight.w800,
             ),
           ),
-
           SizedBox(height: 8),
-
-          // Subtítulo con número
           RichText(
             text: TextSpan(
-              text: 'Enviamos un código a ',
+              text: 'Enviamos un codigo a ',
               style: TextStyle(
                 color: ConstantColors.textGrey,
                 fontSize: 14,
@@ -174,7 +178,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
               ),
               children: [
                 TextSpan(
-                  text: verificationModel.phoneNumber ?? 'tu número',
+                  text: verificationModel.phoneNumber ?? 'tu numero',
                   style: TextStyle(
                     color: ConstantColors.primaryViolet,
                     fontWeight: FontWeight.w600,
@@ -183,30 +187,24 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
               ],
             ),
           ),
-
           SizedBox(height: 32),
-
-          // Cajas OTP
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(4, (index) => _buildOtpBox(index)),
+            children: List.generate(6, (index) => _buildOtpBox(index)),
           ),
-
-          // Mensaje de error
           if (_hasError) ...[
             SizedBox(height: 12),
             Text(
-              'Código incorrecto. Inténtalo de nuevo.',
+              verificationModel.otpErrorMessage.isNotEmpty
+                  ? verificationModel.otpErrorMessage
+                  : 'Codigo incorrecto. Intentalo de nuevo.',
               style: TextStyle(
                 color: ConstantColors.error,
                 fontSize: 12,
               ),
             ),
           ],
-
           SizedBox(height: 32),
-
-          // Botón verificar
           verificationModel.shopCircularLoaderOTP
               ? Center(
                   child: CircularProgressIndicator(
@@ -235,7 +233,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
                     ),
                     child: Center(
                       child: Text(
-                        'Verificar código',
+                        'Verificar codigo',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 16,
@@ -246,18 +244,13 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
                     ),
                   ),
                 ),
-
           SizedBox(height: 16),
-
-          // Reenviar código
           Center(
             child: GestureDetector(
-              onTap: () {
-                // TODO: implementar reenvío de OTP
-              },
+              onTap: () => _resendOtp(verificationModel),
               child: RichText(
                 text: TextSpan(
-                  text: '¿No recibiste el código? ',
+                  text: 'No recibiste el codigo? ',
                   style: TextStyle(
                     color: ConstantColors.textSubtle,
                     fontSize: 13,
@@ -282,7 +275,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
 
   Widget _buildOtpBox(int index) {
     return Container(
-      width: 64,
+      width: 48,
       height: 64,
       decoration: BoxDecoration(
         color: ConstantColors.backgroundLight,

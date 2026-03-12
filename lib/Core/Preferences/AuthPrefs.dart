@@ -9,6 +9,8 @@ class AuthPrefs {
   static const String KEY_FIRST_TIME   = 'first_time';
   static const String KEY_BACKEND_OK   = 'backend_registration_ok';
   static const String KEY_PHOTO_BASE64 = 'user_photo_base64';
+  static const String KEY_FCM_TOKEN = 'user_fcm_token';
+  static const String KEY_FCM_TOKEN_SYNCED = 'user_fcm_token_synced';
 
   // ─── Guardar sesión completa ───────────────────────────────────────────────
   static Future<void> saveUserSession({
@@ -81,6 +83,26 @@ class AuthPrefs {
     return prefs.getString(KEY_PHOTO_BASE64) ?? '';
   }
 
+  static Future<void> saveFcmToken(String token) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(KEY_FCM_TOKEN, token ?? '');
+  }
+
+  static Future<String> getFcmToken() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(KEY_FCM_TOKEN) ?? '';
+  }
+
+  static Future<void> saveSyncedFcmToken(String token) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString(KEY_FCM_TOKEN_SYNCED, token ?? '');
+  }
+
+  static Future<String> getSyncedFcmToken() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    return prefs.getString(KEY_FCM_TOKEN_SYNCED) ?? '';
+  }
+
   // ─── Cerrar sesión ────────────────────────────────────────────────────────
   static Future<void> clearSession() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -89,6 +111,7 @@ class AuthPrefs {
     await prefs.remove(KEY_NAME);
     await prefs.remove(KEY_EMAIL);
     await prefs.remove(KEY_BACKEND_OK);
+    await prefs.remove(KEY_FCM_TOKEN_SYNCED);
     // Mantener KEY_FIRST_TIME en false para no mostrar onboarding de nuevo
   }
 }

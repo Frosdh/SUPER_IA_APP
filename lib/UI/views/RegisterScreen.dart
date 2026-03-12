@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
+import 'package:fu_uber/Core/Services/PushNotificationService.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:provider/provider.dart';
 
@@ -79,6 +80,7 @@ class _RegisterScreenState extends State<RegisterScreen>
           telefono: telefono,
           email: email,
         );
+        await PushNotificationService.syncTokenWithBackend(force: true);
         Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
       } else {
         await AuthPrefs.clearSession();

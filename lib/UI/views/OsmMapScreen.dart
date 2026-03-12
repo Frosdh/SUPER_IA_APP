@@ -26,6 +26,16 @@ final LatLng CUENCA_CENTER = LatLng(-2.9001285, -79.0058965);
 
 enum EstadoViaje { ninguno, buscando, conductorAsignado }
 
+class ParadaViaje {
+  final String nombre;
+  final LatLng ubicacion;
+
+  ParadaViaje({
+    @required this.nombre,
+    @required this.ubicacion,
+  });
+}
+
 class OsmMapScreen extends StatefulWidget {
   static const String route = '/osmmap';
 
@@ -43,6 +53,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   LatLng _miUbicacion = CUENCA_CENTER;
   LatLng _destino;
   String _destinoNombre = '';
+  List<ParadaViaje> _paradasIntermedias = [];
+  bool _agregandoParada = false;
   String _origenNombre = 'Mi ubicación';
   String _userName = '';
 
@@ -188,6 +200,74 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     });
   }
 
+  String _obtenerResumenDestino() {
+    final partes = <String>[
+      ..._paradasIntermedias.map((p) => p.nombre),
+      if (_destinoNombre.isNotEmpty) _destinoNombre,
+    ];
+    return partes.isEmpty ? '' : partes.join(' -> ');
+  }
+
+  Future<void> _agregarParadaSeleccionada(PlaceResult lugar) async {
+    if (_destino == null) return;
+    if (_paradasIntermedias.length >= 3) {
+      _scaffoldKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text('Puedes agregar hasta 3 paradas'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _paradasIntermedias.add(
+        ParadaViaje(
+          nombre: lugar.shortName,
+          ubicacion: LatLng(lugar.lat, lugar.lon),
+        ),
+      );
+      _agregandoParada = false;
+      _sugerencias = [];
+      _mostrandoSugerencias = false;
+      _mostrandoRecientes = false;
+      _searchController.clear();
+      _calculandoRuta = true;
+      _rutaInfo = null;
+      _rutaPuntos = [];
+    });
+
+    await _calcularRuta(_destino);
+  }
+
+  void _iniciarAgregarParada() {
+    if (_destino == null) return;
+    setState(() {
+      _agregandoParada = true;
+      _searchController.clear();
+      _sugerencias = [];
+      _mostrandoSugerencias = false;
+      _mostrandoRecientes = _recientes.isNotEmpty;
+      _searchFeedback = '';
+    });
+  }
+
+  Future<void> _eliminarParada(int index) async {
+    if (index < 0 || index >= _paradasIntermedias.length) return;
+
+    setState(() {
+      _paradasIntermedias.removeAt(index);
+      _calculandoRuta = true;
+      _rutaInfo = null;
+      _rutaPuntos = [];
+    });
+
+    if (_destino != null) {
+      await _calcularRuta(_destino, recenterMap: false);
+    }
+  }
+
   // ── Mostrar confirmación antes de solicitar ───────
   void _mostrarConfirmacion() {
     showModalBottomSheet(
@@ -196,7 +276,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       isScrollControlled: true,
       builder: (sheetContext) => _ConfirmacionSheet(
         origen: _origenNombre,
-        destino: _destinoNombre,
+        destino: _obtenerResumenDestino(),
         categoria: _categoriaSeleccionada,
         distanciaKm: _rutaInfo?.distanciaKm ?? 0,
         duracionMin: _rutaInfo?.duracionMin ?? 0,
@@ -263,7 +343,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           'telefono':      telefono,
           'categoria_id':  (_categoriaSeleccionada?.id ?? 1).toString(),
           'origen_texto':  _origenNombre,
-          'destino_texto': _destinoNombre,
+          'destino_texto': _obtenerResumenDestino(),
           'distancia_km':  (_rutaInfo?.distanciaKm ?? 0.0).toString(),
           'duracion_min':  (_rutaInfo?.duracionMin  ?? 0).toString(),
           'tarifa_total':  _precioCalculado.toString(),
@@ -393,7 +473,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         'viaje_id':        _viajeId,
         'conductor':       _conductorData,
         'origen':          _origenNombre,
-        'destino':         _destinoNombre,
+        'destino':         _obtenerResumenDestino(),
         'distancia':       _rutaInfo?.distanciaKm ?? 0.0,
         'duracion':        _rutaInfo?.duracionMin ?? 0,
         'precio':          _precioCalculado,
@@ -524,7 +604,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       // Generar mensaje con detalles del viaje
       final mensaje = ShareTripService.generarMensajeViaje(
         nombrePasajero: _userName.isNotEmpty ? _userName : 'Pasajero',
-        destinoNombre: _destinoNombre,
+        destinoNombre: _obtenerResumenDestino(),
         ubicacionActual: _miUbicacion,
         destino: _destino,
         distanciaKm: _rutaInfo?.distanciaKm ?? 0.0,
@@ -1094,6 +1174,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     setState(() {
       _destino = destino;
       _destinoNombre = destinoTexto.isNotEmpty ? destinoTexto : 'Destino';
+      _paradasIntermedias = [];
+      _agregandoParada = false;
       _sugerencias = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes = false;
@@ -1120,11 +1202,23 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   // Usar un favorito como destino directo
   void _seleccionarFavorito(LugarFavorito fav) {
+    if (_agregandoParada && _destino != null) {
+      _agregarParadaSeleccionada(PlaceResult(
+        displayName: fav.direccion,
+        shortName: fav.direccion,
+        lat: fav.lat,
+        lon: fav.lng,
+      ));
+      return;
+    }
+
     final destino = LatLng(fav.lat, fav.lng);
     FocusScope.of(context).unfocus();
     setState(() {
       _destino             = destino;
       _destinoNombre       = fav.direccion;
+      _paradasIntermedias  = [];
+      _agregandoParada     = false;
       _sugerencias         = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes  = false;
@@ -1140,11 +1234,23 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   // Usar un reciente como destino directo
   void _seleccionarReciente(LugarReciente rec) {
+    if (_agregandoParada && _destino != null) {
+      _agregarParadaSeleccionada(PlaceResult(
+        displayName: rec.nombre,
+        shortName: rec.nombre,
+        lat: rec.lat,
+        lon: rec.lng,
+      ));
+      return;
+    }
+
     final destino = LatLng(rec.lat, rec.lng);
     FocusScope.of(context).unfocus();
     setState(() {
       _destino             = destino;
       _destinoNombre       = rec.nombre;
+      _paradasIntermedias  = [];
+      _agregandoParada     = false;
       _sugerencias         = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes  = false;
@@ -1224,11 +1330,18 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   }
 
   Future<void> _seleccionarDestino(PlaceResult lugar) async {
+    if (_agregandoParada && _destino != null) {
+      await _agregarParadaSeleccionada(lugar);
+      return;
+    }
+
     final destino = LatLng(lugar.lat, lugar.lon);
     FocusScope.of(context).unfocus();
     setState(() {
       _destino = destino;
       _destinoNombre = lugar.shortName;
+      _paradasIntermedias = [];
+      _agregandoParada = false;
       _sugerencias = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes  = false;
@@ -1251,20 +1364,51 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   // ── Calcular y mostrar la ruta al destino ─────────
   Future<void> _calcularRuta(LatLng destino, {bool recenterMap = true}) async {
-    RouteResult ruta = await OsmService.calcularRuta(_miUbicacion, destino);
+    final puntosRuta = <LatLng>[
+      _miUbicacion,
+      ..._paradasIntermedias.map((p) => p.ubicacion),
+      destino,
+    ];
 
-    if (ruta == null) {
-      final Distance distCalc = Distance();
-      final distanciaM = distCalc.as(LengthUnit.Meter, _miUbicacion, destino);
-      final distanciaKm = distanciaM / 1000;
-      final duracionMin = ((distanciaKm / 30) * 60).round();
-      ruta = RouteResult(
-        puntos: [_miUbicacion, destino],
-        distanciaKm: distanciaKm,
-        duracionMin: duracionMin,
-        precioEstimado: 0.0,
-      );
+    final Distance distCalc = Distance();
+    final List<LatLng> puntosCompletos = [];
+    double distanciaTotalKm = 0.0;
+    int duracionTotalMin = 0;
+
+    for (int i = 0; i < puntosRuta.length - 1; i++) {
+      final origenTramo = puntosRuta[i];
+      final destinoTramo = puntosRuta[i + 1];
+      RouteResult rutaTramo =
+          await OsmService.calcularRuta(origenTramo, destinoTramo);
+
+      if (rutaTramo == null) {
+        final distanciaM = distCalc.as(LengthUnit.Meter, origenTramo, destinoTramo);
+        final distanciaKm = distanciaM / 1000;
+        final duracionMin = ((distanciaKm / 30) * 60).round();
+        rutaTramo = RouteResult(
+          puntos: [origenTramo, destinoTramo],
+          distanciaKm: distanciaKm,
+          duracionMin: duracionMin,
+          precioEstimado: 0.0,
+        );
+      }
+
+      if (puntosCompletos.isEmpty) {
+        puntosCompletos.addAll(rutaTramo.puntos);
+      } else {
+        puntosCompletos.addAll(rutaTramo.puntos.skip(1));
+      }
+
+      distanciaTotalKm += rutaTramo.distanciaKm;
+      duracionTotalMin += rutaTramo.duracionMin;
     }
+
+    final ruta = RouteResult(
+      puntos: puntosCompletos,
+      distanciaKm: distanciaTotalKm,
+      duracionMin: duracionTotalMin,
+      precioEstimado: 0.0,
+    );
 
     if (mounted) {
       setState(() {
@@ -1288,6 +1432,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   void _limpiarDestino() {
     setState(() {
       _destino = null; _destinoNombre = ''; _rutaPuntos = []; _rutaInfo = null;
+      _paradasIntermedias = []; _agregandoParada = false;
       _mostrandoPanel = false; _sugerencias = []; _mostrandoSugerencias = false;
       _mostrandoRecientes = false;
       _searchFeedback = ''; _precioCalculado = 0.0; _searchController.clear();
@@ -1390,6 +1535,28 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     anchorPos: AnchorPos.align(AnchorAlign.top),
                     builder: (_) => Icon(Icons.location_on, color: ConstantColors.primaryViolet, size: 40),
                   ),
+                ..._paradasIntermedias.asMap().entries.map((entry) => Marker(
+                  point: entry.value.ubicacion,
+                  width: 40,
+                  height: 40,
+                  builder: (_) => Container(
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade600,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${entry.key + 1}',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                )).toList(),
                 ..._conductoresCercanos.map((conductor) => Marker(
                   point: LatLng(conductor.latitud, conductor.longitud),
                   width: 52,
@@ -1534,7 +1701,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                       controller: _searchController,
                       style: TextStyle(color: ConstantColors.textWhite, fontSize: 15),
                       decoration: InputDecoration(
-                        hintText: 'Busca tu destino...',
+                        hintText: _agregandoParada ? 'Busca una parada...' : 'Busca tu destino...',
                         hintStyle: TextStyle(color: ConstantColors.textSubtle, fontSize: 14),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(vertical: 14),
@@ -1835,6 +2002,121 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                     ])),
                   ]),
+
+                  if (_paradasIntermedias.isNotEmpty) ...[
+                    SizedBox(height: 14),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Paradas intermedias',
+                        style: TextStyle(
+                          color: ConstantColors.textGrey,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 10),
+                    ..._paradasIntermedias.asMap().entries.map((entry) => Container(
+                      margin: EdgeInsets.only(bottom: 8),
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.backgroundLight,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: ConstantColors.borderColor),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: Colors.orange.withOpacity(0.16),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Center(
+                              child: Text(
+                                '${entry.key + 1}',
+                                style: TextStyle(
+                                  color: Colors.orange.shade300,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              entry.value.nombre,
+                              style: TextStyle(
+                                color: ConstantColors.textWhite,
+                                fontSize: 13,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _eliminarParada(entry.key),
+                            child: Icon(
+                              Icons.close_rounded,
+                              color: ConstantColors.textGrey,
+                              size: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                  ],
+
+                  if (_destino != null && _paradasIntermedias.length < 3) ...[
+                    SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: _iniciarAgregarParada,
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _agregandoParada
+                              ? ConstantColors.primaryViolet.withOpacity(0.14)
+                              : ConstantColors.backgroundLight,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _agregandoParada
+                                ? ConstantColors.primaryViolet
+                                : ConstantColors.borderColor,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.add_location_alt_rounded,
+                              color: _agregandoParada
+                                  ? ConstantColors.primaryViolet
+                                  : ConstantColors.textGrey,
+                              size: 18,
+                            ),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _agregandoParada
+                                    ? 'Selecciona una parada desde la búsqueda superior'
+                                    : 'Añadir parada',
+                                style: TextStyle(
+                                  color: _agregandoParada
+                                      ? ConstantColors.primaryViolet
+                                      : ConstantColors.textWhite,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
 
                   SizedBox(height: 16),
                   Divider(color: ConstantColors.dividerColor),

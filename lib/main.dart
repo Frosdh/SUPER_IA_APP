@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
@@ -9,6 +10,7 @@ import 'package:fu_uber/Core/ProviderModels/RideBookedModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UINotifiersModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
+import 'package:fu_uber/Core/Services/PushNotificationService.dart';
 import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:fu_uber/UI/views/MainScreen.dart';
@@ -26,8 +28,17 @@ import 'package:fu_uber/UI/views/RideCompletedScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
 import 'package:provider/provider.dart';
 
-void main() {
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp();
+    await PushNotificationService.initialize(navigatorKey);
+  } catch (e) {
+    print('>>> [FCM] Firebase no inicializado: $e');
+  }
 
   // Barra de estado transparente sobre fondo oscuro
   SystemChrome.setSystemUIOverlayStyle(
@@ -47,8 +58,6 @@ void main() {
 
   runApp(MyApp());
 }
-
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class MyApp extends StatelessWidget {
   static const String TAG = "MyApp";

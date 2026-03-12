@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "81517299590",
+    "project_id": "fuber-app-bcb93",
+    "storage_bucket": "fuber-app-bcb93.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:81517299590:android:4388554ed6b2dc9ad04e07",
+        "android_client_info": {
+          "package_name": "com.sahdeepsingh.fu_uber"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDvskg7l5L6mUkgsne2xZtlFA66D3mGMrI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

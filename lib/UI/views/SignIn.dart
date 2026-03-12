@@ -16,7 +16,6 @@ class SignInPage extends StatefulWidget {
 
 class _SignInPageState extends State<SignInPage>
     with SingleTickerProviderStateMixin {
-  // Keys declaradas DENTRO del State para evitar duplicados en el árbol
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final GlobalKey<FormState> _phoneFormKey = GlobalKey<FormState>();
 
@@ -56,7 +55,7 @@ class _SignInPageState extends State<SignInPage>
           children: [
             Icon(Icons.star, color: Colors.white, size: 18),
             SizedBox(width: 10),
-            Text('Próximamente disponible'),
+            Text('Proximamente disponible'),
           ],
         ),
         backgroundColor: ConstantColors.primaryViolet,
@@ -86,7 +85,12 @@ class _SignInPageState extends State<SignInPage>
           } else {
             _scaffoldKey.currentState.showSnackBar(
               SnackBar(
-                content: Text('Algo salió mal. Intenta nuevamente.'),
+                content: Text(
+                  verificationModel.otpErrorMessage != null &&
+                          verificationModel.otpErrorMessage.isNotEmpty
+                      ? verificationModel.otpErrorMessage
+                      : 'Algo salio mal. Intenta nuevamente.',
+                ),
                 backgroundColor: ConstantColors.error,
               ),
             );
@@ -128,8 +132,6 @@ class _SignInPageState extends State<SignInPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SizedBox(height: size.height * 0.08),
-
-                    // Logo pequeño arriba
                     Center(
                       child: Container(
                         width: 64,
@@ -152,10 +154,7 @@ class _SignInPageState extends State<SignInPage>
                         ),
                       ),
                     ),
-
                     SizedBox(height: 40),
-
-                    // Título
                     Text(
                       'Bienvenido',
                       style: TextStyle(
@@ -164,23 +163,18 @@ class _SignInPageState extends State<SignInPage>
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-
                     SizedBox(height: 8),
-
                     Text(
-                      'Ingresa tu número de teléfono\npara continuar',
+                      'Ingresa tu numero de telefono\npara continuar',
                       style: TextStyle(
                         color: ConstantColors.textGrey,
                         fontSize: 15,
                         height: 1.5,
                       ),
                     ),
-
                     SizedBox(height: 48),
-
-                    // Label del campo
                     Text(
-                      'Número de teléfono',
+                      'Numero de telefono',
                       style: TextStyle(
                         color: ConstantColors.textGrey,
                         fontSize: 13,
@@ -188,10 +182,7 @@ class _SignInPageState extends State<SignInPage>
                         letterSpacing: 0.5,
                       ),
                     ),
-
                     SizedBox(height: 10),
-
-                    // Campo de teléfono
                     Form(
                       key: _phoneFormKey,
                       child: Container(
@@ -205,7 +196,6 @@ class _SignInPageState extends State<SignInPage>
                         ),
                         child: Row(
                           children: [
-                            // Prefijo Ecuador
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
                               decoration: BoxDecoration(
@@ -218,7 +208,7 @@ class _SignInPageState extends State<SignInPage>
                               ),
                               child: Row(
                                 children: [
-                                  Text('🇪🇨', style: TextStyle(fontSize: 18)),
+                                  Text('EC', style: TextStyle(fontSize: 14)),
                                   SizedBox(width: 6),
                                   Text(
                                     '+593',
@@ -231,8 +221,6 @@ class _SignInPageState extends State<SignInPage>
                                 ],
                               ),
                             ),
-
-                            // Input número
                             Expanded(
                               child: TextFormField(
                                 controller: phoneTextController,
@@ -266,10 +254,10 @@ class _SignInPageState extends State<SignInPage>
                                 ),
                                 validator: (value) {
                                   if (value == null || value.isEmpty) {
-                                    return 'Ingresa tu número de teléfono';
+                                    return 'Ingresa tu numero de telefono';
                                   }
                                   if (value.length < 9 || value.length > 10) {
-                                    return 'Número inválido (9-10 dígitos)';
+                                    return 'Numero invalido (9-10 digitos)';
                                   }
                                   return null;
                                 },
@@ -279,22 +267,16 @@ class _SignInPageState extends State<SignInPage>
                         ),
                       ),
                     ),
-
                     SizedBox(height: 12),
-
-                    // Texto informativo
                     Text(
-                      'Te enviaremos un código de verificación vía WhatsApp',
+                      'Te enviaremos un codigo de verificacion via SMS',
                       style: TextStyle(
                         color: ConstantColors.textSubtle,
                         fontSize: 12,
                         height: 1.4,
                       ),
                     ),
-
                     SizedBox(height: 40),
-
-                    // Botón continuar
                     verificationModel.showCircularLoader
                         ? Center(
                             child: Container(
@@ -347,10 +329,7 @@ class _SignInPageState extends State<SignInPage>
                               ),
                             ),
                           ),
-
                     SizedBox(height: 40),
-
-                    // Divider con "o"
                     Row(
                       children: [
                         Expanded(
@@ -377,10 +356,7 @@ class _SignInPageState extends State<SignInPage>
                         ),
                       ],
                     ),
-
                     SizedBox(height: 24),
-
-                    // Botón WhatsApp
                     GestureDetector(
                       onTap: () => _handleVerification(verificationModel),
                       child: Container(
@@ -404,7 +380,7 @@ class _SignInPageState extends State<SignInPage>
                             ),
                             SizedBox(width: 10),
                             Text(
-                              'Verificar con WhatsApp',
+                              'Verificar con SMS',
                               style: TextStyle(
                                 color: ConstantColors.accentWhatsApp,
                                 fontSize: 15,
@@ -415,10 +391,7 @@ class _SignInPageState extends State<SignInPage>
                         ),
                       ),
                     ),
-
                     SizedBox(height: 20),
-
-                    // Divider "o inicia con"
                     Row(
                       children: [
                         Expanded(
@@ -445,13 +418,9 @@ class _SignInPageState extends State<SignInPage>
                         ),
                       ],
                     ),
-
                     SizedBox(height: 16),
-
-                    // Botones sociales: Google y Facebook
                     Row(
                       children: [
-                        // Botón Google
                         Expanded(
                           child: GestureDetector(
                             onTap: _mostrarProximamente,
@@ -498,10 +467,7 @@ class _SignInPageState extends State<SignInPage>
                             ),
                           ),
                         ),
-
                         SizedBox(width: 12),
-
-                        // Botón Facebook
                         Expanded(
                           child: GestureDetector(
                             onTap: _mostrarProximamente,
@@ -551,10 +517,7 @@ class _SignInPageState extends State<SignInPage>
                         ),
                       ],
                     ),
-
                     SizedBox(height: 24),
-
-                    // Términos
                     Center(
                       child: Text.rich(
                         TextSpan(
@@ -565,7 +528,7 @@ class _SignInPageState extends State<SignInPage>
                           ),
                           children: [
                             TextSpan(
-                              text: 'Términos de servicio',
+                              text: 'Terminos de servicio',
                               style: TextStyle(
                                 color: ConstantColors.primaryViolet,
                                 fontWeight: FontWeight.w600,
@@ -573,7 +536,7 @@ class _SignInPageState extends State<SignInPage>
                             ),
                             TextSpan(text: ' y '),
                             TextSpan(
-                              text: 'Política de privacidad',
+                              text: 'Politica de privacidad',
                               style: TextStyle(
                                 color: ConstantColors.primaryViolet,
                                 fontWeight: FontWeight.w600,
@@ -584,7 +547,6 @@ class _SignInPageState extends State<SignInPage>
                         textAlign: TextAlign.center,
                       ),
                     ),
-
                     SizedBox(height: 24),
                   ],
                 ),
