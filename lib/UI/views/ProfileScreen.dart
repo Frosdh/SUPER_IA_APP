@@ -8,6 +8,7 @@ import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:fu_uber/UI/views/EditProfileScreen.dart';
 import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
+import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
 import 'package:fu_uber/UI/views/SignIn.dart';
 import 'package:image_picker/image_picker.dart';
@@ -355,7 +356,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Divider(color: ConstantColors.dividerColor, height: 1),
                     _accionTile(Icons.settings, 'Configuración', () {}),
                     Divider(color: ConstantColors.dividerColor, height: 1),
-                    _accionTile(Icons.help_outline, 'Ayuda', () {}),
+                    _accionTile(
+                      Icons.help_outline,
+                      'Ayuda',
+                      () => Navigator.pushNamed(context, HelpFaqScreen.route),
+                    ),
                     Divider(color: ConstantColors.dividerColor, height: 1),
                     _accionTile(
                       Icons.exit_to_app,

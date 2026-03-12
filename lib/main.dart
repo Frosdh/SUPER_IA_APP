@@ -20,6 +20,7 @@ import 'package:fu_uber/UI/views/SplashScreen.dart';
 import 'package:fu_uber/UI/views/RegisterScreen.dart';
 import 'package:fu_uber/UI/views/EditProfileScreen.dart';
 import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
+import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
 import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:fu_uber/UI/views/RideCompletedScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
@@ -120,6 +121,7 @@ class MyApp extends StatelessWidget {
           RideHistoryScreen.route: (context) => RideHistoryScreen(),
           EditProfileScreen.route: (context) => EditProfileScreen(),
           FavoritePlacesScreen.route: (context) => FavoritePlacesScreen(),
+          HelpFaqScreen.route: (context) => HelpFaqScreen(),
           EmergencyContactsScreen.route: (context) => EmergencyContactsScreen(),
         },
         home: SplashScreen(),

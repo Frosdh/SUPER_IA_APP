@@ -8,6 +8,7 @@ import 'package:latlong/latlong.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Constants/Constants.dart';
 import 'package:fu_uber/Core/Models/CategoriaModel.dart';
+import 'package:fu_uber/Core/Models/NearbyDriverMapModel.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/Preferences/EmergencyContactsService.dart';
 import 'package:fu_uber/Core/Preferences/FavoritePlacesService.dart';
@@ -36,6 +37,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
+  bool _rutaInicialProcesada = false;
+  Map<String, dynamic> _viajeRepetidoPendiente;
 
   LatLng _miUbicacion = CUENCA_CENTER;
   LatLng _destino;
@@ -52,8 +55,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   bool _mostrandoSugerencias = false;
   bool _mostrandoPanel = false;
   bool _calculandoRuta = false;
+  bool _ajustandoRecogida = false;
+  bool _actualizandoRecogida = false;
   String _searchFeedback = '';
   Timer _searchDebounce;
+  Timer _pickupDebounce;
 
   // ── Categorías ────────────────────────────────────
   List<CategoriaModel> _categorias = [];
@@ -64,6 +70,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   List<LugarFavorito>  _favoritos = [];
   List<LugarReciente>  _recientes = [];
   bool _mostrandoRecientes = false;
+  List<NearbyDriverMapModel> _conductoresCercanos = [];
 
   // ── Estado del viaje ──────────────────────────────
   EstadoViaje _estadoViaje = EstadoViaje.ninguno;
@@ -88,10 +95,33 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   @override
   void dispose() {
     _searchDebounce?.cancel();
+    _pickupDebounce?.cancel();
     _simulacionTimer?.cancel();
     _pollingTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_rutaInicialProcesada) return;
+
+    final route = ModalRoute.of(context);
+    final args = route != null ? route.settings.arguments : null;
+    if (args is Map<String, dynamic> && args['repeat_trip'] == true) {
+      _rutaInicialProcesada = true;
+      _viajeRepetidoPendiente = Map<String, dynamic>.from(args);
+      if (!_cargandoUbicacion) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _viajeRepetidoPendiente != null) {
+            final pending = _viajeRepetidoPendiente;
+            _viajeRepetidoPendiente = null;
+            _procesarViajeRepetido(pending);
+          }
+        });
+      }
+    }
   }
 
   // ── Cargar categorías desde el servidor ──────────
@@ -882,6 +912,212 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     if (mounted) setState(() { _favoritos = favs; _recientes = recs; });
   }
 
+  Future<void> _cargarConductoresCercanos() async {
+    final urls = [
+      '${Constants.apiBaseUrl}/obtener_conductores_cercanos.php',
+      'http://10.0.2.2/fuber_api/obtener_conductores_cercanos.php',
+    ];
+
+    final categoriaId = _categoriaSeleccionada?.id ?? 0;
+
+    for (final url in urls) {
+      try {
+        final response = await http.post(
+          url,
+          headers: {'ngrok-skip-browser-warning': 'true'},
+          body: {
+            'lat': _miUbicacion.latitude.toString(),
+            'lng': _miUbicacion.longitude.toString(),
+            'categoria_id': categoriaId.toString(),
+          },
+        ).timeout(const Duration(seconds: 8));
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+          if (data['status'] == 'success') {
+            final lista = (data['conductores'] as List)
+                .map((e) => NearbyDriverMapModel.fromJson(
+                    Map<String, dynamic>.from(e)))
+                .toList();
+            if (mounted) setState(() => _conductoresCercanos = lista);
+            return;
+          }
+        }
+      } catch (e) {
+        print('>>> [DRIVERS] Error en $url: $e');
+      }
+    }
+
+    if (mounted) setState(() => _conductoresCercanos = []);
+  }
+
+  void _mostrarInfoConductor(NearbyDriverMapModel conductor) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        padding: EdgeInsets.fromLTRB(20, 20, 20, 30),
+        decoration: BoxDecoration(
+          color: ConstantColors.backgroundCard,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: ConstantColors.borderColor),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ConstantColors.borderColor,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            SizedBox(height: 18),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor:
+                      ConstantColors.primaryViolet.withOpacity(0.18),
+                  child: Text(
+                    conductor.nombre.isNotEmpty
+                        ? conductor.nombre[0].toUpperCase()
+                        : 'C',
+                    style: TextStyle(
+                      color: ConstantColors.primaryViolet,
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        conductor.nombre,
+                        style: TextStyle(
+                          color: ConstantColors.textWhite,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        conductor.autoDescripcion,
+                        style: TextStyle(
+                          color: ConstantColors.textGrey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Row(
+                  children: [
+                    Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      conductor.calificacion.toStringAsFixed(1),
+                      style: TextStyle(
+                        color: ConstantColors.textGrey,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            SizedBox(height: 18),
+            Container(
+              padding: EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundLight,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ConstantColors.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.near_me_rounded,
+                      color: ConstantColors.primaryBlue, size: 18),
+                  SizedBox(width: 8),
+                  Text(
+                    'A ${conductor.distanciaKm.toStringAsFixed(1)} km de ti',
+                    style: TextStyle(
+                      color: ConstantColors.textWhite,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _procesarViajeRepetido(Map<String, dynamic> args) async {
+    LatLng destino;
+    final double destinoLat =
+        (args['destino_lat'] as num)?.toDouble() ?? 0.0;
+    final double destinoLng =
+        (args['destino_lng'] as num)?.toDouble() ?? 0.0;
+    final String destinoTexto = args['destino'] ?? '';
+
+    if (destinoLat != 0.0 || destinoLng != 0.0) {
+      destino = LatLng(destinoLat, destinoLng);
+    } else if (destinoTexto.isNotEmpty) {
+      final resultados = await OsmService.buscarLugar(destinoTexto);
+      if (resultados.isNotEmpty) {
+        destino = LatLng(resultados.first.lat, resultados.first.lon);
+      }
+    }
+
+    if (destino == null) {
+      _scaffoldKey.currentState.showSnackBar(
+        SnackBar(
+          content: Text('No se pudo preparar este viaje nuevamente'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _destino = destino;
+      _destinoNombre = destinoTexto.isNotEmpty ? destinoTexto : 'Destino';
+      _sugerencias = [];
+      _mostrandoSugerencias = false;
+      _mostrandoRecientes = false;
+      _searchController.text = _destinoNombre;
+      _calculandoRuta = true;
+      _mostrandoPanel = true;
+      _rutaInfo = null;
+      _rutaPuntos = [];
+      _estadoViaje = EstadoViaje.ninguno;
+    });
+
+    _mapController.move(destino, 14.0);
+    await _calcularRuta(destino);
+
+    if (mounted) {
+      _scaffoldKey.currentState.showSnackBar(
+        SnackBar(
+          content: Text('Viaje anterior cargado. Revisa y confirma.'),
+          backgroundColor: ConstantColors.primaryViolet,
+        ),
+      );
+    }
+  }
+
   // Usar un favorito como destino directo
   void _seleccionarFavorito(LugarFavorito fav) {
     final destino = LatLng(fav.lat, fav.lng);
@@ -940,8 +1176,19 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         _cargandoUbicacion = false;
       });
       _mapController.move(ubicacion, 15.0);
+      _cargarConductoresCercanos();
+      if (_viajeRepetidoPendiente != null) {
+        final pending = _viajeRepetidoPendiente;
+        _viajeRepetidoPendiente = null;
+        await _procesarViajeRepetido(pending);
+      }
     } catch (e) {
       if (mounted) setState(() => _cargandoUbicacion = false);
+      if (_viajeRepetidoPendiente != null) {
+        final pending = _viajeRepetidoPendiente;
+        _viajeRepetidoPendiente = null;
+        await _procesarViajeRepetido(pending);
+      }
     }
   }
 
@@ -1003,7 +1250,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   }
 
   // ── Calcular y mostrar la ruta al destino ─────────
-  Future<void> _calcularRuta(LatLng destino) async {
+  Future<void> _calcularRuta(LatLng destino, {bool recenterMap = true}) async {
     RouteResult ruta = await OsmService.calcularRuta(_miUbicacion, destino);
 
     if (ruta == null) {
@@ -1026,13 +1273,15 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         _calculandoRuta = false;
       });
       _recalcularPrecio();
-      _mapController.move(
-        LatLng(
-          (_miUbicacion.latitude + destino.latitude) / 2,
-          (_miUbicacion.longitude + destino.longitude) / 2,
-        ),
-        13.0,
-      );
+      if (recenterMap) {
+        _mapController.move(
+          LatLng(
+            (_miUbicacion.latitude + destino.latitude) / 2,
+            (_miUbicacion.longitude + destino.longitude) / 2,
+          ),
+          13.0,
+        );
+      }
     }
   }
 
@@ -1047,6 +1296,52 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   void _centrarEnMiUbicacion() => _mapController.move(_miUbicacion, 15.0);
 
+  void _toggleAjusteRecogida() {
+    setState(() {
+      _ajustandoRecogida = !_ajustandoRecogida;
+      if (!_ajustandoRecogida) {
+        _actualizandoRecogida = false;
+      }
+    });
+    if (_ajustandoRecogida) {
+      _mapController.move(_miUbicacion, _mapController.zoom ?? 15.0);
+    }
+  }
+
+  void _onMapaMovido(MapPosition position, bool hasGesture) {
+    if (!_ajustandoRecogida || !hasGesture || position.center == null) return;
+
+    final nuevoPunto = position.center;
+    _pickupDebounce?.cancel();
+    if (mounted && !_actualizandoRecogida) {
+      setState(() => _actualizandoRecogida = true);
+    }
+    _pickupDebounce = Timer(const Duration(milliseconds: 700), () {
+      _actualizarPuntoRecogida(nuevoPunto);
+    });
+  }
+
+  Future<void> _actualizarPuntoRecogida(LatLng nuevoPunto) async {
+    final nombre = await OsmService.obtenerNombreLugar(
+      nuevoPunto.latitude,
+      nuevoPunto.longitude,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _miUbicacion = nuevoPunto;
+      _origenNombre = nombre;
+      _actualizandoRecogida = false;
+    });
+
+    _cargarConductoresCercanos();
+
+    if (_destino != null) {
+      setState(() => _calculandoRuta = true);
+      await _calcularRuta(_destino, recenterMap: false);
+    }
+  }
+
   // ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
@@ -1058,7 +1353,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           // ── MAPA ────────────────────────────────────────────────
           FlutterMap(
             mapController: _mapController,
-            options: MapOptions(center: CUENCA_CENTER, zoom: 14.0, minZoom: 5.0, maxZoom: 18.0),
+            options: MapOptions(
+              center: CUENCA_CENTER,
+              zoom: 14.0,
+              minZoom: 5.0,
+              maxZoom: 18.0,
+              onPositionChanged: _onMapaMovido,
+            ),
             layers: [
               TileLayerOptions(
                 urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -1089,9 +1390,97 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     anchorPos: AnchorPos.align(AnchorAlign.top),
                     builder: (_) => Icon(Icons.location_on, color: ConstantColors.primaryViolet, size: 40),
                   ),
+                ..._conductoresCercanos.map((conductor) => Marker(
+                  point: LatLng(conductor.latitud, conductor.longitud),
+                  width: 52,
+                  height: 52,
+                  builder: (_) => GestureDetector(
+                    onTap: () => _mostrarInfoConductor(conductor),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.9),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 8,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        Icons.directions_car_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                )).toList(),
               ]),
             ],
           ),
+
+          if (_ajustandoRecogida)
+            IgnorePointer(
+              child: Center(
+                child: Transform.translate(
+                  offset: Offset(0, -24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: ConstantColors.backgroundCard.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: ConstantColors.borderColor),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_actualizandoRecogida)
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    ConstantColors.primaryViolet,
+                                  ),
+                                ),
+                              )
+                            else
+                              Icon(
+                                Icons.open_with_rounded,
+                                color: ConstantColors.primaryViolet,
+                                size: 14,
+                              ),
+                            SizedBox(width: 8),
+                            Text(
+                              _actualizandoRecogida
+                                  ? 'Actualizando recogida...'
+                                  : 'Mueve el mapa para ajustar recogida',
+                              style: TextStyle(
+                                color: ConstantColors.textWhite,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Icon(
+                        Icons.location_on_rounded,
+                        color: ConstantColors.primaryViolet,
+                        size: 42,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
           // ── BARRA SUPERIOR ───────────────────────────────────────
           Positioned(
@@ -1296,6 +1685,56 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             ),
           ),
 
+          if (_estadoViaje == EstadoViaje.ninguno)
+            Positioned(
+              right: 16,
+              bottom: (_mostrandoPanel || _estadoViaje != EstadoViaje.ninguno) ? 356 : 156,
+              child: GestureDetector(
+                onTap: _toggleAjusteRecogida,
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 180),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _ajustandoRecogida
+                        ? ConstantColors.primaryViolet
+                        : ConstantColors.backgroundCard,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: _ajustandoRecogida
+                          ? ConstantColors.primaryViolet
+                          : ConstantColors.borderColor,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.place_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _ajustandoRecogida ? 'Listo' : 'Ajustar recogida',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── BOTÓN SHARE TRIP (Durante viaje activo) ───────────────
           if (_estadoViaje == EstadoViaje.conductorAsignado)
             Positioned(
@@ -1421,6 +1860,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                             onTap: () {
                               setState(() => _categoriaSeleccionada = cat);
                               _recalcularPrecio();
+                              _cargarConductoresCercanos();
                             },
                             child: AnimatedContainer(
                               duration: Duration(milliseconds: 200),

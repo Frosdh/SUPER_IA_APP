@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/RideHistoryService.dart';
+import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 
 class RideHistoryScreen extends StatefulWidget {
   static const String route = '/ride_history';
@@ -293,6 +294,54 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
                 ],
               ),
             ],
+            SizedBox(height: 14),
+            GestureDetector(
+              onTap: () {
+                Navigator.pushNamed(
+                  context,
+                  OsmMapScreen.route,
+                  arguments: {
+                    'repeat_trip': true,
+                    'origen': viaje['origen'] ?? '',
+                    'destino': viaje['destino'] ?? '',
+                    'origen_lat': viaje['origen_lat'],
+                    'origen_lng': viaje['origen_lng'],
+                    'destino_lat': viaje['destino_lat'],
+                    'destino_lng': viaje['destino_lng'],
+                  },
+                );
+              },
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: ConstantColors.primaryViolet.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: ConstantColors.primaryViolet.withOpacity(0.35),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.replay_rounded,
+                      color: ConstantColors.primaryViolet,
+                      size: 18,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Repetir viaje',
+                      style: TextStyle(
+                        color: ConstantColors.primaryViolet,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

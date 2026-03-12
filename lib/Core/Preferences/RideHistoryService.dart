@@ -81,6 +81,10 @@ class RideHistoryService {
       conductorNombre: conductorNombre,
       conductorAuto: conductorAuto,
       conductorPlaca: conductorPlaca,
+      origenLat: origenLat,
+      origenLng: origenLng,
+      destinoLat: destinoLat,
+      destinoLng: destinoLng,
       descuento: descuento,
       codigoDescuento: codigoDescuento,
     );
@@ -133,6 +137,10 @@ class RideHistoryService {
     String conductorNombre,
     String conductorAuto,
     String conductorPlaca,
+    double origenLat,
+    double origenLng,
+    double destinoLat,
+    double destinoLng,
     double descuento,
     String codigoDescuento,
   }) async {
@@ -152,6 +160,10 @@ class RideHistoryService {
       'conductor_nombre':  conductorNombre  ?? '',
       'conductor_auto':    conductorAuto    ?? '',
       'conductor_placa':   conductorPlaca   ?? '',
+      'origen_lat':        origenLat        ?? 0.0,
+      'origen_lng':        origenLng        ?? 0.0,
+      'destino_lat':       destinoLat       ?? 0.0,
+      'destino_lng':       destinoLng       ?? 0.0,
       'descuento':         descuento        ?? 0.0,
       'codigo_descuento':  codigoDescuento  ?? '',
     });
