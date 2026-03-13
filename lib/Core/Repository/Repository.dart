@@ -1,41 +1,58 @@
 import 'dart:async';
 
-import 'package:fu_uber/Core/Enums/Enums.dart';
 import 'package:fu_uber/Core/Models/Drivers.dart';
+import 'package:fu_uber/Core/Models/NearbyDriverMapModel.dart';
 import 'package:fu_uber/Core/Models/UserPlaces.dart';
 import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 
 class Repository {
-  static Future<AuthStatus> isUserAlreadyAuthenticated() async {
-    return AuthStatus.Authenticated;
+  final ApiProvider apiProvider = ApiProvider();
+
+  Future<Map<String, dynamic>> registerNewUser({
+    String nombre,
+    String telefono,
+    String email,
+    String tokenFcm,
+  }) {
+    return apiProvider.registerNewUser(
+      nombre: nombre,
+      telefono: telefono,
+      email: email,
+      tokenFcm: tokenFcm,
+    );
   }
 
-  static Future<int> sendOTP(String phone) async {
-    print(">>> [REPOSITORY] Llamando a ApiProvider.sendOtpToUser para: $phone");
-    return await ApiProvider.sendOtpToUser(phone);
+  Future<int> sendEmailOtp(String email) {
+    return apiProvider.sendEmailOtp(email);
   }
 
-  static Future<bool> registerNewUser(String nombre, String telefono, String email, String password) async {
-    print(">>> [REPOSITORY] Iniciando registro de nuevo usuario en el servidor...");
-    return await ApiProvider.registerNewUser(nombre, telefono, email, password);
+  Future<int> verifyEmailOtp(String email, String codigo) {
+    return apiProvider.verifyEmailOtp(email, codigo);
   }
 
-  static Future<int> verifyOtp(String text) async {
-    //just returning 1
-    //somehow check the otp
-    return await ApiProvider.verifyOtp(text);
+  Future<Map<String, dynamic>> checkUserByEmail(String email) {
+    return apiProvider.checkUserByEmail(email);
   }
 
-  static Future<Map<String, dynamic>> checkUserByPhone(String phone) async {
-    return await ApiProvider.checkUserByPhone(phone);
+  Future<List<NearbyDriverMapModel>> getNearbyDriverMapData({
+    double lat,
+    double lng,
+    int categoriaId,
+    double radioKm = 5,
+  }) {
+    return apiProvider.getNearbyDrivers(
+      lat: lat,
+      lng: lng,
+      categoriaId: categoriaId,
+      radioKm: radioKm,
+    );
   }
 
+  // Compatibilidad con modelos viejos del proyecto.
   static void getNearbyDrivers(
       StreamController<List<Driver>> nearbyDriverStreamController) {
-    nearbyDriverStreamController.sink.add(ApiProvider.getNearbyDrivers());
+    nearbyDriverStreamController.sink.add(<Driver>[]);
   }
 
-  static void addFavPlacesToDataBase(List<UserPlaces> data) {
-    //
-  }
+  static void addFavPlacesToDataBase(List<UserPlaces> data) {}
 }

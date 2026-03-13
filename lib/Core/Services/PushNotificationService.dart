@@ -53,6 +53,14 @@ class PushNotificationService {
     });
   }
 
+  Future<String> getToken() async {
+    try {
+      return await _messaging.getToken() ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
   static Future<void> syncTokenWithBackend({bool force = false}) async {
     final phone = await AuthPrefs.getUserPhone();
     final token = await AuthPrefs.getFcmToken();

@@ -8,11 +8,13 @@ header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 
+require_once __DIR__ . '/email_helper.php';
+
 // -------- CONFIGURACION DE BASE DE DATOS --------
-$host     = "localhost";
-$dbname   = "fuber_db";      // <-- Cambia por el nombre de tu base de datos
-$username = "root";           // <-- Cambia por tu usuario MySQL
-$password = "";               // <-- Cambia por tu contraseña MySQL
+$host = "localhost";
+$dbname = "corporat_fuber_db";
+$username = "corporat_fuber_user";
+$password = 'FuB3r!Db#2026$Qx9';
 // ------------------------------------------------
 
 // Solo aceptar POST
@@ -26,10 +28,16 @@ $nombre   = isset($_POST['nombre'])   ? trim($_POST['nombre'])   : '';
 $telefono = isset($_POST['telefono']) ? trim($_POST['telefono']) : '';
 $email    = isset($_POST['email'])    ? trim($_POST['email'])    : '';
 $password_plain = isset($_POST['password']) ? trim($_POST['password']) : '';
+$token_fcm = isset($_POST['token_fcm']) ? trim($_POST['token_fcm']) : '';
 
 // Validar que no vengan vacios
 if (empty($telefono)) {
     echo json_encode(["status" => "error", "message" => "El telefono es requerido"]);
+    exit;
+}
+
+if (empty($email)) {
+    echo json_encode(["status" => "error", "message" => "El correo es requerido"]);
     exit;
 }
 
@@ -44,45 +52,88 @@ if ($conn->connect_error) {
     exit;
 }
 
-// Verificar si el telefono ya existe (usando el nombre exacto de columna de la tabla)
-$check = $conn->prepare("SELECT id FROM usuarios WHERE telefono = ?");
-$check->bind_param("s", $telefono);
-$check->execute();
-$check->store_result();
+// Buscar usuario por telefono
+$checkPhone = $conn->prepare("SELECT id, email FROM usuarios WHERE telefono = ? LIMIT 1");
+$checkPhone->bind_param("s", $telefono);
+$checkPhone->execute();
+$resultPhone = $checkPhone->get_result();
+$usuarioPorTelefono = $resultPhone->fetch_assoc();
+$checkPhone->close();
 
-if ($check->num_rows > 0) {
-    // El usuario ya existe - actualizar el nombre si viene uno nuevo
-    $check->close();
-    if (!empty($nombre) || !empty($email)) {
-        $update = $conn->prepare("UPDATE usuarios SET nombre = ?, email = ? WHERE telefono = ?");
-        $update->bind_param("sss", $nombre, $email, $telefono);
-        $update->execute();
-        $update->close();
+// Buscar usuario por correo
+$checkEmail = $conn->prepare("SELECT id, telefono FROM usuarios WHERE email = ? LIMIT 1");
+$checkEmail->bind_param("s", $email);
+$checkEmail->execute();
+$resultEmail = $checkEmail->get_result();
+$usuarioPorEmail = $resultEmail->fetch_assoc();
+$checkEmail->close();
+
+if ($usuarioPorTelefono && $usuarioPorEmail) {
+    if (intval($usuarioPorTelefono['id']) !== intval($usuarioPorEmail['id'])) {
+        echo json_encode([
+            "status"  => "error",
+            "message" => "Ese numero ya esta asociado a otra cuenta y ese correo pertenece a un usuario distinto"
+        ]);
+        $conn->close();
+        exit;
     }
+
+    $update = $conn->prepare("UPDATE usuarios SET nombre = ?, token_fcm = ? WHERE id = ?");
+    $userId = intval($usuarioPorTelefono['id']);
+    $update->bind_param("ssi", $nombre, $token_fcm, $userId);
+    $update->execute();
+    $update->close();
+
     echo json_encode([
         "status"  => "success",
-        "message" => "Usuario actualizado",
-        "nuevo"   => false
+        "message" => "Usuario actualizado correctamente",
+        "nuevo"   => false,
+        "id"      => $userId
     ]);
     $conn->close();
     exit;
 }
-$check->close();
+
+if ($usuarioPorTelefono && !$usuarioPorEmail) {
+    echo json_encode([
+        "status"  => "error",
+        "message" => "Ese numero ya esta asociado a otra cuenta"
+    ]);
+    $conn->close();
+    exit;
+}
+
+if (!$usuarioPorTelefono && $usuarioPorEmail) {
+    echo json_encode([
+        "status"  => "error",
+        "message" => "Ese correo ya esta registrado con otro numero"
+    ]);
+    $conn->close();
+    exit;
+}
 
 // Hashear la contraseña
 $password_hash = password_hash($password_plain, PASSWORD_DEFAULT);
 
 // Insertar nuevo usuario - columnas exactas de la tabla fuber_db.usuarios
-$stmt = $conn->prepare("INSERT INTO usuarios (nombre, telefono, email, pass_hash, activo, creado_en) VALUES (?, ?, ?, ?, 1, NOW())");
-$stmt->bind_param("ssss", $nombre, $telefono, $email, $password_hash);
+$stmt = $conn->prepare("INSERT INTO usuarios (nombre, telefono, email, pass_hash, token_fcm, activo, creado_en) VALUES (?, ?, ?, ?, ?, 1, NOW())");
+$stmt->bind_param("sssss", $nombre, $telefono, $email, $password_hash, $token_fcm);
 
 if ($stmt->execute()) {
     $nuevo_id = $conn->insert_id;
+    list($welcomeSent, $welcomeError) = sendEmailMessage(
+        $email,
+        'Bienvenido a Fuber',
+        buildWelcomeEmailHtml($nombre),
+        buildWelcomeEmailText($nombre)
+    );
     echo json_encode([
         "status"  => "success",
         "message" => "Usuario registrado correctamente",
         "nuevo"   => true,
-        "id"      => $nuevo_id
+        "id"      => $nuevo_id,
+        "welcome_email_sent" => $welcomeSent,
+        "welcome_email_error" => $welcomeSent ? null : $welcomeError
     ]);
 } else {
     echo json_encode([

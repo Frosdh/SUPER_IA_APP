@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/Core/Services/PushNotificationService.dart';
-import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
+import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:fu_uber/UI/views/RegisterScreen.dart';
 import 'package:provider/provider.dart';
 
@@ -14,300 +12,206 @@ class OtpBottomSheet extends StatefulWidget {
 }
 
 class _OtpBottomSheetState extends State<OtpBottomSheet> {
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
-  bool _hasError = false;
+  final TextEditingController _otpController = TextEditingController();
+  final GlobalKey<FormState> _otpFormKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
-    for (var c in _controllers) c.dispose();
-    for (var f in _focusNodes) f.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
-  String get _otpCode => _controllers.map((c) => c.text).join();
-
-  void _onDigitChanged(int index, String value) {
-    if (value.isNotEmpty && index < 5) {
-      _focusNodes[index + 1].requestFocus();
-    }
-    if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
-    setState(() {
-      _hasError = false;
-    });
-  }
-
   Future<void> _verifyOtp(VerificationModel verificationModel) async {
-    final otp = _otpCode;
-    if (!verificationModel.otpAutoVerified && otp.length < 6) {
-      setState(() => _hasError = true);
+    if (!_otpFormKey.currentState.validate()) {
       return;
     }
 
-    verificationModel.setOtp(otp);
-    verificationModel.updateCircularLoadingOtp(true);
-
+    verificationModel.setOtp(_otpController.text);
     final response = await verificationModel.oTPVerification();
+
     if (!mounted) return;
-    verificationModel.updateCircularLoadingOtp(false);
 
     if (response != 1) {
-      setState(() => _hasError = true);
-      for (var c in _controllers) c.clear();
-      _focusNodes[0].requestFocus();
-      return;
-    }
-
-    final phone = verificationModel.phoneNumber ?? '';
-    final userCheck = await verificationModel.checkUserByPhone(phone);
-    if (!mounted) return;
-
-    final checkSuccess = userCheck["success"] == true;
-    final exists = userCheck["exists"] == true;
-
-    if (checkSuccess && exists) {
-      await AuthPrefs.saveUserSession(
-        nombre: userCheck["nombre"] ?? '',
-        telefono: phone,
-        email: userCheck["email"] ?? '',
-      );
-      await PushNotificationService.syncTokenWithBackend(force: true);
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
-      return;
-    }
-
-    if (!checkSuccess) {
-      final sesionValida = await AuthPrefs.hasValidSession();
-      final telefonoGuardado = await AuthPrefs.getUserPhone();
-      if (sesionValida && telefonoGuardado == phone) {
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
-        return;
-      }
-    }
-
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, RegisterScreen.route);
-  }
-
-  Future<void> _resendOtp(VerificationModel verificationModel) async {
-    verificationModel.updateCircularLoadingOtp(true);
-    final response = await verificationModel.resendOtp();
-    if (!mounted) return;
-    verificationModel.updateCircularLoadingOtp(false);
-
-    if (response == 1) {
-      for (var c in _controllers) c.clear();
-      setState(() => _hasError = false);
-      _focusNodes[0].requestFocus();
+      final message = verificationModel.otpErrorMessage?.isNotEmpty == true
+          ? verificationModel.otpErrorMessage
+          : 'No se pudo verificar el codigo';
       Scaffold.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Codigo reenviado correctamente'),
-          backgroundColor: ConstantColors.primaryViolet,
-        ),
+        SnackBar(content: Text(message)),
       );
       return;
     }
 
-    setState(() => _hasError = true);
+    final email = verificationModel.email;
+    final userResponse = await verificationModel.checkUserByEmail(email);
+
+    if (!mounted) return;
+
+    final exists = userResponse['status'] == 'success' &&
+        userResponse['exists'] == true;
+
+    if (exists) {
+      await AuthPrefs.saveUserSession(
+        telefono: userResponse['telefono'] ?? '',
+        nombre: userResponse['nombre'] ?? '',
+        email: userResponse['email'] ?? email,
+      );
+
+      Navigator.pop(context);
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => OsmMapScreen()),
+        (_) => false,
+      );
+      return;
+    }
+
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChangeNotifierProvider<VerificationModel>(
+          builder: (_) => VerificationModel()..setEmail(email ?? ''),
+          child: RegisterScreen(verifiedEmail: email ?? ''),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final verificationModel = Provider.of<VerificationModel>(context);
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final viewInsets = MediaQuery.of(context).viewInsets;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: ConstantColors.backgroundCard,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
-      padding: EdgeInsets.fromLTRB(28, 16, 28, 32 + bottomInset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: ConstantColors.borderColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          SizedBox(height: 24),
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: ConstantColors.accentWhatsApp.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: ConstantColors.accentWhatsApp.withOpacity(0.3),
-              ),
-            ),
-            child: Icon(
-              Icons.chat_rounded,
-              color: ConstantColors.accentWhatsApp,
-              size: 28,
-            ),
-          ),
-          SizedBox(height: 20),
-          Text(
-            'Verificacion',
-            style: TextStyle(
-              color: ConstantColors.textWhite,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          SizedBox(height: 8),
-          RichText(
-            text: TextSpan(
-              text: 'Enviamos un codigo a ',
-              style: TextStyle(
-                color: ConstantColors.textGrey,
-                fontSize: 14,
-                height: 1.5,
-              ),
-              children: [
-                TextSpan(
-                  text: verificationModel.phoneNumber ?? 'tu numero',
-                  style: TextStyle(
-                    color: ConstantColors.primaryViolet,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: List.generate(6, (index) => _buildOtpBox(index)),
-          ),
-          if (_hasError) ...[
-            SizedBox(height: 12),
-            Text(
-              verificationModel.otpErrorMessage.isNotEmpty
-                  ? verificationModel.otpErrorMessage
-                  : 'Codigo incorrecto. Intentalo de nuevo.',
-              style: TextStyle(
-                color: ConstantColors.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
-          SizedBox(height: 32),
-          verificationModel.shopCircularLoaderOTP
-              ? Center(
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      ConstantColors.primaryViolet,
+    return Padding(
+      padding: EdgeInsets.only(bottom: viewInsets.bottom),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Form(
+          key: _otpFormKey,
+          child: Builder(
+            builder: (formContext) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Center(
+                    child: Container(
+                      width: 46,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                     ),
                   ),
-                )
-              : GestureDetector(
-                  onTap: () => _verifyOtp(verificationModel),
-                  child: Container(
-                    width: double.infinity,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: ConstantColors.buttonGradient,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              ConstantColors.primaryViolet.withOpacity(0.4),
-                          blurRadius: 20,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
+                  SizedBox(height: 20),
+                  Text(
+                    'Verifica tu correo',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
                     ),
-                    child: Center(
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'Ingresa el codigo de 6 digitos enviado a ${verificationModel.email ?? ''}.',
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontSize: 14,
+                    ),
+                  ),
+                  SizedBox(height: 22),
+                  TextFormField(
+                    controller: _otpController,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: InputDecoration(
+                      hintText: '123456',
+                      counterText: '',
+                      prefixIcon: Icon(Icons.lock_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    validator: (value) {
+                      final otp = value?.trim() ?? '';
+                      if (otp.isEmpty) {
+                        return 'Ingresa el codigo';
+                      }
+                      if (otp.length != 6) {
+                        return 'El codigo debe tener 6 digitos';
+                      }
+                      return null;
+                    },
+                  ),
+                  if (verificationModel.otpErrorMessage?.isNotEmpty == true)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
                       child: Text(
-                        'Verificar codigo',
+                        verificationModel.otpErrorMessage,
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.5,
+                          color: Colors.redAccent,
+                          fontSize: 13,
                         ),
                       ),
                     ),
-                  ),
-                ),
-          SizedBox(height: 16),
-          Center(
-            child: GestureDetector(
-              onTap: () => _resendOtp(verificationModel),
-              child: RichText(
-                text: TextSpan(
-                  text: 'No recibiste el codigo? ',
-                  style: TextStyle(
-                    color: ConstantColors.textSubtle,
-                    fontSize: 13,
-                  ),
-                  children: [
-                    TextSpan(
-                      text: 'Reenviar',
-                      style: TextStyle(
-                        color: ConstantColors.primaryViolet,
-                        fontWeight: FontWeight.w600,
+                  SizedBox(height: 18),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: RaisedButton(
+                      color: ConstantColors.primaryViolet,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
+                      child: verificationModel.shopCircularLoaderOTP
+                          ? SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Text(
+                              'Confirmar codigo',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                      onPressed: verificationModel.shopCircularLoaderOTP
+                          ? null
+                          : () => _verifyOtp(verificationModel),
                     ),
-                  ],
-                ),
-              ),
-            ),
+                  ),
+                  SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.center,
+                    child: FlatButton(
+                      child: Text('Reenviar codigo'),
+                      onPressed: () async {
+                        final result = await verificationModel.resendOtp();
+                        if (!mounted) return;
+                        final message = result == 1
+                            ? 'Te enviamos un nuevo codigo al correo'
+                            : verificationModel.otpErrorMessage;
+                        Scaffold.of(formContext).showSnackBar(
+                          SnackBar(content: Text(message)),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOtpBox(int index) {
-    return Container(
-      width: 48,
-      height: 64,
-      decoration: BoxDecoration(
-        color: ConstantColors.backgroundLight,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _hasError
-              ? ConstantColors.error
-              : _focusNodes[index].hasFocus
-                  ? ConstantColors.primaryViolet
-                  : ConstantColors.borderColor,
-          width: 1.5,
         ),
-      ),
-      child: TextFormField(
-        controller: _controllers[index],
-        focusNode: _focusNodes[index],
-        textAlign: TextAlign.center,
-        keyboardType: TextInputType.number,
-        inputFormatters: [
-          FilteringTextInputFormatter.digitsOnly,
-          LengthLimitingTextInputFormatter(1),
-        ],
-        style: TextStyle(
-          color: ConstantColors.textWhite,
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-        ),
-        decoration: InputDecoration(
-          border: InputBorder.none,
-          counterText: '',
-        ),
-        onChanged: (value) => _onDigitChanged(index, value),
       ),
     );
   }

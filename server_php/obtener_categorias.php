@@ -4,10 +4,10 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET');
 header('Access-Control-Allow-Headers: Content-Type');
 
-$host     = "localhost";
-$dbname   = "fuber_db";
-$username = "root";
-$password = "";
+$host = "localhost";
+$dbname = "corporat_fuber_db";
+$username = "corporat_fuber_user";
+$password = 'FuB3r!Db#2026$Qx9';
 
 $conn = new mysqli($host, $username, $password, $dbname);
 if ($conn->connect_error) {

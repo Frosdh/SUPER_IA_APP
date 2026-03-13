@@ -7,5 +7,5 @@ class Constants {
   static const currentRoutePolylineId = "currentRoutePolyline";
   static const driverMarkerId = "CurrentDriverMarker";
   static const driverOriginPolyId = "driverOriginPolyLine";
-  static const apiBaseUrl = "https://unjealous-eleanore-unenquired.ngrok-free.dev/fuber_api";
+  static const apiBaseUrl = "http://corporativoqbank.com/fuber_api";
 }

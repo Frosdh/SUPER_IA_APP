@@ -8,10 +8,10 @@ header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 
-$host     = "localhost";
-$dbname   = "fuber_db";
-$username = "root";
-$password = "";
+$host = "localhost";
+$dbname = "corporat_fuber_db";
+$username = "corporat_fuber_user";
+$password = 'FuB3r!Db#2026$Qx9';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(["status" => "error", "message" => "Metodo no permitido"]);

@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FuBer — Guía Visual & Recomendaciones de Diseño</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Syne:wght@700;800&family=Inter:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #080812;
+    --card: #0F0F20;
+    --card2: #13132a;
+    --violet: #A78BFA;
+    --blue: #60A5FA;
+    --indigo: #818CF8;
+    --green: #34D399;
+    --text: #F8FAFC;
+    --muted: #94A3B8;
+    --border: #1e1e3f;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── HERO ─────────────────────────── */
+  .hero {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 20px;
+    overflow: hidden;
+  }
+
+  .hero-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    opacity: 0.25;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  .hero-orb.o1 { width: 500px; height: 500px; background: #A78BFA; top: -100px; left: -150px; animation-delay: 0s; }
+  .hero-orb.o2 { width: 400px; height: 400px; background: #60A5FA; bottom: -100px; right: -100px; animation-delay: -4s; }
+  .hero-orb.o3 { width: 300px; height: 300px; background: #818CF8; top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -2s; }
+
+  @keyframes orbFloat {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-30px) scale(1.05); }
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(167,139,250,0.12);
+    border: 1px solid rgba(167,139,250,0.3);
+    border-radius: 100px;
+    padding: 8px 18px;
+    font-size: 13px;
+    color: var(--violet);
+    letter-spacing: 0.5px;
+    margin-bottom: 28px;
+    backdrop-filter: blur(10px);
+    animation: fadeSlideUp 0.7s ease both;
+  }
+
+  .hero h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(42px, 7vw, 88px);
+    font-weight: 800;
+    line-height: 1.0;
+    letter-spacing: -2px;
+    animation: fadeSlideUp 0.7s 0.15s ease both;
+  }
+
+  .hero h1 .grad {
+    background: linear-gradient(135deg, #A78BFA, #60A5FA, #818CF8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-sub {
+    font-size: 18px;
+    color: var(--muted);
+    max-width: 560px;
+    margin-top: 20px;
+    animation: fadeSlideUp 0.7s 0.3s ease both;
+  }
+
+  @keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .scroll-hint {
+    margin-top: 60px;
+    animation: bounce 2s ease-in-out infinite;
+    color: var(--muted);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+  }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(8px)} }
+
+  /* ── SECTION ─────────────────────── */
+  section {
+    padding: 80px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-tag {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--violet);
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 800;
+    letter-spacing: -1px;
+    margin-bottom: 16px;
+  }
+
+  .section-desc {
+    color: var(--muted);
+    font-size: 16px;
+    max-width: 600px;
+    margin-bottom: 48px;
+  }
+
+  /* ── DIVIDER ─────────────────────── */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 0;
+  }
+
+  /* ── DIAGNOSIS GRID ──────────────── */
+  .diag-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .diag-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+  .diag-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+
+  .diag-card .icon {
+    font-size: 28px;
+    margin-bottom: 16px;
+  }
+
+  .diag-card h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  .diag-card p {
+    font-size: 14px;
+    color: var(--muted);
+  }
+
+  .tag-good { color: #34D399; }
+  .tag-bad  { color: #F87171; }
+  .tag-opp  { color: #FBBF24; }
+
+  /* ── COLOR PALETTE ───────────────── */
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+  }
+
+  .swatch {
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s;
+  }
+  .swatch:hover { transform: scale(1.03); }
+
+  .swatch-color {
+    height: 90px;
+    width: 100%;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .swatch-info {
+    background: var(--card2);
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 16px 16px;
+  }
+
+  .swatch-name { font-size: 13px; font-weight: 600; }
+  .swatch-hex  { font-size: 12px; color: var(--muted); font-family: monospace; }
+
+  /* ── TYPOGRAPHY ──────────────────── */
+  .typo-demo {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 40px;
+    margin-bottom: 20px;
+  }
+
+  .typo-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+    display: block;
+  }
+
+  .t-display {
+    font-family: 'Syne', sans-serif;
+    font-size: 56px;
+    font-weight: 800;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #A78BFA, #60A5FA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    line-height: 1.05;
+  }
+
+  .t-heading {
+    font-family: 'Syne', sans-serif;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -1px;
+  }
+
+  .t-subhead {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 20px;
+    font-weight: 500;
+  }
+
+  .t-body {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: #CBD5E1;
+  }
+
+  .t-caption {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+  }
+
+  .t-mono {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    letter-spacing: 2px;
+    color: var(--violet);
+  }
+
+  /* ── MOBILE MOCKUPS ──────────────── */
+  .mockups-row {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .phone-frame {
+    width: 240px;
+    border-radius: 40px;
+    background: #0a0a18;
+    border: 2px solid rgba(167,139,250,0.25);
+    padding: 16px;
+    box-shadow:
+      0 0 0 6px #0D0D1A,
+      0 0 0 8px rgba(167,139,250,0.1),
+      0 40px 80px rgba(0,0,0,0.6);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .phone-notch {
+    width: 70px;
+    height: 18px;
+    background: #0a0a18;
+    border-radius: 0 0 12px 12px;
+    margin: 0 auto 10px;
+    border: 1.5px solid rgba(255,255,255,0.06);
+    border-top: none;
+  }
+
+  .phone-screen {
+    border-radius: 28px;
+    overflow: hidden;
+    min-height: 420px;
+    position: relative;
+  }
+
+  /* ── SPLASH MOCKUP ───────────────── */
+  .splash-screen {
+    background: linear-gradient(160deg, #1A0A3D 0%, #0D0D1A 60%);
+    min-height: 420px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    position: relative;
+  }
+
+  .splash-orb1 {
+    position: absolute;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(167,139,250,0.2), transparent);
+    top: -40px; right: -40px;
+  }
+  .splash-orb2 {
+    position: absolute;
+    width: 140px; height: 140px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(96,165,250,0.15), transparent);
+    bottom: -30px; left: -30px;
+  }
+
+  .splash-logo-ring {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #A78BFA, #60A5FA);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px;
+    margin-bottom: 20px;
+    box-shadow: 0 0 40px rgba(167,139,250,0.4);
+    position: relative;
+  }
+
+  .splash-logo-ring::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 1px solid rgba(167,139,250,0.3);
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.15); opacity: 0; }
+  }
+
+  .splash-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 34px;
+    font-weight: 800;
+    background: linear-gradient(90deg, #A78BFA, #60A5FA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+  }
+
+  .splash-sub {
+    font-size: 10px;
+    letter-spacing: 5px;
+    color: rgba(255,255,255,0.5);
+    margin-top: 2px;
+    text-transform: uppercase;
+  }
+
+  .splash-tagline {
+    font-size: 11px;
+    color: rgba(255,255,255,0.35);
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+  }
+
+  .splash-dot-bar {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 4px;
+  }
+
+  .dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: rgba(167,139,250,0.4);
+  }
+  .dot.active { background: #A78BFA; width: 14px; border-radius: 2px; }
+
+  /* ── HOME MOCKUP ─────────────────── */
+  .home-screen {
+    background: #0D0D1A;
+    min-height: 420px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .home-map-area {
+    height: 220px;
+    background: linear-gradient(160deg, #0a1628 0%, #0D1A35 100%);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .map-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(96,165,250,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(96,165,250,0.05) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .map-road-h {
+    position: absolute;
+    height: 2px;
+    background: rgba(96,165,250,0.15);
+    left: 0; right: 0;
+  }
+
+  .map-road-v {
+    position: absolute;
+    width: 2px;
+    background: rgba(96,165,250,0.15);
+    top: 0; bottom: 0;
+  }
+
+  .map-pin {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -60%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pin-dot {
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #A78BFA, #60A5FA);
+    box-shadow: 0 0 16px rgba(167,139,250,0.6);
+    position: relative;
+  }
+
+  .pin-dot::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid rgba(167,139,250,0.3);
+    animation: pulse-ring 2s infinite;
+  }
+
+  .pin-line {
+    width: 2px; height: 10px;
+    background: linear-gradient(to bottom, #A78BFA, transparent);
+  }
+
+  .map-car {
+    position: absolute;
+    font-size: 16px;
+    top: 30%;
+    left: 25%;
+    animation: carMove 4s ease-in-out infinite;
+  }
+
+  @keyframes carMove {
+    0%, 100% { transform: translate(0,0) rotate(0deg); }
+    25% { transform: translate(20px,-10px) rotate(5deg); }
+    75% { transform: translate(-10px,5px) rotate(-3deg); }
+  }
+
+  .home-panel {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #13132A;
+    border-radius: 20px 20px 0 0;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(167,139,250,0.15);
+  }
+
+  .panel-handle {
+    width: 32px; height: 3px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 2px;
+    margin: 0 auto 12px;
+  }
+
+  .search-box {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 12px;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .search-icon { font-size: 12px; color: var(--violet); }
+  .search-text { font-size: 11px; color: rgba(255,255,255,0.4); }
+
+  .quick-dest {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .qd-chip {
+    background: rgba(167,139,250,0.08);
+    border: 1px solid rgba(167,139,250,0.15);
+    border-radius: 8px;
+    padding: 5px 8px;
+    font-size: 9px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .category-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .cat-item {
+    flex: 1;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 6px;
+    text-align: center;
+  }
+
+  .cat-icon { font-size: 14px; display: block; margin-bottom: 3px; }
+  .cat-label { font-size: 8px; color: var(--muted); }
+
+  .cat-item.active {
+    background: rgba(167,139,250,0.12);
+    border-color: rgba(167,139,250,0.4);
+  }
+
+  .cat-item.active .cat-label { color: var(--violet); }
+
+  /* ── ONBOARDING MOCKUP ───────────── */
+  .onboard-screen {
+    background: linear-gradient(160deg, #1A0A3D 0%, #0D0D1A 100%);
+    min-height: 420px;
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .ob-icon-bg {
+    width: 80px; height: 80px;
+    border-radius: 24px;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    margin: 30px 0 20px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 0 40px rgba(167,139,250,0.15);
+  }
+
+  .ob-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    text-align: center;
+    letter-spacing: -0.5px;
+    margin-bottom: 10px;
+  }
+
+  .ob-title span {
+    background: linear-gradient(90deg, #A78BFA, #60A5FA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .ob-text {
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+    margin-bottom: 28px;
+    padding: 0 8px;
+  }
+
+  .ob-dots {
+    display: flex; gap: 6px; margin-bottom: 20px;
+  }
+
+  .ob-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(167,139,250,0.25);
+  }
+  .ob-dot.active {
+    background: var(--violet);
+    width: 18px;
+    border-radius: 3px;
+  }
+
+  .ob-btn {
+    width: 100%;
+    background: linear-gradient(90deg, #A78BFA, #60A5FA);
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 0.3px;
+  }
+
+  /* ── ANIMATION SECTION ───────────── */
+  .anim-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+  }
+
+  .anim-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px 24px;
+    text-align: center;
+    transition: transform 0.3s;
+  }
+  .anim-card:hover { transform: translateY(-4px); }
+
+  .anim-demo {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+    font-size: 32px;
+    position: relative;
+  }
+
+  .anim-pulse .anim-demo::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid rgba(167,139,250,0.3);
+    animation: pulse-ring 2s ease-in-out infinite;
+  }
+
+  .anim-spin .anim-demo::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--violet);
+    animation: spin 1.2s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .anim-bounce-demo {
+    display: flex;
+    gap: 6px;
+    align-items: flex-end;
+    justify-content: center;
+    height: 40px;
+  }
+
+  .bounce-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--violet);
+    animation: bounceDot 1.2s ease-in-out infinite;
+  }
+  .bounce-dot:nth-child(2) { animation-delay: 0.15s; background: var(--indigo); }
+  .bounce-dot:nth-child(3) { animation-delay: 0.3s; background: var(--blue); }
+
+  @keyframes bounceDot {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+  }
+
+  .slide-demo {
+    overflow: hidden;
+    height: 40px;
+    position: relative;
+  }
+
+  .slide-item {
+    position: absolute;
+    left: 0; right: 0;
+    padding: 0 12px;
+    font-size: 12px;
+    color: var(--muted);
+    animation: slideLoop 3s ease-in-out infinite;
+    text-align: center;
+  }
+
+  .slide-item:nth-child(2) { animation-delay: -1.5s; }
+
+  @keyframes slideLoop {
+    0%, 100% { transform: translateY(-100%); opacity: 0; }
+    10%, 40% { transform: translateY(0); opacity: 1; }
+    50%, 90% { transform: translateY(100%); opacity: 0; }
+  }
+
+  .anim-card h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .anim-card p {
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .code-tag {
+    display: inline-block;
+    background: rgba(167,139,250,0.1);
+    border: 1px solid rgba(167,139,250,0.2);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-family: monospace;
+    color: var(--violet);
+    margin-top: 10px;
+  }
+
+  /* ── DEPS TABLE ──────────────────── */
+  .deps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
+  .dep-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: border-color 0.2s;
+  }
+  .dep-card:hover { border-color: rgba(167,139,250,0.4); }
+
+  .dep-icon {
+    font-size: 22px;
+    min-width: 36px;
+    text-align: center;
+  }
+
+  .dep-info h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .dep-info p  { font-size: 12px; color: var(--muted); }
+  .dep-pkg     { font-size: 11px; font-family: monospace; color: var(--blue); margin-top: 6px; display: block; }
+
+  .priority-badge {
+    display: inline-block;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    margin-top: 6px;
+  }
+  .pb-high   { background: rgba(248,113,113,0.15); color: #F87171; }
+  .pb-medium { background: rgba(251,191,36,0.15);  color: #FBBF24; }
+  .pb-nice   { background: rgba(52,211,153,0.15);  color: #34D399; }
+
+  /* ── BEFORE/AFTER ────────────────── */
+  .ba-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 600px) {
+    .ba-grid { grid-template-columns: 1fr; }
+    .mockups-row { flex-direction: column; align-items: center; }
+  }
+
+  .ba-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 24px;
+  }
+
+  .ba-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ba-label.before { color: #F87171; }
+  .ba-label.after  { color: #34D399; }
+
+  .ba-item {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+
+  .ba-item .icon { font-size: 16px; min-width: 20px; }
+
+  /* ── BOTTOM NAV MOCKUP ───────────── */
+  .nav-mockup {
+    background: rgba(19,19,42,0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(167,139,250,0.15);
+    border-radius: 24px;
+    padding: 16px 24px;
+    display: flex;
+    justify-content: space-around;
+    max-width: 340px;
+    margin: 0 auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 12px;
+    transition: background 0.2s;
+    font-size: 20px;
+    min-width: 50px;
+  }
+
+  .nav-item .nav-label {
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .nav-item.active {
+    background: rgba(167,139,250,0.12);
+  }
+
+  .nav-item.active .nav-label {
+    color: var(--violet);
+  }
+
+  .nav-item.active .nav-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--violet);
+    margin-top: 2px;
+  }
+
+  /* ── GLASSMORPH ──────────────────── */
+  .glass-demo {
+    background: rgba(255,255,255,0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .glass-demo::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(167,139,250,0.05), rgba(96,165,250,0.05));
+    pointer-events: none;
+  }
+
+  /* ── CTA ─────────────────────────── */
+  .cta-section {
+    text-align: center;
+    padding: 80px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cta-section::before {
+    content: '';
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(167,139,250,0.1), transparent 70%);
+    top: 50%; left: 50%;
+    transform: translate(-50%,-50%);
+    pointer-events: none;
+  }
+
+  .priority-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 680px;
+    margin: 0 auto;
+  }
+
+  .priority-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    text-align: left;
+    transition: transform 0.2s;
+  }
+  .priority-item:hover { transform: translateX(4px); }
+
+  .priority-num {
+    min-width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .pn1 { background: rgba(248,113,113,0.15); color: #F87171; border: 1px solid rgba(248,113,113,0.3); }
+  .pn2 { background: rgba(251,191,36,0.15);  color: #FBBF24; border: 1px solid rgba(251,191,36,0.3); }
+  .pn3 { background: rgba(52,211,153,0.15);  color: #34D399; border: 1px solid rgba(52,211,153,0.3); }
+  .pn4 { background: rgba(96,165,250,0.15);  color: #60A5FA; border: 1px solid rgba(96,165,250,0.3); }
+  .pn5 { background: rgba(167,139,250,0.15); color: #A78BFA; border: 1px solid rgba(167,139,250,0.3); }
+
+  .priority-item h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .priority-item p  { font-size: 13px; color: var(--muted); }
+
+  /* ── GLASSMORPHISM CARD ──────────── */
+  .glass-card-demo {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  @media (max-width: 600px) {
+    .glass-card-demo { grid-template-columns: 1fr; }
+  }
+
+  .mini-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 16px;
+    backdrop-filter: blur(10px);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .mini-card:hover {
+    border-color: rgba(167,139,250,0.3);
+    transform: translateY(-2px);
+  }
+
+  .mini-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(167,139,250,0.04), transparent);
+  }
+
+  .mini-card-icon { font-size: 22px; margin-bottom: 10px; }
+  .mini-card-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .mini-card-sub   { font-size: 11px; color: var(--muted); }
+
+  .gradient-text {
+    background: linear-gradient(90deg, #A78BFA, #60A5FA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  /* ── RATING COMPONENT ────────────── */
+  .stars {
+    display: flex; gap: 4px;
+  }
+  .star {
+    font-size: 18px;
+    animation: starPop 0.3s ease both;
+  }
+  .star:nth-child(1) { animation-delay: 0.0s; }
+  .star:nth-child(2) { animation-delay: 0.1s; }
+  .star:nth-child(3) { animation-delay: 0.2s; }
+  .star:nth-child(4) { animation-delay: 0.3s; }
+  .star:nth-child(5) { animation-delay: 0.4s; }
+
+  @keyframes starPop {
+    from { transform: scale(0) rotate(-30deg); opacity: 0; }
+    to   { transform: scale(1) rotate(0); opacity: 1; }
+  }
+
+  /* ── GRADIENT BORDER BUTTON ──────── */
+  .grad-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    padding: 14px 28px;
+    background: linear-gradient(90deg, #A78BFA, #60A5FA);
+    border-radius: 14px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    border: none;
+    letter-spacing: 0.2px;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 8px 30px rgba(167,139,250,0.3);
+    text-decoration: none;
+  }
+  .grad-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(167,139,250,0.45);
+  }
+
+  .ghost-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 27px;
+    background: transparent;
+    border: 1px solid rgba(167,139,250,0.4);
+    border-radius: 14px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--violet);
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    text-decoration: none;
+  }
+  .ghost-btn:hover {
+    background: rgba(167,139,250,0.08);
+    border-color: rgba(167,139,250,0.6);
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 24px;
+  }
+
+  /* footer */
+  footer {
+    text-align: center;
+    padding: 40px;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+  }
+
+  footer span {
+    background: linear-gradient(90deg, #A78BFA, #60A5FA);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════ HERO ════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-orb o1"></div>
+  <div class="hero-orb o2"></div>
+  <div class="hero-orb o3"></div>
+
+  <div class="hero-badge">✦ Análisis Visual — FuBer App</div>
+
+  <h1>Diseño que <span class="grad">destaca</span><br>de verdad</h1>
+
+  <p class="hero-sub">Guía completa de identidad visual, tipografía, animaciones y componentes para tu app de transporte en Flutter.</p>
+
+  <div class="scroll-hint">
+    <span>Desplázate para explorar</span>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ DIAGNÓSTICO ══════════════════════════════ -->
+<section>
+  <div class="section-tag">01 — Diagnóstico</div>
+  <h2 class="section-title">¿Dónde está tu app hoy?</h2>
+  <p class="section-desc">Revisé cada pantalla, cada widget y tu sistema de colores. Esto es lo que encontré.</p>
+
+  <div class="diag-grid">
+    <div class="diag-card">
+      <div class="icon">✅</div>
+      <h3 class="tag-good">Paleta de colores sólida</h3>
+      <p>Tu combo violeta (#A78BFA) + azul eléctrico (#60A5FA) sobre fondo oscuro profundo (#0D0D1A) es moderno y diferenciado. Es una buena base.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">✅</div>
+      <h3 class="tag-good">Animaciones básicas presentes</h3>
+      <p>SplashScreen, RideCompleted y OnboardingScreen tienen fade + scale + slide. Es un buen punto de partida, pero necesitan más profundidad.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">🚨</div>
+      <h3 class="tag-bad">Tipografía genérica</h3>
+      <p>Toda la app usa solo "Roboto". Es la tipografía por defecto de Flutter — no comunica ninguna personalidad. Este es el cambio visual de mayor impacto.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">🚨</div>
+      <h3 class="tag-bad">BottomSheetMenuMap sin actualizar</h3>
+      <p>Es blanco con textos en inglés ("Choose the type of Ride"). Rompe completamente con el diseño oscuro del resto de la app.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">🚨</div>
+      <h3 class="tag-bad">Sin glassmorphism</h3>
+      <p>Los cards y contenedores son sólidos (#13132A). Las apps premium 2025 usan capas translúcidas con blur para crear profundidad real.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">⚠️</div>
+      <h3 class="tag-opp">Sin microinteracciones</h3>
+      <p>Botones que no dan feedback táctil, íconos que no reaccionan al tap, listas que aparecen sin animación de entrada — pequeños detalles que hacen la diferencia.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">⚠️</div>
+      <h3 class="tag-opp">Sin animaciones Lottie/Rive</h3>
+      <p>Ninguna pantalla usa animaciones vectoriales. El estado "buscando conductor" con un CircularProgressIndicator se puede transformar en una experiencia memorable.</p>
+    </div>
+
+    <div class="diag-card">
+      <div class="icon">⚠️</div>
+      <h3 class="tag-opp">Sin identidad de marca local</h3>
+      <p>La app está en Cuenca, Ecuador, pero el diseño podría ser de cualquier ciudad. Hay oportunidad de incorporar elementos culturales sutiles.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ TIPOGRAFÍA ═══════════════════════════════ -->
+<section>
+  <div class="section-tag">02 — Tipografía</div>
+  <h2 class="section-title">El cambio de mayor impacto</h2>
+  <p class="section-desc">Cambiar Roboto por un sistema de 3 fuentes transformará la percepción de tu app sin tocar una sola pantalla de lógica.</p>
+
+  <div class="typo-demo">
+    <span class="typo-label">Display / Títulos principales — Syne (800)</span>
+    <div class="t-display">Tu viaje,<br>tu manera</div>
+  </div>
+
+  <div class="typo-demo">
+    <span class="typo-label">Headings / Subtítulos — Syne (700)</span>
+    <div class="t-heading">Elige tu destino</div>
+  </div>
+
+  <div class="typo-demo">
+    <span class="typo-label">Subheadings / Labels — Space Grotesk (500)</span>
+    <div class="t-subhead">Conductor en camino · 3 min</div>
+  </div>
+
+  <div class="typo-demo">
+    <span class="typo-label">Cuerpo de texto — Inter (400)</span>
+    <div class="t-body">FuBer te conecta con conductores verificados en Cuenca en tiempo real. Selecciona tu destino, confirma el precio y disfruta el viaje.</div>
+  </div>
+
+  <div class="typo-demo">
+    <span class="typo-label">Captions / Metadatos — Inter (300)</span>
+    <div class="t-caption">Última actualización hace 2 minutos · Cuenca, Ecuador</div>
+  </div>
+
+  <div class="typo-demo">
+    <span class="typo-label">Precios / Datos numéricos — Space Grotesk (700, números tabulares)</span>
+    <div class="t-mono">$4.80 USD</div>
+  </div>
+
+  <div style="background: rgba(167,139,250,0.08); border: 1px solid rgba(167,139,250,0.2); border-radius: 16px; padding: 20px 24px; margin-top: 20px;">
+    <p style="font-size: 14px; color: var(--muted); margin-bottom: 8px;">📦 <strong style="color: var(--text);">Añade al pubspec.yaml:</strong></p>
+    <pre style="font-family: monospace; font-size: 12px; color: #A78BFA; line-height: 1.8;">google_fonts: ^6.2.1
+
+# En tu ThemeData:
+fontFamily: GoogleFonts.spaceGrotesk().fontFamily
+# Títulos:
+fontFamily: GoogleFonts.syne().fontFamily
+# Cuerpo:
+fontFamily: GoogleFonts.inter().fontFamily</pre>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ PALETA ═══════════════════════════════════ -->
+<section>
+  <div class="section-tag">03 — Paleta de Colores</div>
+  <h2 class="section-title">Tu sistema de colores</h2>
+  <p class="section-desc">Tienes una base excelente. Aquí el sistema completo con los roles de cada color bien definidos.</p>
+
+  <div class="palette-grid">
+    <div class="swatch">
+      <div class="swatch-color" style="background: linear-gradient(135deg, #A78BFA, #60A5FA);">
+        <span style="font-size: 20px;">✦</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Primary Gradient</div>
+        <div class="swatch-hex">#A78BFA → #60A5FA</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #A78BFA;">
+        <span style="font-size: 20px; color: rgba(0,0,0,0.3);">Aa</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Violet Primary</div>
+        <div class="swatch-hex">#A78BFA</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #60A5FA;">
+        <span style="font-size: 20px; color: rgba(0,0,0,0.3);">Aa</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Electric Blue</div>
+        <div class="swatch-hex">#60A5FA</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #818CF8;">
+        <span style="font-size: 20px; color: rgba(0,0,0,0.3);">Aa</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Indigo Accent</div>
+        <div class="swatch-hex">#818CF8</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #0D0D1A;">
+        <span style="font-size: 20px; color: rgba(255,255,255,0.1);">Aa</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Background Dark</div>
+        <div class="swatch-hex">#0D0D1A</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #13132A;">
+        <span style="font-size: 20px; color: rgba(255,255,255,0.1);">Aa</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Card Surface</div>
+        <div class="swatch-hex">#13132A</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #34D399;">
+        <span style="font-size: 20px; color: rgba(0,0,0,0.4);">✓</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Success / Activo</div>
+        <div class="swatch-hex">#34D399</div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-color" style="background: #1A0A3D;">
+        <span style="font-size: 20px; color: rgba(255,255,255,0.1);">Aa</span>
+      </div>
+      <div class="swatch-info">
+        <div class="swatch-name">Deep Violet BG ✨ Nuevo</div>
+        <div class="swatch-hex">#1A0A3D</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 24px; background: rgba(52,211,153,0.05); border: 1px solid rgba(52,211,153,0.15); border-radius: 16px; padding: 20px 24px;">
+    <p style="font-size: 14px; color: #34D399; font-weight: 600; margin-bottom: 8px;">💡 Sugerencia: Añade un color de acento cálido</p>
+    <p style="font-size: 13px; color: var(--muted);">Considera agregar <strong style="color: #F59E0B;">#F59E0B (Amber)</strong> o <strong style="color: #FB7185;">#FB7185 (Rose)</strong> para alertas, descuentos y estados especiales. Un tercer acento cálido sobre fondos fríos crea contraste dramático y llama la atención.</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ MOCKUPS ══════════════════════════════════ -->
+<section>
+  <div class="section-tag">04 — Mockups de Pantallas</div>
+  <h2 class="section-title">Cómo se verían las pantallas</h2>
+  <p class="section-desc">Aquí tienes 3 pantallas rediseñadas con el nuevo sistema visual aplicado.</p>
+
+  <div class="mockups-row">
+
+    <!-- Splash -->
+    <div>
+      <p style="text-align:center; font-size: 12px; color: var(--muted); margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase;">Splash Screen</p>
+      <div class="phone-frame">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="splash-screen">
+            <div class="splash-orb1"></div>
+            <div class="splash-orb2"></div>
+
+            <!-- Partículas decorativas -->
+            <div style="position:absolute; top:25%; left:15%; width:3px; height:3px; border-radius:50%; background:rgba(167,139,250,0.4);"></div>
+            <div style="position:absolute; top:40%; right:20%; width:2px; height:2px; border-radius:50%; background:rgba(96,165,250,0.4);"></div>
+            <div style="position:absolute; top:65%; left:25%; width:2px; height:2px; border-radius:50%; background:rgba(167,139,250,0.3);"></div>
+
+            <div class="splash-logo-ring">🚗</div>
+
+            <div class="splash-title">FuBer</div>
+            <div class="splash-sub">Cuenca · Ecuador</div>
+            <div class="splash-tagline">Tu viaje, tu manera</div>
+
+            <div class="splash-dot-bar">
+              <div class="dot active"></div>
+              <div class="dot"></div>
+              <div class="dot"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Home / Mapa -->
+    <div>
+      <p style="text-align:center; font-size: 12px; color: var(--muted); margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase;">Pantalla Principal</p>
+      <div class="phone-frame">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="home-screen">
+            <div class="home-map-area">
+              <div class="map-grid"></div>
+              <div class="map-road-h" style="top: 40%;"></div>
+              <div class="map-road-h" style="top: 65%;"></div>
+              <div class="map-road-v" style="left: 30%;"></div>
+              <div class="map-road-v" style="left: 70%;"></div>
+              <div class="map-car">🚗</div>
+              <div style="position:absolute; top:15%; right:10%; font-size:10px;">🚗</div>
+              <div class="map-pin">
+                <div class="pin-dot"></div>
+                <div class="pin-line"></div>
+              </div>
+              <!-- Header flotante -->
+              <div style="position:absolute; top:10px; left:10px; right:10px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="background:rgba(13,13,26,0.8); backdrop-filter:blur(10px); border:1px solid rgba(167,139,250,0.2); border-radius:10px; padding:6px 10px; font-size:10px; color:var(--muted);">📍 Cuenca, EC</div>
+                <div style="background:rgba(13,13,26,0.8); backdrop-filter:blur(10px); border:1px solid rgba(167,139,250,0.2); border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:14px;">👤</div>
+              </div>
+            </div>
+
+            <div class="home-panel">
+              <div class="panel-handle"></div>
+              <div style="font-size: 13px; font-weight: 600; margin-bottom: 8px;">¿A dónde vamos?</div>
+              <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <span class="search-text">Buscar destino...</span>
+              </div>
+              <div class="quick-dest">
+                <div class="qd-chip">🏠 Casa</div>
+                <div class="qd-chip">💼 Trabajo</div>
+                <div class="qd-chip">+ Agregar</div>
+              </div>
+              <div style="font-size: 10px; color: var(--muted); margin-bottom: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;">Tipo de viaje</div>
+              <div class="category-row">
+                <div class="cat-item active">
+                  <span class="cat-icon">🚗</span>
+                  <span class="cat-label">Estándar</span>
+                </div>
+                <div class="cat-item">
+                  <span class="cat-icon">⭐</span>
+                  <span class="cat-label">Premium</span>
+                </div>
+                <div class="cat-item">
+                  <span class="cat-icon">🚐</span>
+                  <span class="cat-label">Van</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Onboarding -->
+    <div>
+      <p style="text-align:center; font-size: 12px; color: var(--muted); margin-bottom: 12px; letter-spacing: 1px; text-transform: uppercase;">Onboarding</p>
+      <div class="phone-frame">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <div class="onboard-screen">
+            <div style="position:absolute; top:0; right:0; font-size:11px; color:rgba(167,139,250,0.6); padding:14px 16px;">Omitir</div>
+
+            <!-- Ilustración con blur de fondo -->
+            <div style="position:absolute; width:200px; height:200px; border-radius:50%; background:radial-gradient(circle, rgba(167,139,250,0.15), transparent); top:10%; left:50%; transform:translateX(-50%); pointer-events:none;"></div>
+
+            <div class="ob-icon-bg">📍</div>
+
+            <div class="ob-title">Tu destino,<br><span>en segundos</span></div>
+
+            <div class="ob-text">Ingresa a dónde quieres ir y encuentra conductores cerca de ti en tiempo real por toda Cuenca.</div>
+
+            <!-- Feature pills -->
+            <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center; margin-bottom:20px;">
+              <div style="background:rgba(167,139,250,0.08); border:1px solid rgba(167,139,250,0.15); border-radius:8px; padding:4px 10px; font-size:9px; color:rgba(167,139,250,0.8);">⚡ Tiempo real</div>
+              <div style="background:rgba(96,165,250,0.08); border:1px solid rgba(96,165,250,0.15); border-radius:8px; padding:4px 10px; font-size:9px; color:rgba(96,165,250,0.8);">🗺️ GPS preciso</div>
+            </div>
+
+            <div class="ob-dots">
+              <div class="ob-dot active"></div>
+              <div class="ob-dot"></div>
+              <div class="ob-dot"></div>
+            </div>
+
+            <div class="ob-btn">Siguiente →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ ANIMACIONES ══════════════════════════════ -->
+<section>
+  <div class="section-tag">05 — Animaciones</div>
+  <h2 class="section-title">Las animaciones que necesitas</h2>
+  <p class="section-desc">Cada pantalla clave debe tener su "firma" de animación. Esto es lo que transforma una app funcional en una app memorable.</p>
+
+  <div class="anim-grid">
+
+    <div class="anim-card anim-pulse">
+      <div class="anim-demo">📍</div>
+      <h4>Pulse del pin en el mapa</h4>
+      <p>Un anillo que se expande y desvanece alrededor del pin de ubicación. Comunica "activo" sin interrumpir.</p>
+      <span class="code-tag">AnimationController + ScaleTransition</span>
+    </div>
+
+    <div class="anim-card anim-spin">
+      <div class="anim-demo">🔄</div>
+      <h4>Indicador de búsqueda</h4>
+      <p>Reemplaza el CircularProgressIndicator por un anillo con gradiente violeta→azul girando mientras busca conductor.</p>
+      <span class="code-tag">CustomPainter + RotationTransition</span>
+    </div>
+
+    <div class="anim-card">
+      <div class="anim-demo" style="flex-direction: column;">
+        <div class="anim-bounce-demo">
+          <div class="bounce-dot"></div>
+          <div class="bounce-dot"></div>
+          <div class="bounce-dot"></div>
+        </div>
+      </div>
+      <h4>Loading de 3 puntos</h4>
+      <p>Para estados de espera (OTP, carga de datos) en lugar de un spinner genérico. Más cálido y humano.</p>
+      <span class="code-tag">StaggeredAnimation + Interval</span>
+    </div>
+
+    <div class="anim-card">
+      <div class="anim-demo">✅</div>
+      <h4>Checkmark animado en RideCompleted</h4>
+      <p>Un SVG de checkmark que se dibuja progresivamente con un trazo verde luminoso. Mucho más satisfactorio que un ícono estático.</p>
+      <span class="code-tag">lottie_flutter (archivo JSON)</span>
+    </div>
+
+    <div class="anim-card">
+      <div class="anim-demo">
+        <div class="slide-demo">
+          <div class="slide-item">⭐ Conductor disponible</div>
+          <div class="slide-item">🚗 3 min de espera</div>
+        </div>
+      </div>
+      <h4>Texto rotativo de estado</h4>
+      <p>En la pantalla "buscando conductor", frases que se alternan con slide vertical comunican progreso sin que se sienta estático.</p>
+      <span class="code-tag">AnimatedSwitcher + SlideTransition</span>
+    </div>
+
+    <div class="anim-card">
+      <div class="anim-demo">⭐</div>
+      <h4>Estrellas de calificación</h4>
+      <p>Cada estrella aparece con un pop (scale 0→1 + rotate) con delay escalonado. Hace que calificar se sienta especial.</p>
+      <span class="code-tag">Staggered + ElasticOut curve</span>
+    </div>
+
+    <div class="anim-card">
+      <div class="anim-demo">📋</div>
+      <h4>Lista con entrada animada</h4>
+      <p>Cada ítem del historial de viajes aparece con slide + fade desde abajo, con delay incremental. Elegante y fluido.</p>
+      <span class="code-tag">AnimationStaggered / ListView builder</span>
+    </div>
+
+    <div class="anim-card">
+      <div class="anim-demo">🎯</div>
+      <h4>Hero transitions</h4>
+      <p>Usa Hero() para que el avatar del conductor "vuele" desde el panel principal a la pantalla de viaje activo. Crea continuidad visual.</p>
+      <span class="code-tag">Hero widget + tag único</span>
+    </div>
+
+  </div>
+
+  <!-- Paquetes recomendados -->
+  <div style="margin-top: 40px;">
+    <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 20px;">📦 Paquetes de animación recomendados</h3>
+    <div class="deps-grid">
+      <div class="dep-card">
+        <div class="dep-icon">🎭</div>
+        <div class="dep-info">
+          <h4>Lottie Flutter</h4>
+          <p>Animaciones vectoriales de After Effects. Para el checkmark de viaje completado y el loading de búsqueda.</p>
+          <span class="dep-pkg">lottie: ^3.1.0</span>
+          <div class="priority-badge pb-high">🔴 Alta prioridad</div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-icon">🔤</div>
+        <div class="dep-info">
+          <h4>Google Fonts</h4>
+          <p>Syne + Space Grotesk + Inter. El impacto visual más grande por línea de código.</p>
+          <span class="dep-pkg">google_fonts: ^6.2.1</span>
+          <div class="priority-badge pb-high">🔴 Alta prioridad</div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-icon">✨</div>
+        <div class="dep-info">
+          <h4>Shimmer</h4>
+          <p>Efectos de skeleton loading para listas y perfiles. Profesional y moderno.</p>
+          <span class="dep-pkg">shimmer: ^3.0.0</span>
+          <div class="priority-badge pb-medium">🟡 Media</div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-icon">📦</div>
+        <div class="dep-info">
+          <h4>Flutter Animate</h4>
+          <p>API declarativa (.animate().fadeIn().slideX()) — forma moderna de animar sin boilerplate de AnimationController.</p>
+          <span class="dep-pkg">flutter_animate: ^4.5.0</span>
+          <div class="priority-badge pb-medium">🟡 Media</div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-icon">💫</div>
+        <div class="dep-info">
+          <h4>Animated Text Kit</h4>
+          <p>Para la splash y el onboarding: texto que se escribe progresivamente o hace typewriter effect.</p>
+          <span class="dep-pkg">animated_text_kit: ^4.2.2</span>
+          <div class="priority-badge pb-nice">🟢 Bono visual</div>
+        </div>
+      </div>
+
+      <div class="dep-card">
+        <div class="dep-icon">🎨</div>
+        <div class="dep-info">
+          <h4>Glassmorphism</h4>
+          <p>Cards translúcidas con blur. Para el panel de búsqueda flotando sobre el mapa.</p>
+          <span class="dep-pkg">glassmorphism: ^3.0.0</span>
+          <div class="priority-badge pb-nice">🟢 Bono visual</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ COMPONENTES ══════════════════════════════ -->
+<section>
+  <div class="section-tag">06 — Sistema de Componentes</div>
+  <h2 class="section-title">Construye con consistencia</h2>
+  <p class="section-desc">Estos son los componentes base que deben ser coherentes en toda la app.</p>
+
+  <!-- Botones -->
+  <h3 style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">Botones</h3>
+  <div class="btn-row">
+    <button class="grad-btn">🚗 Confirmar viaje</button>
+    <button class="ghost-btn">Ver historial</button>
+  </div>
+
+  <!-- Bottom Nav -->
+  <h3 style="font-size: 18px; font-weight: 600; margin: 40px 0 20px;">Barra de navegación inferior</h3>
+  <div class="nav-mockup">
+    <div class="nav-item active">
+      <span>🗺️</span>
+      <span class="nav-label">Mapa</span>
+      <div class="nav-dot"></div>
+    </div>
+    <div class="nav-item">
+      <span>📋</span>
+      <span class="nav-label">Viajes</span>
+    </div>
+    <div class="nav-item">
+      <span>💬</span>
+      <span class="nav-label">Chat</span>
+    </div>
+    <div class="nav-item">
+      <span>👤</span>
+      <span class="nav-label">Perfil</span>
+    </div>
+  </div>
+
+  <!-- Cards con glassmorphism -->
+  <h3 style="font-size: 18px; font-weight: 600; margin: 40px 0 20px;">Cards con Glassmorphism</h3>
+  <div class="glass-card-demo">
+    <div class="mini-card">
+      <div class="mini-card-icon">🚗</div>
+      <div class="mini-card-title">Estándar</div>
+      <div class="mini-card-sub">4 pasajeros · $3.50</div>
+    </div>
+    <div class="mini-card" style="border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.06);">
+      <div class="mini-card-icon">⭐</div>
+      <div class="mini-card-title gradient-text">Premium</div>
+      <div class="mini-card-sub">4 pasajeros · $5.20</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-card-icon">🚐</div>
+      <div class="mini-card-title">Van</div>
+      <div class="mini-card-sub">7 pasajeros · $7.00</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-card-icon">♿</div>
+      <div class="mini-card-title">Accesible</div>
+      <div class="mini-card-sub">Adaptado · $4.00</div>
+    </div>
+  </div>
+
+  <!-- Rating animado -->
+  <h3 style="font-size: 18px; font-weight: 600; margin: 40px 0 20px;">Calificación con animación escalonada</h3>
+  <div style="background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; text-align: center;">
+    <p style="color: var(--muted); font-size: 13px; margin-bottom: 16px;">¿Cómo fue tu viaje con Carlos?</p>
+    <div class="stars" style="justify-content: center; margin-bottom: 16px;">
+      <span class="star">⭐</span>
+      <span class="star">⭐</span>
+      <span class="star">⭐</span>
+      <span class="star">⭐</span>
+      <span class="star">⭐</span>
+    </div>
+    <p style="font-size: 12px; color: var(--muted);">Toca para calificar</p>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ ANTES / DESPUÉS ══════════════════════════ -->
+<section>
+  <div class="section-tag">07 — Comparación</div>
+  <h2 class="section-title">Antes vs Después</h2>
+  <p class="section-desc">Los cambios concretos que transformarán la percepción de la app.</p>
+
+  <div class="ba-grid">
+    <div class="ba-box">
+      <div class="ba-label before">❌ Estado Actual</div>
+      <div class="ba-item"><span class="icon">🔤</span><span>Fuente: Roboto en todo (genérico, sin personalidad)</span></div>
+      <div class="ba-item"><span class="icon">📦</span><span>BottomSheet blanco con texto en inglés</span></div>
+      <div class="ba-item"><span class="icon">⬛</span><span>Cards sólidos sin profundidad</span></div>
+      <div class="ba-item"><span class="icon">🔄</span><span>CircularProgressIndicator azul de Material por defecto</span></div>
+      <div class="ba-item"><span class="icon">⭐</span><span>Estrellas de rating estáticas, aparecen de golpe</span></div>
+      <div class="ba-item"><span class="icon">📋</span><span>Listas que aparecen sin animación de entrada</span></div>
+      <div class="ba-item"><span class="icon">🔵</span><span>Sin bottom navigation bar (solo ProfileScreen tiene menú)</span></div>
+      <div class="ba-item"><span class="icon">💫</span><span>Sin microinteracciones en botones ni cards</span></div>
+    </div>
+
+    <div class="ba-box">
+      <div class="ba-label after">✅ Con los Cambios</div>
+      <div class="ba-item"><span class="icon">🔤</span><span>Syne (display) + Space Grotesk (UI) + Inter (cuerpo) — identidad propia</span></div>
+      <div class="ba-item"><span class="icon">🌙</span><span>BottomSheet rediseñado con vidrio oscuro y gradiente</span></div>
+      <div class="ba-item"><span class="icon">✨</span><span>Cards glassmorphism con blur y borde semitransparente</span></div>
+      <div class="ba-item"><span class="icon">💜</span><span>Indicador de búsqueda con gradiente animado personalizado</span></div>
+      <div class="ba-item"><span class="icon">⭐</span><span>Estrellas con pop escalonado (elasticOut) al aparecer</span></div>
+      <div class="ba-item"><span class="icon">📋</span><span>Listas con staggered animation (fade + slide desde abajo)</span></div>
+      <div class="ba-item"><span class="icon">🧭</span><span>Bottom nav bar con indicator animado y glassmorphism</span></div>
+      <div class="ba-item"><span class="icon">💫</span><span>Botones con ripple personalizado + scale on tap</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═══════════════════════════════════ PRIORIDADES ══════════════════════════════ -->
+<section>
+  <div class="section-tag">08 — Plan de Acción</div>
+  <h2 class="section-title">Por dónde empezar</h2>
+  <p class="section-desc">En orden de impacto visual vs esfuerzo de implementación.</p>
+
+  <div class="priority-list">
+    <div class="priority-item">
+      <div class="priority-num pn1">1</div>
+      <div>
+        <h4>Tipografía — google_fonts (30 min)</h4>
+        <p>Añade el paquete y reemplaza fontFamily en ThemeData. Es el cambio más rápido con el mayor impacto perceptual. Syne para títulos en SplashScreen y OnboardingScreen; Space Grotesk para toda la UI.</p>
+      </div>
+    </div>
+
+    <div class="priority-item">
+      <div class="priority-num pn2">2</div>
+      <div>
+        <h4>Rediseñar BottomSheetMenuMap (2-3 horas)</h4>
+        <p>Este widget rompe toda la consistencia visual. Necesita fondo oscuro (#13132A), glassmorphism en el handle, cards de tipo de viaje con el nuevo diseño, y precios en gradiente violeta.</p>
+      </div>
+    </div>
+
+    <div class="priority-item">
+      <div class="priority-num pn3">3</div>
+      <div>
+        <h4>Animación de "Buscando conductor" con Lottie (1-2 horas)</h4>
+        <p>Descarga un archivo Lottie de LottieFiles.com (busca "car location" o "ride hailing") y reemplaza el widget de búsqueda. Esta es la pantalla más emocionalmente importante del flujo.</p>
+      </div>
+    </div>
+
+    <div class="priority-item">
+      <div class="priority-num pn4">4</div>
+      <div>
+        <h4>flutter_animate en listas y cards (2-3 horas)</h4>
+        <p>Añade .animate().fadeIn().slideY() a los ítems del historial de viajes, conductores cercanos y favoritos. Con flutter_animate esto son literalmente 2 líneas por widget.</p>
+      </div>
+    </div>
+
+    <div class="priority-item">
+      <div class="priority-num pn5">5</div>
+      <div>
+        <h4>Glassmorphism en componentes flotantes (1-2 horas)</h4>
+        <p>Aplica BackdropFilter + blur en el panel inferior del mapa, el header flotante, y las cards de selección de tipo de viaje. Crea profundidad visual sin cambiar la lógica.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════ CTA ══════════════════════════════════════ -->
+<div class="cta-section">
+  <div class="section-tag" style="max-width: max-content; margin: 0 auto 16px;">✦ FuBer — Cuenca, Ecuador</div>
+  <h2 class="section-title">Tu app merece destacar</h2>
+  <p class="section-desc" style="margin: 0 auto;">Con estos cambios, FuBer pasará de "app funcional" a "app que los usuarios van a querer enseñarle a sus amigos".</p>
+</div>
+
+<footer>
+  Guía visual generada por <span>Claude</span> para el proyecto FuBer · Marzo 2026
+</footer>
+
+</body>
+</html>

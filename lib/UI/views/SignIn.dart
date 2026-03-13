@@ -1,558 +1,440 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/Core/Utils/LogUtils.dart';
 import 'package:fu_uber/UI/widgets/OtpBottomSheet.dart';
 import 'package:provider/provider.dart';
 
 class SignInPage extends StatefulWidget {
-  static const route = "/signinscreen";
-  static const TAG = "SignInScreen";
+  static const String route = '/signin';
 
   @override
   _SignInPageState createState() => _SignInPageState();
 }
 
-class _SignInPageState extends State<SignInPage>
-    with SingleTickerProviderStateMixin {
-  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final GlobalKey<FormState> _phoneFormKey = GlobalKey<FormState>();
-
-  final phoneTextController = TextEditingController();
-  AnimationController _animController;
-  Animation<double> _fadeAnimation;
-  Animation<Offset> _slideAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 700),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _slideAnimation =
-        Tween<Offset>(begin: Offset(0, 0.3), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _animController.forward();
-  }
+class _SignInPageState extends State<SignInPage> {
+  final GlobalKey<FormState> _emailFormKey = GlobalKey<FormState>();
+  final TextEditingController emailTextController = TextEditingController();
 
   @override
   void dispose() {
-    phoneTextController.dispose();
-    _animController.dispose();
+    emailTextController.dispose();
     super.dispose();
   }
 
-  void _mostrarProximamente() {
-    _scaffoldKey.currentState.showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(Icons.star, color: Colors.white, size: 18),
-            SizedBox(width: 10),
-            Text('Proximamente disponible'),
-          ],
+  Future<void> _handleVerification(
+    BuildContext context,
+    VerificationModel verificationModel,
+  ) async {
+    if (!_emailFormKey.currentState.validate()) {
+      return;
+    }
+
+    verificationModel.setEmail(emailTextController.text);
+    final response = await verificationModel.handleEmailVerification();
+
+    if (!mounted) return;
+
+    if (response == 1) {
+      showModalBottomSheet(
+        isScrollControlled: true,
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (_) => ChangeNotifierProvider<VerificationModel>.value(
+          value: verificationModel,
+          child: OtpBottomSheet(),
         ),
-        backgroundColor: ConstantColors.primaryViolet,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: Duration(seconds: 2),
+      );
+    } else {
+      final errorMessage = verificationModel.otpErrorMessage?.isNotEmpty == true
+          ? verificationModel.otpErrorMessage
+          : 'No se pudo enviar el codigo al correo';
+      Scaffold.of(context).showSnackBar(
+        SnackBar(content: Text(errorMessage)),
+      );
+    }
+  }
+
+  Widget _buildHeroOrb({
+    double size,
+    double top,
+    double left,
+    double right,
+    double opacity,
+  }) {
+    return Positioned(
+      top: top,
+      left: left,
+      right: right,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white.withOpacity(opacity),
+        ),
       ),
     );
   }
 
-  void _handleVerification(VerificationModel verificationModel) {
-    if (_phoneFormKey.currentState.validate()) {
-      verificationModel.setPhoneNumber(phoneTextController.text);
-      verificationModel.updateCircularLoading(true);
-
-      Future.delayed(Duration(seconds: 1)).then((_) {
-        verificationModel.handlePhoneVerification().then((response) {
-          ProjectLog.logIt(SignInPage.TAG, "PhoneVerification Response", response);
-          verificationModel.updateCircularLoading(false);
-          if (response == 1) {
-            showModalBottomSheet(
-              backgroundColor: Colors.transparent,
-              isScrollControlled: true,
-              context: context,
-              builder: (context) => OtpBottomSheet(),
-            );
-          } else {
-            _scaffoldKey.currentState.showSnackBar(
-              SnackBar(
-                content: Text(
-                  verificationModel.otpErrorMessage != null &&
-                          verificationModel.otpErrorMessage.isNotEmpty
-                      ? verificationModel.otpErrorMessage
-                      : 'Algo salio mal. Intenta nuevamente.',
-                ),
-                backgroundColor: ConstantColors.error,
-              ),
-            );
-          }
-        });
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final verificationModel = Provider.of<VerificationModel>(context);
-    final size = MediaQuery.of(context).size;
+    final Size mediaQuery = MediaQuery.of(context).size;
 
-    return Scaffold(
-      key: _scaffoldKey,
-      backgroundColor: ConstantColors.backgroundDark,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1A0A3D),
-              ConstantColors.backgroundDark,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: 28),
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: size.height * 0.08),
-                    Center(
-                      child: Container(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: ConstantColors.primaryGradient,
-                          boxShadow: [
-                            BoxShadow(
-                              color: ConstantColors.primaryViolet.withOpacity(0.4),
-                              blurRadius: 24,
-                              spreadRadius: 2,
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          Icons.directions_car_rounded,
-                          color: Colors.white,
-                          size: 32,
-                        ),
+    return ChangeNotifierProvider<VerificationModel>(
+      builder: (_) => VerificationModel(),
+      child: Scaffold(
+        backgroundColor: ConstantColors.backgroundDark,
+        body: Consumer<VerificationModel>(
+          builder: (_, verificationModel, __) {
+            return Stack(
+              children: <Widget>[
+                Container(color: ConstantColors.backgroundDark),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: mediaQuery.height * 0.42,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: <Color>[
+                          Color(0xFF0F0C29),
+                          Color(0xFF302B63),
+                          Color(0xFF24243E),
+                        ],
                       ),
                     ),
-                    SizedBox(height: 40),
-                    Text(
-                      'Bienvenido',
-                      style: TextStyle(
-                        color: ConstantColors.textWhite,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Ingresa tu numero de telefono\npara continuar',
-                      style: TextStyle(
-                        color: ConstantColors.textGrey,
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                    ),
-                    SizedBox(height: 48),
-                    Text(
-                      'Numero de telefono',
-                      style: TextStyle(
-                        color: ConstantColors.textGrey,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    Form(
-                      key: _phoneFormKey,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: ConstantColors.backgroundCard,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: ConstantColors.borderColor,
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  right: BorderSide(
-                                    color: ConstantColors.borderColor,
-                                    width: 1.5,
-                                  ),
-                                ),
-                              ),
-                              child: Row(
-                                children: [
-                                  Text('EC', style: TextStyle(fontSize: 14)),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    '+593',
-                                    style: TextStyle(
-                                      color: ConstantColors.textGrey,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
+                  ),
+                ),
+                _buildHeroOrb(
+                  size: mediaQuery.width * 0.60,
+                  top: -mediaQuery.height * 0.04,
+                  right: -mediaQuery.width * 0.18,
+                  opacity: 0.08,
+                ),
+                _buildHeroOrb(
+                  size: mediaQuery.width * 0.34,
+                  top: mediaQuery.height * 0.16,
+                  left: -mediaQuery.width * 0.10,
+                  opacity: 0.10,
+                ),
+                SafeArea(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+                    child: Form(
+                      key: _emailFormKey,
+                      child: Builder(
+                        builder: (formContext) {
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Row(
+                                children: <Widget>[
+                                  IconButton(
+                                    padding: EdgeInsets.zero,
+                                    constraints: BoxConstraints(
+                                      minWidth: 36,
+                                      minHeight: 36,
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            Expanded(
-                              child: TextFormField(
-                                controller: phoneTextController,
-                                keyboardType: TextInputType.phone,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(10),
-                                ],
-                                style: TextStyle(
-                                  color: ConstantColors.textWhite,
-                                  fontSize: 16,
-                                  letterSpacing: 1.5,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: '0999 999 999',
-                                  hintStyle: TextStyle(
-                                    color: ConstantColors.textSubtle,
-                                    fontSize: 15,
-                                    letterSpacing: 1.0,
-                                  ),
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 16,
-                                  ),
-                                  errorStyle: TextStyle(
-                                    color: ConstantColors.error,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Ingresa tu numero de telefono';
-                                  }
-                                  if (value.length < 9 || value.length > 10) {
-                                    return 'Numero invalido (9-10 digitos)';
-                                  }
-                                  return null;
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      'Te enviaremos un codigo de verificacion via SMS',
-                      style: TextStyle(
-                        color: ConstantColors.textSubtle,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
-                    ),
-                    SizedBox(height: 40),
-                    verificationModel.showCircularLoader
-                        ? Center(
-                            child: Container(
-                              width: 52,
-                              height: 52,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  ConstantColors.primaryViolet,
-                                ),
-                              ),
-                            ),
-                          )
-                        : GestureDetector(
-                            onTap: () => _handleVerification(verificationModel),
-                            child: Container(
-                              width: double.infinity,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                gradient: ConstantColors.buttonGradient,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: ConstantColors.primaryViolet
-                                        .withOpacity(0.4),
-                                    blurRadius: 20,
-                                    offset: Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Continuar',
-                                    style: TextStyle(
+                                    icon: Icon(
+                                      Icons.arrow_back,
                                       color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.5,
                                     ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(
-                                    Icons.arrow_forward_rounded,
-                                    color: Colors.white,
-                                    size: 20,
+                                    onPressed: () => SchedulerBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      Navigator.pop(context);
+                                    }),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                    SizedBox(height: 40),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: ConstantColors.dividerColor,
-                            thickness: 1,
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'o',
-                            style: TextStyle(
-                              color: ConstantColors.textSubtle,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: ConstantColors.dividerColor,
-                            thickness: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24),
-                    GestureDetector(
-                      onTap: () => _handleVerification(verificationModel),
-                      child: Container(
-                        width: double.infinity,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          color: ConstantColors.accentWhatsApp.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: ConstantColors.accentWhatsApp.withOpacity(0.3),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.chat_rounded,
-                              color: ConstantColors.accentWhatsApp,
-                              size: 20,
-                            ),
-                            SizedBox(width: 10),
-                            Text(
-                              'Verificar con SMS',
-                              style: TextStyle(
-                                color: ConstantColors.accentWhatsApp,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: ConstantColors.dividerColor,
-                            thickness: 1,
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 14),
-                          child: Text(
-                            'o inicia con',
-                            style: TextStyle(
-                              color: ConstantColors.textSubtle,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: ConstantColors.dividerColor,
-                            thickness: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _mostrarProximamente,
-                            child: Container(
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: ConstantColors.backgroundCard,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: ConstantColors.borderColor,
-                                  width: 1.5,
+                              SizedBox(height: 18),
+                              Text(
+                                'Hola de nuevo',
+                                style: TextStyle(
+                                  color: ConstantColors.textGrey,
+                                  fontSize: 14,
                                 ),
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'G',
-                                    style: TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w800,
-                                      foreground: Paint()
-                                        ..shader = LinearGradient(
-                                          colors: [
-                                            Color(0xFF4285F4),
-                                            Color(0xFFEA4335),
-                                          ],
-                                        ).createShader(
-                                          Rect.fromLTWH(0, 0, 20, 20),
+                              SizedBox(height: 4),
+                              Text(
+                                'Bienvenido a Fuber',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 30,
+                                  fontWeight: FontWeight.w800,
+                                  height: 1.1,
+                                ),
+                              ),
+                              SizedBox(height: 10),
+                              Text(
+                                'Ingresa con tu correo y recibe un codigo para entrar de forma rapida y segura.',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.70),
+                                  fontSize: 14,
+                                  height: 1.45,
+                                ),
+                              ),
+                              SizedBox(height: 34),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: ConstantColors.backgroundCard,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: ConstantColors.borderColor,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: <Widget>[
+                                    Container(
+                                      width: 42,
+                                      height: 42,
+                                      decoration: BoxDecoration(
+                                        gradient:
+                                            ConstantColors.buttonGradient,
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                      ),
+                                      child: Icon(
+                                        Icons.alternate_email,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: emailTextController,
+                                        keyboardType:
+                                            TextInputType.emailAddress,
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15,
                                         ),
+                                        decoration: InputDecoration(
+                                          hintText: 'ejemplo@correo.com',
+                                          hintStyle: TextStyle(
+                                            color: ConstantColors.textSubtle,
+                                          ),
+                                          border: InputBorder.none,
+                                          isDense: true,
+                                        ),
+                                        validator: (value) {
+                                          final email = value?.trim() ?? '';
+                                          if (email.isEmpty) {
+                                            return 'Ingresa tu correo';
+                                          }
+                                          final emailRegex = RegExp(
+                                            r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
+                                          );
+                                          if (!emailRegex.hasMatch(email)) {
+                                            return 'Ingresa un correo valido';
+                                          }
+                                          return null;
+                                        },
+                                      ),
                                     ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Google',
-                                    style: TextStyle(
-                                      color: ConstantColors.textGrey,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: _mostrarProximamente,
-                            child: Container(
-                              height: 52,
-                              decoration: BoxDecoration(
-                                color: ConstantColors.backgroundCard,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: ConstantColors.borderColor,
-                                  width: 1.5,
+                                  ],
                                 ),
                               ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 22,
-                                    height: 22,
-                                    alignment: Alignment.center,
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFF1877F2),
-                                      shape: BoxShape.circle,
+                              SizedBox(height: 14),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: ConstantColors.backgroundLight,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: ConstantColors.borderColor
+                                        .withOpacity(0.75),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Icon(
+                                      Icons.phone_iphone_outlined,
+                                      size: 18,
+                                      color: ConstantColors.primaryBlue,
+                                    ),
+                                    SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Tu telefono se registrara despues en tu perfil, pero el acceso principal se validara con correo.',
+                                        style: TextStyle(
+                                          color: ConstantColors.textGrey,
+                                          fontSize: 12.8,
+                                          height: 1.4,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(height: 22),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 54,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: ConstantColors.buttonGradient,
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: <BoxShadow>[
+                                      BoxShadow(
+                                        color: ConstantColors.primaryViolet
+                                            .withOpacity(0.28),
+                                        blurRadius: 22,
+                                        offset: Offset(0, 10),
+                                      ),
+                                    ],
+                                  ),
+                                  child: RaisedButton(
+                                    color: Colors.transparent,
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: verificationModel.showCircularLoader
+                                        ? SizedBox(
+                                            width: 22,
+                                            height: 22,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2.5,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                Colors.white,
+                                              ),
+                                            ),
+                                          )
+                                        : Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: <Widget>[
+                                              Icon(
+                                                Icons.mail_outline,
+                                                color: Colors.white,
+                                                size: 18,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'Recibir codigo por correo',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                    onPressed: verificationModel.showCircularLoader
+                                        ? null
+                                        : () => _handleVerification(
+                                              formContext,
+                                              verificationModel,
+                                            ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: 24),
+                              Row(
+                                children: <Widget>[
+                                  Expanded(
+                                    child: Container(
+                                      height: 1,
+                                      color:
+                                          ConstantColors.dividerColor,
+                                    ),
+                                  ),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
                                     ),
                                     child: Text(
-                                      'f',
+                                      'acceso seguro',
                                       style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w800,
+                                        color: ConstantColors.textSubtle,
+                                        fontSize: 12,
                                       ),
                                     ),
                                   ),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    'Facebook',
-                                    style: TextStyle(
-                                      color: ConstantColors.textGrey,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                  Expanded(
+                                    child: Container(
+                                      height: 1,
+                                      color:
+                                          ConstantColors.dividerColor,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24),
-                    Center(
-                      child: Text.rich(
-                        TextSpan(
-                          text: 'Al continuar, aceptas nuestros ',
-                          style: TextStyle(
-                            color: ConstantColors.textSubtle,
-                            fontSize: 12,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: 'Terminos de servicio',
-                              style: TextStyle(
-                                color: ConstantColors.primaryViolet,
-                                fontWeight: FontWeight.w600,
+                              SizedBox(height: 18),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.18),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: ConstantColors.dividerColor,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Row(
+                                      children: <Widget>[
+                                        Icon(
+                                          Icons.verified_user_outlined,
+                                          color: ConstantColors.success,
+                                          size: 18,
+                                        ),
+                                        SizedBox(width: 8),
+                                        Text(
+                                          'Ingreso sin contrasena',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    SizedBox(height: 8),
+                                    Text(
+                                      'Solo necesitas tu correo y el codigo temporal. El registro se completa despues con tus datos personales.',
+                                      style: TextStyle(
+                                        color: ConstantColors.textGrey,
+                                        fontSize: 12.8,
+                                        height: 1.45,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            TextSpan(text: ' y '),
-                            TextSpan(
-                              text: 'Politica de privacidad',
-                              style: TextStyle(
-                                color: ConstantColors.primaryViolet,
-                                fontWeight: FontWeight.w600,
+                              SizedBox(height: 22),
+                              Center(
+                                child: Text(
+                                  'Al continuar aceptas nuestros Terminos de Uso',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: ConstantColors.textSubtle,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        textAlign: TextAlign.center,
+                            ],
+                          );
+                        },
                       ),
                     ),
-                    SizedBox(height: 24),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          ),
+              ],
+            );
+          },
         ),
       ),
     );

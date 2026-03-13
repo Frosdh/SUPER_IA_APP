@@ -3,444 +3,457 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
 import 'package:fu_uber/Core/Services/PushNotificationService.dart';
-import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
+import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:provider/provider.dart';
 
 class RegisterScreen extends StatefulWidget {
   static const String route = '/register';
+  final String verifiedEmail;
+
+  const RegisterScreen({Key key, this.verifiedEmail = ''}) : super(key: key);
 
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen>
-    with SingleTickerProviderStateMixin {
+class _RegisterScreenState extends State<RegisterScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-  final TextEditingController _nameController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  AnimationController _animController;
-  Animation<double> _fadeAnimation;
-  Animation<Offset> _slideAnimation;
-  bool _isLoading = false;
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _phoneController = TextEditingController();
+  bool _saving = false;
 
   @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 600),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _slideAnimation =
-        Tween<Offset>(begin: Offset(0, 0.2), end: Offset.zero).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOut),
-    );
-    _animController.forward();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final verificationModel = Provider.of<VerificationModel>(context, listen: false);
+    final resolvedEmail = widget.verifiedEmail?.isNotEmpty == true
+        ? widget.verifiedEmail
+        : (verificationModel.email ?? '');
+    if (_emailController.text.isEmpty && resolvedEmail.isNotEmpty) {
+      _emailController.text = resolvedEmail;
+    }
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _animController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
-  void _continuar(VerificationModel verificationModel) async {
-    if (_formKey.currentState.validate()) {
-      setState(() => _isLoading = true);
-
-      final nombre = _nameController.text.trim();
-      final email = _emailController.text.trim();
-      final telefono = verificationModel.phoneNumber ?? '';
-
-      if (telefono.isEmpty) {
-        setState(() => _isLoading = false);
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(
-            content: Text('No se encontró el teléfono verificado. Intenta de nuevo.'),
-            backgroundColor: ConstantColors.error,
-          ),
-        );
-        return;
-      }
-
-      // Registrar usuario en la base de datos
-      bool exito = await verificationModel.registerUser(nombre, telefono, email);
-
-      setState(() => _isLoading = false);
-
-      if (exito) {
-        // Guardar sesión solo si el backend confirmó registro.
-        await AuthPrefs.saveUserSession(
-          nombre: nombre,
-          telefono: telefono,
-          email: email,
-        );
-        await PushNotificationService.syncTokenWithBackend(force: true);
-        Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
-      } else {
-        await AuthPrefs.clearSession();
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(
-            content: Text('No se pudo registrar en la base de datos. Revisa la API y vuelve a intentar.'),
-            backgroundColor: ConstantColors.error,
-          ),
-        );
-      }
+  Future<void> _registerUser(VerificationModel verificationModel) async {
+    if (!_formKey.currentState.validate()) {
+      return;
     }
+
+    setState(() {
+      _saving = true;
+    });
+
+    final pushService = PushNotificationService();
+    String tokenFcm = '';
+    try {
+      tokenFcm = await pushService.getToken() ?? '';
+    } catch (_) {}
+
+    final response = await verificationModel.registerUser(
+      nombre: _nameController.text.trim(),
+      telefono: _phoneController.text.trim(),
+      email: _emailController.text.trim(),
+      tokenFcm: tokenFcm,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _saving = false;
+    });
+
+    if (response != 1) {
+      _scaffoldKey.currentState.showSnackBar(
+        SnackBar(
+          content: Text(
+            verificationModel.registerErrorMessage?.isNotEmpty == true
+                ? verificationModel.registerErrorMessage
+                : 'No se pudo completar el registro',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (verificationModel.welcomeEmailSent == false) {
+      _scaffoldKey.currentState.showSnackBar(
+        SnackBar(
+          content: Text(
+            verificationModel.welcomeEmailError?.isNotEmpty == true
+                ? 'Cuenta creada, pero fallo el correo de bienvenida: ${verificationModel.welcomeEmailError}'
+                : 'Cuenta creada, pero no se pudo enviar el correo de bienvenida',
+          ),
+        ),
+      );
+    }
+
+    await AuthPrefs.saveUserSession(
+      telefono: _phoneController.text.trim(),
+      nombre: _nameController.text.trim(),
+      email: _emailController.text.trim(),
+    );
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => OsmMapScreen()),
+      (_) => false,
+    );
+  }
+
+  Widget _buildProgressBar(bool active) {
+    return Expanded(
+      child: Container(
+        height: 4,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(4),
+          gradient: active ? ConstantColors.buttonGradient : null,
+          color: active ? null : ConstantColors.dividerColor,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDarkField({
+    TextEditingController controller,
+    String label,
+    String hintText,
+    IconData icon,
+    TextInputType keyboardType,
+    bool readOnly = false,
+    FormFieldValidator<String> validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      readOnly: readOnly,
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 15,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hintText,
+        labelStyle: TextStyle(color: ConstantColors.textGrey),
+        hintStyle: TextStyle(color: ConstantColors.textSubtle),
+        prefixIcon: Icon(icon, color: ConstantColors.primaryViolet),
+        filled: true,
+        fillColor: ConstantColors.backgroundCard,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: ConstantColors.borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(
+            color: ConstantColors.primaryViolet,
+            width: 1.4,
+          ),
+        ),
+      ),
+      validator: validator,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final verificationModel = Provider.of<VerificationModel>(context);
-    final size = MediaQuery.of(context).size;
+    final Size mediaQuery = MediaQuery.of(context).size;
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: ConstantColors.backgroundDark,
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFF1A0A3D),
-              ConstantColors.backgroundDark,
-            ],
-          ),
-        ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.symmetric(horizontal: 28),
-            child: FadeTransition(
-              opacity: _fadeAnimation,
-              child: SlideTransition(
-                position: _slideAnimation,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: size.height * 0.08),
-
-                    // Ícono de bienvenida
-                    Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              ConstantColors.primaryViolet,
-                              ConstantColors.primaryBlue,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: ConstantColors.primaryViolet.withOpacity(0.4),
-                              blurRadius: 30,
-                              spreadRadius: 2,
+      body: Consumer<VerificationModel>(
+        builder: (_, verificationModel, __) {
+          return Stack(
+            children: <Widget>[
+              Container(color: ConstantColors.backgroundDark),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  height: mediaQuery.height * 0.38,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: <Color>[
+                        Color(0xFF0F0C29),
+                        Color(0xFF1A1535),
+                        ConstantColors.backgroundDark,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: -mediaQuery.height * 0.05,
+                right: -mediaQuery.width * 0.10,
+                child: Container(
+                  width: mediaQuery.width * 0.40,
+                  height: mediaQuery.width * 0.40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.08),
+                  ),
+                ),
+              ),
+              SafeArea(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
+                            IconButton(
+                              padding: EdgeInsets.zero,
+                              constraints: BoxConstraints(
+                                minWidth: 36,
+                                minHeight: 36,
+                              ),
+                              icon: Icon(
+                                Icons.arrow_back,
+                                color: Colors.white,
+                              ),
+                              onPressed: () => Navigator.pop(context),
                             ),
                           ],
                         ),
-                        child: Icon(
-                          Icons.person_rounded,
-                          color: Colors.white,
-                          size: 40,
+                        SizedBox(height: 14),
+                        Row(
+                          children: <Widget>[
+                            _buildProgressBar(true),
+                            SizedBox(width: 6),
+                            _buildProgressBar(true),
+                            SizedBox(width: 6),
+                            _buildProgressBar(false),
+                          ],
                         ),
-                      ),
-                    ),
-
-                    SizedBox(height: 36),
-
-                    // Título
-                    Text(
-                      '¡Casi listo!',
-                      style: TextStyle(
-                        color: ConstantColors.textWhite,
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-
-                    SizedBox(height: 10),
-
-                    Text(
-                      'Completa tu perfil para que los conductores te reconozcan.',
-                      style: TextStyle(
-                        color: ConstantColors.textGrey,
-                        fontSize: 15,
-                        height: 1.5,
-                      ),
-                    ),
-
-                    SizedBox(height: 40),
-
-                    // Label
-                    Text(
-                      'Tu nombre completo',
-                      style: TextStyle(
-                        color: ConstantColors.textGrey,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-
-                    SizedBox(height: 10),
-
-                    // Campo de nombre
-                    Form(
-                      key: _formKey,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: ConstantColors.backgroundCard,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: ConstantColors.borderColor,
-                            width: 1.5,
+                        SizedBox(height: 26),
+                        Center(
+                          child: Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              gradient: ConstantColors.buttonGradient,
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: ConstantColors.primaryViolet
+                                      .withOpacity(0.25),
+                                  blurRadius: 26,
+                                  offset: Offset(0, 12),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.person_outline,
+                              color: Colors.white,
+                              size: 42,
+                            ),
                           ),
                         ),
-                        child: TextFormField(
+                        SizedBox(height: 22),
+                        Center(
+                          child: Text(
+                            'Termina tu perfil',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Center(
+                          child: Text(
+                            'Tu correo ya fue verificado. Ahora te pediremos solo lo esencial para activar tu cuenta.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: ConstantColors.textGrey,
+                              fontSize: 14,
+                              height: 1.4,
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 24),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Color(0xFF10261A),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: ConstantColors.success.withOpacity(0.35),
+                            ),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Icon(
+                                Icons.mark_email_read_outlined,
+                                color: ConstantColors.success,
+                              ),
+                              SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Correo verificado\n${verificationModel.email ?? _emailController.text}',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 18),
+                        _buildDarkField(
                           controller: _nameController,
-                          textCapitalization: TextCapitalization.words,
-                          keyboardType: TextInputType.name,
-                          style: TextStyle(
-                            color: ConstantColors.textWhite,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Ej: María García',
-                            hintStyle: TextStyle(
-                              color: ConstantColors.textSubtle,
-                              fontSize: 15,
-                            ),
-                            prefixIcon: Icon(
-                              Icons.person_outline_rounded,
-                              color: ConstantColors.textSubtle,
-                              size: 22,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                            errorStyle: TextStyle(
-                              color: ConstantColors.error,
-                              fontSize: 12,
-                            ),
-                          ),
+                          label: 'Nombre completo',
+                          hintText: 'Como quieres que te llamen',
+                          icon: Icons.person_outline,
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Por favor ingresa tu nombre';
-                            }
-                            if (value.trim().length < 3) {
-                              return 'El nombre debe tener al menos 3 caracteres';
+                            if ((value?.trim() ?? '').isEmpty) {
+                              return 'Ingresa tu nombre';
                             }
                             return null;
                           },
                         ),
-                      ),
-                    ),
-
-                    SizedBox(height: 20),
-
-                    // Label email
-                    Text(
-                      'Correo electrónico',
-                      style: TextStyle(
-                        color: ConstantColors.textGrey,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-
-                    SizedBox(height: 10),
-
-                    // Campo de email
-                    Container(
-                      decoration: BoxDecoration(
-                        color: ConstantColors.backgroundCard,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: ConstantColors.borderColor,
-                          width: 1.5,
+                        SizedBox(height: 16),
+                        _buildDarkField(
+                          controller: _phoneController,
+                          label: 'Numero de telefono',
+                          hintText: '09XXXXXXXX',
+                          icon: Icons.phone_iphone_outlined,
+                          keyboardType: TextInputType.phone,
+                          validator: (value) {
+                            final phone = value?.trim() ?? '';
+                            if (phone.isEmpty) {
+                              return 'Ingresa tu numero';
+                            }
+                            if (phone.length < 10) {
+                              return 'Ingresa un numero valido';
+                            }
+                            return null;
+                          },
                         ),
-                      ),
-                      child: TextFormField(
-                        controller: _emailController,
-                        keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(
-                          color: ConstantColors.textWhite,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Ej: wendy@gmail.com',
-                          hintStyle: TextStyle(
-                            color: ConstantColors.textSubtle,
-                            fontSize: 15,
-                          ),
-                          prefixIcon: Icon(
-                            Icons.email_outlined,
-                            color: ConstantColors.textSubtle,
-                            size: 22,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                          errorStyle: TextStyle(
-                            color: ConstantColors.error,
-                            fontSize: 12,
-                          ),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Por favor ingresa tu correo';
-                          }
-                          if (!value.contains('@') || !value.contains('.')) {
-                            return 'Ingresa un correo válido';
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-
-                    SizedBox(height: 12),
-
-                    Text(
-                      'Para enviarte recibos y notificaciones de tus viajes',
-                      style: TextStyle(
-                        color: ConstantColors.textSubtle,
-                        fontSize: 12,
-                        height: 1.4,
-                      ),
-                    ),
-
-                    SizedBox(height: 40),
-
-                    // Botón continuar
-                    _isLoading
-                        ? Center(
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                ConstantColors.primaryViolet,
-                              ),
-                            ),
-                          )
-                        : GestureDetector(
-                            onTap: () => _continuar(verificationModel),
-                            child: Container(
-                              width: double.infinity,
-                              height: 56,
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    ConstantColors.primaryViolet,
-                                    ConstantColors.primaryBlue,
-                                  ],
-                                  begin: Alignment.centerLeft,
-                                  end: Alignment.centerRight,
-                                ),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: ConstantColors.primaryViolet
-                                        .withOpacity(0.4),
-                                    blurRadius: 20,
-                                    offset: Offset(0, 8),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    'Comenzar a viajar',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.5,
-                                    ),
-                                  ),
-                                  SizedBox(width: 8),
-                                  Icon(
-                                    Icons.arrow_forward_rounded,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                ],
-                              ),
+                        SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.18),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: ConstantColors.dividerColor,
                             ),
                           ),
-
-                    SizedBox(height: 32),
-
-                    // Info de número verificado
-                    Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: ConstantColors.primaryViolet.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: ConstantColors.primaryViolet.withOpacity(0.2),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.check_circle_rounded,
-                            color: ConstantColors.success,
-                            size: 20,
+                          child: Text(
+                            'El correo ya quedo confirmado en el paso anterior. Aqui solo completas tu nombre y telefono para activar la cuenta.',
+                            style: TextStyle(
+                              color: ConstantColors.textGrey,
+                              fontSize: 12.8,
+                              height: 1.45,
+                            ),
                           ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Número verificado',
-                                  style: TextStyle(
-                                    color: ConstantColors.textWhite,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  verificationModel.phoneNumber ?? '',
-                                  style: TextStyle(
-                                    color: ConstantColors.textGrey,
-                                    fontSize: 12,
-                                  ),
+                        ),
+                        SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: ConstantColors.buttonGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: <BoxShadow>[
+                                BoxShadow(
+                                  color: ConstantColors.primaryViolet
+                                      .withOpacity(0.28),
+                                  blurRadius: 22,
+                                  offset: Offset(0, 10),
                                 ),
                               ],
                             ),
+                            child: RaisedButton(
+                              color: Colors.transparent,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: _saving
+                                  ? SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
+                                          Colors.white,
+                                        ),
+                                      ),
+                                    )
+                                  : Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        Text(
+                                          'Crear cuenta',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 15,
+                                          ),
+                                        ),
+                                        SizedBox(width: 8),
+                                        Icon(
+                                          Icons.arrow_forward,
+                                          color: Colors.white,
+                                          size: 18,
+                                        ),
+                                      ],
+                                    ),
+                              onPressed: _saving
+                                  ? null
+                                  : () => _registerUser(verificationModel),
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                        SizedBox(height: 16),
+                        Center(
+                          child: Text(
+                            'Paso final para entrar a la app',
+                            style: TextStyle(
+                              color: ConstantColors.textSubtle,
+                              fontSize: 11.5,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-
-                    SizedBox(height: 32),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
+            ],
+          );
+        },
       ),
     );
   }

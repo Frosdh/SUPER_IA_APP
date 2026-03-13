@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:fu_uber/Core/ProviderModels/CurrentRideCreationModel.dart';
 import 'package:fu_uber/Core/ProviderModels/MapModel.dart';
 import 'package:fu_uber/Core/ProviderModels/NearbyDriversModel.dart';
@@ -102,7 +103,8 @@ class MyApp extends StatelessWidget {
           brightness: Brightness.dark,
           primaryColor: ConstantColors.primaryViolet,
           scaffoldBackgroundColor: ConstantColors.backgroundDark,
-          fontFamily: 'Roboto',
+          // ── Tipografía: Poppins reemplaza Roboto en toda la app ──
+          fontFamily: GoogleFonts.poppins().fontFamily,
           colorScheme: ColorScheme.dark(
             primary: ConstantColors.primaryViolet,
             secondary: ConstantColors.primaryBlue,
@@ -110,8 +112,46 @@ class MyApp extends StatelessWidget {
             surface: ConstantColors.backgroundCard,
           ),
           textTheme: TextTheme(
-            bodyText1: TextStyle(color: ConstantColors.textWhite),
-            bodyText2: TextStyle(color: ConstantColors.textGrey),
+            bodyText1: GoogleFonts.poppins(color: ConstantColors.textWhite),
+            bodyText2: GoogleFonts.poppins(color: ConstantColors.textGrey),
+            headline6: GoogleFonts.poppins(
+              color: ConstantColors.textWhite,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.5,
+            ),
+            subtitle1: GoogleFonts.poppins(color: ConstantColors.textWhite),
+            subtitle2: GoogleFonts.poppins(color: ConstantColors.textGrey, fontSize: 12),
+            caption: GoogleFonts.poppins(color: ConstantColors.textSubtle, fontSize: 12),
+          ),
+          appBarTheme: AppBarTheme(
+            color: Colors.transparent,
+            elevation: 0,
+            iconTheme: IconThemeData(color: ConstantColors.textWhite),
+            textTheme: TextTheme(
+              headline6: GoogleFonts.poppins(
+                color: ConstantColors.textWhite,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: ConstantColors.backgroundCard,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: ConstantColors.borderColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: ConstantColors.borderColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide(color: ConstantColors.primaryViolet, width: 1.5),
+            ),
+            hintStyle: GoogleFonts.poppins(color: ConstantColors.textSubtle),
+            labelStyle: GoogleFonts.poppins(color: ConstantColors.textGrey),
           ),
         ),
         navigatorKey: navigatorKey,

@@ -13,9 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$telefono = isset($_POST['telefono']) ? trim($_POST['telefono']) : '';
-if (empty($telefono)) {
-    echo json_encode(["status" => "error", "message" => "El telefono es requerido"]);
+$email = isset($_POST['email']) ? trim($_POST['email']) : '';
+if (empty($email)) {
+    echo json_encode(["status" => "error", "message" => "El correo es requerido"]);
     exit;
 }
 
@@ -28,18 +28,19 @@ if ($conn->connect_error) {
     exit;
 }
 
-$stmt = $conn->prepare("SELECT id, nombre, email FROM usuarios WHERE telefono = ? LIMIT 1");
-$stmt->bind_param("s", $telefono);
+$stmt = $conn->prepare("SELECT id, nombre, email, telefono FROM usuarios WHERE email = ? LIMIT 1");
+$stmt->bind_param("s", $email);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if ($row = $result->fetch_assoc()) {
     echo json_encode([
-        "status" => "success",
-        "exists" => true,
-        "id"     => intval($row["id"]),
-        "nombre" => $row["nombre"] ?? "",
-        "email"  => $row["email"] ?? ""
+        "status"   => "success",
+        "exists"   => true,
+        "id"       => intval($row["id"]),
+        "nombre"   => $row["nombre"] ?? "",
+        "email"    => $row["email"] ?? "",
+        "telefono" => $row["telefono"] ?? ""
     ]);
 } else {
     echo json_encode([
