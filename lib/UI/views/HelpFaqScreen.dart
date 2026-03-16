@@ -100,7 +100,7 @@ class HelpFaqScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 12),
                 Text(
-                  'Aqui encuentras respuestas rapidas sobre viajes, cupones, seguridad y funciones principales de Fuber.',
+                  'Aqui encuentras respuestas rapidas sobre viajes, cupones, seguridad y funciones principales de GeoMove.',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.88),
                     fontSize: 13,
@@ -112,8 +112,8 @@ class HelpFaqScreen extends StatelessWidget {
           ),
           SizedBox(height: 18),
           ..._faqs.map((faq) => _faqCard(
-                question: faq['question'],
-                answer: faq['answer'],
+                question: faq['question'] ?? '',
+                answer: faq['answer'] ?? '',
               )),
           SizedBox(height: 18),
           Container(
@@ -157,7 +157,7 @@ class HelpFaqScreen extends StatelessWidget {
     );
   }
 
-  Widget _faqCard({String question, String answer}) {
+  Widget _faqCard({required String question, required String answer}) {
     return Container(
       margin: EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

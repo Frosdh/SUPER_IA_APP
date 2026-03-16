@@ -31,7 +31,7 @@ if ($nombre === '') {
 
 list($sent, $errorMessage) = sendEmailMessage(
     $email,
-    'Bienvenido a Fuber',
+    'Bienvenido a GeoMove',
     buildWelcomeEmailHtml($nombre),
     buildWelcomeEmailText($nombre)
 );

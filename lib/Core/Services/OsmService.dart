@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:latlong/latlong.dart';
+import 'package:latlong2/latlong.dart';
 
 class PlaceResult {
   final String displayName;
@@ -11,10 +11,10 @@ class PlaceResult {
   final double lon;
 
   PlaceResult({
-    this.displayName,
-    this.shortName,
-    this.lat,
-    this.lon,
+    required this.displayName,
+    required this.shortName,
+    required this.lat,
+    required this.lon,
   });
 
   factory PlaceResult.fromJson(Map<String, dynamic> json) {
@@ -40,10 +40,10 @@ class RouteResult {
   final double precioEstimado;
 
   RouteResult({
-    this.puntos,
-    this.distanciaKm,
-    this.duracionMin,
-    this.precioEstimado,
+    required this.puntos,
+    required this.distanciaKm,
+    required this.duracionMin,
+    required this.precioEstimado,
   });
 }
 
@@ -54,7 +54,7 @@ class OsmService {
 
   static Future<List<PlaceResult>> buscarLugar(String query) async {
     final texto = query.trim();
-    if (texto.isEmpty) return [];
+    if (texto.isEmpty) return <PlaceResult>[];
 
     try {
       final uriEcuador = Uri.parse(
@@ -83,14 +83,14 @@ class OsmService {
       return resultados;
     } catch (e) {
       print('>>> [OSM] Error Nominatim: $e');
-      return [];
+      return <PlaceResult>[];
     }
   }
 
   static Future<List<PlaceResult>> _buscarConUri(Uri uri) async {
     final response = await http
         .get(
-      uri.toString(),
+      uri,
       headers: {
         'User-Agent': 'WendyUberApp/1.0 (contacto: soporte@wendyuber.app)',
         'Accept-Language': 'es',
@@ -100,14 +100,14 @@ class OsmService {
 
     if (response.statusCode != 200) {
       print('>>> [OSM] Nominatim HTTP ${response.statusCode}');
-      return [];
+      return <PlaceResult>[];
     }
 
     final data = json.decode(response.body) as List<dynamic>;
-    return data.map((item) => PlaceResult.fromJson(item)).toList();
+    return data.map((item) => PlaceResult.fromJson(item as Map<String, dynamic>)).toList();
   }
 
-  static Future<RouteResult> calcularRuta(LatLng origen, LatLng destino) async {
+  static Future<RouteResult?> calcularRuta(LatLng origen, LatLng destino) async {
     final servidores = [
       'http://router.project-osrm.org/route/v1/driving/',
       'http://routing.openstreetmap.de/routed-car/route/v1/driving/',
@@ -121,7 +121,7 @@ class OsmService {
             '${destino.longitude},${destino.latitude}'
             '?overview=full&geometries=geojson';
 
-        final response = await http.get(url).timeout(const Duration(seconds: 12));
+        final response = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 12));
         if (response.statusCode != 200) {
           continue;
         }
@@ -131,7 +131,7 @@ class OsmService {
           continue;
         }
 
-        final routes = data['routes'] as List<dynamic>;
+        final routes = data['routes'] as List<dynamic>?;
         if (routes == null || routes.isEmpty) {
           continue;
         }
@@ -180,7 +180,7 @@ class OsmService {
       );
 
       final response = await http.get(
-        url.toString(),
+        url,
         headers: {
           'User-Agent': 'WendyUberApp/1.0 (contacto: soporte@wendyuber.app)',
           'Accept-Language': 'es',
@@ -194,16 +194,16 @@ class OsmService {
       final data = json.decode(response.body) as Map<String, dynamic>;
       final address = data['address'];
       if (address is Map<String, dynamic>) {
-        final road = address['road'] ?? '';
-        final suburb = address['suburb'] ?? address['neighbourhood'] ?? '';
-        if (road.toString().isNotEmpty) {
-          if (suburb.toString().isNotEmpty) {
+        final road = address['road'] as String? ?? '';
+        final suburb = (address['suburb'] as String?) ?? (address['neighbourhood'] as String?) ?? '';
+        if (road.isNotEmpty) {
+          if (suburb.isNotEmpty) {
             return '$road, $suburb';
           }
           return road;
         }
       }
-      return data['display_name'] ?? 'Mi ubicacion';
+      return (data['display_name'] as String?) ?? 'Mi ubicacion';
     } catch (_) {
       return 'Mi ubicacion';
     }

@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $telefono = isset($_POST['telefono']) ? trim($_POST['telefono']) : '';
-$titulo = isset($_POST['titulo']) ? trim($_POST['titulo']) : 'Fuber';
+$titulo = isset($_POST['titulo']) ? trim($_POST['titulo']) : 'GeoMove';
 $mensaje = isset($_POST['mensaje']) ? trim($_POST['mensaje']) : 'Tienes una nueva notificacion';
 $dataRaw = isset($_POST['data_json']) ? trim($_POST['data_json']) : '';
 

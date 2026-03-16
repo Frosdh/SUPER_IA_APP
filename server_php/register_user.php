@@ -123,7 +123,7 @@ if ($stmt->execute()) {
     $nuevo_id = $conn->insert_id;
     list($welcomeSent, $welcomeError) = sendEmailMessage(
         $email,
-        'Bienvenido a Fuber',
+        'Bienvenido a GeoMove',
         buildWelcomeEmailHtml($nombre),
         buildWelcomeEmailText($nombre)
     );

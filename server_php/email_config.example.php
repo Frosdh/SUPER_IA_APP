@@ -6,5 +6,5 @@ return [
     'username' => 'angelespinozav@corporativoqbank.com',
     'password' => 'CAMBIA_ESTA_PASSWORD',
     'from_email' => 'angelespinozav@corporativoqbank.com',
-    'from_name' => 'Fuber',
+    'from_name' => 'GeoMove',
 ];

@@ -48,7 +48,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _guardarCambios() async {
-    if (!_formKey.currentState.validate()) return;
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     if (_guardando) return;
 
     setState(() => _guardando = true);
@@ -58,29 +58,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     bool exito = false;
 
-    // Intentar actualizar en el servidor
-    final urls = [
-      '${Constants.apiBaseUrl}/actualizar_perfil.php',
-      'http://10.0.2.2/fuber_api/actualizar_perfil.php',
-    ];
-
-    for (final url in urls) {
-      try {
-        final response = await http.post(url, body: {
+    // Intentar actualizar en el servidor (hosting)
+    try {
+      final response = await http.post(
+        Uri.parse('${Constants.apiBaseUrl}/actualizar_perfil.php'),
+        body: {
           'telefono': _telefono,
-          'nombre':   nombre,
-          'email':    email,
-        }).timeout(const Duration(seconds: 10));
+          'nombre': nombre,
+          'email': email,
+        },
+      ).timeout(const Duration(seconds: 10));
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          if (data['status'] == 'success') {
-            exito = true;
-            break;
-          }
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'success') {
+          exito = true;
         }
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     // Actualizar SharedPreferences localmente siempre
     await AuthPrefs.saveUserSession(
@@ -97,7 +92,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _guardando = false);
 
     if (mounted) {
-      Scaffold.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             exito ? '¡Perfil actualizado!' : 'Guardado localmente (sin conexión)',

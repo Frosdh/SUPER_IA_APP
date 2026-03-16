@@ -1,9 +1,9 @@
-import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:latlong2/latlong.dart';
 
 class UserPlaces {
-  String title;
-  String name;
-  LatLng location;
+  late String title;
+  late String name;
+  late LatLng location;
 
   UserPlaces(this.title, this.name, this.location);
 }

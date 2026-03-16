@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
@@ -10,7 +11,7 @@ class RegisterScreen extends StatefulWidget {
   static const String route = '/register';
   final String verifiedEmail;
 
-  const RegisterScreen({Key key, this.verifiedEmail = ''}) : super(key: key);
+  const RegisterScreen({Key? key, this.verifiedEmail = ''}) : super(key: key);
 
   @override
   _RegisterScreenState createState() => _RegisterScreenState();
@@ -45,7 +46,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Future<void> _registerUser(VerificationModel verificationModel) async {
-    if (!_formKey.currentState.validate()) {
+    if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -53,10 +54,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _saving = true;
     });
 
-    final pushService = PushNotificationService();
     String tokenFcm = '';
     try {
-      tokenFcm = await pushService.getToken() ?? '';
+      tokenFcm = await FirebaseMessaging.instance.getToken() ?? '';
     } catch (_) {}
 
     final response = await verificationModel.registerUser(
@@ -73,7 +73,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     if (response != 1) {
-      _scaffoldKey.currentState.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             verificationModel.registerErrorMessage?.isNotEmpty == true
@@ -86,7 +86,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
 
     if (verificationModel.welcomeEmailSent == false) {
-      _scaffoldKey.currentState.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             verificationModel.welcomeEmailError?.isNotEmpty == true
@@ -124,13 +124,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _buildDarkField({
-    TextEditingController controller,
-    String label,
-    String hintText,
-    IconData icon,
-    TextInputType keyboardType,
+    required TextEditingController controller,
+    required String label,
+    required String hintText,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
     bool readOnly = false,
-    FormFieldValidator<String> validator,
+    required FormFieldValidator<String> validator,
   }) {
     return TextFormField(
       controller: controller,
@@ -392,12 +392,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 ),
                               ],
                             ),
-                            child: RaisedButton(
-                              color: Colors.transparent,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
+                              onPressed: _saving
+                                  ? null
+                                  : () => _registerUser(verificationModel),
                               child: _saving
                                   ? SizedBox(
                                       width: 22,
@@ -430,9 +435,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         ),
                                       ],
                                     ),
-                              onPressed: _saving
-                                  ? null
-                                  : () => _registerUser(verificationModel),
                             ),
                           ),
                         ),

@@ -6,8 +6,8 @@ class ContactoEmergencia {
   final String telefono;
 
   ContactoEmergencia({
-    this.nombre,
-    this.telefono,
+    required this.nombre,
+    required this.telefono,
   });
 
   Map<String, dynamic> toJson() => {
@@ -30,12 +30,12 @@ class EmergencyContactsService {
   static Future<List<ContactoEmergencia>> obtenerContactos() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_key);
-    if (raw == null || raw.isEmpty) return [];
+    if (raw == null || raw.isEmpty) return <ContactoEmergencia>[];
     try {
       final lista = jsonDecode(raw) as List;
       return lista.map((e) => ContactoEmergencia.fromJson(e as Map<String, dynamic>)).toList();
     } catch (_) {
-      return [];
+      return <ContactoEmergencia>[];
     }
   }
 

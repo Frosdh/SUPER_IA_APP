@@ -26,10 +26,7 @@ class _FavoritePlacesScreenState extends State<FavoritePlacesScreen> {
   }
 
   Future<void> _agregarEditar(String tipo) async {
-    final existente = _favoritos.firstWhere(
-      (l) => l.tipo == tipo,
-      orElse: () => null,
-    );
+    final existente = _favoritos.where((l) => l.tipo == tipo).firstOrNull;
 
     final TextEditingController controller = TextEditingController(
       text: existente?.direccion ?? '',
@@ -228,14 +225,8 @@ class _FavoritePlacesScreenState extends State<FavoritePlacesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final LugarFavorito casa = _favoritos.firstWhere(
-      (l) => l.tipo == 'casa',
-      orElse: () => null,
-    );
-    final LugarFavorito trabajo = _favoritos.firstWhere(
-      (l) => l.tipo == 'trabajo',
-      orElse: () => null,
-    );
+    final LugarFavorito? casa = _favoritos.where((l) => l.tipo == 'casa').firstOrNull;
+    final LugarFavorito? trabajo = _favoritos.where((l) => l.tipo == 'trabajo').firstOrNull;
 
     return Scaffold(
       backgroundColor: ConstantColors.backgroundDark,
@@ -321,11 +312,11 @@ class _FavoritePlacesScreenState extends State<FavoritePlacesScreen> {
   }
 
   Widget _favoritoCard({
-    String tipo,
-    String icono,
-    String titulo,
-    LugarFavorito lugar,
-    Color color,
+    required String tipo,
+    required String icono,
+    required String titulo,
+    required LugarFavorito? lugar,
+    required Color color,
   }) {
     final bool tieneDir = lugar != null;
     return GestureDetector(

@@ -11,7 +11,7 @@ class CircularFlatButton extends StatelessWidget {
   final OnPressed onPressed;
 
   const CircularFlatButton(
-      {Key key, this.size, this.name, this.onPressed, this.child})
+      {Key? key, required this.size, required this.name, required this.onPressed, required this.child})
       : super(key: key);
 
   @override
@@ -19,9 +19,16 @@ class CircularFlatButton extends StatelessWidget {
     return SizedBox(
         height: size,
         width: size,
-        child: FlatButton(
-            shape: CircleBorder(),
-            disabledColor: ConstantColors.DeepBlue.withOpacity(0.2),
+        child: TextButton(
+            style: ButtonStyle(
+              shape: MaterialStateProperty.all(const CircleBorder()),
+              backgroundColor: MaterialStateProperty.resolveWith((states) {
+                if (states.contains(MaterialState.disabled)) {
+                  return ConstantColors.DeepBlue.withOpacity(0.2);
+                }
+                return null;
+              }),
+            ),
             onPressed: onPressed,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -31,7 +38,7 @@ class CircularFlatButton extends StatelessWidget {
                 child,
                 Text(
                   name,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 18,
                     color: Colors.deepPurpleAccent,
                   ),

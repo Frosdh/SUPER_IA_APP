@@ -6,7 +6,7 @@ class ErrorDialogue extends StatelessWidget {
   final String errorMessage;
 
   const ErrorDialogue(
-      {Key key, @required this.errorMessage, @required this.errorTitle})
+      {Key? key, required this.errorMessage, required this.errorTitle})
       : super(key: key);
 
   @override
@@ -16,12 +16,14 @@ class ErrorDialogue extends StatelessWidget {
       title: Text(errorTitle),
       content: Text(errorMessage),
       actions: <Widget>[
-        RaisedButton(
-          color: Colors.black87,
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.black87,
+          ),
           onPressed: () {
             Navigator.of(context).pop();
           },
-          child: Text(
+          child: const Text(
             "OK",
             style: TextStyle(fontSize: 20, color: Colors.white),
           ),

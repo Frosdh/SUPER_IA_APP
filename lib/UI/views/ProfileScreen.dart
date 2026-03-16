@@ -40,7 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _cambiarFoto() async {
-    ImageSource opcion;
+    ImageSource? opcion;
 
     await showModalBottomSheet(
       context: context,
@@ -111,11 +111,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (opcion == null) return;
+    final source = opcion!;
 
     try {
       final picker     = ImagePicker();
-      final pickedFile = await picker.getImage(
-        source:       opcion,
+      final pickedFile = await picker.pickImage(
+        source:       source,
         imageQuality: 70,
         maxWidth:     400,
       );
@@ -130,7 +131,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Widget _opcionFotoItem({IconData icon, String label, Color color, VoidCallback onTap}) {
+  Widget _opcionFotoItem({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -391,7 +392,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _accionTile(IconData icon, String label, VoidCallback onTap, {Color color}) {
+  Widget _accionTile(IconData icon, String label, VoidCallback onTap, {Color? color}) {
     return ListTile(
       leading: Icon(icon, color: color ?? ConstantColors.textGrey),
       title: Text(

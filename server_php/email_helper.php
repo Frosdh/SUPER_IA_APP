@@ -77,9 +77,9 @@ function buildOtpEmailHtml($codigo)
         <div style="margin:0;padding:32px 16px;background:#0b1020;font-family:Arial,sans-serif;color:#f4f7fb;">
             <div style="max-width:560px;margin:0 auto;background:linear-gradient(180deg,#131a33 0%,#0f1530 100%);border:1px solid rgba(138,164,255,.18);border-radius:28px;overflow:hidden;box-shadow:0 24px 80px rgba(3,8,25,.45);">
                 <div style="padding:32px 32px 20px;background:radial-gradient(circle at top right,rgba(112,157,255,.35),transparent 32%),linear-gradient(135deg,#161f45 0%,#0f1530 70%);">
-                    <div style="display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(125,151,255,.16);color:#bcd0ff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Fuber</div>
+                    <div style="display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(125,151,255,.16);color:#bcd0ff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">GeoMove</div>
                     <h1 style="margin:20px 0 8px;font-size:30px;line-height:1.15;color:#ffffff;">Tu código de verificación ya está listo</h1>
-                    <p style="margin:0;color:#a9b6da;font-size:15px;line-height:1.6;">Usa este código para continuar con tu acceso a Fuber. Expira en 10 minutos.</p>
+                    <p style="margin:0;color:#a9b6da;font-size:15px;line-height:1.6;">Usa este código para continuar con tu acceso a GeoMove. Expira en 10 minutos.</p>
                 </div>
                 <div style="padding:12px 32px 32px;">
                     <div style="margin:20px 0 24px;padding:24px;border-radius:24px;background:linear-gradient(135deg,#7d97ff 0%,#64b2ff 100%);text-align:center;box-shadow:0 16px 40px rgba(89,132,255,.28);">
@@ -97,7 +97,7 @@ function buildOtpEmailHtml($codigo)
 
 function buildOtpEmailText($codigo)
 {
-    return "Tu codigo de verificacion de Fuber es: $codigo. Este codigo expira en 10 minutos.";
+    return "Tu codigo de verificacion de GeoMove es: $codigo. Este codigo expira en 10 minutos.";
 }
 
 function buildWelcomeEmailHtml($nombre)
@@ -108,7 +108,7 @@ function buildWelcomeEmailHtml($nombre)
         <div style="margin:0;padding:32px 16px;background:#07101f;font-family:Arial,sans-serif;color:#eef4ff;">
             <div style="max-width:600px;margin:0 auto;background:linear-gradient(180deg,#101933 0%,#0a1226 100%);border-radius:30px;overflow:hidden;border:1px solid rgba(127,150,255,.16);box-shadow:0 28px 90px rgba(0,0,0,.42);">
                 <div style="padding:36px 36px 22px;background:radial-gradient(circle at top right,rgba(109,161,255,.42),transparent 30%),radial-gradient(circle at left top,rgba(163,110,255,.24),transparent 28%),linear-gradient(135deg,#182455 0%,#0d1430 70%);">
-                    <div style="display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.08);color:#d9e6ff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Bienvenido a Fuber</div>
+                    <div style="display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.08);color:#d9e6ff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;">Bienvenido a GeoMove</div>
                     <h1 style="margin:18px 0 10px;font-size:32px;line-height:1.12;color:#ffffff;">' . $safeName . ', tu cuenta ya está lista</h1>
                     <p style="margin:0;color:#b2c2e7;font-size:16px;line-height:1.7;">Gracias por registrarte. Desde este momento ya puedes solicitar viajes, guardar tus destinos favoritos y moverte con una experiencia pensada para ser rápida, clara y confiable.</p>
                 </div>
@@ -137,5 +137,5 @@ function buildWelcomeEmailText($nombre)
 {
     $displayName = trim($nombre) !== '' ? $nombre : 'viajero';
 
-    return "Hola $displayName,\n\nTu cuenta en Fuber fue creada correctamente.\nGracias por registrarte. Ya puedes solicitar viajes y usar la app.\n\nBienvenido a Fuber.";
+    return "Hola $displayName,\n\nTu cuenta en GeoMove fue creada correctamente.\nGracias por registrarte. Ya puedes solicitar viajes y usar la app.\n\nBienvenido a GeoMove.";
 }

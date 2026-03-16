@@ -22,7 +22,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
   }
 
   Future<void> _verifyOtp(VerificationModel verificationModel) async {
-    if (!_otpFormKey.currentState.validate()) {
+    if (!(_otpFormKey.currentState?.validate() ?? false)) {
       return;
     }
 
@@ -35,14 +35,15 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
       final message = verificationModel.otpErrorMessage?.isNotEmpty == true
           ? verificationModel.otpErrorMessage
           : 'No se pudo verificar el codigo';
-      Scaffold.of(context).showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
       return;
     }
 
     final email = verificationModel.email;
-    final userResponse = await verificationModel.checkUserByEmail(email);
+    final localEmail = email ?? '';
+    final userResponse = await verificationModel.checkUserByEmail(localEmail);
 
     if (!mounted) return;
 
@@ -53,7 +54,7 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
       await AuthPrefs.saveUserSession(
         telefono: userResponse['telefono'] ?? '',
         nombre: userResponse['nombre'] ?? '',
-        email: userResponse['email'] ?? email,
+        email: userResponse['email'] ?? localEmail,
       );
 
       Navigator.pop(context);
@@ -70,8 +71,8 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
       context,
       MaterialPageRoute(
         builder: (_) => ChangeNotifierProvider<VerificationModel>(
-          builder: (_) => VerificationModel()..setEmail(email ?? ''),
-          child: RegisterScreen(verifiedEmail: email ?? ''),
+          create: (_) => VerificationModel()..setEmail(localEmail),
+          child: RegisterScreen(verifiedEmail: localEmail),
         ),
       ),
     );
@@ -163,11 +164,16 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
                   SizedBox(
                     width: double.infinity,
                     height: 50,
-                    child: RaisedButton(
-                      color: ConstantColors.primaryViolet,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ConstantColors.primaryViolet,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
+                      onPressed: verificationModel.shopCircularLoaderOTP
+                          ? null
+                          : () => _verifyOtp(verificationModel),
                       child: verificationModel.shopCircularLoaderOTP
                           ? SizedBox(
                               width: 22,
@@ -185,26 +191,23 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                      onPressed: verificationModel.shopCircularLoaderOTP
-                          ? null
-                          : () => _verifyOtp(verificationModel),
                     ),
                   ),
                   SizedBox(height: 10),
                   Align(
                     alignment: Alignment.center,
-                    child: FlatButton(
-                      child: Text('Reenviar codigo'),
+                    child: TextButton(
                       onPressed: () async {
                         final result = await verificationModel.resendOtp();
                         if (!mounted) return;
                         final message = result == 1
                             ? 'Te enviamos un nuevo codigo al correo'
                             : verificationModel.otpErrorMessage;
-                        Scaffold.of(formContext).showSnackBar(
+                        ScaffoldMessenger.of(formContext).showSnackBar(
                           SnackBar(content: Text(message)),
                         );
                       },
+                      child: Text('Reenviar codigo'),
                     ),
                   ),
                 ],

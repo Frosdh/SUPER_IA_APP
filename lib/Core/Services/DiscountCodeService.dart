@@ -7,7 +7,7 @@ import 'package:fu_uber/Core/Preferences/DiscountPreferences.dart';
 class DiscountCodeService {
   /// Validar un código de descuento en el servidor
   static Future<DiscountCode> validarCodigo(String codigo) async {
-    if (codigo == null || codigo.isEmpty) {
+    if (codigo.isEmpty) {
       throw Exception('Código vacío');
     }
 
@@ -22,7 +22,6 @@ class DiscountCodeService {
 
     final urls = [
       '${Constants.apiBaseUrl}/validar_codigo.php',
-      'http://10.0.2.2/fuber_api/validar_codigo.php',
     ];
 
     for (final url in urls) {
@@ -30,7 +29,7 @@ class DiscountCodeService {
         print('>>> [DISCOUNT] Validando código: $codigoLimpio en $url');
 
         final response = await http.post(
-          url,
+          Uri.parse(url),
           headers: {'ngrok-skip-browser-warning': 'true'},
           body: {
             'codigo': codigoLimpio,
@@ -100,28 +99,28 @@ class DiscountCodeService {
   }
 
   /// Calcular precio con descuento
-  static double aplicarDescuento(double precioOriginal, DiscountCode cupom) {
+  static double aplicarDescuento(double precioOriginal, DiscountCode? cupom) {
     if (cupom == null) return precioOriginal;
     return cupom.calcularPrecioFinal(precioOriginal);
   }
 
   /// Obtener monto del descuento
-  static double obtenerMontoDescuento(double precioOriginal, DiscountCode cupom) {
+  static double obtenerMontoDescuento(double precioOriginal, DiscountCode? cupom) {
     if (cupom == null) return 0.0;
     return cupom.calcularDescuento(precioOriginal);
   }
 
   /// Validar que el precio mínimo se cumple
-  static bool cumpleMinimoViaje(DiscountCode cupom, double precioViaje) {
+  static bool cumpleMinimoViaje(DiscountCode? cupom, double precioViaje) {
     if (cupom == null) return true;
-    if (cupom.minimoViaje == null || cupom.minimoViaje <= 0) return true;
+    if (cupom.minimoViaje <= 0) return true;
     return precioViaje >= cupom.minimoViaje;
   }
 
   /// Obtener mensaje de error si no cumple mínimo
-  static String obtenerMensajeMinimo(DiscountCode cupom, double precioViaje) {
+  static String obtenerMensajeMinimo(DiscountCode? cupom, double precioViaje) {
     if (cupom == null) return '';
-    if (cupom.minimoViaje == null || cupom.minimoViaje <= 0) return '';
+    if (cupom.minimoViaje <= 0) return '';
     if (precioViaje < cupom.minimoViaje) {
       return 'Viaje mínimo requerido: \$${cupom.minimoViaje.toStringAsFixed(2)}';
     }
@@ -132,7 +131,6 @@ class DiscountCodeService {
   static Future<void> registrarUsoEnServidor(String codigo, int viajeId) async {
     final urls = [
       '${Constants.apiBaseUrl}/registrar_uso_codigo.php',
-      'http://10.0.2.2/fuber_api/registrar_uso_codigo.php',
     ];
 
     for (final url in urls) {
@@ -140,7 +138,7 @@ class DiscountCodeService {
         print('>>> [DISCOUNT] Registrando uso del código: $codigo (viaje: $viajeId)');
 
         final response = await http.post(
-          url,
+          Uri.parse(url),
           headers: {'ngrok-skip-browser-warning': 'true'},
           body: {
             'codigo': codigo,

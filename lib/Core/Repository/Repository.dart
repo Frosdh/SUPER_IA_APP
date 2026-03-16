@@ -9,10 +9,10 @@ class Repository {
   final ApiProvider apiProvider = ApiProvider();
 
   Future<Map<String, dynamic>> registerNewUser({
-    String nombre,
-    String telefono,
-    String email,
-    String tokenFcm,
+    required String nombre,
+    required String telefono,
+    required String email,
+    required String tokenFcm,
   }) {
     return apiProvider.registerNewUser(
       nombre: nombre,
@@ -35,9 +35,9 @@ class Repository {
   }
 
   Future<List<NearbyDriverMapModel>> getNearbyDriverMapData({
-    double lat,
-    double lng,
-    int categoriaId,
+    required double lat,
+    required double lng,
+    int? categoriaId,
     double radioKm = 5,
   }) {
     return apiProvider.getNearbyDrivers(

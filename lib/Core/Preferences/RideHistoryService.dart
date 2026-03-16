@@ -12,50 +12,48 @@ class RideHistoryService {
   }
 
   // URLs del servidor
-  static List<String> _urlsGuardar() => [
+  static final List<String> _urlsGuardar = [
         '${Constants.apiBaseUrl}/guardar_viaje.php',
-        'http://10.0.2.2/fuber_api/guardar_viaje.php',
       ];
 
-  static List<String> _urlsObtener() => [
+  static final List<String> _urlsObtener = [
         '${Constants.apiBaseUrl}/obtener_viajes.php',
-        'http://10.0.2.2/fuber_api/obtener_viajes.php',
       ];
 
   /// Guarda un viaje: actualiza el registro existente en servidor + guarda en caché local
   static Future<void> guardarViaje({
-    int viajeId,
-    String origen,
-    String destino,
-    double distanciaKm,
-    int duracionMin,
-    double precio,
-    int calificacion,
-    int conductorId,
-    String comentario,
-    String conductorNombre,
-    String conductorAuto,
-    String conductorPlaca,
-    double origenLat,
-    double origenLng,
-    double destinoLat,
-    double destinoLng,
-    double descuento,
-    String codigoDescuento,
+    required int viajeId,
+    required String origen,
+    required String destino,
+    required double distanciaKm,
+    required int duracionMin,
+    required double precio,
+    required int calificacion,
+    required int conductorId,
+    required String comentario,
+    required String conductorNombre,
+    required String conductorAuto,
+    required String conductorPlaca,
+    required double origenLat,
+    required double origenLng,
+    required double destinoLat,
+    required double destinoLng,
+    required double descuento,
+    required String codigoDescuento,
   }) async {
 
     // 1. Actualizar el viaje en el servidor (UPDATE, no INSERT)
     bool guardadoEnServidor = false;
-    if (viajeId != null && viajeId > 0) {
-      for (final url in _urlsGuardar()) {
+    if (viajeId > 0) {
+      for (final url in _urlsGuardar) {
         try {
-          final response = await http.post(url, body: {
+          final response = await http.post(Uri.parse(url), body: {
             'viaje_id':         viajeId.toString(),
-            'calificacion':     (calificacion ?? 0).toString(),
-            'conductor_id':     (conductorId ?? '').toString(),
-            'comentario':       comentario ?? '',
-            'descuento':        (descuento ?? 0.0).toString(),
-            'codigo_descuento': codigoDescuento ?? '',
+            'calificacion':     calificacion.toString(),
+            'conductor_id':     conductorId.toString(),
+            'comentario':       comentario,
+            'descuento':        descuento.toString(),
+            'codigo_descuento': codigoDescuento,
           }).timeout(const Duration(seconds: 10));
 
           if (response.statusCode == 200) {
@@ -99,9 +97,9 @@ class RideHistoryService {
     final telefono = await AuthPrefs.getUserPhone();
 
     // 1. Intentar cargar desde el servidor
-    for (final url in _urlsObtener()) {
+    for (final url in _urlsObtener) {
       try {
-        final response = await http.post(url, body: {
+        final response = await http.post(Uri.parse(url), body: {
           'telefono': telefono,
         }).timeout(const Duration(seconds: 10));
 
@@ -127,22 +125,22 @@ class RideHistoryService {
   // ── Métodos internos para caché local ──────────────────
 
   static Future<void> _guardarLocal({
-    String origen,
-    String destino,
-    double distanciaKm,
-    int duracionMin,
-    double precio,
-    int calificacion,
-    String comentario,
-    String conductorNombre,
-    String conductorAuto,
-    String conductorPlaca,
-    double origenLat,
-    double origenLng,
-    double destinoLat,
-    double destinoLng,
-    double descuento,
-    String codigoDescuento,
+    required String origen,
+    required String destino,
+    required double distanciaKm,
+    required int duracionMin,
+    required double precio,
+    required int calificacion,
+    required String comentario,
+    required String conductorNombre,
+    required String conductorAuto,
+    required String conductorPlaca,
+    required double origenLat,
+    required double origenLng,
+    required double destinoLat,
+    required double destinoLng,
+    required double descuento,
+    required String codigoDescuento,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final clave = await _claveLocal();
@@ -150,22 +148,22 @@ class RideHistoryService {
 
     lista.insert(0, {
       'fecha':             DateTime.now().toIso8601String(),
-      'origen':            origen           ?? '',
-      'destino':           destino          ?? '',
-      'distancia_km':      distanciaKm      ?? 0.0,
-      'duracion_min':      duracionMin      ?? 0,
-      'precio':            precio           ?? 0.0,
-      'calificacion':      calificacion     ?? 0,
-      'comentario':        comentario       ?? '',
-      'conductor_nombre':  conductorNombre  ?? '',
-      'conductor_auto':    conductorAuto    ?? '',
-      'conductor_placa':   conductorPlaca   ?? '',
-      'origen_lat':        origenLat        ?? 0.0,
-      'origen_lng':        origenLng        ?? 0.0,
-      'destino_lat':       destinoLat       ?? 0.0,
-      'destino_lng':       destinoLng       ?? 0.0,
-      'descuento':         descuento        ?? 0.0,
-      'codigo_descuento':  codigoDescuento  ?? '',
+      'origen':            origen,
+      'destino':           destino,
+      'distancia_km':      distanciaKm,
+      'duracion_min':      duracionMin,
+      'precio':            precio,
+      'calificacion':      calificacion,
+      'comentario':        comentario,
+      'conductor_nombre':  conductorNombre,
+      'conductor_auto':    conductorAuto,
+      'conductor_placa':   conductorPlaca,
+      'origen_lat':        origenLat,
+      'origen_lng':        origenLng,
+      'destino_lat':       destinoLat,
+      'destino_lng':       destinoLng,
+      'descuento':         descuento,
+      'codigo_descuento':  codigoDescuento,
     });
 
     if (lista.length > 50) lista.removeLast();

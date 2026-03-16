@@ -11,11 +11,11 @@ class LugarFavorito {
   final double lng;
 
   LugarFavorito({
-    this.tipo,
-    this.nombre,
-    this.direccion,
-    this.lat,
-    this.lng,
+    required this.tipo,
+    required this.nombre,
+    required this.direccion,
+    required this.lat,
+    required this.lng,
   });
 
   Map<String, dynamic> toJson() => {
@@ -61,15 +61,15 @@ class FavoritePlacesService {
     final prefs = await SharedPreferences.getInstance();
     final key = await _key();
     final raw = prefs.getString(key) ?? prefs.getString(_baseKey);
-    if (raw == null || raw.isEmpty) return [];
+    if (raw == null || raw.isEmpty) return <LugarFavorito>[];
 
     try {
       final lista = jsonDecode(raw) as List;
       return lista
-          .map((e) => LugarFavorito.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => LugarFavorito.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     } catch (_) {
-      return [];
+      return <LugarFavorito>[];
     }
   }
 
@@ -99,7 +99,7 @@ class FavoritePlacesService {
     );
   }
 
-  static Future<LugarFavorito> obtenerPorTipo(String tipo) async {
+  static Future<LugarFavorito?> obtenerPorTipo(String tipo) async {
     final lista = await obtenerFavoritos();
     try {
       return lista.firstWhere((l) => l.tipo == tipo);

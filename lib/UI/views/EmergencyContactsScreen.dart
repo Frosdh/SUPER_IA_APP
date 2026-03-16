@@ -29,7 +29,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     }
   }
 
-  void _abrirDialogoAgregarContacto({ContactoEmergencia contactoExistente}) {
+  void _abrirDialogoAgregarContacto({ContactoEmergencia? contactoExistente}) {
     final esEditar = contactoExistente != null;
     final nombreController = TextEditingController(text: esEditar ? contactoExistente.nombre : '');
     final telefonoController = TextEditingController(text: esEditar ? contactoExistente.telefono : '');
@@ -120,7 +120,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
               Navigator.pop(ctx);
             },
             style: ElevatedButton.styleFrom(
-              primary: ConstantColors.primaryViolet,
+              backgroundColor: ConstantColors.primaryViolet,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(esEditar ? 'Actualizar' : 'Agregar', style: TextStyle(color: Colors.white)),

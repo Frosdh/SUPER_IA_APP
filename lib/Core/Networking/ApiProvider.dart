@@ -5,20 +5,212 @@ import 'package:fu_uber/Core/Models/NearbyDriverMapModel.dart';
 import 'package:http/http.dart' as http;
 
 class ApiProvider {
+  Future<Map<String, dynamic>> loginDriver({
+    required String identificador,
+    required String password,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/login_conductor.php';
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'identificador': identificador,
+        'password': password,
+      },
+    );
+
+    print('>>> [DRIVER_LOGIN] HTTP ${response.statusCode} desde $url');
+    if (response.statusCode != 200) {
+      print('>>> [DRIVER_LOGIN] Body (non-200): ${response.body}');
+    }
+
+    if (response.statusCode != 200) {
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'No se pudo conectar con el servidor',
+      };
+    }
+
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateDriverStatus({
+    required int conductorId,
+    required String estado,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/actualizar_estado_conductor.php';
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'conductor_id': conductorId.toString(),
+        'estado': estado,
+      },
+    );
+
+    print('>>> [DRIVER_STATUS] HTTP ${response.statusCode} desde $url');
+    if (response.statusCode != 200) {
+      print('>>> [DRIVER_STATUS] Body (non-200): ${response.body}');
+    }
+
+    if (response.statusCode != 200) {
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'No se pudo actualizar el estado',
+      };
+    }
+
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateDriverLocation({
+    required int conductorId,
+    required double latitud,
+    required double longitud,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/actualizar_ubicacion_conductor.php';
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'conductor_id': conductorId.toString(),
+        'latitud': latitud.toString(),
+        'longitud': longitud.toString(),
+      },
+    );
+
+    print('>>> [DRIVER_LOC] HTTP ${response.statusCode} desde $url');
+    if (response.statusCode != 200) {
+      print('>>> [DRIVER_LOC] Body (non-200): ${response.body}');
+    }
+
+    if (response.statusCode != 200) {
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'No se pudo actualizar la ubicacion',
+      };
+    }
+
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getDriverPendingRequest({
+    required int conductorId,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/obtener_solicitud_conductor.php';
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'conductor_id': conductorId.toString(),
+      },
+    );
+
+    print(
+      '>>> [DRIVER_POLL] HTTP ${response.statusCode} desde $url (conductor_id=$conductorId)',
+    );
+    // Si el hosting no tiene el PHP, normalmente aqui veras 404 con HTML.
+    if (response.statusCode != 200) {
+      print('>>> [DRIVER_POLL] Body (non-200): ${response.body}');
+    }
+
+    if (response.statusCode != 200) {
+      return <String, dynamic>{
+        'status': 'error',
+        'found': false,
+        'message': 'No se pudo consultar solicitudes',
+      };
+    }
+
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> respondDriverRequest({
+    required int conductorId,
+    required int viajeId,
+    required String accion,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/responder_solicitud_conductor.php';
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'conductor_id': conductorId.toString(),
+        'viaje_id': viajeId.toString(),
+        'accion': accion,
+      },
+    );
+
+    print(
+      '>>> [DRIVER_RESP] HTTP ${response.statusCode} desde $url (viaje_id=$viajeId, accion=$accion)',
+    );
+    if (response.statusCode != 200) {
+      print('>>> [DRIVER_RESP] Body (non-200): ${response.body}');
+    }
+
+    if (response.statusCode != 200) {
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'No se pudo responder la solicitud',
+      };
+    }
+
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateRideStatus({
+    required int conductorId,
+    required int viajeId,
+    required String estado,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/actualizar_estado_viaje.php';
+    final response = await http.post(
+      Uri.parse(url),
+      body: {
+        'conductor_id': conductorId.toString(),
+        'viaje_id': viajeId.toString(),
+        'estado': estado,
+      },
+    );
+
+    print(
+      '>>> [RIDE_STATUS] HTTP ${response.statusCode} desde $url (viaje_id=$viajeId, estado=$estado)',
+    );
+    if (response.statusCode != 200) {
+      print('>>> [RIDE_STATUS] Body (non-200): ${response.body}');
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'No se pudo actualizar el estado del viaje',
+      };
+    }
+
+    return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  // Consulta el estado actual de un viaje (usado por el conductor para detectar cancelación).
+  Future<Map<String, dynamic>> getRideStatus({required int viajeId}) async {
+    final url = '${Constants.apiBaseUrl}/estado_viaje.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {'viaje_id': viajeId.toString()},
+      ).timeout(const Duration(seconds: 6));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return <String, dynamic>{'status': 'error', 'estado': ''};
+  }
+
   Future<Map<String, dynamic>> registerNewUser({
-    String nombre,
-    String telefono,
-    String email,
-    String tokenFcm,
+    required String nombre,
+    required String telefono,
+    required String email,
+    required String tokenFcm,
   }) async {
     final url = '${Constants.apiBaseUrl}/register_user.php';
     final response = await http.post(
-      url,
+      Uri.parse(url),
       body: {
         'nombre': nombre,
         'telefono': telefono,
         'email': email,
-        'token_fcm': tokenFcm ?? '',
+        'token_fcm': tokenFcm,
       },
     );
 
@@ -38,7 +230,7 @@ class ApiProvider {
   Future<int> sendEmailOtp(String email) async {
     final url = '${Constants.apiBaseUrl}/enviar_codigo_email.php';
     final response = await http.post(
-      url,
+      Uri.parse(url),
       body: {'email': email},
     );
 
@@ -51,7 +243,7 @@ class ApiProvider {
   Future<int> verifyEmailOtp(String email, String codigo) async {
     final url = '${Constants.apiBaseUrl}/verificar_codigo_email.php';
     final response = await http.post(
-      url,
+      Uri.parse(url),
       body: {
         'email': email,
         'codigo': codigo,
@@ -70,7 +262,7 @@ class ApiProvider {
   Future<Map<String, dynamic>> checkUserByEmail(String email) async {
     final url = '${Constants.apiBaseUrl}/check_user_by_email.php';
     final response = await http.post(
-      url,
+      Uri.parse(url),
       body: {'email': email},
     );
 
@@ -81,10 +273,45 @@ class ApiProvider {
     return json.decode(response.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getDriverTripHistory({
+    required int conductorId,
+    int page = 1,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/historial_conductor.php';
+    try {
+      print('>>> [HISTORIAL] Llamando $url con conductor_id=$conductorId');
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'conductor_id': conductorId.toString(),
+          'page': page.toString(),
+        },
+      ).timeout(const Duration(seconds: 8));
+      print('>>> [HISTORIAL] HTTP ${response.statusCode}');
+      print('>>> [HISTORIAL] Body: ${response.body}');
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body) as Map<String, dynamic>;
+        return decoded;
+      }
+      return <String, dynamic>{
+        'status': 'error',
+        'viajes': [],
+        'debug': 'HTTP ${response.statusCode}: ${response.body}',
+      };
+    } catch (e) {
+      print('>>> [HISTORIAL] Excepcion: $e');
+      return <String, dynamic>{
+        'status': 'error',
+        'viajes': [],
+        'debug': 'Excepcion: $e',
+      };
+    }
+  }
+
   Future<List<NearbyDriverMapModel>> getNearbyDrivers({
-    double lat,
-    double lng,
-    int categoriaId,
+    required double lat,
+    required double lng,
+    int? categoriaId,
     double radioKm = 5,
   }) async {
     final url = '${Constants.apiBaseUrl}/obtener_conductores_cercanos.php';
@@ -97,7 +324,7 @@ class ApiProvider {
       body['categoria_id'] = categoriaId.toString();
     }
 
-    final response = await http.post(url, body: body);
+    final response = await http.post(Uri.parse(url), body: body);
     if (response.statusCode != 200) {
       return <NearbyDriverMapModel>[];
     }

@@ -7,12 +7,12 @@ class LugarReciente {
   final String nombre;
   final double lat;
   final double lng;
-  final DateTime fecha;
+  final DateTime? fecha;
 
   LugarReciente({
-    this.nombre,
-    this.lat,
-    this.lng,
+    required this.nombre,
+    required this.lat,
+    required this.lng,
     this.fecha,
   });
 
@@ -67,15 +67,15 @@ class RecentPlacesService {
     final prefs = await SharedPreferences.getInstance();
     final key = await _key();
     final raw = prefs.getString(key) ?? prefs.getString(_baseKey);
-    if (raw == null || raw.isEmpty) return [];
+    if (raw == null || raw.isEmpty) return <LugarReciente>[];
 
     try {
       final lista = jsonDecode(raw) as List;
       return lista
-          .map((e) => LugarReciente.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => LugarReciente.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList();
     } catch (_) {
-      return [];
+      return <LugarReciente>[];
     }
   }
 

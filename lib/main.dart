@@ -4,25 +4,24 @@ import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fu_uber/Core/ProviderModels/CurrentRideCreationModel.dart';
-import 'package:fu_uber/Core/ProviderModels/MapModel.dart';
 import 'package:fu_uber/Core/ProviderModels/NearbyDriversModel.dart';
 import 'package:fu_uber/Core/ProviderModels/PermissionHandlerModel.dart';
-import 'package:fu_uber/Core/ProviderModels/RideBookedModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UINotifiersModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
 import 'package:fu_uber/Core/Services/PushNotificationService.dart';
 import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
-import 'package:fu_uber/UI/views/MainScreen.dart';
 import 'package:fu_uber/UI/views/OnboardingScreen.dart';
-import 'package:fu_uber/UI/views/OnGoingRideScreen.dart';
 import 'package:fu_uber/UI/views/ProfileScreen.dart';
 import 'package:fu_uber/UI/views/SignIn.dart';
 import 'package:fu_uber/UI/views/SplashScreen.dart';
 import 'package:fu_uber/UI/views/RegisterScreen.dart';
 import 'package:fu_uber/UI/views/EditProfileScreen.dart';
 import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
+import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
+import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
+import 'package:fu_uber/UI/views/DriverTripHistoryScreen.dart';
 import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
 import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:fu_uber/UI/views/RideCompletedScreen.dart';
@@ -41,7 +40,6 @@ void main() async {
     print('>>> [FCM] Firebase no inicializado: $e');
   }
 
-  // Barra de estado transparente sobre fondo oscuro
   SystemChrome.setSystemUIOverlayStyle(
     SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -51,59 +49,49 @@ void main() async {
     ),
   );
 
-  // Solo orientación vertical
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  runApp(MyApp());
+  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
   static const String TAG = "MyApp";
+
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<PermissionHandlerModel>(
-          builder: (context) => PermissionHandlerModel(),
+          create: (_) => PermissionHandlerModel(),
         ),
-        ChangeNotifierProvider<MapModel>(
-          builder: (context) => MapModel(),
-        ),
-        ChangeNotifierProxyProvider<MapModel, RideBookedModel>(
-            initialBuilder: (_) => RideBookedModel(),
-            builder: (_, foo, bar) {
-              bar.originLatLng = foo.pickupPosition;
-              bar.destinationLatLng = foo.destinationPosition;
-              return bar;
-            }),
         ChangeNotifierProvider<VerificationModel>(
-          builder: (context) => VerificationModel(),
+          create: (_) => VerificationModel(),
         ),
         ChangeNotifierProvider<NearbyDriversModel>(
-          builder: (context) => NearbyDriversModel(),
+          create: (_) => NearbyDriversModel(),
         ),
         ChangeNotifierProvider<UserDetailsModel>(
-          builder: (context) => UserDetailsModel(),
+          create: (_) => UserDetailsModel(),
         ),
         ChangeNotifierProvider<CurrentRideCreationModel>(
-          builder: (context) => CurrentRideCreationModel(),
+          create: (_) => CurrentRideCreationModel(),
         ),
         ChangeNotifierProvider<UINotifiersModel>(
-          builder: (context) => UINotifiersModel(),
+          create: (_) => UINotifiersModel(),
         ),
       ],
       child: MaterialApp(
-        title: 'Wendy Uber',
+        title: 'GeoMove',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           brightness: Brightness.dark,
           primaryColor: ConstantColors.primaryViolet,
           scaffoldBackgroundColor: ConstantColors.backgroundDark,
-          // ── Tipografía: Poppins reemplaza Roboto en toda la app ──
           fontFamily: GoogleFonts.poppins().fontFamily,
           colorScheme: ColorScheme.dark(
             primary: ConstantColors.primaryViolet,
@@ -112,27 +100,27 @@ class MyApp extends StatelessWidget {
             surface: ConstantColors.backgroundCard,
           ),
           textTheme: TextTheme(
-            bodyText1: GoogleFonts.poppins(color: ConstantColors.textWhite),
-            bodyText2: GoogleFonts.poppins(color: ConstantColors.textGrey),
-            headline6: GoogleFonts.poppins(
+            bodyLarge: GoogleFonts.poppins(color: ConstantColors.textWhite),
+            bodyMedium: GoogleFonts.poppins(color: ConstantColors.textGrey),
+            titleLarge: GoogleFonts.poppins(
               color: ConstantColors.textWhite,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.5,
             ),
-            subtitle1: GoogleFonts.poppins(color: ConstantColors.textWhite),
-            subtitle2: GoogleFonts.poppins(color: ConstantColors.textGrey, fontSize: 12),
-            caption: GoogleFonts.poppins(color: ConstantColors.textSubtle, fontSize: 12),
+            titleMedium: GoogleFonts.poppins(color: ConstantColors.textWhite),
+            titleSmall: GoogleFonts.poppins(
+                color: ConstantColors.textGrey, fontSize: 12),
+            bodySmall: GoogleFonts.poppins(
+                color: ConstantColors.textSubtle, fontSize: 12),
           ),
           appBarTheme: AppBarTheme(
             color: Colors.transparent,
             elevation: 0,
-            iconTheme: IconThemeData(color: ConstantColors.textWhite),
-            textTheme: TextTheme(
-              headline6: GoogleFonts.poppins(
-                color: ConstantColors.textWhite,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+            iconTheme: const IconThemeData(color: Colors.white),
+            titleTextStyle: GoogleFonts.poppins(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
             ),
           ),
           inputDecorationTheme: InputDecorationTheme(
@@ -148,7 +136,8 @@ class MyApp extends StatelessWidget {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
-              borderSide: BorderSide(color: ConstantColors.primaryViolet, width: 1.5),
+              borderSide:
+                  BorderSide(color: ConstantColors.primaryViolet, width: 1.5),
             ),
             hintStyle: GoogleFonts.poppins(color: ConstantColors.textSubtle),
             labelStyle: GoogleFonts.poppins(color: ConstantColors.textGrey),
@@ -160,18 +149,20 @@ class MyApp extends StatelessWidget {
           OnboardingScreen.route: (context) => OnboardingScreen(),
           SignInPage.route: (context) => SignInPage(),
           RegisterScreen.route: (context) => RegisterScreen(),
+          DriverLoginScreen.route: (context) => DriverLoginScreen(),
+          DriverHomeScreen.route: (context) => DriverHomeScreen(),
           LocationPermissionScreen.route: (context) =>
               LocationPermissionScreen(),
           OsmMapScreen.route: (context) => OsmMapScreen(),
-          MainScreen.route: (context) => MainScreen(),
           ProfileScreen.route: (context) => ProfileScreen(),
-          OnGoingRideScreen.route: (context) => OnGoingRideScreen(),
           RideCompletedScreen.route: (context) => RideCompletedScreen(),
           RideHistoryScreen.route: (context) => RideHistoryScreen(),
           EditProfileScreen.route: (context) => EditProfileScreen(),
-          FavoritePlacesScreen.route: (context) => FavoritePlacesScreen(),
+          FavoritePlacesScreen.route: (context) =>
+              FavoritePlacesScreen(),
           HelpFaqScreen.route: (context) => HelpFaqScreen(),
-          EmergencyContactsScreen.route: (context) => EmergencyContactsScreen(),
+          EmergencyContactsScreen.route: (context) =>
+              EmergencyContactsScreen(),
         },
         home: SplashScreen(),
       ),

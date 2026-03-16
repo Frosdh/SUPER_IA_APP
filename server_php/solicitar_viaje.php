@@ -43,17 +43,16 @@ if ($conn->connect_error) {
 $stmt = $conn->prepare("SELECT id FROM usuarios WHERE telefono = ? AND activo = 1 LIMIT 1");
 $stmt->bind_param("s", $telefono);
 $stmt->execute();
-$result = $stmt->get_result();
-$usuario = $result->fetch_assoc();
+$stmt->bind_result($usuario_id);
+$usuarioEncontrado = $stmt->fetch();
 $stmt->close();
 
-if (!$usuario) {
+if (!$usuarioEncontrado) {
     echo json_encode(["status" => "error", "message" => "Usuario no encontrado"]);
     $conn->close();
     exit;
 }
 
-$usuario_id   = $usuario['id'];
 $categoria_id = isset($_POST['categoria_id']) ? intval($_POST['categoria_id']) : 1;
 
 // Crear el viaje con estado 'pedido'

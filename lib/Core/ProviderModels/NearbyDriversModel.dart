@@ -5,10 +5,10 @@ import 'package:fu_uber/Core/Models/Drivers.dart';
 import 'package:fu_uber/Core/Repository/Repository.dart';
 
 class NearbyDriversModel extends ChangeNotifier {
-  List<Driver> nearbyDrivers;
+  List<Driver>? nearbyDrivers;
   final nearbyDriverStreamController = StreamController<List<Driver>>();
 
-  get nearbyDriverList => nearbyDrivers;
+  List<Driver>? get nearbyDriverList => nearbyDrivers;
 
   Stream<List<Driver>> get dataStream => nearbyDriverStreamController.stream;
 

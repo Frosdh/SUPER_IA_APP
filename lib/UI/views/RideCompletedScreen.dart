@@ -14,9 +14,9 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
   int _calificacion = 0;
   bool _guardando = false;
   final TextEditingController _comentarioController = TextEditingController();
-  AnimationController _animController;
-  Animation<double> _scaleAnim;
-  Animation<double> _fadeAnim;
+  late AnimationController _animController;
+  late Animation<double> _scaleAnim;
+  late Animation<double> _fadeAnim;
 
   @override
   void initState() {
@@ -54,24 +54,24 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
               : 0;
 
       await RideHistoryService.guardarViaje(
-        viajeId: (args['viaje_id'] as num)?.toInt(),
+        viajeId: (args['viaje_id'] as num?)?.toInt() ?? 0,
         calificacion: _calificacion,
         conductorId: conductorId,
         comentario: _comentarioController.text.trim(),
         origen: args['origen'] ?? '',
         destino: args['destino'] ?? '',
-        distanciaKm: (args['distancia'] as num)?.toDouble() ?? 0.0,
-        duracionMin: (args['duracion'] as num)?.toInt() ?? 0,
-        precio: (args['precio'] as num)?.toDouble() ?? 0.0,
+        distanciaKm: (args['distancia'] as num?)?.toDouble() ?? 0.0,
+        duracionMin: (args['duracion'] as num?)?.toInt() ?? 0,
+        precio: (args['precio'] as num?)?.toDouble() ?? 0.0,
         conductorNombre: conductor != null ? (conductor['nombre'] ?? '') : '',
         conductorAuto: conductor != null ? (conductor['auto'] ?? '') : '',
         conductorPlaca: conductor != null ? (conductor['placa'] ?? '') : '',
-        origenLat: (args['origen_lat'] as num)?.toDouble() ?? 0.0,
-        origenLng: (args['origen_lng'] as num)?.toDouble() ?? 0.0,
-        destinoLat: (args['destino_lat'] as num)?.toDouble() ?? 0.0,
-        destinoLng: (args['destino_lng'] as num)?.toDouble() ?? 0.0,
-        descuento: (args['descuento'] as num)?.toDouble() ?? 0.0,
-        codigoDescuento: args['codigo_descuento'] as String ?? '',
+        origenLat: (args['origen_lat'] as num?)?.toDouble() ?? 0.0,
+        origenLng: (args['origen_lng'] as num?)?.toDouble() ?? 0.0,
+        destinoLat: (args['destino_lat'] as num?)?.toDouble() ?? 0.0,
+        destinoLng: (args['destino_lng'] as num?)?.toDouble() ?? 0.0,
+        descuento: (args['descuento'] as num?)?.toDouble() ?? 0.0,
+        codigoDescuento: args['codigo_descuento'] as String? ?? '',
       );
       print('>>> [RideCompleted] Viaje guardado. viaje_id=${args['viaje_id']}, calificacion=$_calificacion');
     } catch (e) {
@@ -89,21 +89,21 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
   @override
   Widget build(BuildContext context) {
     final args =
-        ModalRoute.of(context).settings.arguments as Map<String, dynamic>;
+        (ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?) ?? {};
 
-    final conductor = args['conductor'] as Map<String, dynamic>;
-    final String origen          = args['origen']   ?? '';
-    final String destino         = args['destino']  ?? '';
-    final double distancia       = (args['distancia'] as num)?.toDouble() ?? 0.0;
-    final int    duracion        = (args['duracion'] as num)?.toInt()    ?? 0;
-    final double precio          = (args['precio']   as num)?.toDouble() ?? 0.0;
-    final String categoriaNombre = args['categoria_nombre'] ?? 'Fuber-X';
-    final double tarifaBase      = (args['tarifa_base']  as num)?.toDouble() ?? 0.0;
-    final double precioKm        = (args['precio_km']    as num)?.toDouble() ?? 0.0;
-    final double precioMin       = (args['precio_minuto'] as num)?.toDouble() ?? 0.0;
+    final conductor = args['conductor'] as Map<String, dynamic>?;
+    final String origen          = args['origen'] as String?   ?? '';
+    final String destino         = args['destino'] as String?  ?? '';
+    final double distancia       = (args['distancia'] as num?)?.toDouble() ?? 0.0;
+    final int    duracion        = (args['duracion'] as num?)?.toInt()    ?? 0;
+    final double precio          = (args['precio'] as num?)?.toDouble() ?? 0.0;
+    final String categoriaNombre = args['categoria_nombre'] as String? ?? 'GeoMove-X';
+    final double tarifaBase      = (args['tarifa_base'] as num?)?.toDouble() ?? 0.0;
+    final double precioKm        = (args['precio_km'] as num?)?.toDouble() ?? 0.0;
+    final double precioMin       = (args['precio_minuto'] as num?)?.toDouble() ?? 0.0;
     // Descuento aplicado (puede ser 0 si no hubo cupón)
-    final double descuento       = (args['descuento'] as num)?.toDouble() ?? 0.0;
-    final String codigoDescuento = args['codigo_descuento'] as String ?? '';
+    final double descuento       = (args['descuento'] as num?)?.toDouble() ?? 0.0;
+    final String codigoDescuento = args['codigo_descuento'] as String? ?? '';
     // Componentes del precio
     final double costoBase = tarifaBase;
     final double costoKm   = precioKm  * distancia;
@@ -403,61 +403,64 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
                   child: Column(
                     children: [
                       // Info del conductor
-                      Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 26,
-                            backgroundColor:
-                                ConstantColors.primaryViolet.withOpacity(0.2),
-                            child: Text(
-                              conductor['inicial'] ?? 'C',
-                              style: TextStyle(
-                                color: ConstantColors.primaryViolet,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
+                      if (conductor != null) ...[
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 26,
+                              backgroundColor:
+                                  ConstantColors.primaryViolet.withOpacity(0.2),
+                              child: Text(
+                                conductor['inicial'] ?? 'C',
+                                style: TextStyle(
+                                  color: ConstantColors.primaryViolet,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
-                          SizedBox(width: 14),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  conductor['nombre'] ?? '',
-                                  style: TextStyle(
-                                    color: ConstantColors.textWhite,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
+                            SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    conductor['nombre'] ?? '',
+                                    style: TextStyle(
+                                      color: ConstantColors.textWhite,
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
-                                ),
-                                SizedBox(height: 3),
+                                  SizedBox(height: 3),
+                                  Text(
+                                    '${conductor['auto']}  ·  ${conductor['placa']}',
+                                    style: TextStyle(
+                                      color: ConstantColors.textGrey,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                Icon(Icons.star_rounded,
+                                    color: Colors.amber, size: 16),
+                                SizedBox(width: 3),
                                 Text(
-                                  '${conductor['auto']}  ·  ${conductor['placa']}',
+                                  '${conductor['calificacion']}',
                                   style: TextStyle(
                                     color: ConstantColors.textGrey,
-                                    fontSize: 12,
+                                    fontSize: 13,
                                   ),
                                 ),
                               ],
                             ),
-                          ),
-                          Row(
-                            children: [
-                              Icon(Icons.star_rounded,
-                                  color: Colors.amber, size: 16),
-                              SizedBox(width: 3),
-                              Text(
-                                '${conductor['calificacion']}',
-                                style: TextStyle(
-                                  color: ConstantColors.textGrey,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ] else
+                        SizedBox(),
 
                       SizedBox(height: 20),
                       Divider(color: ConstantColors.dividerColor),

@@ -15,8 +15,8 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  AnimationController _animController;
-  Animation<double> _fadeAnim;
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
 
   final List<OnboardingData> _pages = [
     OnboardingData(
@@ -24,7 +24,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       iconColor: Color(0xFFA78BFA),
       title: 'Tu destino,\nen segundos',
       subtitle:
-          'Ingresa a dónde quieres ir y encuentra conductores cerca de ti en tiempo real.',
+          'Ingresa a donde quieres ir y encuentra conductores cerca de ti en tiempo real.',
       gradientColors: [Color(0xFF1A0A3D), Color(0xFF0D0D1A)],
     ),
     OnboardingData(
@@ -32,7 +32,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       iconColor: Color(0xFF60A5FA),
       title: 'Seguro y\nconfiable',
       subtitle:
-          'Todos nuestros conductores están verificados. Comparte tu viaje en tiempo real con familiares.',
+          'Todos nuestros conductores estan verificados. Comparte tu viaje en tiempo real con familiares.',
       gradientColors: [Color(0xFF0A1A3D), Color(0xFF0D0D1A)],
     ),
     OnboardingData(
@@ -40,7 +40,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       iconColor: Color(0xFF818CF8),
       title: 'Paga como\nprefieras',
       subtitle:
-          'Efectivo o transferencia bancaria. Sin sorpresas — ves el precio antes de confirmar.',
+          'Efectivo o transferencia bancaria. Ves el precio antes de confirmar.',
       gradientColors: [Color(0xFF0D0A3D), Color(0xFF0D0D1A)],
     ),
   ];
@@ -80,14 +80,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
         curve: Curves.easeInOut,
       );
     } else {
-      // Última página: marcar onboarding como visto y navegar al login
       await AuthPrefs.markOnboardingSeen();
       if (mounted) Navigator.pushReplacementNamed(context, SignInPage.route);
     }
   }
 
   void _skip() async {
-    // Saltar: también marcar como visto para no mostrar de nuevo
     await AuthPrefs.markOnboardingSeen();
     if (mounted) Navigator.pushReplacementNamed(context, SignInPage.route);
   }
@@ -96,109 +94,116 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: ConstantColors.backgroundDark,
-      body: Stack(
-        children: [
-          // Páginas de onboarding
-          PageView.builder(
-            controller: _pageController,
-            onPageChanged: _onPageChanged,
-            itemCount: _pages.length,
-            itemBuilder: (context, index) {
-              return _buildPage(_pages[index]);
-            },
-          ),
-
-          // Botón SKIP arriba a la derecha
-          Positioned(
-            top: 50,
-            right: 24,
-            child: GestureDetector(
-              onTap: _skip,
-              child: Container(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.15),
-                  ),
-                ),
-                child: Text(
-                  'Omitir',
-                  style: TextStyle(
-                    color: ConstantColors.textGrey,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              Positioned.fill(
+                child: PageView.builder(
+                  controller: _pageController,
+                  onPageChanged: _onPageChanged,
+                  itemCount: _pages.length,
+                  itemBuilder: (context, index) {
+                    return _buildPage(_pages[index], constraints);
+                  },
                 ),
               ),
-            ),
-          ),
-
-          // Controles inferiores
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Container(
-              padding: EdgeInsets.fromLTRB(32, 24, 32, 48),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Indicadores de página
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(
-                      _pages.length,
-                      (index) => _buildDot(index),
-                    ),
-                  ),
-
-                  SizedBox(height: 32),
-
-                  // Botón siguiente / empezar
-                  GestureDetector(
-                    onTap: _nextPage,
-                    child: Container(
-                      width: double.infinity,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        gradient: ConstantColors.buttonGradient,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: ConstantColors.primaryViolet.withOpacity(0.4),
-                            blurRadius: 20,
-                            offset: Offset(0, 8),
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
+                    child: GestureDetector(
+                      onTap: _skip,
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.15),
                           ),
-                        ],
-                      ),
-                      child: Center(
+                        ),
                         child: Text(
-                          _currentPage == _pages.length - 1
-                              ? '¡Empezar ahora!'
-                              : 'Siguiente',
+                          'Omitir',
                           style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+                            color: ConstantColors.textGrey,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ],
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(24, 12, 24, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(
+                            _pages.length,
+                            (index) => _buildDot(index),
+                          ),
+                        ),
+                        SizedBox(height: 24),
+                        GestureDetector(
+                          onTap: _nextPage,
+                          child: Container(
+                            width: double.infinity,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              gradient: ConstantColors.buttonGradient,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      ConstantColors.primaryViolet.withOpacity(0.4),
+                                  blurRadius: 20,
+                                  offset: Offset(0, 8),
+                                ),
+                              ],
+                            ),
+                            child: Center(
+                              child: Text(
+                                _currentPage == _pages.length - 1
+                                    ? 'Empezar ahora'
+                                    : 'Siguiente',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _buildPage(OnboardingData data) {
+  Widget _buildPage(OnboardingData data, BoxConstraints constraints) {
+    final bool compactHeight = constraints.maxHeight < 720;
+    final double horizontalPadding = constraints.maxWidth < 360 ? 24 : 32;
+
     return Container(
+      width: double.infinity,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -206,19 +211,27 @@ class _OnboardingScreenState extends State<OnboardingScreen>
           colors: data.gradientColors,
         ),
       ),
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(32, 80, 32, 180),
+      child: SingleChildScrollView(
+        physics: BouncingScrollPhysics(),
+        padding: EdgeInsets.fromLTRB(
+          horizontalPadding,
+          compactHeight ? 96 : 112,
+          horizontalPadding,
+          180,
+        ),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: constraints.maxHeight - (compactHeight ? 180 : 200),
+          ),
           child: FadeTransition(
             opacity: _fadeAnim,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Ícono animado
                 Container(
-                  width: 90,
-                  height: 90,
+                  width: compactHeight ? 76 : 90,
+                  height: compactHeight ? 76 : 90,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: data.iconColor.withOpacity(0.15),
@@ -230,26 +243,20 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   child: Icon(
                     data.icon,
                     color: data.iconColor,
-                    size: 44,
+                    size: compactHeight ? 38 : 44,
                   ),
                 ),
-
-                SizedBox(height: 40),
-
-                // Título
+                SizedBox(height: compactHeight ? 28 : 40),
                 Text(
                   data.title,
                   style: TextStyle(
                     color: ConstantColors.textWhite,
-                    fontSize: 36,
+                    fontSize: compactHeight ? 30 : 36,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
                   ),
                 ),
-
                 SizedBox(height: 20),
-
-                // Línea decorativa
                 Container(
                   width: 50,
                   height: 3,
@@ -258,15 +265,12 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-
                 SizedBox(height: 24),
-
-                // Subtítulo
                 Text(
                   data.subtitle,
                   style: TextStyle(
                     color: ConstantColors.textGrey,
-                    fontSize: 16,
+                    fontSize: compactHeight ? 15 : 16,
                     height: 1.6,
                     fontWeight: FontWeight.w400,
                   ),
@@ -303,10 +307,10 @@ class OnboardingData {
   final List<Color> gradientColors;
 
   OnboardingData({
-    @required this.icon,
-    @required this.iconColor,
-    @required this.title,
-    @required this.subtitle,
-    @required this.gradientColors,
+    required this.icon,
+    required this.iconColor,
+    required this.title,
+    required this.subtitle,
+    required this.gradientColors,
   });
 }

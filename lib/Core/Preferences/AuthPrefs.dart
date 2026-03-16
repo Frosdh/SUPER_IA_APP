@@ -21,15 +21,15 @@ class AuthPrefs {
   }
 
   static Future<void> saveUserSession({
-    String nombre,
-    String telefono,
-    String email,
+    required String nombre,
+    required String telefono,
+    required String email,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(KEY_IS_LOGGED_IN, true);
-    await prefs.setString(KEY_PHONE, telefono ?? '');
-    await prefs.setString(KEY_NAME, nombre ?? '');
-    await prefs.setString(KEY_EMAIL, email ?? '');
+    await prefs.setString(KEY_PHONE, telefono);
+    await prefs.setString(KEY_NAME, nombre);
+    await prefs.setString(KEY_EMAIL, email);
     await prefs.setBool(KEY_BACKEND_OK, true);
     await prefs.setBool(KEY_FIRST_TIME, false);
   }
@@ -73,7 +73,7 @@ class AuthPrefs {
     return prefs.getString(KEY_EMAIL) ?? '';
   }
 
-  static Future<void> saveUserPhoto(String base64) async {
+  static Future<void> saveUserPhoto(String? base64) async {
     final prefs = await SharedPreferences.getInstance();
     final key = await _scopedKey(KEY_PHOTO_BASE64);
     await prefs.setString(key, base64 ?? '');
@@ -89,7 +89,7 @@ class AuthPrefs {
     return prefs.getString(KEY_PHOTO_BASE64) ?? '';
   }
 
-  static Future<void> saveFcmToken(String token) async {
+  static Future<void> saveFcmToken(String? token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(KEY_FCM_TOKEN, token ?? '');
   }
@@ -99,7 +99,7 @@ class AuthPrefs {
     return prefs.getString(KEY_FCM_TOKEN) ?? '';
   }
 
-  static Future<void> saveSyncedFcmToken(String token) async {
+  static Future<void> saveSyncedFcmToken(String? token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(KEY_FCM_TOKEN_SYNCED, token ?? '');
   }

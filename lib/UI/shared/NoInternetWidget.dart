@@ -1,14 +1,16 @@
-import 'package:connectivity/connectivity.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 class NoInternetWidget extends StatefulWidget {
+  const NoInternetWidget({Key? key}) : super(key: key);
+
   @override
   _NoInternetWidgetState createState() => _NoInternetWidgetState();
 }
 
 class _NoInternetWidgetState extends State<NoInternetWidget> {
-  bool isConnected;
+  late bool isConnected;
 
   @override
   void initState() {
@@ -17,7 +19,7 @@ class _NoInternetWidgetState extends State<NoInternetWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder(
+    return StreamBuilder<ConnectivityResult>(
         stream: Connectivity().onConnectivityChanged,
         builder: (context, snapshot) {
           return snapshot.data == ConnectivityResult.none
@@ -28,12 +30,12 @@ class _NoInternetWidgetState extends State<NoInternetWidget> {
                     padding: const EdgeInsets.all(16.0),
                     child: Text(
                       " Cannot connect to Aeober servers",
-                      style: TextStyle(
+                      style: const TextStyle(
                           color: Colors.black, fontWeight: FontWeight.bold),
                     ),
                   ),
                 )
-              : SizedBox();
+              : const SizedBox();
         });
   }
 

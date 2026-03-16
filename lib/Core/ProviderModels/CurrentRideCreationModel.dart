@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fu_uber/Core/Enums/Enums.dart';
 
 class CurrentRideCreationModel extends ChangeNotifier {
-  RideType selectedRideType;
+  late RideType selectedRideType;
   bool riderFound = false;
 
   CurrentRideCreationModel() {
@@ -13,13 +13,13 @@ class CurrentRideCreationModel extends ChangeNotifier {
     return "200";
   }
 
-  carTypeChanged(int index) {
+  void carTypeChanged(int index) {
     selectedRideType = RideType.values[index];
     notifyListeners();
   }
 
-  searchForRides() {
-    Future.delayed(Duration(seconds: 5), () {
+  void searchForRides() {
+    Future.delayed(const Duration(seconds: 5), () {
       riderFound = true;
       notifyListeners();
     });

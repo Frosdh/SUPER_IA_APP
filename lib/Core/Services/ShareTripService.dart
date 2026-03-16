@@ -1,13 +1,13 @@
-import 'package:latlong/latlong.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ShareTripService {
   /// Genera un mensaje con los detalles del viaje para compartir
   static String generarMensajeViaje({
-    String nombrePasajero,
-    String destinoNombre,
-    LatLng ubicacionActual,
-    LatLng destino,
+    required String nombrePasajero,
+    required String destinoNombre,
+    required LatLng ubicacionActual,
+    required LatLng destino,
     double distanciaKm = 0.0,
     int duracionMin = 0,
     double precioEstimado = 0.0,
@@ -20,7 +20,7 @@ class ShareTripService {
     final mapsUrl = 'https://maps.google.com/?q=${ubicacionActual.latitude},${ubicacionActual.longitude}';
 
     // Construir mensaje
-    String mensaje = '📍 *Estoy en un viaje Fuber*\n\n';
+    String mensaje = '📍 *Estoy en un viaje GeoMove*\n\n';
 
     if (nombrePasajero.isNotEmpty) {
       mensaje += '👤 Pasajero: $nombrePasajero\n';
@@ -58,20 +58,20 @@ class ShareTripService {
     }
 
     mensaje += '\n🗺️ Mi ubicación: $mapsUrl\n\n';
-    mensaje += '_Compartido desde Fuber_ ✓';
+    mensaje += '_Compartido desde GeoMove_ ✓';
 
     return mensaje;
   }
 
   /// Valida que el número de teléfono tenga un formato adecuado
-  static bool validarTelefono(String telefono) {
+  static bool validarTelefono(String? telefono) {
     if (telefono == null || telefono.isEmpty) return false;
     final cleaned = telefono.replaceAll(RegExp(r'[^\d+]'), '');
     return cleaned.length >= 10 && cleaned.length <= 15;
   }
 
   /// Formatea el teléfono con código de país para WhatsApp (Ecuador: +593)
-  static String formatearTelefonoWhatsapp(String telefono) {
+  static String formatearTelefonoWhatsapp(String? telefono) {
     if (telefono == null || telefono.isEmpty) return '';
 
     // Limpiar caracteres no numéricos excepto +
@@ -104,14 +104,14 @@ class ShareTripService {
 
   /// Envía el mensaje del viaje por WhatsApp
   static Future<void> compartirPorWhatsapp({
-    String telefono,
-    String mensaje,
+    required String telefono,
+    required String mensaje,
   }) async {
-    if (telefono == null || telefono.isEmpty) {
+    if (telefono.isEmpty) {
       throw Exception('Número de teléfono no proporcionado');
     }
 
-    if (mensaje == null || mensaje.isEmpty) {
+    if (mensaje.isEmpty) {
       throw Exception('Mensaje vacío');
     }
 
@@ -129,11 +129,11 @@ class ShareTripService {
 
     try {
       // Intentar primero con el esquema nativo de WhatsApp
-      if (await canLaunch(waUrlScheme.toString())) {
-        await launch(waUrlScheme.toString());
-      } else if (await canLaunch(waUrl.toString())) {
+      if (await canLaunchUrl(waUrlScheme)) {
+        await launchUrl(waUrlScheme);
+      } else if (await canLaunchUrl(waUrl)) {
         // Si falla, intentar con https
-        await launch(waUrl.toString());
+        await launchUrl(waUrl);
       } else {
         throw Exception('No se pudo abrir WhatsApp');
       }
@@ -145,14 +145,14 @@ class ShareTripService {
 
   /// Envía el mensaje por SMS
   static Future<void> compartirPorSMS({
-    String telefono,
-    String mensaje,
+    required String telefono,
+    required String mensaje,
   }) async {
-    if (telefono == null || telefono.isEmpty) {
+    if (telefono.isEmpty) {
       throw Exception('Número de teléfono no proporcionado');
     }
 
-    if (mensaje == null || mensaje.isEmpty) {
+    if (mensaje.isEmpty) {
       throw Exception('Mensaje vacío');
     }
 
@@ -168,8 +168,8 @@ class ShareTripService {
     final smsUrl = Uri.parse('sms:$telefonoLimpio?body=${Uri.encodeComponent(mensaje)}');
 
     try {
-      if (await canLaunch(smsUrl.toString())) {
-        await launch(smsUrl.toString());
+      if (await canLaunchUrl(smsUrl)) {
+        await launchUrl(smsUrl);
       } else {
         throw Exception('No se pudo abrir la aplicación de SMS');
       }
@@ -180,14 +180,14 @@ class ShareTripService {
   }
 
   /// Genera un enlace de Google Maps con la ubicación actual
-  static String generarEnlaceMaps(LatLng ubicacion) {
+  static String generarEnlaceMaps(LatLng? ubicacion) {
     if (ubicacion == null) return '';
     return 'https://maps.google.com/?q=${ubicacion.latitude},${ubicacion.longitude}';
   }
 
   /// Genera un código QR datos (como string) para la ubicación
   /// Este puede ser usado con paquetes como qr_flutter
-  static String generarDatosQR(LatLng ubicacion) {
+  static String generarDatosQR(LatLng? ubicacion) {
     if (ubicacion == null) return '';
     return 'https://maps.google.com/?q=${ubicacion.latitude},${ubicacion.longitude}';
   }

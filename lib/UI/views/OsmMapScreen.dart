@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong/latlong.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Constants/Constants.dart';
 import 'package:fu_uber/Core/Models/CategoriaModel.dart';
@@ -24,15 +24,15 @@ import 'package:http/http.dart' as http;
 // Centro de Cuenca, Ecuador
 final LatLng CUENCA_CENTER = LatLng(-2.9001285, -79.0058965);
 
-enum EstadoViaje { ninguno, buscando, conductorAsignado }
+enum EstadoViaje { ninguno, buscando, conductorAsignado, enCamino, enViaje }
 
 class ParadaViaje {
   final String nombre;
   final LatLng ubicacion;
 
   ParadaViaje({
-    @required this.nombre,
-    @required this.ubicacion,
+    required this.nombre,
+    required this.ubicacion,
   });
 }
 
@@ -48,10 +48,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
   bool _rutaInicialProcesada = false;
-  Map<String, dynamic> _viajeRepetidoPendiente;
+  Map<String, dynamic>? _viajeRepetidoPendiente;
 
   LatLng _miUbicacion = CUENCA_CENTER;
-  LatLng _destino;
+  LatLng _puntoRecogida = CUENCA_CENTER;
+  LatLng? _destino;
   String _destinoNombre = '';
   List<ParadaViaje> _paradasIntermedias = [];
   bool _agregandoParada = false;
@@ -60,7 +61,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   List<PlaceResult> _sugerencias = [];
   List<LatLng> _rutaPuntos = [];
-  RouteResult _rutaInfo;
+  RouteResult? _rutaInfo;
 
   bool _cargandoUbicacion = true;
   bool _buscando = false;
@@ -69,13 +70,16 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   bool _calculandoRuta = false;
   bool _ajustandoRecogida = false;
   bool _actualizandoRecogida = false;
+  bool _seleccionandoDestinoMapa = false;
+  bool _actualizandoDestinoMapa = false;
   String _searchFeedback = '';
-  Timer _searchDebounce;
-  Timer _pickupDebounce;
+  Timer? _searchDebounce;
+  Timer? _pickupDebounce;
+  Timer? _destinoDebounce;
 
   // ── Categorías ────────────────────────────────────
   List<CategoriaModel> _categorias = [];
-  CategoriaModel _categoriaSeleccionada;
+  CategoriaModel? _categoriaSeleccionada;
   double _precioCalculado = 0.0;
 
   // ── Favoritos y recientes ─────────────────────────
@@ -86,10 +90,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   // ── Estado del viaje ──────────────────────────────
   EstadoViaje _estadoViaje = EstadoViaje.ninguno;
-  Map<String, dynamic> _conductorData;
-  Timer _simulacionTimer;
-  Timer _pollingTimer;
-  int _viajeId;
+  Map<String, dynamic>? _conductorData;
+  Timer? _simulacionTimer;
+  Timer? _pollingTimer;
+  int? _viajeId;
 
   // ── Descuentos ────────────────────────────────────
   double _descuentoAplicado = 0.0;
@@ -108,10 +112,19 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _pickupDebounce?.cancel();
+    _destinoDebounce?.cancel();
     _simulacionTimer?.cancel();
     _pollingTimer?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  void _mostrarMensaje(String msg, {Color color = Colors.black87}) {
+    final ctx = _scaffoldKey.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color, duration: const Duration(seconds: 3)),
+    );
   }
 
   @override
@@ -126,8 +139,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _viajeRepetidoPendiente = Map<String, dynamic>.from(args);
       if (!_cargandoUbicacion) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && _viajeRepetidoPendiente != null) {
-            final pending = _viajeRepetidoPendiente;
+          final pending = _viajeRepetidoPendiente;
+          if (mounted && pending != null) {
             _viajeRepetidoPendiente = null;
             _procesarViajeRepetido(pending);
           }
@@ -140,12 +153,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Future<void> _cargarCategorias() async {
     final urls = [
       '${Constants.apiBaseUrl}/obtener_categorias.php',
-      'http://10.0.2.2/fuber_api/obtener_categorias.php',
     ];
     for (final url in urls) {
       try {
         final response = await http.post(
-          url,
+          Uri.parse(url),
           headers: {'ngrok-skip-browser-warning': 'true'},
         ).timeout(const Duration(seconds: 8));
         print('>>> [CAT] HTTP ${response.statusCode} desde $url');
@@ -173,11 +185,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       }
     }
     // Fallback si no hay conexión
-    print('>>> [CAT] Usando fallback Fuber-X');
+    print('>>> [CAT] Usando fallback GeoMove-X');
     if (mounted && _categorias.isEmpty) {
       final fallback = CategoriaModel(
         id: 1,
-        nombre: 'Fuber-X',
+        nombre: 'GeoMove-X',
         tarifaBase: 1.50,
         precioKm: 0.40,
         precioMinuto: 0.10,
@@ -191,11 +203,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   // ── Calcular precio según categoría ──────────────
   void _recalcularPrecio() {
-    if (_rutaInfo == null || _categoriaSeleccionada == null) return;
+    final info = _rutaInfo;
+    final cat = _categoriaSeleccionada;
+    if (info == null || cat == null) return;
     setState(() {
-      _precioCalculado = _categoriaSeleccionada.calcularPrecio(
-        _rutaInfo.distanciaKm,
-        _rutaInfo.duracionMin,
+      _precioCalculado = cat.calcularPrecio(
+        info.distanciaKm,
+        info.duracionMin,
       );
     });
   }
@@ -211,7 +225,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Future<void> _agregarParadaSeleccionada(PlaceResult lugar) async {
     if (_destino == null) return;
     if (_paradasIntermedias.length >= 3) {
-      _scaffoldKey.currentState?.showSnackBar(
+      ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Puedes agregar hasta 3 paradas'),
           backgroundColor: Colors.orange,
@@ -238,7 +252,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _rutaPuntos = [];
     });
 
-    await _calcularRuta(_destino);
+    await _calcularRuta(_destino!);
   }
 
   void _iniciarAgregarParada() {
@@ -264,12 +278,14 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     });
 
     if (_destino != null) {
-      await _calcularRuta(_destino, recenterMap: false);
+      await _calcularRuta(_destino!, recenterMap: false);
     }
   }
 
   // ── Mostrar confirmación antes de solicitar ───────
   void _mostrarConfirmacion() {
+    final cat = _categoriaSeleccionada;
+    if (cat == null) return;
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -277,7 +293,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       builder: (sheetContext) => _ConfirmacionSheet(
         origen: _origenNombre,
         destino: _obtenerResumenDestino(),
-        categoria: _categoriaSeleccionada,
+        categoria: cat,
         distanciaKm: _rutaInfo?.distanciaKm ?? 0,
         duracionMin: _rutaInfo?.duracionMin ?? 0,
         precio: _precioCalculado,
@@ -307,39 +323,19 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
     final telefono = await AuthPrefs.getUserPhone();
     final id = await _crearViajeEnServidor(telefono);
-    if (mounted) setState(() => _viajeId = id);
-
-    // Mostrar conductor simulado tras 4 segundos
-    _simulacionTimer = Timer(Duration(seconds: 4), () {
-      if (!mounted || _estadoViaje != EstadoViaje.buscando) return;
-      setState(() {
-        _estadoViaje = EstadoViaje.conductorAsignado;
-        _conductorData = {
-          'id': 0,
-          'nombre': 'Carlos Mendoza',
-          'inicial': 'C',
-          'calificacion': 4.8,
-          'viajes': 312,
-          'auto': 'Toyota Corolla',
-          'placa': 'ABC-1234',
-          'color': 'Blanco',
-          'eta_min': 3,
-        };
-      });
-    });
+    if (mounted) setState(() => _viajeId = id ?? 0);
 
     _iniciarPolling();
   }
 
   // ── Crear viaje en el servidor ────────────────────
-  Future<int> _crearViajeEnServidor(String telefono) async {
+  Future<int?> _crearViajeEnServidor(String telefono) async {
     final urls = [
       '${Constants.apiBaseUrl}/solicitar_viaje.php',
-      'http://10.0.2.2/fuber_api/solicitar_viaje.php',
     ];
     for (final url in urls) {
       try {
-        final response = await http.post(url, body: {
+        final response = await http.post(Uri.parse(url), body: {
           'telefono':      telefono,
           'categoria_id':  (_categoriaSeleccionada?.id ?? 1).toString(),
           'origen_texto':  _origenNombre,
@@ -347,8 +343,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           'distancia_km':  (_rutaInfo?.distanciaKm ?? 0.0).toString(),
           'duracion_min':  (_rutaInfo?.duracionMin  ?? 0).toString(),
           'tarifa_total':  _precioCalculado.toString(),
-          'origen_lat':    _miUbicacion.latitude.toString(),
-          'origen_lng':    _miUbicacion.longitude.toString(),
+          'origen_lat':    (_puntoRecogida ?? _miUbicacion).latitude.toString(),
+          'origen_lng':    (_puntoRecogida ?? _miUbicacion).longitude.toString(),
           'destino_lat':   (_destino?.latitude  ?? 0.0).toString(),
           'destino_lng':   (_destino?.longitude ?? 0.0).toString(),
         }).timeout(const Duration(seconds: 8));
@@ -372,9 +368,50 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     _pollingTimer?.cancel();
     _pollingTimer = Timer.periodic(Duration(seconds: 5), (_) async {
       if (_viajeId == null || !mounted) return;
-      final estado = await _verificarEstadoViaje(_viajeId);
+      final estadoData = await _verificarEstadoViaje(_viajeId!);
       if (!mounted) return;
-      if (estado == 'terminado') {
+      final estado = (estadoData['estado'] as String?) ?? '';
+      if (estado == 'aceptado' && _estadoViaje != EstadoViaje.conductorAsignado &&
+          _estadoViaje != EstadoViaje.enCamino && _estadoViaje != EstadoViaje.enViaje) {
+        final conductor = (estadoData['conductor'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        final nombre = conductor['nombre']?.toString() ?? 'Conductor';
+        setState(() {
+          _estadoViaje = EstadoViaje.conductorAsignado;
+          _conductorData = {
+            'id': conductor['id'] ?? 0,
+            'nombre': nombre,
+            'inicial': nombre.isNotEmpty ? nombre.substring(0, 1).toUpperCase() : 'C',
+            'calificacion': conductor['calificacion'] ?? 5.0,
+            'viajes': conductor['viajes'] ?? 0,
+            'auto': conductor['auto'] ?? 'Vehiculo asignado',
+            'placa': conductor['placa'] ?? '',
+            'color': conductor['color'] ?? '',
+            'eta_min': conductor['eta_min'] ?? 3,
+          };
+        });
+      } else if (estado == 'en_camino' && _estadoViaje != EstadoViaje.enCamino &&
+          _estadoViaje != EstadoViaje.enViaje) {
+        final conductor = (estadoData['conductor'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+        final nombre = conductor['nombre']?.toString() ?? (_conductorData?['nombre'] ?? 'Conductor');
+        setState(() {
+          _estadoViaje = EstadoViaje.enCamino;
+          _conductorData ??= {
+            'id': conductor['id'] ?? 0,
+            'nombre': nombre,
+            'inicial': nombre.isNotEmpty ? nombre.substring(0, 1).toUpperCase() : 'C',
+            'calificacion': conductor['calificacion'] ?? 5.0,
+            'viajes': conductor['viajes'] ?? 0,
+            'auto': conductor['auto'] ?? 'Vehiculo asignado',
+            'placa': conductor['placa'] ?? '',
+            'color': conductor['color'] ?? '',
+            'eta_min': conductor['eta_min'] ?? 3,
+          };
+        });
+      } else if (estado == 'iniciado' && _estadoViaje != EstadoViaje.enViaje) {
+        setState(() {
+          _estadoViaje = EstadoViaje.enViaje;
+        });
+      } else if (estado == 'terminado') {
         _pollingTimer?.cancel();
         _finalizarViaje();
       } else if (estado == 'cancelado') {
@@ -384,34 +421,32 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     });
   }
 
-  Future<String> _verificarEstadoViaje(int viajeId) async {
+  Future<Map<String, dynamic>> _verificarEstadoViaje(int viajeId) async {
     final urls = [
       '${Constants.apiBaseUrl}/estado_viaje.php',
-      'http://10.0.2.2/fuber_api/estado_viaje.php',
     ];
     for (final url in urls) {
       try {
-        final response = await http.post(url, body: {
+        final response = await http.post(Uri.parse(url), body: {
           'viaje_id': viajeId.toString(),
         }).timeout(const Duration(seconds: 6));
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
-          if (data['status'] == 'success') return data['estado'] as String;
+          if (data['status'] == 'success') return (data as Map).cast<String, dynamic>();
         }
       } catch (_) {}
     }
-    return '';
+    return <String, dynamic>{'estado': ''};
   }
 
   Future<void> _cancelarViajeEnServidor() async {
     if (_viajeId == null) return;
     final urls = [
       '${Constants.apiBaseUrl}/cancelar_viaje.php',
-      'http://10.0.2.2/fuber_api/cancelar_viaje.php',
     ];
     for (final url in urls) {
       try {
-        await http.post(url, body: {
+        await http.post(Uri.parse(url), body: {
           'viaje_id': _viajeId.toString(),
         }).timeout(const Duration(seconds: 6));
         break;
@@ -463,7 +498,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
     // Registrar uso del cupón en el servidor
     if (_codigoAplicado.isNotEmpty && _viajeId != null) {
-      DiscountCodeService.registrarUsoEnServidor(_codigoAplicado, _viajeId);
+      DiscountCodeService.registrarUsoEnServidor(_codigoAplicado, _viajeId!);
     }
 
     Navigator.pushNamed(
@@ -479,12 +514,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         'precio':          _precioCalculado,
         'descuento':       _descuentoAplicado,
         'codigo_descuento': _codigoAplicado,
-        'origen_lat':      _miUbicacion.latitude,
-        'origen_lng':      _miUbicacion.longitude,
+        'origen_lat':      (_puntoRecogida ?? _miUbicacion).latitude,
+        'origen_lng':      (_puntoRecogida ?? _miUbicacion).longitude,
         'destino_lat':     _destino?.latitude ?? 0.0,
         'destino_lng':     _destino?.longitude ?? 0.0,
         // ── Para el recibo detallado ──
-        'categoria_nombre': _categoriaSeleccionada?.nombre ?? 'Fuber-X',
+        'categoria_nombre': _categoriaSeleccionada?.nombre ?? 'GeoMove-X',
         'tarifa_base':      _categoriaSeleccionada?.tarifaBase ?? 1.50,
         'precio_km':        _categoriaSeleccionada?.precioKm ?? 0.45,
         'precio_minuto':    _categoriaSeleccionada?.precioMinuto ?? 0.10,
@@ -519,13 +554,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       final contactos = await EmergencyContactsService.obtenerContactos();
 
       if (contactos.isEmpty) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(
-            content: Text('No tienes contactos de emergencia registrados'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        _mostrarMensaje('No tienes contactos de emergencia registrados', color: Colors.orange);
         return;
       }
 
@@ -545,7 +574,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           // Enviar SOS
           await SOSService.enviarSOS(
             telefono: telefonoFormateado,
-            ubicacion: _miUbicacion,
+            ubicacion: _puntoRecogida ?? _miUbicacion,
             nombrePasajero: nombreUsuario,
           );
           enviados++;
@@ -555,22 +584,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       }
 
       // Mostrar confirmación
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(
-          content: Text('¡SOS enviado a $enviados contacto${enviados != 1 ? 's' : ''}!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      _mostrarMensaje('¡SOS enviado a $enviados contacto${enviados != 1 ? 's' : ''}!', color: Colors.green);
     } catch (e) {
       print('>>> [SOS] Error general: $e');
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(
-          content: Text('Error al enviar SOS'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _mostrarMensaje('Error al enviar SOS', color: Colors.red);
     }
   }
 
@@ -578,42 +595,34 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Future<void> _compartirViaje() async {
     try {
       // Validar que hay un viaje activo
-      if (_estadoViaje != EstadoViaje.conductorAsignado || _conductorData == null) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(
-            content: Text('No hay un viaje activo para compartir'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
+      final bool _hayViajeActivo = _estadoViaje == EstadoViaje.conductorAsignado ||
+          _estadoViaje == EstadoViaje.enCamino ||
+          _estadoViaje == EstadoViaje.enViaje;
+      if (!_hayViajeActivo || _conductorData == null) {
+        _mostrarMensaje('No hay un viaje activo para compartir', color: Colors.orange);
         return;
       }
 
       // Validar ubicación y destino
-      if (_miUbicacion == null || _destino == null) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(
-            content: Text('Ubicación incompleta'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 2),
-          ),
-        );
+      if ((_puntoRecogida ?? _miUbicacion) == null || _destino == null) {
+        _mostrarMensaje('Ubicación incompleta', color: Colors.red);
         return;
       }
 
       // Generar mensaje con detalles del viaje
+      final conductorLocal = _conductorData ?? <String, dynamic>{};
       final mensaje = ShareTripService.generarMensajeViaje(
         nombrePasajero: _userName.isNotEmpty ? _userName : 'Pasajero',
         destinoNombre: _obtenerResumenDestino(),
-        ubicacionActual: _miUbicacion,
-        destino: _destino,
+        ubicacionActual: _puntoRecogida ?? _miUbicacion,
+        destino: _destino!,
         distanciaKm: _rutaInfo?.distanciaKm ?? 0.0,
         duracionMin: _rutaInfo?.duracionMin ?? 0,
         precioEstimado: _precioCalculado,
-        nombreConductor: _conductorData['nombre'] ?? '',
-        placaConductor: _conductorData['placa'] ?? '',
-        autoConductor: _conductorData['auto'] ?? '',
-        etaMin: _conductorData['eta_min'] ?? 0,
+        nombreConductor: conductorLocal['nombre']?.toString() ?? '',
+        placaConductor: conductorLocal['placa']?.toString() ?? '',
+        autoConductor: conductorLocal['auto']?.toString() ?? '',
+        etaMin: conductorLocal['eta_min'] ?? 0,
       );
 
       print('>>> [SHARE] Mensaje generado:\n$mensaje');
@@ -622,13 +631,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _mostrarOpcionesCompartir(mensaje);
     } catch (e) {
       print('>>> [SHARE] Error al preparar compartir: $e');
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(
-          content: Text('Error al preparar compartir viaje'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 2),
-        ),
-      );
+      _mostrarMensaje('Error al preparar compartir viaje', color: Colors.red);
     }
   }
 
@@ -820,17 +823,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Future<void> _enviarPorWhatsappAContacto(String telefono, String mensaje) async {
     try {
       if (telefono.isEmpty) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(content: Text('Ingresa un número de teléfono'), backgroundColor: Colors.orange),
-        );
+        _mostrarMensaje('Ingresa un número de teléfono', color: Colors.orange);
         return;
       }
 
       // Validar teléfono
       if (!ShareTripService.validarTelefono(telefono)) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(content: Text('Número de teléfono inválido'), backgroundColor: Colors.red),
-        );
+        _mostrarMensaje('Número de teléfono inválido', color: Colors.red);
         return;
       }
 
@@ -840,14 +839,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         mensaje: mensaje,
       );
 
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(content: Text('¡Viaje compartido por WhatsApp!'), backgroundColor: Colors.green),
-      );
+      _mostrarMensaje('¡Viaje compartido por WhatsApp!', color: Colors.green);
     } catch (e) {
       print('>>> [SHARE] Error al enviar WhatsApp: $e');
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(content: Text('Error al enviar por WhatsApp'), backgroundColor: Colors.red),
-      );
+      _mostrarMensaje('Error al enviar por WhatsApp', color: Colors.red);
     }
   }
 
@@ -900,17 +895,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Future<void> _enviarSMSAContacto(String telefono, String mensaje) async {
     try {
       if (telefono.isEmpty) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(content: Text('Ingresa un número de teléfono'), backgroundColor: Colors.orange),
-        );
+        _mostrarMensaje('Ingresa un número de teléfono', color: Colors.orange);
         return;
       }
 
       // Validar teléfono
       if (!ShareTripService.validarTelefono(telefono)) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(content: Text('Número de teléfono inválido'), backgroundColor: Colors.red),
-        );
+        _mostrarMensaje('Número de teléfono inválido', color: Colors.red);
         return;
       }
 
@@ -920,14 +911,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         mensaje: mensaje,
       );
 
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(content: Text('¡Viaje compartido por SMS!'), backgroundColor: Colors.green),
-      );
+      _mostrarMensaje('¡Viaje compartido por SMS!', color: Colors.green);
     } catch (e) {
       print('>>> [SHARE] Error al enviar SMS: $e');
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(content: Text('Error al enviar SMS'), backgroundColor: Colors.red),
-      );
+      _mostrarMensaje('Error al enviar SMS', color: Colors.red);
     }
   }
 
@@ -937,13 +924,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       Navigator.pop(context); // Cerrar modal
 
       if (_miUbicacion == null) {
-        _scaffoldKey.currentState.showSnackBar(
-          SnackBar(content: Text('Ubicación no disponible'), backgroundColor: Colors.red),
-        );
+        _mostrarMensaje('Ubicación no disponible', color: Colors.red);
         return;
       }
 
-      final enlace = ShareTripService.generarEnlaceMaps(_miUbicacion);
+      final enlace =
+          ShareTripService.generarEnlaceMaps(_puntoRecogida ?? _miUbicacion);
 
       // Copiar al portapapeles
       await Future.delayed(Duration(milliseconds: 300)); // Pequeña pausa para cerrar el modal
@@ -973,9 +959,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         ),
       );
 
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(content: Text('¡Enlace preparado!'), backgroundColor: Colors.green),
-      );
+      _mostrarMensaje('¡Enlace preparado!', color: Colors.green);
     } catch (e) {
       print('>>> [SHARE] Error al copiar enlace: $e');
     }
@@ -995,7 +979,6 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Future<void> _cargarConductoresCercanos() async {
     final urls = [
       '${Constants.apiBaseUrl}/obtener_conductores_cercanos.php',
-      'http://10.0.2.2/fuber_api/obtener_conductores_cercanos.php',
     ];
 
     final categoriaId = _categoriaSeleccionada?.id ?? 0;
@@ -1003,11 +986,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     for (final url in urls) {
       try {
         final response = await http.post(
-          url,
+          Uri.parse(url),
           headers: {'ngrok-skip-browser-warning': 'true'},
           body: {
-            'lat': _miUbicacion.latitude.toString(),
-            'lng': _miUbicacion.longitude.toString(),
+            'lat': (_puntoRecogida ?? _miUbicacion).latitude.toString(),
+            'lng': (_puntoRecogida ?? _miUbicacion).longitude.toString(),
             'categoria_id': categoriaId.toString(),
           },
         ).timeout(const Duration(seconds: 8));
@@ -1144,7 +1127,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   }
 
   Future<void> _procesarViajeRepetido(Map<String, dynamic> args) async {
-    LatLng destino;
+    LatLng? destino;
     final double destinoLat =
         (args['destino_lat'] as num)?.toDouble() ?? 0.0;
     final double destinoLng =
@@ -1161,24 +1144,24 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     }
 
     if (destino == null) {
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(
-          content: Text('No se pudo preparar este viaje nuevamente'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _mostrarMensaje('No se pudo preparar este viaje nuevamente', color: Colors.orange);
       return;
     }
 
+    final destinoFinal = destino!;
     FocusScope.of(context).unfocus();
     setState(() {
-      _destino = destino;
+      _destino = destinoFinal;
       _destinoNombre = destinoTexto.isNotEmpty ? destinoTexto : 'Destino';
       _paradasIntermedias = [];
       _agregandoParada = false;
       _sugerencias = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes = false;
+      _ajustandoRecogida = false;
+      _actualizandoRecogida = false;
+      _seleccionandoDestinoMapa = false;
+      _actualizandoDestinoMapa = false;
       _searchController.text = _destinoNombre;
       _calculandoRuta = true;
       _mostrandoPanel = true;
@@ -1187,16 +1170,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _estadoViaje = EstadoViaje.ninguno;
     });
 
-    _mapController.move(destino, 14.0);
-    await _calcularRuta(destino);
+    _mapController.move(destinoFinal, 14.0);
+    await _calcularRuta(destinoFinal);
 
     if (mounted) {
-      _scaffoldKey.currentState.showSnackBar(
-        SnackBar(
-          content: Text('Viaje anterior cargado. Revisa y confirma.'),
-          backgroundColor: ConstantColors.primaryViolet,
-        ),
-      );
+      _mostrarMensaje('Viaje anterior cargado. Revisa y confirma.', color: ConstantColors.primaryViolet);
     }
   }
 
@@ -1222,6 +1200,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _sugerencias         = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes  = false;
+      _ajustandoRecogida = false;
+      _actualizandoRecogida = false;
+      _seleccionandoDestinoMapa = false;
+      _actualizandoDestinoMapa = false;
       _searchController.text = fav.direccion;
       _calculandoRuta      = true;
       _mostrandoPanel      = true;
@@ -1254,6 +1236,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _sugerencias         = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes  = false;
+      _ajustandoRecogida = false;
+      _actualizandoRecogida = false;
+      _seleccionandoDestinoMapa = false;
+      _actualizandoDestinoMapa = false;
       _searchController.text = rec.nombre;
       _calculandoRuta      = true;
       _mostrandoPanel      = true;
@@ -1266,7 +1252,27 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   Future<void> _obtenerUbicacion() async {
     try {
-      Position position = await Geolocator().getCurrentPosition(
+      LocationPermission permission = await Geolocator.checkPermission();
+      
+      if (permission == LocationPermission.deniedForever) {
+        _mostrarMensaje('Ubicación denegada. Habilítala en ajustes.', color: Colors.red);
+        await Geolocator.openAppSettings();
+        return;
+      }
+
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _mostrarMensaje('Se requieren permisos de ubicación para funcionar', color: Colors.orange);
+          return;
+        }
+        if (permission == LocationPermission.deniedForever) {
+          _mostrarMensaje('Ubicación denegada. Habilítala en ajustes.', color: Colors.red);
+          return;
+        }
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
       if (!mounted) return;
@@ -1278,20 +1284,21 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       if (!mounted) return;
       setState(() {
         _miUbicacion = ubicacion;
+        _puntoRecogida = ubicacion;
         _origenNombre = nombre;
         _cargandoUbicacion = false;
       });
       _mapController.move(ubicacion, 15.0);
       _cargarConductoresCercanos();
-      if (_viajeRepetidoPendiente != null) {
-        final pending = _viajeRepetidoPendiente;
+      final pending = _viajeRepetidoPendiente;
+      if (pending != null) {
         _viajeRepetidoPendiente = null;
         await _procesarViajeRepetido(pending);
       }
     } catch (e) {
       if (mounted) setState(() => _cargandoUbicacion = false);
-      if (_viajeRepetidoPendiente != null) {
-        final pending = _viajeRepetidoPendiente;
+      final pending = _viajeRepetidoPendiente;
+      if (pending != null) {
         _viajeRepetidoPendiente = null;
         await _procesarViajeRepetido(pending);
       }
@@ -1345,6 +1352,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _sugerencias = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes  = false;
+      _ajustandoRecogida = false;
+      _actualizandoRecogida = false;
+      _seleccionandoDestinoMapa = false;
+      _actualizandoDestinoMapa = false;
       _searchController.text = lugar.shortName;
       _calculandoRuta = true;
       _mostrandoPanel = true;
@@ -1362,10 +1373,31 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     await _calcularRuta(destino);
   }
 
+  void _toggleSeleccionDestinoMapa() {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _seleccionandoDestinoMapa = !_seleccionandoDestinoMapa;
+      if (_seleccionandoDestinoMapa) {
+        _ajustandoRecogida = false;
+        _actualizandoRecogida = false;
+      } else {
+        _actualizandoDestinoMapa = false;
+      }
+    });
+
+    if (_seleccionandoDestinoMapa) {
+      _mapController.move(
+        _destino ?? _puntoRecogida ?? _miUbicacion,
+        _mapController.zoom ?? 15.0,
+      );
+    }
+  }
+
   // ── Calcular y mostrar la ruta al destino ─────────
   Future<void> _calcularRuta(LatLng destino, {bool recenterMap = true}) async {
+    final origenRuta = _puntoRecogida ?? _miUbicacion;
     final puntosRuta = <LatLng>[
-      _miUbicacion,
+      origenRuta,
       ..._paradasIntermedias.map((p) => p.ubicacion),
       destino,
     ];
@@ -1378,10 +1410,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     for (int i = 0; i < puntosRuta.length - 1; i++) {
       final origenTramo = puntosRuta[i];
       final destinoTramo = puntosRuta[i + 1];
-      RouteResult rutaTramo =
-          await OsmService.calcularRuta(origenTramo, destinoTramo);
+      final rutaTramoTemp = await OsmService.calcularRuta(origenTramo, destinoTramo);
+      final RouteResult rutaTramo;
 
-      if (rutaTramo == null) {
+      if (rutaTramoTemp == null) {
         final distanciaM = distCalc.as(LengthUnit.Meter, origenTramo, destinoTramo);
         final distanciaKm = distanciaM / 1000;
         final duracionMin = ((distanciaKm / 30) * 60).round();
@@ -1391,6 +1423,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           duracionMin: duracionMin,
           precioEstimado: 0.0,
         );
+      } else {
+        rutaTramo = rutaTramoTemp;
       }
 
       if (puntosCompletos.isEmpty) {
@@ -1420,8 +1454,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       if (recenterMap) {
         _mapController.move(
           LatLng(
-            (_miUbicacion.latitude + destino.latitude) / 2,
-            (_miUbicacion.longitude + destino.longitude) / 2,
+            (origenRuta.latitude + destino.latitude) / 2,
+            (origenRuta.longitude + destino.longitude) / 2,
           ),
           13.0,
         );
@@ -1435,6 +1469,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _paradasIntermedias = []; _agregandoParada = false;
       _mostrandoPanel = false; _sugerencias = []; _mostrandoSugerencias = false;
       _mostrandoRecientes = false;
+      _seleccionandoDestinoMapa = false;
+      _actualizandoDestinoMapa = false;
       _searchFeedback = ''; _precioCalculado = 0.0; _searchController.clear();
     });
   }
@@ -1444,26 +1480,43 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   void _toggleAjusteRecogida() {
     setState(() {
       _ajustandoRecogida = !_ajustandoRecogida;
+      if (_ajustandoRecogida) {
+        _seleccionandoDestinoMapa = false;
+        _actualizandoDestinoMapa = false;
+      }
       if (!_ajustandoRecogida) {
         _actualizandoRecogida = false;
       }
     });
     if (_ajustandoRecogida) {
-      _mapController.move(_miUbicacion, _mapController.zoom ?? 15.0);
+      _mapController.move(
+        _puntoRecogida ?? _miUbicacion,
+        _mapController.zoom ?? 15.0,
+      );
     }
   }
 
   void _onMapaMovido(MapPosition position, bool hasGesture) {
-    if (!_ajustandoRecogida || !hasGesture || position.center == null) return;
+    if (!hasGesture || position.center == null) return;
 
-    final nuevoPunto = position.center;
-    _pickupDebounce?.cancel();
-    if (mounted && !_actualizandoRecogida) {
-      setState(() => _actualizandoRecogida = true);
+    final nuevoPunto = position.center!;
+    if (_ajustandoRecogida) {
+      _pickupDebounce?.cancel();
+      if (mounted && !_actualizandoRecogida) {
+        setState(() => _actualizandoRecogida = true);
+      }
+      _pickupDebounce = Timer(const Duration(milliseconds: 700), () {
+        _actualizarPuntoRecogida(nuevoPunto);
+      });
+    } else if (_seleccionandoDestinoMapa) {
+      _destinoDebounce?.cancel();
+      if (mounted && !_actualizandoDestinoMapa) {
+        setState(() => _actualizandoDestinoMapa = true);
+      }
+      _destinoDebounce = Timer(const Duration(milliseconds: 700), () {
+        _actualizarDestinoDesdeMapa(nuevoPunto);
+      });
     }
-    _pickupDebounce = Timer(const Duration(milliseconds: 700), () {
-      _actualizarPuntoRecogida(nuevoPunto);
-    });
   }
 
   Future<void> _actualizarPuntoRecogida(LatLng nuevoPunto) async {
@@ -1474,7 +1527,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     if (!mounted) return;
 
     setState(() {
-      _miUbicacion = nuevoPunto;
+      _puntoRecogida = nuevoPunto;
       _origenNombre = nombre;
       _actualizandoRecogida = false;
     });
@@ -1483,8 +1536,32 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
     if (_destino != null) {
       setState(() => _calculandoRuta = true);
-      await _calcularRuta(_destino, recenterMap: false);
+      await _calcularRuta(_destino!, recenterMap: false);
     }
+  }
+
+  Future<void> _actualizarDestinoDesdeMapa(LatLng nuevoPunto) async {
+    final nombre = await OsmService.obtenerNombreLugar(
+      nuevoPunto.latitude,
+      nuevoPunto.longitude,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _destino = nuevoPunto;
+      _destinoNombre = nombre;
+      _searchController.text = nombre;
+      _mostrandoPanel = true;
+      _calculandoRuta = true;
+      _actualizandoDestinoMapa = false;
+      _rutaInfo = null;
+      _rutaPuntos = [];
+      _sugerencias = [];
+      _mostrandoSugerencias = false;
+      _mostrandoRecientes = false;
+    });
+
+    await _calcularRuta(nuevoPunto, recenterMap: false);
   }
 
   // ────────────────────────────────────────────────────────────────
@@ -1505,41 +1582,68 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               maxZoom: 18.0,
               onPositionChanged: _onMapaMovido,
             ),
-            layers: [
-              TileLayerOptions(
+            children: [
+              TileLayer(
                 urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                 subdomains: ['a', 'b', 'c'],
+                userAgentPackageName: 'com.sahdeepsingh.fu_uber',
                 additionalOptions: {'attribution': '© OpenStreetMap contributors'},
               ),
               if (_rutaPuntos.isNotEmpty)
-                PolylineLayerOptions(polylines: [
+                PolylineLayer(polylines: [
                   Polyline(points: _rutaPuntos, strokeWidth: 4.0, color: ConstantColors.primaryViolet),
                 ]),
-              MarkerLayerOptions(markers: [
+              MarkerLayer(markers: [
                 Marker(
-                  point: _miUbicacion, width: 50, height: 50,
-                  builder: (_) => Container(
+                  point: _miUbicacion, width: 24, height: 24,
+                  child: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: ConstantColors.primaryBlue.withOpacity(0.3),
-                      border: Border.all(color: ConstantColors.primaryBlue, width: 2),
+                      color: ConstantColors.primaryBlue.withOpacity(0.22),
+                      border: Border.all(color: Colors.white, width: 2),
                     ),
-                    child: Center(child: Container(width: 14, height: 14,
-                      decoration: BoxDecoration(shape: BoxShape.circle, color: ConstantColors.primaryBlue),
-                    )),
+                    child: Center(
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: ConstantColors.primaryBlue,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Marker(
+                  point: _puntoRecogida ?? _miUbicacion,
+                  width: 54,
+                  height: 54,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: ConstantColors.primaryBlue.withOpacity(0.14),
+                      border: Border.all(
+                        color: ConstantColors.primaryBlue.withOpacity(0.45),
+                        width: 2,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.my_location_rounded,
+                      color: ConstantColors.primaryBlue,
+                      size: 24,
+                    ),
                   ),
                 ),
                 if (_destino != null)
                   Marker(
-                    point: _destino, width: 40, height: 50,
-                    anchorPos: AnchorPos.align(AnchorAlign.top),
-                    builder: (_) => Icon(Icons.location_on, color: ConstantColors.primaryViolet, size: 40),
+                    point: _destino!, width: 40, height: 50,
+                    child: Icon(Icons.location_on, color: ConstantColors.primaryViolet, size: 40),
                   ),
                 ..._paradasIntermedias.asMap().entries.map((entry) => Marker(
                   point: entry.value.ubicacion,
                   width: 40,
                   height: 40,
-                  builder: (_) => Container(
+                  child: Container(
                     decoration: BoxDecoration(
                       color: Colors.orange.shade600,
                       shape: BoxShape.circle,
@@ -1561,7 +1665,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                   point: LatLng(conductor.latitud, conductor.longitud),
                   width: 52,
                   height: 52,
-                  builder: (_) => GestureDetector(
+                  child: GestureDetector(
                     onTap: () => _mostrarInfoConductor(conductor),
                     child: Container(
                       decoration: BoxDecoration(
@@ -1588,7 +1692,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             ],
           ),
 
-          if (_ajustandoRecogida)
+          if (_ajustandoRecogida || _seleccionandoDestinoMapa)
             IgnorePointer(
               child: Center(
                 child: Transform.translate(
@@ -1606,7 +1710,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            if (_actualizandoRecogida)
+                            if (_actualizandoRecogida || _actualizandoDestinoMapa)
                               SizedBox(
                                 width: 12,
                                 height: 12,
@@ -1625,9 +1729,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                               ),
                             SizedBox(width: 8),
                             Text(
-                              _actualizandoRecogida
-                                  ? 'Actualizando recogida...'
-                                  : 'Mueve el mapa para ajustar recogida',
+                              _ajustandoRecogida
+                                  ? (_actualizandoRecogida
+                                      ? 'Actualizando recogida...'
+                                      : 'Mueve el mapa para ajustar recogida')
+                                  : (_actualizandoDestinoMapa
+                                      ? 'Actualizando destino...'
+                                      : 'Mueve el mapa para elegir destino'),
                               style: TextStyle(
                                 color: ConstantColors.textWhite,
                                 fontSize: 11,
@@ -1639,8 +1747,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                       ),
                       SizedBox(height: 8),
                       Icon(
-                        Icons.location_on_rounded,
-                        color: ConstantColors.primaryViolet,
+                        _ajustandoRecogida
+                            ? Icons.location_on_rounded
+                            : Icons.place_rounded,
+                        color: _ajustandoRecogida
+                            ? ConstantColors.primaryViolet
+                            : Colors.orangeAccent,
                         size: 42,
                       ),
                     ],
@@ -1718,6 +1830,27 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         onTap: _limpiarDestino,
                         child: Padding(padding: EdgeInsets.symmetric(horizontal: 12),
                           child: Icon(Icons.close_rounded, color: ConstantColors.textGrey, size: 20)),
+                      ),
+                    if (_estadoViaje == EstadoViaje.ninguno)
+                      GestureDetector(
+                        onTap: _toggleSeleccionDestinoMapa,
+                        child: Container(
+                          margin: EdgeInsets.only(right: 10),
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _seleccionandoDestinoMapa
+                                ? Colors.orangeAccent.withOpacity(0.18)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            Icons.place_rounded,
+                            color: _seleccionandoDestinoMapa
+                                ? Colors.orangeAccent
+                                : ConstantColors.textGrey,
+                            size: 20,
+                          ),
+                        ),
                       ),
                   ]),
                 ),
@@ -1902,8 +2035,64 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               ),
             ),
 
+          if (_estadoViaje == EstadoViaje.ninguno)
+            Positioned(
+              right: 16,
+              bottom: (_mostrandoPanel || _estadoViaje != EstadoViaje.ninguno)
+                  ? 412
+                  : 212,
+              child: GestureDetector(
+                onTap: _toggleSeleccionDestinoMapa,
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 180),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _seleccionandoDestinoMapa
+                        ? Colors.orangeAccent
+                        : ConstantColors.backgroundCard,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: _seleccionandoDestinoMapa
+                          ? Colors.orangeAccent
+                          : ConstantColors.borderColor,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.flag_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _seleccionandoDestinoMapa
+                            ? 'Destino listo'
+                            : 'Elegir destino',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── BOTÓN SHARE TRIP (Durante viaje activo) ───────────────
-          if (_estadoViaje == EstadoViaje.conductorAsignado)
+          if (_estadoViaje == EstadoViaje.conductorAsignado ||
+              _estadoViaje == EstadoViaje.enCamino ||
+              _estadoViaje == EstadoViaje.enViaje)
             Positioned(
               right: 16,
               bottom: 450,
@@ -1936,7 +2125,9 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             ),
 
           // ── BOTÓN SOS (Durante viaje activo) ─────────────────────
-          if (_estadoViaje == EstadoViaje.conductorAsignado)
+          if (_estadoViaje == EstadoViaje.conductorAsignado ||
+              _estadoViaje == EstadoViaje.enCamino ||
+              _estadoViaje == EstadoViaje.enViaje)
             Positioned(
               right: 16,
               bottom: 380,
@@ -2187,8 +2378,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         ]))
                       : _rutaInfo != null
                           ? Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                              _buildInfoChip(Icons.straighten_rounded, '${_rutaInfo.distanciaKm.toStringAsFixed(1)} km', 'Distancia'),
-                              _buildInfoChip(Icons.access_time_rounded, '${_rutaInfo.duracionMin} min', 'Tiempo'),
+                              _buildInfoChip(Icons.straighten_rounded, '${_rutaInfo!.distanciaKm.toStringAsFixed(1)} km', 'Distancia'),
+                              _buildInfoChip(Icons.access_time_rounded, '${_rutaInfo!.duracionMin} min', 'Tiempo'),
                               _buildInfoChip(Icons.attach_money_rounded, '\$${_precioCalculado.toStringAsFixed(2)}', 'Precio', highlight: true),
                             ])
                           : SizedBox.shrink(),
@@ -2264,9 +2455,9 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         border: Border.all(color: ConstantColors.primaryViolet.withOpacity(0.3)),
                       ),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_categoriaSeleccionada.icono, style: TextStyle(fontSize: 16)),
+                        Text(_categoriaSeleccionada!.icono, style: TextStyle(fontSize: 16)),
                         SizedBox(width: 6),
-                        Text(_categoriaSeleccionada.nombre,
+                        Text(_categoriaSeleccionada!.nombre,
                           style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 13, fontWeight: FontWeight.w600)),
                         SizedBox(width: 8),
                         Text('· \$${_precioCalculado.toStringAsFixed(2)}',
@@ -2311,8 +2502,10 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               ),
             ),
 
-          // ── PANEL: CONDUCTOR EN CAMINO ────────────────────────
-          if (_estadoViaje == EstadoViaje.conductorAsignado && _conductorData != null)
+          // ── PANEL: CONDUCTOR ASIGNADO / EN CAMINO / EN VIAJE ─────
+          if ((_estadoViaje == EstadoViaje.conductorAsignado ||
+               _estadoViaje == EstadoViaje.enCamino ||
+               _estadoViaje == EstadoViaje.enViaje) && _conductorData != null)
             Positioned(
               bottom: 0, left: 0, right: 0,
               child: Container(
@@ -2328,19 +2521,41 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
                   SizedBox(height: 16),
                   Row(children: [
-                    Icon(Icons.check_circle_rounded, color: Colors.greenAccent, size: 20),
-                    SizedBox(width: 8),
-                    Text('¡Conductor en camino!', style: TextStyle(color: Colors.greenAccent, fontSize: 15, fontWeight: FontWeight.w700)),
-                    Spacer(),
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: ConstantColors.primaryViolet.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text('${_conductorData['eta_min']} min',
-                        style: TextStyle(color: ConstantColors.primaryViolet, fontWeight: FontWeight.w700, fontSize: 13)),
+                    Icon(
+                      _estadoViaje == EstadoViaje.enViaje
+                          ? Icons.directions_car_filled_rounded
+                          : Icons.check_circle_rounded,
+                      color: _estadoViaje == EstadoViaje.enViaje
+                          ? Colors.orangeAccent
+                          : Colors.greenAccent,
+                      size: 20,
                     ),
+                    SizedBox(width: 8),
+                    Text(
+                      _estadoViaje == EstadoViaje.enViaje
+                          ? '¡Estás en viaje!'
+                          : _estadoViaje == EstadoViaje.enCamino
+                              ? '¡Tu conductor está en camino!'
+                              : '¡Conductor asignado!',
+                      style: TextStyle(
+                        color: _estadoViaje == EstadoViaje.enViaje
+                            ? Colors.orangeAccent
+                            : Colors.greenAccent,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Spacer(),
+                    if (_estadoViaje != EstadoViaje.enViaje)
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: ConstantColors.primaryViolet.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text('${_conductorData!['eta_min']} min',
+                          style: TextStyle(color: ConstantColors.primaryViolet, fontWeight: FontWeight.w700, fontSize: 13)),
+                      ),
                   ]),
                   SizedBox(height: 14),
                   Divider(color: ConstantColors.dividerColor),
@@ -2349,41 +2564,43 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     CircleAvatar(
                       radius: 30,
                       backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
-                      child: Text(_conductorData['inicial'],
+                      child: Text(_conductorData!['inicial'],
                         style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 24, fontWeight: FontWeight.bold)),
                     ),
                     SizedBox(width: 14),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(_conductorData['nombre'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
+                      Text(_conductorData!['nombre'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
                       SizedBox(height: 4),
                       Row(children: [
                         Icon(Icons.star_rounded, color: Colors.amber, size: 16),
                         SizedBox(width: 4),
-                        Text('${_conductorData['calificacion']}  ·  ${_conductorData['viajes']} viajes',
+                        Text('${_conductorData!['calificacion']}  ·  ${_conductorData!['viajes']} viajes',
                           style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
                       ]),
                     ])),
                     Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text(_conductorData['auto'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(_conductorData!['auto'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 13, fontWeight: FontWeight.w600)),
                       SizedBox(height: 2),
-                      Text('${_conductorData['color']} · ${_conductorData['placa']}',
+                      Text('${_conductorData!['color']} · ${_conductorData!['placa']}',
                         style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
                     ]),
                   ]),
-                  SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: _cancelarViaje,
-                    child: Container(
-                      width: double.infinity, height: 48,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                  if (_estadoViaje != EstadoViaje.enViaje) ...[
+                    SizedBox(height: 20),
+                    GestureDetector(
+                      onTap: _cancelarViaje,
+                      child: Container(
+                        width: double.infinity, height: 48,
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+                        ),
+                        child: Center(child: Text('Cancelar viaje',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.w600))),
                       ),
-                      child: Center(child: Text('Cancelar viaje',
-                        style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.w600))),
                     ),
-                  ),
+                  ],
                 ]),
               ),
             ),
@@ -2416,15 +2633,15 @@ class _ConfirmacionSheet extends StatefulWidget {
   final Function(String, double, double) onCuponAplicado; // (codigo, descuento, precioFinal)
 
   const _ConfirmacionSheet({
-    Key key,
-    @required this.origen,
-    @required this.destino,
-    @required this.categoria,
-    @required this.distanciaKm,
-    @required this.duracionMin,
-    @required this.precio,
-    @required this.onConfirmar,
-    this.onCuponAplicado,
+    Key? key,
+    required this.origen,
+    required this.destino,
+    required this.categoria,
+    required this.distanciaKm,
+    required this.duracionMin,
+    required this.precio,
+    required this.onConfirmar,
+    required this.onCuponAplicado,
   }) : super(key: key);
 
   @override

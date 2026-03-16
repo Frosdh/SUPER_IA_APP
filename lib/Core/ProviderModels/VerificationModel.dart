@@ -4,34 +4,35 @@ import 'package:fu_uber/Core/Repository/Repository.dart';
 class VerificationModel extends ChangeNotifier {
   final Repository _repository = Repository();
 
-  String phoneNumber;
-  String email;
-  String otp;
+  String? phoneNumber;
+  String? email;
+  String? otp;
   String otpErrorMessage = '';
   String registerErrorMessage = '';
-  bool welcomeEmailSent;
+  bool? welcomeEmailSent;
   String welcomeEmailError = '';
   bool showCircularLoader = false;
   bool shopCircularLoaderOTP = false;
 
-  void setPhoneNumber(String newPhoneNumber) {
+  void setPhoneNumber(String? newPhoneNumber) {
     phoneNumber = newPhoneNumber?.trim();
     notifyListeners();
   }
 
-  void setEmail(String newEmail) {
-    email = newEmail?.trim()?.toLowerCase();
+  void setEmail(String? newEmail) {
+    email = newEmail?.trim().toLowerCase();
     notifyListeners();
   }
 
-  void setOtp(String newOtp) {
+  void setOtp(String? newOtp) {
     otp = newOtp?.trim();
     otpErrorMessage = '';
     notifyListeners();
   }
 
   Future<int> handleEmailVerification() async {
-    if (email == null || email.isEmpty) {
+    final localEmail = email;
+    if (localEmail == null || localEmail.isEmpty) {
       otpErrorMessage = 'Ingresa un correo valido';
       notifyListeners();
       return 0;
@@ -41,7 +42,7 @@ class VerificationModel extends ChangeNotifier {
     otpErrorMessage = '';
     notifyListeners();
 
-    final result = await _repository.sendEmailOtp(email);
+    final result = await _repository.sendEmailOtp(localEmail);
 
     showCircularLoader = false;
     if (result != 1) {
@@ -52,7 +53,9 @@ class VerificationModel extends ChangeNotifier {
   }
 
   Future<int> oTPVerification() async {
-    if (email == null || email.isEmpty || otp == null || otp.isEmpty) {
+    final localEmail = email;
+    final localOtp = otp;
+    if (localEmail == null || localEmail.isEmpty || localOtp == null || localOtp.isEmpty) {
       otpErrorMessage = 'Completa el correo y el codigo';
       notifyListeners();
       return 0;
@@ -62,7 +65,7 @@ class VerificationModel extends ChangeNotifier {
     otpErrorMessage = '';
     notifyListeners();
 
-    final result = await _repository.verifyEmailOtp(email, otp);
+    final result = await _repository.verifyEmailOtp(localEmail, localOtp);
 
     shopCircularLoaderOTP = false;
     if (result != 1) {
@@ -77,10 +80,10 @@ class VerificationModel extends ChangeNotifier {
   }
 
   Future<int> registerUser({
-    String nombre,
-    String telefono,
-    String email,
-    String tokenFcm,
+    required String nombre,
+    required String telefono,
+    required String email,
+    required String tokenFcm,
   }) async {
     registerErrorMessage = '';
     welcomeEmailSent = null;
@@ -109,6 +112,6 @@ class VerificationModel extends ChangeNotifier {
   }
 
   Future<int> resendOtp() async {
-    return handleEmailVerification();
+    return await handleEmailVerification();
   }
 }

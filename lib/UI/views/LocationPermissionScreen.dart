@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/ProviderModels/MapModel.dart';
 import 'package:fu_uber/Core/ProviderModels/PermissionHandlerModel.dart';
 import 'package:fu_uber/UI/views/OsmMapScreen.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
 class LocationPermissionScreen extends StatefulWidget {
@@ -16,9 +16,9 @@ class LocationPermissionScreen extends StatefulWidget {
 
 class _LocationPermissionScreenState extends State<LocationPermissionScreen>
     with SingleTickerProviderStateMixin {
-  AnimationController loadingController;
-  Animation<double> animation;
-  bool _yaNavego = false; // evitar doble navegación
+  late AnimationController loadingController;
+  late Animation<double> animation;
+  bool _yaNavego = false;
 
   @override
   void dispose() {
@@ -30,8 +30,8 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
   void initState() {
     super.initState();
     loadingController =
-        AnimationController(vsync: this, duration: Duration(seconds: 5));
-    animation = Tween<double>(begin: 0, end: 40).animate(new CurvedAnimation(
+        AnimationController(vsync: this, duration: const Duration(seconds: 5));
+    animation = Tween<double>(begin: 0, end: 40).animate(CurvedAnimation(
         parent: loadingController, curve: Curves.easeInOutCirc));
     loadingController.addStatusListener((AnimationStatus status) {
       if (status == AnimationStatus.completed) {
@@ -41,11 +41,25 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
     loadingController.forward();
   }
 
+  /// Intenta obtener la posición actual y navega al mapa OSM
+  Future<void> _intentarNavegar() async {
+    if (_yaNavego || !mounted) return;
+    try {
+      await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      if (mounted && !_yaNavego) {
+        _yaNavego = true;
+        Navigator.of(context).pushReplacementNamed(OsmMapScreen.route);
+      }
+    } catch (_) {
+      // Si falla, el usuario verá el botón para intentar de nuevo
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final permModel = Provider.of<PermissionHandlerModel>(context);
-    final mapModel = Provider.of<MapModel>(context);
-
     return Material(
       child: Container(
         child: Stack(
@@ -53,50 +67,50 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
             SpringEffect(),
             permModel.isLocationPerGiven
                 ? Align(
-              alignment: Alignment(0, 0.5),
-              child: permModel.isLocationSerGiven
-                  ? Text("Fetching Location...")
-                  : InkResponse(
-                onTap: () {
-                  permModel.requestLocationServiceToEnable();
-                  mapModel.randomMapZoom();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    color: ConstantColors.PrimaryColor,
-                    height: 40,
-                    width: double.infinity,
-                    child: Text(
-                      "Location Service Not Enabled",
-                      style: TextStyle(
-                          fontSize: 20, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ),
-            )
+                    alignment: const Alignment(0, 0.5),
+                    child: permModel.isLocationSerGiven
+                        ? const Text("Fetching Location...")
+                        : InkResponse(
+                            onTap: () {
+                              permModel.requestLocationServiceToEnable();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Container(
+                                color: ConstantColors.PrimaryColor,
+                                height: 40,
+                                width: double.infinity,
+                                child: const Text(
+                                  "Location Service Not Enabled",
+                                  style: TextStyle(
+                                      fontSize: 20, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ),
+                  )
                 : Align(
-              alignment: Alignment.bottomCenter,
-              child: InkResponse(
-                onTap: () {
-                  permModel.requestAppLocationPermission();
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    color: ConstantColors.PrimaryColor,
-                    height: 60,
-                    width: double.infinity,
-                    child: Center(
-                        child: Text(
-                          "Location Permission is Not Given",
-                          style: TextStyle(fontSize: 15, color: Colors.white),
-                        )),
-                  ),
-                ),
-              ),
-            )
+                    alignment: Alignment.bottomCenter,
+                    child: InkResponse(
+                      onTap: () {
+                        permModel.requestAppLocationPermission();
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Container(
+                          color: ConstantColors.PrimaryColor,
+                          height: 60,
+                          width: double.infinity,
+                          child: const Center(
+                              child: Text(
+                            "Location Permission is Not Given",
+                            style:
+                                TextStyle(fontSize: 15, color: Colors.white),
+                          )),
+                        ),
+                      ),
+                    ),
+                  )
           ],
         ),
       ),
@@ -106,13 +120,12 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final mapModel = Provider.of<MapModel>(context);
-    if (mapModel.currentPosition != null && !_yaNavego) {
-      _yaNavego = true; // marcar para no navegar dos veces
+    final permModel = Provider.of<PermissionHandlerModel>(context);
+    if (permModel.isLocationPerGiven &&
+        permModel.isLocationSerGiven &&
+        !_yaNavego) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed(OsmMapScreen.route);
-        }
+        _intentarNavegar();
       });
     }
   }
@@ -124,17 +137,17 @@ class SpringEffect extends StatefulWidget {
 }
 
 class SpringState extends State<SpringEffect> with TickerProviderStateMixin {
-  AnimationController controller;
-  AnimationController controller2;
-  Animation<double> animation;
-  SpringSimulation simulation;
+  late AnimationController controller;
+  late AnimationController controller2;
+  late Animation<double> animation;
+  late SpringSimulation simulation;
   double _position = 0;
 
   @override
   void initState() {
     super.initState();
     simulation = SpringSimulation(
-      SpringDescription(
+      const SpringDescription(
         mass: 1.0,
         stiffness: 100.0,
         damping: 5.0,
@@ -144,8 +157,8 @@ class SpringState extends State<SpringEffect> with TickerProviderStateMixin {
       -2000.0,
     );
 
-    controller2 =
-        AnimationController(vsync: this, duration: Duration(milliseconds: 70));
+    controller2 = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 70));
     animation = Tween(begin: 100.0, end: 200.0).animate(controller2)
       ..addListener(() {
         if (controller2.status == AnimationStatus.completed) {
@@ -157,7 +170,7 @@ class SpringState extends State<SpringEffect> with TickerProviderStateMixin {
       });
 
     controller =
-        AnimationController(vsync: this, duration: Duration(seconds: 2))
+        AnimationController(vsync: this, duration: const Duration(seconds: 2))
           ..forward()
           ..addListener(() {
             if (controller.status == AnimationStatus.completed) {

@@ -6,7 +6,7 @@ import 'package:fu_uber/Core/Utils/BasicShapeUtils.dart';
 class CarSelectionCard extends StatelessWidget {
   final CarTypeMenu carTypeMenu;
 
-  const CarSelectionCard({Key key, this.carTypeMenu})
+  const CarSelectionCard({Key? key, required this.carTypeMenu})
       : super(key: key);
   @override
   Widget build(BuildContext context) {
@@ -33,14 +33,14 @@ class CarSelectionCard extends StatelessWidget {
               padding: const EdgeInsets.all(8.0),
               child: Text(
                 carTypeMenu.rideType.toString(),
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
               ),
             ),
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(
                 carTypeMenu.info,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
               ),
             )
           ],

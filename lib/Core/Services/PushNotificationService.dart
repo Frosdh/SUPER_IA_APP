@@ -8,8 +8,8 @@ import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:http/http.dart' as http;
 
 class PushNotificationService {
-  static final FirebaseMessaging _messaging = FirebaseMessaging();
-  static GlobalKey<NavigatorState> _navigatorKey;
+  static final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  static GlobalKey<NavigatorState>? _navigatorKey;
   static bool _initialized = false;
 
   static Future<void> initialize(GlobalKey<NavigatorState> navigatorKey) async {
@@ -18,27 +18,22 @@ class PushNotificationService {
     _navigatorKey = navigatorKey;
 
     if (Platform.isIOS) {
-      _messaging.requestNotificationPermissions(
-        const IosNotificationSettings(
-          alert: true,
-          badge: true,
-          sound: true,
-        ),
+      await _messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
       );
-      _messaging.onIosSettingsRegistered.listen((_) {});
     }
 
-    _messaging.configure(
-      onMessage: (Map<String, dynamic> message) async {
-        _mostrarDialogoForeground(message);
-      },
-      onLaunch: (Map<String, dynamic> message) async {
-        print('>>> [FCM] onLaunch: $message');
-      },
-      onResume: (Map<String, dynamic> message) async {
-        print('>>> [FCM] onResume: $message');
-      },
-    );
+    // Handle message when app is in foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _mostrarDialogoForeground(message);
+    });
+
+    // Handle message when app is opened from a notification
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      print('>>> [FCM] onMessageOpenedApp: ${message.data}');
+    });
 
     final token = await _messaging.getToken();
     if (token != null && token.isNotEmpty) {
@@ -47,15 +42,16 @@ class PushNotificationService {
     }
 
     _messaging.onTokenRefresh.listen((token) async {
-      if (token == null || token.isEmpty) return;
+      if (token.isEmpty) return;
       await AuthPrefs.saveFcmToken(token);
       await syncTokenWithBackend(force: true);
     });
   }
 
-  Future<String> getToken() async {
+  static Future<String> getToken() async {
     try {
-      return await _messaging.getToken() ?? '';
+      final token = await _messaging.getToken();
+      return token ?? '';
     } catch (_) {
       return '';
     }
@@ -71,13 +67,12 @@ class PushNotificationService {
 
     final urls = <String>[
       '${Constants.apiBaseUrl}/actualizar_token_fcm.php',
-      'http://10.0.2.2/fuber_api/actualizar_token_fcm.php',
     ];
 
     for (final url in urls) {
       try {
         final response = await http.post(
-          url,
+          Uri.parse(url),
           headers: {'ngrok-skip-browser-warning': 'true'},
           body: {
             'telefono': phone,
@@ -99,21 +94,12 @@ class PushNotificationService {
     }
   }
 
-  static void _mostrarDialogoForeground(Map<String, dynamic> message) {
+  static void _mostrarDialogoForeground(RemoteMessage message) {
     final context = _navigatorKey?.currentState?.overlay?.context;
     if (context == null) return;
 
-    final dynamic notification = message['notification'];
-    final Map<String, dynamic> data =
-        (message['data'] as Map)?.cast<String, dynamic>() ??
-            <String, dynamic>{};
-
-    final String title = (notification is Map && notification['title'] != null)
-        ? notification['title'].toString()
-        : (data['title']?.toString() ?? 'Nueva notificacion');
-    final String body = (notification is Map && notification['body'] != null)
-        ? notification['body'].toString()
-        : (data['body']?.toString() ?? 'Tienes una actualizacion en tu viaje.');
+    final String title = message.notification?.title ?? message.data['title'] ?? 'Nueva notificacion';
+    final String body = message.notification?.body ?? message.data['body'] ?? 'Tienes una actualizacion en tu viaje.';
 
     showDialog<void>(
       context: context,
@@ -121,8 +107,8 @@ class PushNotificationService {
         title: Text(title),
         content: Text(body),
         actions: [
-          FlatButton(
-            child: Text('OK'),
+          TextButton(
+            child: const Text('OK'),
             onPressed: () => Navigator.of(context, rootNavigator: true).pop(),
           ),
         ],

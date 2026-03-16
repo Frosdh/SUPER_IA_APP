@@ -34,34 +34,52 @@ if ($conn->connect_error) {
     exit;
 }
 
-// Actualizar calificacion, comentario, descuento y fecha_fin
-// No actualizamos conductor_id porque el conductor es simulado (sin FK real)
-$stmt = $conn->prepare("
-    UPDATE viajes
-    SET estado = 'terminado',
-        fecha_fin = NOW(),
-        calificacion = ?,
-        comentario = ?,
-        descuento = ?,
-        codigo_descuento = ?
-    WHERE id = ?
-");
+$conn->begin_transaction();
+try {
+    // 1) Terminar el viaje
+    $stmt = $conn->prepare("
+        UPDATE viajes
+        SET estado = 'terminado',
+            fecha_fin = NOW(),
+            calificacion = ?,
+            comentario = ?,
+            descuento = ?,
+            codigo_descuento = ?
+        WHERE id = ?
+    ");
 
-$stmt->bind_param("dsdsi", $calificacion, $comentario, $descuento, $codigo_descuento, $viaje_id);
+    $stmt->bind_param("dsdsi", $calificacion, $comentario, $descuento, $codigo_descuento, $viaje_id);
+    $stmt->execute();
+    $stmt->close();
 
-if ($stmt->execute()) {
+    // 2) Liberar conductor si existe asignado a este viaje
+    $stmtGet = $conn->prepare("SELECT conductor_id FROM viajes WHERE id = ? LIMIT 1");
+    $stmtGet->bind_param("i", $viaje_id);
+    $stmtGet->execute();
+    $stmtGet->bind_result($conductor_id_db);
+    $stmtGet->fetch();
+    $stmtGet->close();
+
+    if (!is_null($conductor_id_db) && intval($conductor_id_db) > 0) {
+        $stmtDriver = $conn->prepare("UPDATE conductores SET estado = 'libre' WHERE id = ?");
+        $stmtDriver->bind_param("i", $conductor_id_db);
+        $stmtDriver->execute();
+        $stmtDriver->close();
+    }
+
+    $conn->commit();
     echo json_encode([
         "status"  => "success",
         "message" => "Viaje actualizado correctamente",
         "viaje_id" => $viaje_id
     ]);
-} else {
+} catch (Exception $e) {
+    $conn->rollback();
     echo json_encode([
         "status"  => "error",
-        "message" => "Error al actualizar: " . $stmt->error
+        "message" => "Error al actualizar: " . $e->getMessage()
     ]);
 }
 
-$stmt->close();
 $conn->close();
 ?>

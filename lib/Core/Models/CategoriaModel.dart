@@ -6,11 +6,11 @@ class CategoriaModel {
   final double precioMinuto;
 
   CategoriaModel({
-    this.id,
-    this.nombre,
-    this.tarifaBase,
-    this.precioKm,
-    this.precioMinuto,
+    required this.id,
+    required this.nombre,
+    required this.tarifaBase,
+    required this.precioKm,
+    required this.precioMinuto,
   });
 
   factory CategoriaModel.fromJson(Map<String, dynamic> json) {

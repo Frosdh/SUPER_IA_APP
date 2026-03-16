@@ -1,27 +1,27 @@
 // Modelo de Código de Descuento
 class DiscountCode {
-  int id;
-  String codigo;           // Ej: FUBER20
-  String tipo;             // 'porcentaje' o 'monto_fijo'
-  double valor;            // 20 (20%) o 5.00 (5 dólares)
-  double minimoViaje;      // Monto mínimo del viaje para usar el cupón
-  int maximoUsos;          // Máximo de veces que se puede usar
-  int usosActuales;        // Veces ya usado
-  DateTime fechaInicio;
-  DateTime fechaFin;
-  bool activo;
+  late int id;
+  late String codigo;           // Ej: FUBER20
+  late String tipo;             // 'porcentaje' o 'monto_fijo'
+  late double valor;            // 20 (20%) o 5.00 (5 dólares)
+  late double minimoViaje;      // Monto mínimo del viaje para usar el cupón
+  late int maximoUsos;          // Máximo de veces que se puede usar
+  late int usosActuales;        // Veces ya usado
+  DateTime? fechaInicio;
+  DateTime? fechaFin;
+  late bool activo;
 
   DiscountCode({
-    this.id,
-    this.codigo,
-    this.tipo,
-    this.valor,
-    this.minimoViaje,
-    this.maximoUsos,
-    this.usosActuales,
+    required this.id,
+    required this.codigo,
+    required this.tipo,
+    required this.valor,
+    required this.minimoViaje,
+    required this.maximoUsos,
+    required this.usosActuales,
     this.fechaInicio,
     this.fechaFin,
-    this.activo,
+    required this.activo,
   });
 
   // Crear desde JSON del servidor
@@ -64,10 +64,12 @@ class DiscountCode {
     if (!activo) return false;
 
     // ✓ No debe estar expirado
-    if (fechaFin != null && ahora.isAfter(fechaFin)) return false;
+    final fin = fechaFin;
+    if (fin != null && ahora.isAfter(fin)) return false;
 
     // ✓ Debe haber alcanzado la fecha de inicio
-    if (fechaInicio != null && ahora.isBefore(fechaInicio)) return false;
+    final inicio = fechaInicio;
+    if (inicio != null && ahora.isBefore(inicio)) return false;
 
     // ✓ No debe haber alcanzado el máximo de usos
     if (maximoUsos != null && usosActuales >= maximoUsos) return false;
@@ -117,7 +119,7 @@ double _parseDouble(dynamic value) {
 }
 
 // Función auxiliar para parsear DateTime
-DateTime _parseDateTime(dynamic value) {
+DateTime? _parseDateTime(dynamic value) {
   if (value == null) return null;
   if (value is DateTime) return value;
   if (value is String) {

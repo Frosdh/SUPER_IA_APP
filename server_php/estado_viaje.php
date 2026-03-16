@@ -30,16 +30,22 @@ if ($conn->connect_error) {
     exit;
 }
 
-// Obtener el estado del viaje junto con info del conductor (si está asignado)
+// Obtener el estado del viaje junto con info del conductor (si esta asignado).
+// Incluye un ETA estimado usando la ubicacion del conductor vs el punto de recogida.
 $stmt = $conn->prepare("
     SELECT
         v.estado,
         v.tarifa_total,
         v.distancia_km,
         v.duracion_min,
+        v.origen_lat,
+        v.origen_lng,
+        c.id      AS conductor_id,
         c.nombre  AS conductor_nombre,
         c.telefono AS conductor_telefono,
         c.calificacion_promedio AS conductor_calificacion,
+        c.latitud AS conductor_latitud,
+        c.longitud AS conductor_longitud,
         vh.marca  AS auto_marca,
         vh.modelo AS auto_modelo,
         vh.color  AS auto_color,
@@ -53,30 +59,87 @@ $stmt = $conn->prepare("
 
 $stmt->bind_param("i", $viaje_id);
 $stmt->execute();
-$result = $stmt->get_result();
-$row = $result->fetch_assoc();
+$stmt->bind_result(
+    $estado,
+    $tarifaTotal,
+    $distanciaKm,
+    $duracionMin,
+    $origenLat,
+    $origenLng,
+    $conductorId,
+    $conductorNombre,
+    $conductorTelefono,
+    $conductorCalificacion,
+    $conductorLat,
+    $conductorLng,
+    $autoMarca,
+    $autoModelo,
+    $autoColor,
+    $autoPlaca
+);
+$found = $stmt->fetch();
 $stmt->close();
-$conn->close();
 
-if (!$row) {
+if (!$found) {
     echo json_encode(["status" => "error", "message" => "Viaje no encontrado"]);
+    $conn->close();
     exit;
 }
 
 $auto = '';
-if (!empty($row['auto_marca']) || !empty($row['auto_modelo'])) {
-    $auto = trim($row['auto_marca'] . ' ' . $row['auto_modelo']);
+if (!empty($autoMarca) || !empty($autoModelo)) {
+    $auto = trim($autoMarca . ' ' . $autoModelo);
 }
+
+$viajesConductor = 0;
+if (!empty($conductorId)) {
+    $stmtTrips = $conn->prepare("
+        SELECT COUNT(*) AS total
+        FROM viajes
+        WHERE conductor_id = ? AND estado = 'terminado'
+    ");
+    if ($stmtTrips) {
+        $stmtTrips->bind_param("i", $conductorId);
+        $stmtTrips->execute();
+        $stmtTrips->bind_result($viajesConductor);
+        $stmtTrips->fetch();
+        $stmtTrips->close();
+    }
+}
+
+$etaMin = 0;
+if (!empty($conductorLat) && !empty($conductorLng) && !empty($origenLat) && !empty($origenLng)) {
+    // Distancia Haversine (km)
+    $earthRadius = 6371.0;
+    $dLat = deg2rad(((double)$origenLat) - ((double)$conductorLat));
+    $dLng = deg2rad(((double)$origenLng) - ((double)$conductorLng));
+    $a = sin($dLat / 2) * sin($dLat / 2) +
+         cos(deg2rad((double)$conductorLat)) * cos(deg2rad((double)$origenLat)) *
+         sin($dLng / 2) * sin($dLng / 2);
+    $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+    $distKm = $earthRadius * $c;
+
+    // Velocidad promedio estimada 25 km/h
+    $etaMin = (int)round(($distKm / 25.0) * 60.0);
+    if ($etaMin < 1) $etaMin = 1;
+    if ($etaMin > 99) $etaMin = 99;
+}
+
+$conn->close();
 
 echo json_encode([
     "status"  => "success",
-    "estado"  => $row['estado'],
+    "estado"  => $estado,
     "conductor" => [
-        "nombre"       => $row['conductor_nombre']      ?? '',
-        "calificacion" => floatval($row['conductor_calificacion'] ?? 5.0),
+        "id"           => intval($conductorId ?? 0),
+        "nombre"       => $conductorNombre ?? '',
+        "telefono"     => $conductorTelefono ?? '',
+        "calificacion" => floatval($conductorCalificacion ?? 5.0),
+        "viajes"       => intval($viajesConductor ?? 0),
         "auto"         => $auto,
-        "color"        => $row['auto_color']  ?? '',
-        "placa"        => $row['auto_placa']  ?? '',
+        "color"        => $autoColor ?? '',
+        "placa"        => $autoPlaca ?? '',
+        "eta_min"      => intval($etaMin ?? 0),
     ]
 ]);
 ?>

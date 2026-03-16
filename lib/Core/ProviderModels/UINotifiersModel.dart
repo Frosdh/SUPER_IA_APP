@@ -6,8 +6,8 @@ class UINotifiersModel extends ChangeNotifier {
   bool isPanelOpen = false;
   bool isPanelScrollDisabled = true;
   bool searchingRide = false;
-  ScrollController sheetScrollController = ScrollController();
-  PanelController panelController = PanelController();
+  final ScrollController sheetScrollController = ScrollController();
+  final PanelController panelController = PanelController();
 
   UINotifiersModel() {
     sheetScrollController.addListener(() {
@@ -18,30 +18,30 @@ class UINotifiersModel extends ChangeNotifier {
     });
   }
 
-  setOriginDestinationVisibility(double visibility) {
+  void setOriginDestinationVisibility(double visibility) {
     visibility = (visibility - 1);
     if (visibility < 0) visibility *= -1;
     originDestinationVisibility = visibility;
     notifyListeners();
   }
 
-  disablePanelScroll() {
+  void disablePanelScroll() {
     isPanelScrollDisabled = true;
     isPanelOpen = false;
     notifyListeners();
   }
 
-  enablePanelScroll() {
+  void enablePanelScroll() {
     isPanelScrollDisabled = false;
     notifyListeners();
   }
 
-  onPanelOpen() {
+  void onPanelOpen() {
     isPanelOpen = true;
     notifyListeners();
   }
 
-  onPanelClosed() {
+  void onPanelClosed() {
     isPanelOpen = false;
     notifyListeners();
   }

@@ -5,14 +5,14 @@ import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/Core/Repository/Repository.dart';
 
 class UserDetailsModel extends ChangeNotifier {
-  String uuid;
-  String photoUrl;
-  String name;
-  String email;
-  String phone;
-  String ongoingRide;
-  List<String> previousRides;
-  List<UserPlaces> favouritePlaces;
+  late String uuid;
+  late String photoUrl;
+  late String name;
+  late String email;
+  late String phone;
+  String? ongoingRide;
+  late List<String> previousRides;
+  late List<UserPlaces> favouritePlaces;
 
   UserDetailsModel() {
     uuid = '';
@@ -21,8 +21,8 @@ class UserDetailsModel extends ChangeNotifier {
     email = '';
     phone = '';
     ongoingRide = null;
-    previousRides = [];
-    favouritePlaces = [];
+    previousRides = <String>[];
+    favouritePlaces = <UserPlaces>[];
     _loadUserData();
   }
 
@@ -37,11 +37,11 @@ class UserDetailsModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  setStaticData(UserDetails userDetails) {}
+  void setStaticData(UserDetails userDetails) {}
 
-  changeName(String newName) {}
+  void changeName(String newName) {}
 
-  addToFavouritePlace(UserPlaces userPlaces) {
+  void addToFavouritePlace(UserPlaces userPlaces) {
     if (favouritePlaces.length >= 5) {
       favouritePlaces.insert(0, userPlaces);
       favouritePlaces.removeLast();

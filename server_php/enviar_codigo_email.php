@@ -62,7 +62,7 @@ $stmt->close();
 
 list($mailSent, $mailError) = sendEmailMessage(
     $email,
-    'Fuber - Codigo de verificacion',
+    'GeoMove - Codigo de verificacion',
     buildOtpEmailHtml($codigo),
     buildOtpEmailText($codigo)
 );
