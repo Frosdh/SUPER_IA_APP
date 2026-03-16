@@ -61,10 +61,29 @@ try {
     $stmtGet->close();
 
     if (!is_null($conductor_id_db) && intval($conductor_id_db) > 0) {
+        // Liberar al conductor
         $stmtDriver = $conn->prepare("UPDATE conductores SET estado = 'libre' WHERE id = ?");
         $stmtDriver->bind_param("i", $conductor_id_db);
         $stmtDriver->execute();
         $stmtDriver->close();
+
+        // Recalcular calificacion_promedio si se envió una calificación válida
+        if (!is_null($calificacion) && $calificacion >= 1 && $calificacion <= 5) {
+            $stmtProm = $conn->prepare("
+                UPDATE conductores
+                SET calificacion_promedio = (
+                    SELECT ROUND(AVG(v.calificacion), 2)
+                    FROM viajes v
+                    WHERE v.conductor_id = ?
+                      AND v.calificacion IS NOT NULL
+                      AND v.calificacion > 0
+                )
+                WHERE id = ?
+            ");
+            $stmtProm->bind_param("ii", $conductor_id_db, $conductor_id_db);
+            $stmtProm->execute();
+            $stmtProm->close();
+        }
     }
 
     $conn->commit();

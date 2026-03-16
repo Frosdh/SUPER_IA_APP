@@ -140,6 +140,8 @@ echo json_encode([
         "color"        => $autoColor ?? '',
         "placa"        => $autoPlaca ?? '',
         "eta_min"      => intval($etaMin ?? 0),
+        "latitud"      => floatval($conductorLat ?? 0),
+        "longitud"     => floatval($conductorLng ?? 0),
     ]
 ]);
 ?>

@@ -182,6 +182,23 @@ class ApiProvider {
     return json.decode(response.body) as Map<String, dynamic>;
   }
 
+  // Cancela un viaje activo (puede llamarlo el conductor o el pasajero).
+  Future<Map<String, dynamic>> cancelRide({required int viajeId}) async {
+    final url = '${Constants.apiBaseUrl}/cancelar_viaje.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {'viaje_id': viajeId.toString()},
+      ).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      print('>>> [CANCELAR] Error: $e');
+    }
+    return <String, dynamic>{'status': 'error', 'message': 'Error de conexión'};
+  }
+
   // Consulta el estado actual de un viaje (usado por el conductor para detectar cancelación).
   Future<Map<String, dynamic>> getRideStatus({required int viajeId}) async {
     final url = '${Constants.apiBaseUrl}/estado_viaje.php';

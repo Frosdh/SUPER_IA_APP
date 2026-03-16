@@ -71,7 +71,11 @@ $stmtViaje = $conn->prepare("
         v.destino_texto,
         IFNULL(v.distancia_km, 0),
         IFNULL(v.duracion_min, 0),
-        IFNULL(v.tarifa_total, 0)
+        IFNULL(v.tarifa_total, 0),
+        IFNULL(v.origen_lat, 0),
+        IFNULL(v.origen_lng, 0),
+        IFNULL(v.destino_lat, 0),
+        IFNULL(v.destino_lng, 0)
     FROM viajes v
     INNER JOIN usuarios u ON u.id = v.usuario_id
     LEFT JOIN solicitud_viajes sv
@@ -93,7 +97,11 @@ $stmtViaje->bind_result(
     $destinoTexto,
     $distanciaKm,
     $duracionMin,
-    $tarifaTotal
+    $tarifaTotal,
+    $origenLat,
+    $origenLng,
+    $destinoLat,
+    $destinoLng
 );
 $viajeEncontrado = $stmtViaje->fetch();
 $stmtViaje->close();
@@ -117,14 +125,18 @@ echo json_encode([
     "status" => "success",
     "found" => true,
     "solicitud" => [
-        "viaje_id" => $viajeId,
-        "pasajero_nombre" => $pasajeroNombre,
+        "viaje_id"          => $viajeId,
+        "pasajero_nombre"   => $pasajeroNombre,
         "pasajero_telefono" => $pasajeroTelefono,
-        "origen_texto" => $origenTexto,
-        "destino_texto" => $destinoTexto,
-        "distancia_km" => floatval($distanciaKm),
-        "duracion_min" => intval($duracionMin),
-        "tarifa_total" => floatval($tarifaTotal),
+        "origen_texto"      => $origenTexto,
+        "destino_texto"     => $destinoTexto,
+        "distancia_km"      => floatval($distanciaKm),
+        "duracion_min"      => intval($duracionMin),
+        "tarifa_total"      => floatval($tarifaTotal),
+        "origen_lat"        => floatval($origenLat),
+        "origen_lng"        => floatval($origenLng),
+        "destino_lat"       => floatval($destinoLat),
+        "destino_lng"       => floatval($destinoLng),
     ]
 ]);
 

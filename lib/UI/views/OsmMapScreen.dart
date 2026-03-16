@@ -91,6 +91,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   // ── Estado del viaje ──────────────────────────────
   EstadoViaje _estadoViaje = EstadoViaje.ninguno;
   Map<String, dynamic>? _conductorData;
+  LatLng? _conductorUbicacion; // posición en tiempo real del conductor
   Timer? _simulacionTimer;
   Timer? _pollingTimer;
   int? _viajeId;
@@ -371,9 +372,17 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       final estadoData = await _verificarEstadoViaje(_viajeId!);
       if (!mounted) return;
       final estado = (estadoData['estado'] as String?) ?? '';
+      final conductor = (estadoData['conductor'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+
+      // ── Actualizar posición del conductor en tiempo real ──
+      final cLat = double.tryParse(conductor['latitud']?.toString() ?? '');
+      final cLng = double.tryParse(conductor['longitud']?.toString() ?? '');
+      if (cLat != null && cLng != null && cLat != 0 && cLng != 0) {
+        setState(() => _conductorUbicacion = LatLng(cLat, cLng));
+      }
+
       if (estado == 'aceptado' && _estadoViaje != EstadoViaje.conductorAsignado &&
           _estadoViaje != EstadoViaje.enCamino && _estadoViaje != EstadoViaje.enViaje) {
-        final conductor = (estadoData['conductor'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
         final nombre = conductor['nombre']?.toString() ?? 'Conductor';
         setState(() {
           _estadoViaje = EstadoViaje.conductorAsignado;
@@ -391,7 +400,6 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         });
       } else if (estado == 'en_camino' && _estadoViaje != EstadoViaje.enCamino &&
           _estadoViaje != EstadoViaje.enViaje) {
-        final conductor = (estadoData['conductor'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
         final nombre = conductor['nombre']?.toString() ?? (_conductorData?['nombre'] ?? 'Conductor');
         setState(() {
           _estadoViaje = EstadoViaje.enCamino;
@@ -407,10 +415,16 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             'eta_min': conductor['eta_min'] ?? 3,
           };
         });
-      } else if (estado == 'iniciado' && _estadoViaje != EstadoViaje.enViaje) {
-        setState(() {
-          _estadoViaje = EstadoViaje.enViaje;
-        });
+      } else if (estado == 'aceptado' || estado == 'en_camino' || estado == 'iniciado') {
+        // Actualizar ETA y datos del conductor aunque el estado no cambie
+        if (_conductorData != null && conductor['eta_min'] != null) {
+          setState(() {
+            _conductorData!['eta_min'] = conductor['eta_min'];
+          });
+        }
+        if (estado == 'iniciado' && _estadoViaje != EstadoViaje.enViaje) {
+          setState(() => _estadoViaje = EstadoViaje.enViaje);
+        }
       } else if (estado == 'terminado') {
         _pollingTimer?.cancel();
         _finalizarViaje();
@@ -488,6 +502,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     setState(() {
       _estadoViaje = EstadoViaje.ninguno;
       _conductorData = null;
+      _conductorUbicacion = null;
       _viajeId = null;
       _mostrandoPanel = _destino != null;
     });
@@ -1661,6 +1676,38 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     ),
                   ),
                 )).toList(),
+                // ── Marcador del conductor asignado (tiempo real) ──
+                if (_conductorUbicacion != null &&
+                    (_estadoViaje == EstadoViaje.conductorAsignado ||
+                     _estadoViaje == EstadoViaje.enCamino ||
+                     _estadoViaje == EstadoViaje.enViaje))
+                  Marker(
+                    point: _conductorUbicacion!,
+                    width: 58,
+                    height: 72,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            color: ConstantColors.primaryBlue,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 3),
+                            boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 10)],
+                          ),
+                          child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 26),
+                        ),
+                        Container(
+                          width: 2,
+                          height: 16,
+                          color: ConstantColors.primaryBlue,
+                        ),
+                      ],
+                    ),
+                  ),
+
                 ..._conductoresCercanos.map((conductor) => Marker(
                   point: LatLng(conductor.latitud, conductor.longitud),
                   width: 52,

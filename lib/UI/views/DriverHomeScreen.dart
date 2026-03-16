@@ -736,6 +736,79 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     }
   }
 
+  // ── Cancelar viaje desde el conductor ─────────────
+  Future<void> _cancelarViaje() async {
+    final ride = _activeRide;
+    if (ride == null) return;
+
+    // Solo permitir cancelar si el viaje aún no ha iniciado
+    final estado = ride['estado']?.toString() ?? '';
+    if (estado == 'iniciado') {
+      _showMessage('No puedes cancelar un viaje que ya está en curso');
+      return;
+    }
+
+    // Confirmación
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: ConstantColors.backgroundCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('¿Cancelar viaje?',
+            style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700)),
+        content: Text(
+          'El pasajero será notificado y el viaje quedará cancelado.',
+          style: TextStyle(color: ConstantColors.textGrey, fontSize: 14, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text('No, continuar', style: TextStyle(color: ConstantColors.primaryBlue)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Sí, cancelar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true) return;
+
+    setState(() => _updatingRideStatus = true);
+
+    final viajeIdRaw = ride['viaje_id'];
+    final viajeId = viajeIdRaw is int
+        ? viajeIdRaw
+        : int.tryParse(viajeIdRaw?.toString() ?? '') ?? 0;
+
+    // 1. Cancelar viaje en el servidor
+    if (viajeId > 0) {
+      await _apiProvider.cancelRide(viajeId: viajeId);
+    }
+
+    // 2. Liberar al conductor en el servidor
+    await _apiProvider.updateDriverStatus(conductorId: _driverId, estado: 'libre');
+
+    if (!mounted) return;
+
+    // 3. Limpiar estado local
+    _ridePollingTimer?.cancel();
+    _mapTimer?.cancel();
+    await DriverPrefs.clearActiveRide();
+    await DriverPrefs.saveDriverStatus('libre');
+
+    setState(() {
+      _activeRide = null;
+      _driverStatus = 'libre';
+      _rutaPuntos = [];
+      _miUbicacion = null;
+      _updatingRideStatus = false;
+    });
+
+    _restartRequestPolling();
+    _showMessage('Viaje cancelado');
+  }
+
   Widget _buildActiveRideCard() {
     final ride = _activeRide;
     if (ride == null) return SizedBox.shrink();
@@ -2039,6 +2112,25 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                       ),
                       onPressed: _updatingRideStatus ? null : () => _setRideStatus('terminado'),
                       child: Text('Finalizar viaje', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                    ),
+                  ),
+                ],
+
+                // Botón cancelar (solo disponible antes de iniciar el viaje)
+                if (estado != 'iniciado') ...[
+                  SizedBox(height: 6),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _updatingRideStatus ? null : _cancelarViaje,
+                      icon: Icon(Icons.cancel_outlined, color: Colors.redAccent.withOpacity(0.8), size: 16),
+                      label: Text(
+                        'Cancelar viaje',
+                        style: TextStyle(
+                          color: Colors.redAccent.withOpacity(0.8),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ],
