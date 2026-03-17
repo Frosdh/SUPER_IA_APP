@@ -24,6 +24,7 @@ class _DriverStep4ScreenState extends State<DriverStep4Screen> {
     _CatItem(id: 1, nombre: 'Fuber-X',   icon: Icons.directions_car,   desc: 'Estándar'),
     _CatItem(id: 2, nombre: 'Fuber-Plus', icon: Icons.airport_shuttle,  desc: 'Lujo'),
     _CatItem(id: 3, nombre: 'Fuber-Moto', icon: Icons.two_wheeler,      desc: 'Moto'),
+    _CatItem(id: 4, nombre: 'Taxi',       icon: Icons.local_taxi,       desc: 'Servicio Taxi'),
   ];
 
   @override

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/UI/views/VehicleRegistrationScreen.dart';
+import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 
 class DriverRegistrationScreen extends StatefulWidget {
   static const String route = '/driver_registration';
@@ -24,6 +25,32 @@ class _DriverRegistrationScreenState
   bool _showPassword  = false;
   bool _showConfirm   = false;
 
+  // Registro Dual
+  String _tipoConductor = 'independiente'; // 'independiente' o 'cooperativa'
+  int? _cooperativaId;
+  List<dynamic> _cooperativas = [];
+  bool _loadingCooperativas = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchCooperativas();
+  }
+
+  Future<void> _fetchCooperativas() async {
+    setState(() => _loadingCooperativas = true);
+    final api = ApiProvider();
+    final resp = await api.obtenerCooperativas();
+    if (mounted && resp['status'] == 'success') {
+      setState(() {
+        _cooperativas = resp['cooperativas'] ?? [];
+        _loadingCooperativas = false;
+      });
+    } else if (mounted) {
+      setState(() => _loadingCooperativas = false);
+    }
+  }
+
   @override
   void dispose() {
     _nombreController.dispose();
@@ -36,6 +63,13 @@ class _DriverRegistrationScreenState
 
   void _nextStep() {
     if (_formKey.currentState!.validate()) {
+      if (_tipoConductor == 'cooperativa' && _cooperativaId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Por favor, selecciona tu cooperativa')),
+        );
+        return;
+      }
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -44,6 +78,8 @@ class _DriverRegistrationScreenState
             telefono: _telefonoController.text.trim(),
             cedula:   _cedulaController.text.trim(),
             password: _passwordController.text.trim(),
+            tipoConductor: _tipoConductor,
+            cooperativaId: _cooperativaId,
           ),
         ),
       );
@@ -228,6 +264,45 @@ class _DriverRegistrationScreenState
                               crossAxisAlignment:
                                   CrossAxisAlignment.start,
                               children: [
+                                // ── Selección de Perfil ────────────────
+                                const Text(
+                                  '¿Cómo deseas registrarte?',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildProfileCard(
+                                        title: 'Independiente',
+                                        icon: Icons.person_pin_outlined,
+                                        selected: _tipoConductor == 'independiente',
+                                        onTap: () => setState(() => _tipoConductor = 'independiente'),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildProfileCard(
+                                        title: 'Cooperativa',
+                                        icon: Icons.group_outlined,
+                                        selected: _tipoConductor == 'cooperativa',
+                                        onTap: () => setState(() => _tipoConductor = 'cooperativa'),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (_tipoConductor == 'cooperativa') ...[
+                                  const SizedBox(height: 16),
+                                  _buildCooperativaDropdown(),
+                                ],
+                                const SizedBox(height: 24),
+                                const Divider(color: Colors.white24),
+                                const SizedBox(height: 16),
+
                                 Row(
                                   children: [
                                     Container(
@@ -435,6 +510,85 @@ class _DriverRegistrationScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildProfileCard({
+    required String title,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: selected
+              ? ConstantColors.primaryBlue.withOpacity(0.15)
+              : ConstantColors.backgroundCard,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: selected
+                ? ConstantColors.primaryBlue
+                : ConstantColors.borderColor.withOpacity(0.6),
+            width: selected ? 2 : 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: selected
+                  ? ConstantColors.primaryBlue
+                  : ConstantColors.textGrey,
+              size: 28,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: TextStyle(
+                color: selected ? Colors.white : ConstantColors.textGrey,
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCooperativaDropdown() {
+    return Container(
+      decoration: BoxDecoration(
+        color: ConstantColors.backgroundCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: ConstantColors.borderColor.withOpacity(0.9)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int>(
+          value: _cooperativaId,
+          hint: Text(
+            _loadingCooperativas ? 'Cargando...' : 'Selecciona tu cooperativa',
+            style: const TextStyle(color: ConstantColors.textGrey, fontSize: 14),
+          ),
+          dropdownColor: ConstantColors.backgroundDark,
+          icon: const Icon(Icons.arrow_drop_down,
+              color: ConstantColors.primaryBlue),
+          isExpanded: true,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+          items: _cooperativas.map((c) {
+            return DropdownMenuItem<int>(
+              value: int.tryParse(c['id'].toString()),
+              child: Text(c['nombre']?.toString() ?? ''),
+            );
+          }).toList(),
+          onChanged: (val) => setState(() => _cooperativaId = val),
+        ),
       ),
     );
   }

@@ -4,6 +4,7 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
 import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
+import 'package:fu_uber/UI/views/DriverRegistrationScreen.dart';
 import 'package:fu_uber/UI/views/DriverStep1Screen.dart';
 
 class DriverLoginScreen extends StatefulWidget {

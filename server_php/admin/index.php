@@ -1,8 +1,12 @@
 <?php
 require_once 'db_admin.php';
 
+if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] === true) {
+    header('Location: panel_cooperativa.php');
+    exit;
+}
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: login.php');
+    header('Location: login_selector.php');
     exit;
 }
 

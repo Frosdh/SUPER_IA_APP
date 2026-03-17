@@ -19,6 +19,7 @@ class DriverRegistrationData {
   File? fotoCedula;
   File? fotoSoat;
   File? fotoMatricula;
+  File? vinculacionCoop;
 
   // ── Paso 4: Vehículo ────────────────────────────────────────
   String marca;
@@ -34,6 +35,10 @@ class DriverRegistrationData {
   // ── Paso 6: Antecedentes ────────────────────────────────────
   bool aceptaAntecedentes;
 
+  // ── Campos de Cooperativa ───────────────────────────────────
+  String tipoConductor; // 'independiente' o 'cooperativa'
+  int?   cooperativaId;
+
   DriverRegistrationData({
     this.ciudad             = 'Cuenca',
     this.nombre             = '',
@@ -46,6 +51,7 @@ class DriverRegistrationData {
     this.fotoCedula,
     this.fotoSoat,
     this.fotoMatricula,
+    this.vinculacionCoop,
     this.marca              = '',
     this.modelo             = '',
     this.placa              = '',
@@ -54,6 +60,8 @@ class DriverRegistrationData {
     this.categoriaId        = 1,
     this.fotoPerfil,
     this.aceptaAntecedentes = false,
+    this.tipoConductor      = 'independiente',
+    this.cooperativaId,
   });
 
   /// Verifica que todos los documentos requeridos estén adjuntos.
@@ -62,5 +70,6 @@ class DriverRegistrationData {
       licenciaReverso != null &&
       fotoCedula      != null &&
       fotoSoat        != null &&
-      fotoMatricula   != null;
+      fotoMatricula   != null &&
+      (tipoConductor == 'independiente' || vinculacionCoop != null);
 }

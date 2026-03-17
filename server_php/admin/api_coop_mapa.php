@@ -1,13 +1,11 @@
 <?php
 // ============================================================
-// admin/api_conductores_mapa.php
-// Devuelve JSON con todos los conductores que tienen coordenadas
-// registradas (libre u ocupado). Usado por mapa.php para
-// actualización en tiempo real vía AJAX.
+// admin/api_coop_mapa.php
+// Versión filtrada para secretarias de cooperativa
 // ============================================================
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+if (!isset($_SESSION['secretary_logged_in']) || $_SESSION['secretary_logged_in'] !== true) {
     header('Content-Type: application/json');
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
@@ -15,7 +13,9 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 
 header('Content-Type: application/json; charset=utf-8');
 
-$stmt = $pdo->query("
+$coopId = $_SESSION['cooperativa_id'];
+
+$stmt = $pdo->prepare("
     SELECT
         c.id, c.nombre, c.telefono, c.estado, c.latitud, c.longitud,
         c.calificacion_promedio, c.verificado, v.marca, v.modelo, v.color, v.placa,
@@ -26,8 +26,10 @@ $stmt = $pdo->query("
     WHERE c.latitud IS NOT NULL
       AND c.longitud IS NOT NULL
       AND c.estado IN ('libre', 'ocupado')
+      AND c.cooperativa_id = ?
     ORDER BY c.estado ASC, c.nombre ASC
 ");
+$stmt->execute([$coopId]);
 $conductores = $stmt->fetchAll();
 
 // Contar por estado

@@ -141,8 +141,18 @@ class _DriverStep3ScreenState extends State<DriverStep3Screen> {
         icon: Icons.article_outlined,
         onTap: () => _showPickerDialog('Matrícula del vehículo', (f) => setState(() => d.fotoMatricula = f)),
       ),
+      if (d.tipoConductor == 'cooperativa')
+        _DocItem(
+          titulo: 'Vinculación a Cooperativa',
+          subtitulo: 'Certificado o carnet de la cooperativa',
+          tipo: 'vinculacion_cooperativa',
+          file: d.vinculacionCoop,
+          icon: Icons.assignment_ind_outlined,
+          onTap: () => _showPickerDialog('Documento de Cooperativa', (f) => setState(() => d.vinculacionCoop = f)),
+        ),
     ];
 
+    final totalDocs = docs.length;
     final completados = docs.where((doc) => doc.file != null).length;
 
     return Scaffold(
@@ -180,17 +190,17 @@ class _DriverStep3ScreenState extends State<DriverStep3Screen> {
                   child: Row(
                     children: [
                       Icon(
-                        completados == 5 ? Icons.check_circle_rounded : Icons.info_outline,
-                        color: completados == 5 ? Colors.greenAccent : ConstantColors.primaryBlue,
+                        completados == totalDocs ? Icons.check_circle_rounded : Icons.info_outline,
+                        color: completados == totalDocs ? Colors.greenAccent : ConstantColors.primaryBlue,
                         size: 18,
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        completados == 5
+                        completados == totalDocs
                             ? '¡Todos los documentos listos!'
-                            : '$completados de 5 documentos subidos',
+                            : '$completados de $totalDocs documentos subidos',
                         style: TextStyle(
-                          color: completados == 5 ? Colors.greenAccent : ConstantColors.textGrey,
+                          color: completados == totalDocs ? Colors.greenAccent : ConstantColors.textGrey,
                           fontSize: 13,
                         ),
                       ),

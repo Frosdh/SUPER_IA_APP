@@ -371,25 +371,33 @@ class ApiProvider {
     required int categoriaId,
     String email  = '',
     String ciudad = 'Cuenca',
+    String tipoConductor = 'independiente',
+    int? cooperativaId,
   }) async {
     final url = '${Constants.apiBaseUrl}/register_driver.php';
     try {
+      final body = {
+        'nombre':       nombre,
+        'email':        email,
+        'telefono':     telefono,
+        'cedula':       cedula,
+        'password':     password,
+        'ciudad':       ciudad,
+        'marca':        marca,
+        'modelo':       modelo,
+        'placa':        placa,
+        'color':        color,
+        'anio':         anio.toString(),
+        'categoria_id': categoriaId.toString(),
+        'tipo_conductor': tipoConductor,
+      };
+      if (cooperativaId != null) {
+        body['cooperativa_id'] = cooperativaId.toString();
+      }
+
       final response = await http.post(
         Uri.parse(url),
-        body: {
-          'nombre':       nombre,
-          'email':        email,
-          'telefono':     telefono,
-          'cedula':       cedula,
-          'password':     password,
-          'ciudad':       ciudad,
-          'marca':        marca,
-          'modelo':       modelo,
-          'placa':        placa,
-          'color':        color,
-          'anio':         anio.toString(),
-          'categoria_id': categoriaId.toString(),
-        },
+        body: body,
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
@@ -451,6 +459,22 @@ class ApiProvider {
         Uri.parse(url),
         body: {'conductor_id': conductorId.toString()},
       ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red: $e'};
+    }
+  }
+
+  // ── Obtiene la lista de cooperativas para el registro ────────
+  Future<Map<String, dynamic>> obtenerCooperativas() async {
+    final url = '${Constants.apiBaseUrl}/obtener_cooperativas.php';
+    try {
+      final response = await http.get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         return json.decode(response.body) as Map<String, dynamic>;

@@ -33,13 +33,25 @@ $color        = isset($_POST['color'])        ? trim($_POST['color'])        : '
 $anio         = isset($_POST['anio'])         ? intval($_POST['anio'])       : 0;
 $categoria_id = isset($_POST['categoria_id']) ? intval($_POST['categoria_id']) : 1;
 
+// Nuevos campos: Registro Dual
+$tipo_conductor = isset($_POST['tipo_conductor']) ? trim($_POST['tipo_conductor']) : 'independiente';
+$cooperativa_id = isset($_POST['cooperativa_id']) ? intval($_POST['cooperativa_id']) : null;
+
 // Validaciones
 if (empty($nombre) || empty($telefono) || empty($cedula) || empty($password_plain) ||
     empty($marca) || empty($modelo) || empty($placa) || empty($color) || $anio < 1990) {
     echo json_encode(["status" => "error", "message" => "Todos los campos son requeridos"]);
     exit;
 }
-if ($categoria_id < 1 || $categoria_id > 3) {
+if (!in_array($tipo_conductor, ['independiente', 'cooperativa'])) {
+    $tipo_conductor = 'independiente';
+}
+if ($tipo_conductor === 'cooperativa' && ($cooperativa_id === null || $cooperativa_id <= 0)) {
+    echo json_encode(["status" => "error", "message" => "Debe seleccionar una cooperativa válida"]);
+    exit;
+}
+
+if ($categoria_id < 1 || $categoria_id > 4) {
     $categoria_id = 1;
 }
 
@@ -77,10 +89,10 @@ $conn->begin_transaction();
 try {
     // Insertar conductor (verificado=0 → pendiente, estado=desconectado)
     $stmt = $conn->prepare(
-        "INSERT INTO conductores (nombre, email, telefono, cedula, pass_hash, ciudad, estado, verificado, calificacion_promedio)
-         VALUES (?, ?, ?, ?, ?, ?, 'desconectado', 0, 5.00)"
+        "INSERT INTO conductores (nombre, email, telefono, cedula, pass_hash, ciudad, estado, verificado, calificacion_promedio, tipo_conductor, cooperativa_id)
+         VALUES (?, ?, ?, ?, ?, ?, 'desconectado', 0, 5.00, ?, ?)"
     );
-    $stmt->bind_param("ssssss", $nombre, $email, $telefono, $cedula, $pass_hash, $ciudad);
+    $stmt->bind_param("sssssssi", $nombre, $email, $telefono, $cedula, $pass_hash, $ciudad, $tipo_conductor, $cooperativa_id);
     $stmt->execute();
     $conductor_id = $conn->insert_id;
     $stmt->close();

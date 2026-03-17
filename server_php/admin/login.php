@@ -5,19 +5,69 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     header('Location: index.php');
     exit;
 }
+if (isset($_SESSION['family_logged_in']) && $_SESSION['family_logged_in'] === true) {
+    header('Location: mapa_familiar.php');
+    exit;
+}
+if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] === true) {
+    header('Location: panel_cooperativa.php');
+    exit;
+}
+
+$role = $_GET['role'] ?? 'admin'; // 'admin', 'family', 'secretary'
+$role_labels = [
+    'admin' => ['title' => 'Admin Panel', 'subtitle' => 'Ingresa credenciales de administrador'],
+    'family' => ['title' => 'Familia/Amigos', 'subtitle' => 'Ingresa credenciales del conductor'],
+    'secretary' => ['title' => 'Panel Secretaria', 'subtitle' => 'Ingresa tu usuario de cooperativa']
+];
+$current_label = $role_labels[$role] ?? $role_labels['admin'];
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = $_POST['username'] ?? '';
     $pass = $_POST['password'] ?? '';
+    $login_role = $_POST['role'] ?? 'admin';
 
-    // Credenciales hardcodeadas por simplicidad temporal como indicó el plan
-    if ($user === 'admin' && $pass === 'Admin123!') {
-        $_SESSION['admin_logged_in'] = true;
-        header('Location: index.php');
-        exit;
-    } else {
-        $error = 'Usuario o contraseña incorrectos.';
+    if ($login_role === 'admin') {
+        // 1. Intentar como administrador (hardcoded)
+        if ($user === 'admin' && $pass === 'Admin123!') {
+            $_SESSION['admin_logged_in'] = true;
+            header('Location: index.php');
+            exit;
+        } else {
+            $error = 'Credenciales de administrador incorrectas.';
+        }
+    } elseif ($login_role === 'family') {
+        // 2. Intentar como conductor (para seguimiento familiar)
+        $stmt = $pdo->prepare("SELECT id, nombre, pass_hash FROM conductores WHERE (telefono = ? OR cedula = ?) AND verificado = 1 LIMIT 1");
+        $stmt->execute([$user, $user]);
+        $conductor = $stmt->fetch();
+
+        if ($conductor && password_verify($pass, $conductor['pass_hash'])) {
+            $_SESSION['family_logged_in'] = true;
+            $_SESSION['conductor_id'] = (int)$conductor['id'];
+            $_SESSION['conductor_nombre'] = $conductor['nombre'];
+            header('Location: mapa_familiar.php');
+            exit;
+        } else {
+            $error = 'Datos de conductor no encontrados o contraseña incorrecta.';
+        }
+    } elseif ($login_role === 'secretary') {
+        // 3. Intentar como secretaria
+        $stmt = $pdo->prepare("SELECT id, usuario, pass_hash, cooperativa_id, nombre FROM secretarias WHERE usuario = ? LIMIT 1");
+        $stmt->execute([$user]);
+        $sec = $stmt->fetch();
+
+        if ($sec && password_verify($pass, $sec['pass_hash'])) {
+            $_SESSION['secretary_logged_in'] = true;
+            $_SESSION['secretary_id'] = (int)$sec['id'];
+            $_SESSION['secretary_name'] = $sec['nombre'];
+            $_SESSION['cooperativa_id'] = (int)$sec['cooperativa_id'];
+            header('Location: panel_cooperativa.php');
+            exit;
+        } else {
+            $error = 'Usuario de secretaria incorrecto o cooperativa no vinculada.';
+        }
     }
 }
 ?>
@@ -53,6 +103,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .inp-wrap input:focus{border-color:#6b11ff;box-shadow:0 0 0 3px rgba(107,17,255,.1);}
         .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#6b11ff,#3182fe);border:none;border-radius:11px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:.22s;box-shadow:0 6px 20px rgba(107,17,255,.35);font-family:'Inter',sans-serif;margin-top:8px;}
         .btn-login:hover{opacity:.92;transform:translateY(-2px);box-shadow:0 10px 28px rgba(107,17,255,.45);}
+        .btn-back{width:100%;padding:10px;background:transparent;border:1.5px solid #e5e7eb;border-radius:11px;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif;margin-top:12px;text-decoration:none;display:inline-block;text-align:center;}
+        .btn-back:hover{background:#f8fafc;border-color:#d1d5db;color:#1e293b;}
         .error-msg{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:11px 16px;font-size:13px;display:flex;align-items:center;gap:8px;margin-bottom:20px;}
         .login-footer{margin-top:28px;text-align:center;font-size:12px;color:#9ca3af;}
         @media(max-width:640px){.login-left{display:none;}.login-right{padding:36px 28px;}}
@@ -69,12 +121,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="feature"><div class="fi"><i class="fas fa-shield-alt"></i></div><span>Gestión de documentos y verificaciones</span></div>
         </div>
         <div class="login-right">
-            <div class="form-title">Bienvenida de nuevo 👋</div>
-            <div class="form-subtitle">Ingresa tus credenciales para acceder al panel</div>
+            <div class="form-title"><?= htmlspecialchars($current_label['title']) ?></div>
+            <div class="form-subtitle"><?= htmlspecialchars($current_label['subtitle']) ?></div>
             <?php if ($error): ?>
                 <div class="error-msg"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
             <?php endif; ?>
             <form method="POST">
+                <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
                 <div class="inp-group">
                     <label>Usuario</label>
                     <div class="inp-wrap"><i class="fas fa-user"></i><input type="text" name="username" placeholder="Ingresa tu usuario" required autocomplete="off"></div>
@@ -84,8 +137,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="inp-wrap"><i class="fas fa-lock"></i><input type="password" name="password" placeholder="••••••••" required></div>
                 </div>
                 <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión</button>
+                
+                <?php if ($role === 'secretary'): ?>
+                    <a href="registro_secretaria.php" class="btn-back mt-3" style="background: rgba(107,17,255,0.05); border-color: rgba(107,17,255,0.2); color: var(--primary-color);">
+                        <i class="fas fa-user-plus me-2"></i>Crear Cuenta de Secretaria
+                    </a>
+                <?php endif; ?>
+
+                <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Cambiar de Rol</a>
             </form>
-            <div class="login-footer">GeoMove Admin · Fuber Platform &copy; 2026</div>
+            <div class="login-footer">GeoMove App · Fuber Platform &copy; 2026</div>
         </div>
     </div>
 </body>

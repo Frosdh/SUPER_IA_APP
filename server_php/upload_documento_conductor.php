@@ -19,7 +19,7 @@ $conductor_id  = isset($_POST['conductor_id'])  ? intval($_POST['conductor_id'])
 $tipo          = isset($_POST['tipo'])          ? trim($_POST['tipo'])                : '';
 $imagen_base64 = isset($_POST['imagen_base64']) ? trim($_POST['imagen_base64'])       : '';
 
-$tipos_validos = ['licencia_frente','licencia_reverso','cedula','soat','matricula','foto_perfil'];
+$tipos_validos = ['licencia_frente','licencia_reverso','cedula','soat','matricula','foto_perfil','vinculacion_cooperativa'];
 
 if ($conductor_id <= 0) {
     echo json_encode(["status" => "error", "message" => "conductor_id inválido"]);

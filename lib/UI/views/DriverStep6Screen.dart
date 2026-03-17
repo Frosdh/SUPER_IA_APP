@@ -51,8 +51,10 @@ class _DriverStep6ScreenState extends State<DriverStep6Screen> {
       modelo:      d.modelo,
       placa:       d.placa,
       color:       d.color,
-      anio:        d.anio,
-      categoriaId: d.categoriaId,
+      anio:         d.anio,
+      categoriaId:  d.categoriaId,
+      tipoConductor: d.tipoConductor,
+      cooperativaId: d.cooperativaId,
     );
 
     if (regResp['status'] != 'success') {
@@ -70,6 +72,7 @@ class _DriverStep6ScreenState extends State<DriverStep6Screen> {
       'cedula':           d.fotoCedula,
       'soat':             d.fotoSoat,
       'matricula':        d.fotoMatricula,
+      'vinculacion_cooperativa': d.vinculacionCoop,
     };
 
     for (final entry in docs.entries) {
@@ -114,6 +117,7 @@ class _DriverStep6ScreenState extends State<DriverStep6Screen> {
       'cedula':           'cédula',
       'soat':             'SOAT',
       'matricula':        'matrícula',
+      'vinculacion_cooperativa': 'vínculo cooperativa',
     };
     return map[tipo] ?? tipo;
   }

@@ -26,7 +26,7 @@ class _DriverWaitingScreenState extends State<DriverWaitingScreen> {
   List<_DocEstado> _documentos = [];
 
   static const _tiposOrden = [
-    'licencia_frente', 'licencia_reverso', 'cedula', 'soat', 'matricula',
+    'licencia_frente', 'licencia_reverso', 'cedula', 'soat', 'matricula', 'vinculacion_cooperativa',
   ];
   static const _nombres = {
     'licencia_frente':  'Licencia (frente)',
@@ -34,6 +34,7 @@ class _DriverWaitingScreenState extends State<DriverWaitingScreen> {
     'cedula':           'Cédula de identidad',
     'soat':             'SOAT / Seguro',
     'matricula':        'Matrícula',
+    'vinculacion_cooperativa': 'Documento de Cooperativa',
   };
 
   @override

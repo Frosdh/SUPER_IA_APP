@@ -1,14 +1,19 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 import 'package:fu_uber/UI/views/DriverWaitingScreen.dart';
+import 'package:image_picker/image_picker.dart';
 
 class VehicleRegistrationScreen extends StatefulWidget {
   final String nombre;
   final String telefono;
   final String cedula;
   final String password;
+  final String tipoConductor;
+  final int? cooperativaId;
 
   const VehicleRegistrationScreen({
     Key? key,
@@ -16,6 +21,8 @@ class VehicleRegistrationScreen extends StatefulWidget {
     required this.telefono,
     required this.cedula,
     required this.password,
+    this.tipoConductor = 'independiente',
+    this.cooperativaId,
   }) : super(key: key);
 
   @override
@@ -41,7 +48,12 @@ class _VehicleRegistrationScreenState
     _CategoriaItem(id: 1, nombre: 'Fuber-X',    icon: Icons.directions_car,    descripcion: 'Vehículo estándar'),
     _CategoriaItem(id: 2, nombre: 'Fuber-Plus',  icon: Icons.airport_shuttle,   descripcion: 'Vehículo de lujo'),
     _CategoriaItem(id: 3, nombre: 'Fuber-Moto',  icon: Icons.two_wheeler,       descripcion: 'Motocicleta'),
+    _CategoriaItem(id: 4, nombre: 'Taxi',        icon: Icons.local_taxi,        descripcion: 'Servicio de Taxi'),
   ];
+
+  // Documento de vinculación (para cooperativas)
+  String? _documentoVinculacionBase64;
+  bool _subiendoDoc = false;
 
   @override
   void dispose() {
@@ -58,8 +70,45 @@ class _VehicleRegistrationScreenState
         .showSnackBar(SnackBar(content: Text(text)));
   }
 
+  Future<void> _seleccionarDocumento() async {
+    final picker = ImagePicker();
+    final pickedFile = await showModalBottomSheet<XFile?>(
+      context: context,
+      backgroundColor: ConstantColors.backgroundCard,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: Colors.white),
+              title: const Text('Tomar foto', style: TextStyle(color: Colors.white)),
+              onTap: () async => Navigator.pop(ctx, await picker.pickImage(source: ImageSource.camera, imageQuality: 70)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Colors.white),
+              title: const Text('Elegir de galería', style: TextStyle(color: Colors.white)),
+              onTap: () async => Navigator.pop(ctx, await picker.pickImage(source: ImageSource.gallery, imageQuality: 70)),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (pickedFile != null) {
+      final bytes = await File(pickedFile.path).readAsBytes();
+      setState(() {
+        _documentoVinculacionBase64 = base64Encode(bytes);
+      });
+    }
+  }
+
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
+
+    if (widget.tipoConductor == 'cooperativa' && _documentoVinculacionBase64 == null) {
+      _showMessage('Por favor, sube el documento de vinculación con la cooperativa');
+      return;
+    }
 
     setState(() => _isLoading = true);
 
@@ -74,17 +123,32 @@ class _VehicleRegistrationScreenState
       color:       _colorController.text.trim(),
       anio:        int.tryParse(_anioController.text.trim()) ?? 2020,
       categoriaId: _categoriaId,
+      tipoConductor: widget.tipoConductor,
+      cooperativaId: widget.cooperativaId,
     );
 
-    setState(() => _isLoading = false);
-
     if (response['status'] == 'success') {
+      final int conductorId = int.tryParse(response['conductor_id']?.toString() ?? '0') ?? 0;
+      
+      // Subir documento si es cooperativa
+      if (widget.tipoConductor == 'cooperativa' && _documentoVinculacionBase64 != null && conductorId > 0) {
+        setState(() => _subiendoDoc = true);
+        await _apiProvider.uploadDocumentoConductor(
+          conductorId: conductorId,
+          tipo: 'vinculacion_cooperativa',
+          imagenBase64: _documentoVinculacionBase64!,
+        );
+        setState(() => _subiendoDoc = false);
+      }
+
+      setState(() => _isLoading = false);
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => DriverWaitingScreen()),
+        MaterialPageRoute(builder: (context) => DriverWaitingScreen(conductorId: conductorId)),
         (route) => false,
       );
     } else {
+      setState(() => _isLoading = false);
       _showMessage(
         response['message']?.toString() ?? 'Error al registrar conductor',
       );
@@ -494,6 +558,8 @@ class _VehicleRegistrationScreenState
                             ),
                           ),
 
+                          _buildDocumentSection(),
+
                           const SizedBox(height: 24),
 
                           // ── Botón registrar ───────────────────────
@@ -561,6 +627,127 @@ class _VehicleRegistrationScreenState
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentSection() {
+    if (widget.tipoConductor != 'cooperativa') return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.22),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: ConstantColors.borderColor.withOpacity(0.7),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  gradient: ConstantColors.buttonGradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.file_present_outlined,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Documento de Cooperativa',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Sube tu carta de vinculación o contrato',
+                      style: TextStyle(
+                        color: ConstantColors.textGrey,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: _subiendoDoc ? null : _seleccionarDocumento,
+            child: Container(
+              height: 120,
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundCard,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(
+                  color: _documentoVinculacionBase64 != null
+                      ? ConstantColors.primaryBlue
+                      : ConstantColors.borderColor.withOpacity(0.5),
+                  style: BorderStyle.solid,
+                ),
+              ),
+              child: _documentoVinculacionBase64 != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.memory(
+                        base64Decode(_documentoVinculacionBase64!),
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_upload_outlined,
+                            color: ConstantColors.primaryBlue, size: 30),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Toca para subir documento',
+                          style: TextStyle(
+                              color: ConstantColors.textGrey, fontSize: 13),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+          if (_documentoVinculacionBase64 != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.check_circle,
+                      color: Colors.greenAccent, size: 16),
+                  const SizedBox(width: 6),
+                  const Text('Documento cargado',
+                      style:
+                          TextStyle(color: Colors.greenAccent, fontSize: 12)),
+                  const SizedBox(width: 10),
+                  TextButton(
+                    onPressed: _seleccionarDocumento,
+                    child: const Text('Cambiar',
+                        style: TextStyle(
+                            color: ConstantColors.primaryBlue, fontSize: 12)),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
