@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 // ============================================================
 // register_user.php - API para registrar usuarios de fu_uber
 // Colocar este archivo en: /fuber_api/register_user.php
@@ -11,10 +13,6 @@ header("Access-Control-Allow-Methods: POST");
 require_once __DIR__ . '/email_helper.php';
 
 // -------- CONFIGURACION DE BASE DE DATOS --------
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
 // ------------------------------------------------
 
 // Solo aceptar POST
@@ -42,16 +40,6 @@ if (empty($email)) {
 }
 
 // Conectar a MySQL
-$conn = new mysqli($host, $username, $password, $dbname);
-
-if ($conn->connect_error) {
-    echo json_encode([
-        "status"  => "error",
-        "message" => "Error de conexion a base de datos: " . $conn->connect_error
-    ]);
-    exit;
-}
-
 // Buscar usuario por telefono
 $checkPhone = $conn->prepare("SELECT id, email FROM usuarios WHERE telefono = ? LIMIT 1");
 $checkPhone->bind_param("s", $telefono);

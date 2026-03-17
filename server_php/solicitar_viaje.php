@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 // ============================================================
 // solicitar_viaje.php - Crea un viaje nuevo con estado 'pedido'
 // Colocar en: /fuber_api/solicitar_viaje.php
@@ -6,11 +8,6 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
-
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(["status" => "error", "message" => "Metodo no permitido"]);
@@ -30,12 +27,6 @@ $destino_lng   = isset($_POST['destino_lng'])   ? floatval($_POST['destino_lng']
 
 if (empty($telefono)) {
     echo json_encode(["status" => "error", "message" => "El telefono es requerido"]);
-    exit;
-}
-
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    echo json_encode(["status" => "error", "message" => "Error de conexion: " . $conn->connect_error]);
     exit;
 }
 

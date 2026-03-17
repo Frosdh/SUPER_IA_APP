@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/UI/views/SignIn.dart';
+import 'package:fu_uber/UI/views/WelcomeScreen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   static const String route = '/onboarding';
@@ -81,13 +81,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       );
     } else {
       await AuthPrefs.markOnboardingSeen();
-      if (mounted) Navigator.pushReplacementNamed(context, SignInPage.route);
+      if (mounted) Navigator.pushReplacementNamed(context, WelcomeScreen.route);
     }
   }
 
   void _skip() async {
     await AuthPrefs.markOnboardingSeen();
-    if (mounted) Navigator.pushReplacementNamed(context, SignInPage.route);
+    if (mounted) Navigator.pushReplacementNamed(context, WelcomeScreen.route);
   }
 
   @override

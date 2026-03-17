@@ -3,7 +3,7 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:fu_uber/UI/views/OnboardingScreen.dart';
-import 'package:fu_uber/UI/views/SignIn.dart';
+import 'package:fu_uber/UI/views/WelcomeScreen.dart';
 
 class SplashScreen extends StatefulWidget {
   static const String route = '/splash';
@@ -55,7 +55,7 @@ class _SplashScreenState extends State<SplashScreen>
         if (firstTime) {
           Navigator.pushReplacementNamed(context, OnboardingScreen.route);
         } else {
-          Navigator.pushReplacementNamed(context, SignInPage.route);
+          Navigator.pushReplacementNamed(context, WelcomeScreen.route);
         }
       }
     });

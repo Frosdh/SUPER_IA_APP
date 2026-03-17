@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
 import 'package:fu_uber/UI/widgets/OtpBottomSheet.dart';
 import 'package:provider/provider.dart';
 
@@ -493,63 +492,6 @@ class _SignInPageState extends State<SignInPage> {
                                       ),
                                     ),
                                   ],
-                                ),
-                              ),
-                              SizedBox(height: 14),
-                              InkWell(
-                                borderRadius: BorderRadius.circular(18),
-                                onTap: () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    DriverLoginScreen.route,
-                                  );
-                                },
-                                child: _buildInfoCard(
-                                  child: Row(
-                                    children: <Widget>[
-                                      Container(
-                                        width: 42,
-                                        height: 42,
-                                        decoration: BoxDecoration(
-                                          color: ConstantColors.primaryBlue.withOpacity(0.16),
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Icon(
-                                          Icons.directions_car,
-                                          color: ConstantColors.primaryBlue,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: <Widget>[
-                                            Text(
-                                              'Soy conductor',
-                                              style: TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.w700,
-                                              ),
-                                            ),
-                                            SizedBox(height: 4),
-                                            Text(
-                                              'Entrar al panel del conductor y cambiar tu disponibilidad.',
-                                              style: TextStyle(
-                                                color: ConstantColors.textGrey,
-                                                fontSize: 12.8,
-                                                height: 1.4,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.arrow_forward_ios,
-                                        color: ConstantColors.textSubtle,
-                                        size: 16,
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               ),
                               SizedBox(height: 22),

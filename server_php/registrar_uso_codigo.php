@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 // ============================================================
 // registrar_uso_codigo.php  –  Incrementa el contador de usos
 //                              del código tras confirmar viaje
@@ -7,11 +9,6 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
-
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(["status" => "error", "message" => "Metodo no permitido"]);
@@ -23,12 +20,6 @@ $viajeId  = isset($_POST['viaje_id']) ? intval($_POST['viaje_id'])          : 0;
 
 if (empty($codigo)) {
     echo json_encode(["status" => "error", "message" => "Codigo requerido"]);
-    exit;
-}
-
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    echo json_encode(["status" => "error", "message" => "Error de conexion: " . $conn->connect_error]);
     exit;
 }
 

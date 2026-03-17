@@ -73,3 +73,4 @@
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 server_php/firebase_service_account.json
 server_php/email_config.php
+server_php/db_config.php

@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 // ============================================================
 // obtener_viajes.php - Devuelve el historial de viajes
 // Colocar en: /fuber_api/obtener_viajes.php
@@ -6,11 +8,6 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
-
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(["status" => "error", "message" => "Metodo no permitido"]);
@@ -20,12 +17,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $telefono = isset($_POST['telefono']) ? trim($_POST['telefono']) : '';
 if (empty($telefono)) {
     echo json_encode(["status" => "error", "message" => "El telefono es requerido"]);
-    exit;
-}
-
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    echo json_encode(["status" => "error", "message" => "Error de conexion: " . $conn->connect_error]);
     exit;
 }
 

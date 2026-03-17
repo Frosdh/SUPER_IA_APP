@@ -1,19 +1,10 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, GET');
 header('Access-Control-Allow-Headers: Content-Type');
-
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
-
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    echo json_encode(['status' => 'error', 'message' => 'DB error: ' . $conn->connect_error]);
-    exit;
-}
 
 $stmt = $conn->prepare(
     "SELECT id, nombre, tarifa_base, precio_km, precio_minuto FROM categorias ORDER BY id ASC"

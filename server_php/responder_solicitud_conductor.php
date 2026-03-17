@@ -1,12 +1,9 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
-
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(["status" => "error", "message" => "Metodo no permitido"]);
@@ -19,12 +16,6 @@ $accion = isset($_POST['accion']) ? trim($_POST['accion']) : '';
 
 if ($conductorId <= 0 || $viajeId <= 0 || ($accion !== 'aceptar' && $accion !== 'rechazar')) {
     echo json_encode(["status" => "error", "message" => "Datos invalidos"]);
-    exit;
-}
-
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    echo json_encode(["status" => "error", "message" => "Error de conexion: " . $conn->connect_error]);
     exit;
 }
 

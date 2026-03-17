@@ -4,6 +4,7 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
 import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
+import 'package:fu_uber/UI/views/DriverStep1Screen.dart';
 
 class DriverLoginScreen extends StatefulWidget {
   static const String route = '/driver_login';
@@ -20,6 +21,7 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
   final ApiProvider _apiProvider = ApiProvider();
 
   bool _isLoading = false;
+  bool _showPassword = false;
 
   @override
   void dispose() {
@@ -284,19 +286,31 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                             ),
                             child: TextFormField(
                               controller: _passwordController,
-                              obscureText: true,
+                              obscureText: !_showPassword,
                               style: TextStyle(color: Colors.white),
                               decoration: InputDecoration(
                                 prefixIcon: Icon(
                                   Icons.lock_outline,
                                   color: ConstantColors.primaryViolet,
                                 ),
-                                labelText: 'Contrasena',
+                                labelText: 'Contraseña',
                                 hintText: 'Ingresa tu clave',
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _showPassword
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: ConstantColors.textGrey,
+                                    size: 20,
+                                  ),
+                                  onPressed: () => setState(
+                                    () => _showPassword = !_showPassword,
+                                  ),
+                                ),
                               ),
                               validator: (value) {
                                 if ((value ?? '').trim().isEmpty) {
-                                  return 'Ingresa tu contrasena';
+                                  return 'Ingresa tu contraseña';
                                 }
                                 return null;
                               },
@@ -390,6 +404,37 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
                           ),
                         ],
                       ),
+                    ),
+
+                    // ── Link de registro ──────────────────────────
+                    SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '¿No tienes cuenta? ',
+                          style: TextStyle(
+                            color: ConstantColors.textGrey,
+                            fontSize: 14,
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.pushNamed(
+                            context,
+                            DriverStep1Screen.route,
+                          ),
+                          child: Text(
+                            'Regístrate aquí',
+                            style: TextStyle(
+                              color: ConstantColors.primaryBlue,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              decoration: TextDecoration.underline,
+                              decorationColor: ConstantColors.primaryBlue,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

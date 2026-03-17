@@ -358,4 +358,106 @@ class ApiProvider {
             ))
         .toList();
   }
+  Future<Map<String, dynamic>> registerDriver({
+    required String nombre,
+    required String telefono,
+    required String cedula,
+    required String password,
+    required String marca,
+    required String modelo,
+    required String placa,
+    required String color,
+    required int anio,
+    required int categoriaId,
+    String email  = '',
+    String ciudad = 'Cuenca',
+  }) async {
+    final url = '${Constants.apiBaseUrl}/register_driver.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'nombre':       nombre,
+          'email':        email,
+          'telefono':     telefono,
+          'cedula':       cedula,
+          'password':     password,
+          'ciudad':       ciudad,
+          'marca':        marca,
+          'modelo':       modelo,
+          'placa':        placa,
+          'color':        color,
+          'anio':         anio.toString(),
+          'categoria_id': categoriaId.toString(),
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error de conexión (HTTP ${response.statusCode})'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red o timeout'};
+    }
+  }
+
+  // ── Sube un documento o foto de perfil del conductor ─────────
+  Future<Map<String, dynamic>> uploadDocumentoConductor({
+    required int    conductorId,
+    required String tipo,
+    required String imagenBase64,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/upload_documento_conductor.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'conductor_id':  conductorId.toString(),
+          'tipo':          tipo,
+          'imagen_base64': imagenBase64,
+        },
+      ).timeout(const Duration(seconds: 30)); // imágenes pueden tardar más
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error al subir documento: $e'};
+    }
+  }
+
+  // ── Obtiene el estado de los documentos de un conductor ───────
+  Future<Map<String, dynamic>> obtenerDocumentosConductor(int conductorId) async {
+    final url = '${Constants.apiBaseUrl}/obtener_documentos_conductor.php?conductor_id=$conductorId';
+    try {
+      final response = await http.get(Uri.parse(url))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red: $e'};
+    }
+  }
+
+  // ── Obtiene el perfil completo del conductor (datos, vehículo, docs, stats)
+  Future<Map<String, dynamic>> obtenerPerfilConductor(int conductorId) async {
+    final url = '${Constants.apiBaseUrl}/obtener_perfil_conductor.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {'conductor_id': conductorId.toString()},
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red: $e'};
+    }
+  }
 }

@@ -9,6 +9,7 @@ import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
 import 'package:fu_uber/Core/Services/OsmService.dart';
 import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
+import 'package:fu_uber/UI/views/DriverProfileScreen.dart';
 import 'package:fu_uber/UI/views/DriverTripHistoryScreen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1283,6 +1284,15 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                         ),
                       ),
                     ]),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Botón perfil
+                _btnTopCircle(
+                  icon: Icons.person_rounded,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DriverProfileScreen()),
                   ),
                 ),
                 const SizedBox(width: 8),

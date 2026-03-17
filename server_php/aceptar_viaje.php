@@ -4,16 +4,7 @@
 // ============================================================
 header("Content-Type: application/json");
 
-require_once 'db_config.php'; // Asegúrate de crear este archivo
-
-// Simulación de conexión si no tienes db_config aún
-if (!isset($conn)) {
-    $host = "localhost";
-    $dbname = "corporat_fuber_db";
-    $user = "corporat_fuber_user";
-    $pass = "FuB3r!Db#2026$Qx9"; // Mover a archivo seguro
-    $conn = new mysqli($host, $user, $pass, $dbname);
-}
+require_once __DIR__ . '/db_config.php';
 
 $viaje_id = $_POST['viaje_id'] ?? 0;
 $conductor_id = $_POST['conductor_id'] ?? 0;

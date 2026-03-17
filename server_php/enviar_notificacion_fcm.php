@@ -1,12 +1,9 @@
 <?php
+require_once __DIR__ . '/db_config.php';
+
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
-
-$host = "localhost";
-$dbname = "corporat_fuber_db";
-$username = "corporat_fuber_user";
-$password = 'FuB3r!Db#2026$Qx9';
 
 $serviceAccountPath = __DIR__ . "/firebase_service_account.json";
 
@@ -86,15 +83,6 @@ function getAccessToken($serviceAccountPath) {
 
     $json = json_decode($response, true);
     return [$json['access_token'], $creds['project_id']];
-}
-
-$conn = new mysqli($host, $username, $password, $dbname);
-if ($conn->connect_error) {
-    echo json_encode([
-        "status" => "error",
-        "message" => "Error de conexion: " . $conn->connect_error,
-    ]);
-    exit;
 }
 
 $stmt = $conn->prepare("SELECT token_fcm FROM usuarios WHERE telefono = ? LIMIT 1");

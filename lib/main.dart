@@ -21,11 +21,22 @@ import 'package:fu_uber/UI/views/EditProfileScreen.dart';
 import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
 import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
 import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
+import 'package:fu_uber/UI/views/DriverRegistrationScreen.dart';
+import 'package:fu_uber/UI/views/VehicleRegistrationScreen.dart';
+import 'package:fu_uber/UI/views/DriverWaitingScreen.dart';
+import 'package:fu_uber/UI/views/DriverStep1Screen.dart';
+import 'package:fu_uber/UI/views/DriverStep2Screen.dart';
+import 'package:fu_uber/UI/views/DriverStep3Screen.dart';
+import 'package:fu_uber/UI/views/DriverStep4Screen.dart';
+import 'package:fu_uber/UI/views/DriverStep5Screen.dart';
+import 'package:fu_uber/UI/views/DriverStep6Screen.dart';
 import 'package:fu_uber/UI/views/DriverTripHistoryScreen.dart';
 import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
 import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:fu_uber/UI/views/RideCompletedScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
+import 'package:fu_uber/UI/views/DriverProfileScreen.dart';
+import 'package:fu_uber/UI/views/WelcomeScreen.dart';
 import 'package:provider/provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -147,10 +158,24 @@ class MyApp extends StatelessWidget {
         routes: {
           SplashScreen.route: (context) => SplashScreen(),
           OnboardingScreen.route: (context) => OnboardingScreen(),
+          WelcomeScreen.route: (context) => WelcomeScreen(),
           SignInPage.route: (context) => SignInPage(),
           RegisterScreen.route: (context) => RegisterScreen(),
+          '/driver_registration': (context) => DriverRegistrationScreen(),
+          '/vehicle_registration': (context) {
+            final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+            return VehicleRegistrationScreen(
+              nombre: args['nombre'],
+              cedula: args['cedula'],
+              telefono: args['telefono'],
+              password: args['password'],
+            );
+          },
+          '/driver_waiting': (context) => DriverWaitingScreen(),
           DriverLoginScreen.route: (context) => DriverLoginScreen(),
+          DriverStep1Screen.route: (context) => DriverStep1Screen(),
           DriverHomeScreen.route: (context) => DriverHomeScreen(),
+          DriverProfileScreen.route: (context) => const DriverProfileScreen(),
           LocationPermissionScreen.route: (context) =>
               LocationPermissionScreen(),
           OsmMapScreen.route: (context) => OsmMapScreen(),
