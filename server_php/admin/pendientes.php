@@ -34,6 +34,9 @@ $stmt = $pdo->query("
     ORDER BY c.creado_en DESC
 ");
 $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$currentPage = 'pendientes';
+$totalPendientes = count($pendientes);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -43,23 +46,8 @@ $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>GeoMove Admin – Conductores Pendientes</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
     <style>
-        body { background: #f0f2f5; font-family: 'Segoe UI', sans-serif; }
-
-        /* ── Sidebar ─────────────────────────────── */
-        .sidebar {
-            background: linear-gradient(180deg, #0f0c29 0%, #302b63 60%, #24243e 100%);
-            min-height: 100vh; color: #fff; padding-top: 24px;
-            position: sticky; top: 0; height: 100vh; overflow-y: auto;
-        }
-        .sidebar .brand { font-size: 1.1rem; font-weight: 700; text-align: center; padding: 0 20px 20px; border-bottom: 1px solid rgba(255,255,255,.1); }
-        .sidebar a { color: #bbb; text-decoration: none; display: flex; align-items: center; gap: 10px; padding: 13px 22px; transition: .2s; font-size: .9rem; }
-        .sidebar a:hover, .sidebar a.active { background: rgba(255,255,255,.1); color: #fff; border-left: 3px solid #6b11ff; padding-left: 19px; }
-        .sidebar a i { width: 18px; text-align: center; }
-
-        /* ── Content ─────────────────────────────── */
-        .content { padding: 30px 32px; }
-
         /* ── Driver card ─────────────────────────── */
         .driver-card {
             background: #fff;
@@ -105,15 +93,7 @@ $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <div class="container-fluid p-0">
     <div class="row g-0">
 
-        <!-- Sidebar -->
-        <div class="col-md-2 sidebar">
-            <div class="brand"><i class="fas fa-map-marked-alt me-2" style="color:#6b11ff"></i>GeoMove Admin</div>
-            <a href="index.php"><i class="fas fa-home"></i> Inicio</a>
-            <a href="pendientes.php" class="active"><i class="fas fa-user-clock"></i> Pendientes</a>
-            <a href="activos.php"><i class="fas fa-users"></i> Conductores Activos</a>
-            <a href="viajes.php"><i class="fas fa-route"></i> Viajes en Curso</a>
-            <a href="logout.php" style="color:#f87171; margin-top: auto;"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
-        </div>
+<?php include '_sidebar.php'; ?>
 
         <!-- Main content -->
         <div class="col-md-10 content">

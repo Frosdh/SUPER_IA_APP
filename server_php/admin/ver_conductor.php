@@ -83,6 +83,9 @@ function estadoBadge($estado) {
         default     => '<span class="badge bg-warning text-dark">Pendiente</span>',
     };
 }
+
+$currentPage = 'conductores';
+$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -92,12 +95,8 @@ function estadoBadge($estado) {
     <title>GeoMove Admin — <?= htmlspecialchars($c['nombre']) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
     <style>
-        body { background:#f0f2f5; font-family:'Segoe UI',sans-serif; }
-        .sidebar { background:#24243e; min-height:100vh; color:#fff; padding-top:20px; }
-        .sidebar a { color:#ccc; text-decoration:none; display:block; padding:14px 20px; transition:.3s; }
-        .sidebar a:hover,.sidebar a.active { background:rgba(255,255,255,.1); color:#fff; border-left:4px solid #6b11ff; }
-        .sidebar i { margin-right:10px; width:20px; text-align:center; }
         .content { padding:28px; }
 
         .doc-card { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 3px 12px rgba(0,0,0,.07); margin-bottom:20px; }
@@ -119,15 +118,7 @@ function estadoBadge($estado) {
 <div class="container-fluid p-0">
 <div class="row g-0">
 
-    <!-- Sidebar -->
-    <div class="col-md-2 sidebar">
-        <h4 class="text-center mb-4 fw-bold">GeoMove Admin</h4>
-        <a href="index.php"><i class="fas fa-home"></i> Inicio</a>
-        <a href="pendientes.php" class="active"><i class="fas fa-user-clock"></i> Pendientes</a>
-        <a href="activos.php"><i class="fas fa-users"></i> Activos</a>
-        <a href="viajes.php"><i class="fas fa-route"></i> Viajes</a>
-        <a href="logout.php" class="text-danger mt-5"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
-    </div>
+<?php include '_sidebar.php'; ?>
 
     <!-- Contenido -->
     <div class="col-md-10 content">

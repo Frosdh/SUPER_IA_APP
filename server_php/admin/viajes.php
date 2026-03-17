@@ -22,6 +22,9 @@ $stmt = $pdo->query("
     ORDER BY v.fecha_pedido DESC
 ");
 $viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$currentPage = 'viajes';
+$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -31,17 +34,12 @@ $viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <title>GeoMove Admin - Viajes en Curso</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="admin.css">
     <style>
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
-        .sidebar { background: #24243e; min-height: 100vh; color: #fff; padding-top: 20px; }
-        .sidebar a { color: #ccc; text-decoration: none; display: block; padding: 15px 20px; transition: 0.3s; }
-        .sidebar a:hover, .sidebar a.active { background: rgba(255,255,255,0.1); color: #fff; border-left: 4px solid #6b11ff; }
-        .sidebar i { margin-right: 10px; width: 20px; text-align: center; }
-        .content { padding: 30px; }
         .data-table { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .table th { background: #f1f3f5; border-bottom: none; color: #495057; font-weight: 600; }
         .table td { vertical-align: middle; border-bottom: 1px solid #f1f3f5; }
-        
+
         .badge-estado { padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
         .est-pedido { background: #cff4fc; color: #055160; }
         .est-aceptado { background: #fff3cd; color: #856404; }
@@ -51,15 +49,9 @@ $viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 <body>
     <div class="container-fluid p-0">
         <div class="row g-0">
-            <div class="col-md-2 sidebar">
-                <h4 class="text-center mb-4 font-weight-bold">GeoMove Admin</h4>
-                <a href="index.php"><i class="fas fa-home"></i> Inicio</a>
-                <a href="pendientes.php"><i class="fas fa-user-clock"></i> Pendientes</a>
-                <a href="activos.php"><i class="fas fa-users"></i> Conductores Activos</a>
-                <a href="viajes.php" class="active"><i class="fas fa-route"></i> Viajes en Curso</a>
-                <a href="logout.php" class="text-danger mt-5"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
-            </div>
-            
+
+<?php include '_sidebar.php'; ?>
+
             <div class="col-md-10 content">
                 <h2 class="mb-4 fw-bold">Monitoreo de Viajes Activos</h2>
 

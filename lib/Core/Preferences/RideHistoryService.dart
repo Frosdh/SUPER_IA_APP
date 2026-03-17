@@ -69,6 +69,7 @@ class RideHistoryService {
 
     // 2. Siempre guardar localmente como caché (para acceso sin internet)
     await _guardarLocal(
+      viajeId: viajeId,
       origen: origen,
       destino: destino,
       distanciaKm: distanciaKm,
@@ -125,6 +126,7 @@ class RideHistoryService {
   // ── Métodos internos para caché local ──────────────────
 
   static Future<void> _guardarLocal({
+    required int viajeId,
     required String origen,
     required String destino,
     required double distanciaKm,
@@ -147,6 +149,8 @@ class RideHistoryService {
     final lista = await _obtenerLocal();
 
     lista.insert(0, {
+      'id':                viajeId,
+      'estado':            'terminado',
       'fecha':             DateTime.now().toIso8601String(),
       'origen':            origen,
       'destino':           destino,

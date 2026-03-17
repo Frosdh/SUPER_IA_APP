@@ -95,6 +95,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Timer? _simulacionTimer;
   Timer? _pollingTimer;
   int? _viajeId;
+  bool _perfilMostrado = false; // Para mostrar el modal del conductor solo 1 vez
 
   // ── Descuentos ────────────────────────────────────
   double _descuentoAplicado = 0.0;
@@ -398,6 +399,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             'eta_min': conductor['eta_min'] ?? 3,
           };
         });
+        // Mostrar perfil del conductor automáticamente (solo la primera vez)
+        if (!_perfilMostrado) {
+          _perfilMostrado = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _mostrarPerfilConductor();
+          });
+        }
       } else if (estado == 'en_camino' && _estadoViaje != EstadoViaje.enCamino &&
           _estadoViaje != EstadoViaje.enViaje) {
         final nombre = conductor['nombre']?.toString() ?? (_conductorData?['nombre'] ?? 'Conductor');
@@ -453,6 +461,217 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     return <String, dynamic>{'estado': ''};
   }
 
+  // ── Modal perfil del conductor ────────────────────
+  void _mostrarPerfilConductor() {
+    final data = _conductorData;
+    if (data == null || !mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        decoration: BoxDecoration(
+          color: ConstantColors.backgroundCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: ConstantColors.borderColor),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.45), blurRadius: 24, offset: const Offset(0, -6)),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: ConstantColors.borderColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Avatar grande + badge de calificación
+            Stack(
+              alignment: Alignment.bottomRight,
+              children: [
+                CircleAvatar(
+                  radius: 44,
+                  backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
+                  child: Text(
+                    data['inicial'] ?? 'C',
+                    style: TextStyle(
+                      color: ConstantColors.primaryViolet,
+                      fontSize: 38,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.amber,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: ConstantColors.backgroundCard, width: 2),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rounded, color: Colors.white, size: 11),
+                      const SizedBox(width: 2),
+                      Text(
+                        '${data['calificacion']}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Nombre
+            Text(
+              data['nombre'] ?? 'Conductor',
+              style: TextStyle(
+                color: ConstantColors.textWhite,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${data['viajes']} viajes completados',
+              style: TextStyle(color: ConstantColors.textGrey, fontSize: 13),
+            ),
+            const SizedBox(height: 24),
+
+            // Tarjeta del vehículo
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: ConstantColors.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48, height: 48,
+                    decoration: BoxDecoration(
+                      color: ConstantColors.primaryViolet.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.directions_car_filled_rounded,
+                      color: ConstantColors.primaryViolet,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          data['auto'] ?? 'Vehículo',
+                          style: TextStyle(
+                            color: ConstantColors.textWhite,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '${data['color']}',
+                          style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: ConstantColors.primaryViolet.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: ConstantColors.primaryViolet.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      data['placa'] ?? '',
+                      style: TextStyle(
+                        color: ConstantColors.primaryViolet,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ETA chip
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.green.withOpacity(0.25)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.access_time_rounded, color: Colors.greenAccent, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    '¡Conductor en camino! Llegará en aprox. ${data['eta_min']} min',
+                    style: const TextStyle(
+                      color: Colors.greenAccent,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // Botón cerrar
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ConstantColors.primaryViolet,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'Entendido',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _cancelarViajeEnServidor() async {
     if (_viajeId == null) return;
     final urls = [
@@ -504,6 +723,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _conductorData = null;
       _conductorUbicacion = null;
       _viajeId = null;
+      _perfilMostrado = false;
       _mostrandoPanel = _destino != null;
     });
   }
@@ -543,6 +763,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       setState(() {
         _estadoViaje = EstadoViaje.ninguno;
         _conductorData = null;
+        _perfilMostrado = false;
         _mostrandoPanel = false;
         _destino = null;
         _destinoNombre = '';
@@ -2608,11 +2829,28 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                   Divider(color: ConstantColors.dividerColor),
                   SizedBox(height: 14),
                   Row(children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
-                      child: Text(_conductorData!['inicial'],
-                        style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 24, fontWeight: FontWeight.bold)),
+                    GestureDetector(
+                      onTap: _mostrarPerfilConductor,
+                      child: Stack(
+                        alignment: Alignment.bottomRight,
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
+                            child: Text(_conductorData!['inicial'],
+                              style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 24, fontWeight: FontWeight.bold)),
+                          ),
+                          Container(
+                            width: 18, height: 18,
+                            decoration: BoxDecoration(
+                              color: ConstantColors.primaryViolet,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: ConstantColors.backgroundCard, width: 1.5),
+                            ),
+                            child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 11),
+                          ),
+                        ],
+                      ),
                     ),
                     SizedBox(width: 14),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

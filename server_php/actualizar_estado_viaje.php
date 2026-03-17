@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/email_helper.php';
 
 // ============================================================
 // actualizar_estado_viaje.php - Actualiza el estado de un viaje
@@ -67,6 +68,57 @@ try {
         $stmtDriver->bind_param("i", $conductorId);
         $stmtDriver->execute();
         $stmtDriver->close();
+
+        // ── Enviar recibo por email al pasajero ──────────────────────────
+        $stmtRecibo = $conn->prepare("
+            SELECT
+                v.id, v.origen_texto, v.destino_texto,
+                v.distancia_km, v.duracion_min, v.tarifa_total,
+                v.descuento, v.codigo_descuento, v.fecha_pedido,
+                u.nombre  AS pasajero_nombre,
+                u.email   AS pasajero_email,
+                c.nombre  AS conductor_nombre,
+                ve.marca, ve.modelo, ve.color, ve.placa
+            FROM viajes v
+            JOIN usuarios    u  ON u.id  = v.usuario_id
+            JOIN conductores c  ON c.id  = v.conductor_id
+            LEFT JOIN vehiculos ve ON ve.conductor_id = v.conductor_id
+            WHERE v.id = ?
+            LIMIT 1
+        ");
+        $stmtRecibo->bind_param("i", $viajeId);
+        $stmtRecibo->execute();
+        $rowRecibo = $stmtRecibo->get_result()->fetch_assoc();
+        $stmtRecibo->close();
+
+        if ($rowRecibo && !empty($rowRecibo['pasajero_email'])) {
+            $vehiculoDesc = trim(
+                ($rowRecibo['marca'] ?? '') . ' ' .
+                ($rowRecibo['modelo'] ?? '') . ' ' .
+                ($rowRecibo['color']  ?? '')
+            );
+            $receiptData = [
+                'viaje_id'        => $rowRecibo['id'],
+                'pasajero'        => $rowRecibo['pasajero_nombre'],
+                'conductor'       => $rowRecibo['conductor_nombre'],
+                'origen'          => $rowRecibo['origen_texto'],
+                'destino'         => $rowRecibo['destino_texto'],
+                'distancia'       => $rowRecibo['distancia_km'],
+                'duracion'        => $rowRecibo['duracion_min'],
+                'tarifa'          => $rowRecibo['tarifa_total'],
+                'descuento'       => $rowRecibo['descuento'],
+                'codigo_descuento'=> $rowRecibo['codigo_descuento'],
+                'placa'           => $rowRecibo['placa'] ?? '-',
+                'vehiculo'        => $vehiculoDesc ?: '-',
+                'fecha'           => date('d/m/Y H:i', strtotime($rowRecibo['fecha_pedido'])),
+            ];
+            $asunto   = "Recibo de tu viaje #" . $rowRecibo['id'] . " – GeoMove";
+            $htmlBody = buildReceiptEmailHtml($receiptData);
+            $textBody = buildReceiptEmailText($receiptData);
+            // Envío en background — no bloquea la respuesta al conductor
+            sendEmailMessage($rowRecibo['pasajero_email'], $asunto, $htmlBody, $textBody);
+        }
+        // ────────────────────────────────────────────────────────────────
     } else {
         $stmt = $conn->prepare("
             UPDATE viajes

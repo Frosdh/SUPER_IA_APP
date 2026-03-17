@@ -139,3 +139,126 @@ function buildWelcomeEmailText($nombre)
 
     return "Hola $displayName,\n\nTu cuenta en GeoMove fue creada correctamente.\nGracias por registrarte. Ya puedes solicitar viajes y usar la app.\n\nBienvenido a GeoMove.";
 }
+
+// ── Recibo de viaje ───────────────────────────────────────────────────────────
+function buildReceiptEmailHtml($data)
+{
+    $pasajero   = htmlspecialchars($data['pasajero']   ?? 'Pasajero',   ENT_QUOTES, 'UTF-8');
+    $conductor  = htmlspecialchars($data['conductor']  ?? 'Conductor',  ENT_QUOTES, 'UTF-8');
+    $origen     = htmlspecialchars($data['origen']     ?? '-',          ENT_QUOTES, 'UTF-8');
+    $destino    = htmlspecialchars($data['destino']    ?? '-',          ENT_QUOTES, 'UTF-8');
+    $tarifa     = number_format(floatval($data['tarifa']     ?? 0), 2);
+    $descuento  = number_format(floatval($data['descuento']  ?? 0), 2);
+    $total      = number_format(floatval($data['tarifa'] ?? 0) - floatval($data['descuento'] ?? 0), 2);
+    $distancia  = number_format(floatval($data['distancia']  ?? 0), 2);
+    $duracion   = intval($data['duracion'] ?? 0);
+    $placa      = htmlspecialchars($data['placa']      ?? '-',          ENT_QUOTES, 'UTF-8');
+    $vehiculo   = htmlspecialchars($data['vehiculo']   ?? '-',          ENT_QUOTES, 'UTF-8');
+    $fecha      = htmlspecialchars($data['fecha']      ?? date('d/m/Y H:i'), ENT_QUOTES, 'UTF-8');
+    $viajeId    = intval($data['viaje_id'] ?? 0);
+    $codigo     = htmlspecialchars($data['codigo_descuento'] ?? '', ENT_QUOTES, 'UTF-8');
+
+    $descuentoRow = $descuento > 0 ? "
+        <tr>
+            <td style='padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);color:#a9b8da;font-size:14px;'>Cupón aplicado</td>
+            <td style='padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);color:#4fd9a0;font-size:14px;text-align:right;font-weight:700;'>- \$$descuento</td>
+        </tr>" : '';
+
+    return "
+    <div style='margin:0;padding:32px 16px;background:#07101f;font-family:Arial,sans-serif;color:#eef4ff;'>
+        <div style='max-width:600px;margin:0 auto;background:linear-gradient(180deg,#101933 0%,#0a1226 100%);border-radius:30px;overflow:hidden;border:1px solid rgba(127,150,255,.16);box-shadow:0 28px 90px rgba(0,0,0,.42);'>
+
+            <!-- Header -->
+            <div style='padding:36px 36px 22px;background:radial-gradient(circle at top right,rgba(109,161,255,.42),transparent 30%),linear-gradient(135deg,#182455 0%,#0d1430 70%);'>
+                <div style='display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.08);color:#d9e6ff;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;'>GeoMove · Recibo #{$viajeId}</div>
+                <h1 style='margin:18px 0 10px;font-size:28px;line-height:1.2;color:#ffffff;'>¡Tu viaje ha terminado!</h1>
+                <p style='margin:0;color:#b2c2e7;font-size:15px;line-height:1.7;'>Hola <strong>{$pasajero}</strong>, aquí está el resumen de tu viaje del {$fecha}.</p>
+            </div>
+
+            <div style='padding:28px 36px 36px;'>
+
+                <!-- Ruta -->
+                <div style='margin-bottom:22px;padding:22px;border-radius:20px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);'>
+                    <div style='display:flex;align-items:flex-start;margin-bottom:16px;'>
+                        <div style='width:12px;height:12px;border-radius:50%;background:#4fd9a0;margin-top:3px;flex-shrink:0;'></div>
+                        <div style='margin-left:12px;'>
+                            <div style='font-size:11px;color:#7a8fb0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;'>Origen</div>
+                            <div style='font-size:14px;color:#eef4ff;'>{$origen}</div>
+                        </div>
+                    </div>
+                    <div style='margin-left:5px;width:2px;height:20px;background:rgba(255,255,255,.15);margin-bottom:16px;margin-top:-10px;'></div>
+                    <div style='display:flex;align-items:flex-start;'>
+                        <div style='width:12px;height:12px;border-radius:50%;background:#7d97ff;margin-top:3px;flex-shrink:0;'></div>
+                        <div style='margin-left:12px;'>
+                            <div style='font-size:11px;color:#7a8fb0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;'>Destino</div>
+                            <div style='font-size:14px;color:#eef4ff;'>{$destino}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div style='display:flex;gap:12px;margin-bottom:22px;'>
+                    <div style='flex:1;padding:16px;border-radius:16px;background:rgba(125,151,255,.10);border:1px solid rgba(125,151,255,.18);text-align:center;'>
+                        <div style='font-size:11px;color:#7a8fb0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;'>Distancia</div>
+                        <div style='font-size:20px;font-weight:800;color:#ffffff;'>{$distancia} km</div>
+                    </div>
+                    <div style='flex:1;padding:16px;border-radius:16px;background:rgba(125,151,255,.10);border:1px solid rgba(125,151,255,.18);text-align:center;'>
+                        <div style='font-size:11px;color:#7a8fb0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;'>Duración</div>
+                        <div style='font-size:20px;font-weight:800;color:#ffffff;'>{$duracion} min</div>
+                    </div>
+                </div>
+
+                <!-- Conductor -->
+                <div style='margin-bottom:22px;padding:18px 22px;border-radius:18px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);'>
+                    <div style='font-size:12px;color:#7a8fb0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;'>Tu conductor</div>
+                    <div style='font-size:16px;font-weight:700;color:#ffffff;margin-bottom:4px;'>{$conductor}</div>
+                    <div style='font-size:13px;color:#a9b8da;'>{$vehiculo} &nbsp;·&nbsp; Placa: <strong style='color:#eef4ff;'>{$placa}</strong></div>
+                </div>
+
+                <!-- Resumen de cobro -->
+                <div style='padding:22px;border-radius:20px;background:linear-gradient(135deg,rgba(125,151,255,.14),rgba(92,181,255,.10));border:1px solid rgba(125,151,255,.2);'>
+                    <div style='font-size:13px;color:#7a8fb0;text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;font-weight:700;'>Resumen del cobro</div>
+                    <table style='width:100%;border-collapse:collapse;'>
+                        <tr>
+                            <td style='padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);color:#a9b8da;font-size:14px;'>Tarifa del viaje</td>
+                            <td style='padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);color:#ffffff;font-size:14px;text-align:right;'>\${$tarifa}</td>
+                        </tr>
+                        {$descuentoRow}
+                        <tr>
+                            <td style='padding:14px 0 0;color:#ffffff;font-size:16px;font-weight:800;'>Total pagado</td>
+                            <td style='padding:14px 0 0;color:#4fd9a0;font-size:22px;font-weight:800;text-align:right;'>\${$total}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style='margin-top:28px;text-align:center;color:#7a8fb0;font-size:13px;line-height:1.8;'>
+                    Pago en efectivo · GeoMove<br>
+                    <span style='font-size:11px;'>¿Tienes algún problema con este viaje? Contáctanos desde la app.</span>
+                </div>
+            </div>
+        </div>
+    </div>";
+}
+
+function buildReceiptEmailText($data)
+{
+    $pasajero  = $data['pasajero']  ?? 'Pasajero';
+    $conductor = $data['conductor'] ?? 'Conductor';
+    $origen    = $data['origen']    ?? '-';
+    $destino   = $data['destino']   ?? '-';
+    $tarifa    = number_format(floatval($data['tarifa'] ?? 0), 2);
+    $total     = number_format(floatval($data['tarifa'] ?? 0) - floatval($data['descuento'] ?? 0), 2);
+    $distancia = number_format(floatval($data['distancia'] ?? 0), 2);
+    $duracion  = intval($data['duracion'] ?? 0);
+    $fecha     = $data['fecha'] ?? date('d/m/Y H:i');
+    $viajeId   = intval($data['viaje_id'] ?? 0);
+
+    return "Recibo de tu viaje en GeoMove - #{$viajeId}\n\n"
+        . "Hola {$pasajero},\n\n"
+        . "Tu viaje del {$fecha} ha terminado.\n\n"
+        . "RUTA:\nOrigen: {$origen}\nDestino: {$destino}\n\n"
+        . "Distancia: {$distancia} km | Duración: {$duracion} min\n\n"
+        . "CONDUCTOR: {$conductor}\n\n"
+        . "TOTAL COBRADO: \${$total}\n\n"
+        . "Gracias por viajar con GeoMove.";
+}
