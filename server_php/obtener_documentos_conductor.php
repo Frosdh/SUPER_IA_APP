@@ -20,11 +20,11 @@ if ($conductor_id <= 0) {
 
 // Estado general del conductor
 $stmtC = $conn->prepare(
-    "SELECT verificado, estado FROM conductores WHERE id = ? LIMIT 1"
+    "SELECT verificado, estado, tipo_conductor FROM conductores WHERE id = ? LIMIT 1"
 );
 $stmtC->bind_param("i", $conductor_id);
 $stmtC->execute();
-$stmtC->bind_result($verificado, $estadoConductor);
+$stmtC->bind_result($verificado, $estadoConductor, $tipoConductor);
 $stmtC->fetch();
 $stmtC->close();
 
@@ -51,6 +51,7 @@ echo json_encode([
     "status"           => "success",
     "verificado"       => (int)($verificado ?? 0),
     "estado_conductor" => $estadoConductor ?? 'desconectado',
+    "tipo_conductor"   => $tipoConductor ?? 'independiente',
     "documentos"       => $documentos,
 ]);
 ?>

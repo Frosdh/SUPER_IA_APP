@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
+import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
+import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
+import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:fu_uber/UI/views/OnboardingScreen.dart';
 import 'package:fu_uber/UI/views/WelcomeScreen.dart';
@@ -47,8 +50,11 @@ class _SplashScreenState extends State<SplashScreen>
       if (!mounted) return;
 
       bool loggedIn = await AuthPrefs.hasValidSession();
+      bool driverLoggedIn = await DriverPrefs.isDriverLoggedIn();
 
-      if (loggedIn) {
+      if (driverLoggedIn) {
+        Navigator.pushReplacementNamed(context, DriverHomeScreen.route);
+      } else if (loggedIn) {
         Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
       } else {
         bool firstTime = await AuthPrefs.isFirstTime();

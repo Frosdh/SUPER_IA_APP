@@ -6,6 +6,7 @@ import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
 import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
 import 'package:fu_uber/UI/views/DriverRegistrationScreen.dart';
 import 'package:fu_uber/UI/views/DriverStep1Screen.dart';
+import 'package:fu_uber/UI/views/DriverRevisionScreen.dart';
 
 class DriverLoginScreen extends StatefulWidget {
   static const String route = '/driver_login';
@@ -54,6 +55,19 @@ class _DriverLoginScreenState extends State<DriverLoginScreen> {
     }
 
     setState(() => _isLoading = false);
+
+    if (response['status'] == 'pending') {
+      final conductor = (response['conductor'] as Map?)?.cast<String, dynamic>() ?? <String, dynamic>{};
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => DriverRevisionScreen(
+            conductorId: conductor['id'] as int,
+          ),
+        ),
+      );
+      return;
+    }
 
     if (response['status'] != 'success') {
       _showMessage(response['message']?.toString() ?? 'No se pudo iniciar sesion');

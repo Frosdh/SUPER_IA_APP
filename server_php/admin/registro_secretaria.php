@@ -16,11 +16,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $usuario = trim($_POST['usuario'] ?? '');
     $pass = $_POST['password'] ?? '';
     $coop_id = intval($_POST['cooperativa_id'] ?? 0);
+    $email = trim($_POST['email'] ?? '');
+    
+    // Procesar archivo adjunto
+    $docBase64 = null;
+    if (isset($_FILES['documento']) && $_FILES['documento']['error'] === UPLOAD_ERR_OK) {
+        $tmp = $_FILES['documento']['tmp_name'];
+        $tipoMime = $_FILES['documento']['type'];
+        if (strpos($tipoMime, 'image/') === 0 || $tipoMime === 'application/pdf') {
+            $data = file_get_contents($tmp);
+            $docBase64 = 'data:' . $tipoMime . ';base64,' . base64_encode($data);
+        } else {
+            $msg = "El documento debe ser una imagen o PDF válido.";
+            $msgType = "danger";
+        }
+    }
 
-    if (empty($nombre) || empty($usuario) || empty($pass) || $coop_id <= 0) {
-        $msg = "Todos los campos son obligatorios.";
+    if (empty($nombre) || empty($usuario) || empty($pass) || empty($email) || $coop_id <= 0 || empty($docBase64)) {
+        $msg = "Todos los campos (incluyendo adjuntar la credencial) son estrictamente obligatorios.";
         $msgType = "danger";
-    } else {
+    } elseif (!$msg) {
         // Verificar si el usuario ya existe
         $check = $pdo->prepare("SELECT id FROM secretarias WHERE usuario = ?");
         $check->execute([$usuario]);
@@ -30,11 +45,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msgType = "danger";
         } else {
             $passHash = password_hash($pass, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO secretarias (usuario, pass_hash, cooperativa_id, nombre) VALUES (?, ?, ?, ?)");
-            if ($stmt->execute([$usuario, $passHash, $coop_id, $nombre])) {
-                $msg = "Registro exitoso. Ya puedes iniciar sesión.";
-                // Redirigir después de 2 segundos
-                header("refresh:2;url=login.php?role=secretary");
+            $stmt = $pdo->prepare("INSERT INTO secretarias (usuario, pass_hash, cooperativa_id, nombre, email, documento_credencial, verificado) VALUES (?, ?, ?, ?, ?, ?, 0)");
+            if ($stmt->execute([$usuario, $passHash, $coop_id, $nombre, $email, $docBase64])) {
+                $msg = "Registro exitoso. Se revisará tu cuenta pronto.";
+                // Redirigir después de 3 segundos
+                header("refresh:3;url=login.php?role=secretary");
             } else {
                 $msg = "Error al registrar. Inténtalo de nuevo.";
                 $msgType = "danger";
@@ -184,10 +199,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     <?php endif; ?>
 
-    <form method="POST">
+    <form method="POST" enctype="multipart/form-data">
         <div class="mb-3">
             <label class="form-label">Nombre Completo</label>
             <input type="text" name="nombre" class="form-control" placeholder="Ej: Maria Lopez" required>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label">Correo Electrónico</label>
+            <input type="email" name="email" class="form-control" placeholder="maria@cooperativa.com" required>
         </div>
 
         <div class="mb-3">
@@ -208,6 +228,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <option value="<?= $coop['id'] ?>"><?= htmlspecialchars($coop['nombre']) ?></option>
                 <?php endforeach; ?>
             </select>
+        </div>
+
+        <div class="mb-4">
+            <label class="form-label">Credencial / Nombramiento (Foto o PDF)</label>
+            <input type="file" name="documento" class="form-control" accept="image/*,application/pdf" required>
+            <small class="text-muted d-block mt-1">El administrador verificará este documento para autorizar tu cuenta.</small>
         </div>
 
         <button type="submit" class="btn btn-register">

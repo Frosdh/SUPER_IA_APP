@@ -36,7 +36,7 @@ if (!$usuario) {
 
 $usuario_id = $usuario['id'];
 
-// Obtener los viajes terminados más recientes (máx 50)
+// Obtener los viajes terminados más recientes (máx 50) con datos del conductor
 $query = $conn->prepare("
     SELECT
         v.id,
@@ -49,8 +49,16 @@ $query = $conn->prepare("
         v.fecha_fin,
         v.estado,
         v.calificacion,
-        v.comentario
+        v.comentario,
+        v.descuento,
+        v.codigo_descuento,
+        c.nombre        AS conductor_nombre,
+        CONCAT(COALESCE(ve.marca,''), ' ', COALESCE(ve.modelo,'')) AS conductor_auto,
+        ve.placa        AS conductor_placa,
+        ve.color        AS conductor_color
     FROM viajes v
+    LEFT JOIN conductores c  ON c.id = v.conductor_id
+    LEFT JOIN vehiculos  ve ON ve.conductor_id = v.conductor_id
     WHERE v.usuario_id = ?
       AND v.estado = 'terminado'
     ORDER BY v.fecha_pedido DESC
@@ -64,19 +72,21 @@ $result = $query->get_result();
 $viajes = [];
 while ($row = $result->fetch_assoc()) {
     $viajes[] = [
-        "id"            => intval($row['id']),
-        "origen"        => $row['origen_texto']  ?? '',
-        "destino"       => $row['destino_texto'] ?? '',
-        "distancia_km"  => floatval($row['distancia_km']),
-        "duracion_min"  => intval($row['duracion_min']),
-        "precio"        => floatval($row['tarifa_total']),
-        "fecha"         => $row['fecha_pedido'],
-        // Sin conductor real por ahora
-        "conductor_nombre" => "",
-        "conductor_auto"   => "",
-        "conductor_placa"  => "",
+        "id"               => intval($row['id']),
+        "origen"           => $row['origen_texto']  ?? '',
+        "destino"          => $row['destino_texto'] ?? '',
+        "distancia_km"     => floatval($row['distancia_km']),
+        "duracion_min"     => intval($row['duracion_min']),
+        "precio"           => floatval($row['tarifa_total']),
+        "fecha"            => $row['fecha_pedido'],
+        "conductor_nombre" => trim($row['conductor_nombre'] ?? ''),
+        "conductor_auto"   => trim($row['conductor_auto']   ?? ''),
+        "conductor_placa"  => trim($row['conductor_placa']  ?? ''),
+        "conductor_color"  => trim($row['conductor_color']  ?? ''),
         "calificacion"     => $row['calificacion'] !== null ? floatval($row['calificacion']) : 0,
-        "comentario"       => $row['comentario'] ?? ''
+        "comentario"       => $row['comentario']       ?? '',
+        "descuento"        => floatval($row['descuento'] ?? 0),
+        "codigo_descuento" => $row['codigo_descuento'] ?? '',
     ];
 }
 

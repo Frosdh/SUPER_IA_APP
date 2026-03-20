@@ -9,6 +9,8 @@ class DriverPrefs {
   static const String _keyDriverCedula = 'driver_cedula';
   static const String _keyDriverStatus = 'driver_status';
   static const String _keyActiveRideJson = 'driver_active_ride_json';
+  static const String _keyLastLat = 'driver_last_lat';
+  static const String _keyLastLng = 'driver_last_lng';
 
   static Future<void> saveDriverSession({
     required int id,
@@ -24,6 +26,21 @@ class DriverPrefs {
     await prefs.setString(_keyDriverPhone, telefono);
     await prefs.setString(_keyDriverCedula, cedula);
     await prefs.setString(_keyDriverStatus, estado);
+  }
+
+  /// Guarda las últimas coordenadas GPS (usadas por el Foreground Service en background).
+  static Future<void> saveLastLocation(double lat, double lng) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble(_keyLastLat, lat);
+    await prefs.setDouble(_keyLastLng, lng);
+  }
+
+  static Future<Map<String, double>?> getLastLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lat = prefs.getDouble(_keyLastLat);
+    final lng = prefs.getDouble(_keyLastLng);
+    if (lat == null || lng == null) return null;
+    return {'lat': lat, 'lng': lng};
   }
 
   static Future<void> saveDriverStatus(String? estado) async {

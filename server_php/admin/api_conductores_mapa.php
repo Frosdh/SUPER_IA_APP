@@ -15,17 +15,24 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 
 header('Content-Type: application/json; charset=utf-8');
 
+// Solo se muestran conductores que enviaron su ubicación en los últimos 5 minutos.
+// Esto elimina "conductores fantasma" cuyo teléfono está apagado o con la app cerrada.
 $stmt = $pdo->query("
     SELECT
         c.id, c.nombre, c.telefono, c.estado, c.latitud, c.longitud,
-        c.calificacion_promedio, c.verificado, v.marca, v.modelo, v.color, v.placa,
+        c.calificacion_promedio, c.verificado, c.ultima_ubicacion,
+        v.marca, v.modelo, v.color, v.placa,
         cat.nombre AS categoria
     FROM conductores c
-    LEFT JOIN vehiculos v   ON v.conductor_id = c.id
+    LEFT JOIN vehiculos v    ON v.conductor_id = c.id
     LEFT JOIN categorias cat ON cat.id = v.categoria_id
     WHERE c.latitud IS NOT NULL
       AND c.longitud IS NOT NULL
       AND c.estado IN ('libre', 'ocupado')
+      AND (
+          c.ultima_ubicacion IS NULL
+          OR c.ultima_ubicacion >= NOW() - INTERVAL 5 MINUTE
+      )
     ORDER BY c.estado ASC, c.nombre ASC
 ");
 $conductores = $stmt->fetchAll();

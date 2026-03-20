@@ -14,7 +14,7 @@ if ($viaje_id == 0 || $conductor_id == 0) {
     exit;
 }
 
-// 1. Verificar si el viaje sigue disponible (estado 'pendiente')
+// 1. Verificar si el viaje sigue disponible (estado 'pedido')
 $sql_check = "SELECT estado FROM viajes WHERE id = ? LIMIT 1";
 $stmt = $conn->prepare($sql_check);
 $stmt->bind_param("i", $viaje_id);
@@ -27,7 +27,7 @@ if (!$viaje) {
     exit;
 }
 
-if ($viaje['estado'] !== 'pendiente') {
+if ($viaje['estado'] !== 'pedido') {
     echo json_encode(["status" => "error", "message" => "El viaje ya fue tomado por otro conductor"]);
     exit;
 }
@@ -37,7 +37,7 @@ $sql_update = "UPDATE viajes SET
                 conductor_id = ?, 
                 estado = 'aceptado',
                 fecha_aceptacion = NOW() 
-               WHERE id = ? AND estado = 'pendiente'";
+               WHERE id = ? AND estado = 'pedido'";
 
 $stmt_up = $conn->prepare($sql_update);
 $stmt_up->bind_param("ii", $conductor_id, $viaje_id);

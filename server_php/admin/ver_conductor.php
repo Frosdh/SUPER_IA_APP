@@ -19,9 +19,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pdo->prepare("UPDATE conductores SET verificado=1, estado='libre' WHERE id=?")->execute([$id]);
         $msg = 'Conductor aprobado correctamente. Ya puede iniciar sesión.';
 
-    } elseif ($_POST['action'] === 'rechazar_conductor') {
+        // Enviar Correo de Bienvenida al Conductor
+        $stmtCorreo = $pdo->prepare("SELECT nombre, email FROM conductores WHERE id = ?");
+        $stmtCorreo->execute([$id]);
+        $dest = $stmtCorreo->fetch(PDO::FETCH_ASSOC);
+
+        if ($dest && !empty($dest['email'])) {
+            require_once __DIR__ . '/../email_helper.php';
+            
+            $subject = 'Cuenta Aprobada - Bienvenido a GeoMove';
+            $htmlBody = 'Hola ' . htmlspecialchars($dest['nombre']) . ',<br><br>¡Felicidades! Tus documentos han sido <b>verificados y tu cuenta está activa</b>.<br><br>Ya puedes abrir la aplicación de conductores, conectarte y empezar a recibir viajes.<br><br>Saludos cordiales,<br>El equipo de GeoMove.';
+            $plainBody = 'Hola ' . $dest['nombre'] . ', ¡Felicidades! Tus documentos han sido verificados y tu cuenta está activa. Ya puedes abrir la aplicación de conductores. Saludos cordiales.';
+            
+            list($success, $error) = sendEmailMessage($dest['email'], $subject, $htmlBody, $plainBody);
+            if ($success) {
+                $msg .= ' Se ha enviado el correo de bienvenida al conductor.';
+            }
+        }
+    } elseif ($_POST['action'] === 'rechazar_solicitud') {
         $nota = trim($_POST['motivo'] ?? 'Sin motivo especificado');
-        $pdo->prepare("UPDATE conductores SET verificado=0, estado='rechazado' WHERE id=?")->execute([$id]);
+        $pdo->prepare("UPDATE conductores SET verificado=2 WHERE id=?")->execute([$id]);
         $msg = 'Conductor rechazado.'; $msgType = 'danger';
 
     // Aprobar / rechazar documento individual
@@ -44,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 $stmtC = $pdo->prepare("
     SELECT c.id, c.nombre, c.email, c.telefono, c.cedula, c.ciudad,
            c.verificado, c.estado, c.foto_perfil, c.creado_en,
-           c.calificacion_promedio,
+           c.calificacion_promedio, c.tipo_conductor,
            v.marca, v.modelo, v.placa, v.color, v.anio,
            cat.nombre AS categoria
     FROM conductores c
@@ -71,6 +88,10 @@ $tiposDoc = [
     'soat'             => 'SOAT / Seguro',
     'matricula'        => 'Matrícula vehicular',
 ];
+
+if (($c['tipo_conductor'] ?? '') === 'cooperativa') {
+    $tiposDoc['vinculacion_cooperativa'] = 'Resolución de Cooperativa';
+}
 
 // Contar documentos aprobados
 $aprobados = count(array_filter($docs, fn($d) => $d['estado'] === 'aprobado'));
@@ -165,7 +186,7 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                             <span class="badge bg-success fs-6 px-3 py-2">
                                 <i class="fas fa-check-circle me-1"></i> Aprobado
                             </span>
-                        <?php elseif ($c['estado'] === 'rechazado'): ?>
+                        <?php elseif ($c['verificado'] == 2): ?>
                             <span class="badge bg-danger fs-6 px-3 py-2">
                                 <i class="fas fa-times-circle me-1"></i> Rechazado
                             </span>
@@ -218,7 +239,7 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                 </div>
 
                 <!-- Botones de decisión final -->
-                <?php if ($c['verificado'] != 1 && $c['estado'] !== 'rechazado'): ?>
+                <?php if ($c['verificado'] != 1 && $c['verificado'] != 2): ?>
                 <div class="info-card">
                     <h6 class="fw-bold mb-3"><i class="fas fa-gavel me-2 text-warning"></i>Decisión final</h6>
                     <p class="text-muted small mb-3">

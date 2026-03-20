@@ -10,6 +10,7 @@ import 'package:fu_uber/Core/ProviderModels/UINotifiersModel.dart';
 import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
 import 'package:fu_uber/Core/Services/PushNotificationService.dart';
+import 'package:fu_uber/Core/Services/BackgroundLocationService.dart';
 import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
 import 'package:fu_uber/UI/views/OnboardingScreen.dart';
@@ -49,6 +50,13 @@ void main() async {
     await PushNotificationService.initialize(navigatorKey);
   } catch (e) {
     print('>>> [FCM] Firebase no inicializado: $e');
+  }
+
+  // Inicializar Foreground Service para ubicación en background
+  try {
+    await BackgroundLocationService.initialize();
+  } catch (e) {
+    print('>>> [BG_SERVICE] No se pudo inicializar: $e');
   }
 
   SystemChrome.setSystemUIOverlayStyle(

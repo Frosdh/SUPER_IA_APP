@@ -54,19 +54,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } elseif ($login_role === 'secretary') {
         // 3. Intentar como secretaria
-        $stmt = $pdo->prepare("SELECT id, usuario, pass_hash, cooperativa_id, nombre FROM secretarias WHERE usuario = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, usuario, pass_hash, cooperativa_id, nombre, verificado FROM secretarias WHERE usuario = ? LIMIT 1");
         $stmt->execute([$user]);
         $sec = $stmt->fetch();
 
         if ($sec && password_verify($pass, $sec['pass_hash'])) {
-            $_SESSION['secretary_logged_in'] = true;
-            $_SESSION['secretary_id'] = (int)$sec['id'];
-            $_SESSION['secretary_name'] = $sec['nombre'];
-            $_SESSION['cooperativa_id'] = (int)$sec['cooperativa_id'];
-            header('Location: panel_cooperativa.php');
-            exit;
+            if (!isset($sec['verificado']) || (int)$sec['verificado'] === 1) {
+                $_SESSION['secretary_logged_in'] = true;
+                $_SESSION['secretary_id'] = (int)$sec['id'];
+                $_SESSION['secretary_name'] = $sec['nombre'];
+                $_SESSION['cooperativa_id'] = (int)$sec['cooperativa_id'];
+                header('Location: panel_cooperativa.php');
+                exit;
+            } elseif ((int)$sec['verificado'] === 0) {
+                $error = 'Tu cuenta ha sido creada y está pendiente de revisión por el administrador.';
+            } else {
+                $_SESSION['resubir_sec_id'] = (int)$sec['id'];
+                header('Location: resubir_credencial.php');
+                exit;
+            }
         } else {
-            $error = 'Usuario de secretaria incorrecto o cooperativa no vinculada.';
+            $error = 'Usuario de secretaria incorrecto o contraseña inválida.';
         }
     }
 }

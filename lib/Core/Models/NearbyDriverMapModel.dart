@@ -11,6 +11,7 @@ class NearbyDriverMapModel {
   final String modelo;
   final String color;
   final double distanciaKm;
+  final String estado;
 
   NearbyDriverMapModel({
     required this.id,
@@ -25,6 +26,7 @@ class NearbyDriverMapModel {
     required this.modelo,
     required this.color,
     required this.distanciaKm,
+    required this.estado,
   });
 
   factory NearbyDriverMapModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class NearbyDriverMapModel {
       modelo: (json['modelo'] as String?) ?? '',
       color: (json['color'] as String?) ?? '',
       distanciaKm: ((json['distancia_km'] as num?) ?? 0.0).toDouble(),
+      estado: (json['estado'] as String?) ?? 'libre',
     );
   }
 

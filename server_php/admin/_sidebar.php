@@ -16,8 +16,21 @@ $nav = [
 ];
 
 if (!$isSecretary) {
-    $nav['principal'][] = ['href' => 'pendientes.php','icon' => 'fa-user-clock', 'label' => 'Pendientes', 'page' => 'pendientes', 'badge' => $totalPendientes];
-    $nav['principal'][] = ['href' => 'activos.php',   'icon' => 'fa-id-badge',  'label' => 'Conductores', 'page' => 'conductores'];
+    // Calcular badges globales para el administrador
+    if (isset($pdo)) {
+        $stmtC = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0");
+        $gBadgeCond = $stmtC->fetchColumn();
+        
+        $stmtS = $pdo->query("SELECT COUNT(*) FROM secretarias WHERE verificado = 0");
+        $gBadgeSec = $stmtS->fetchColumn();
+    } else {
+        $gBadgeCond = 0; $gBadgeSec = 0;
+    }
+
+    $nav['principal'][] = ['href' => 'pendientes.php','icon' => 'fa-user-clock', 'label' => 'Cond. Pendientes', 'page' => 'pendientes', 'badge' => $gBadgeCond];
+    $nav['principal'][] = ['href' => 'activos.php',   'icon' => 'fa-id-badge',  'label' => 'Cond. Activos', 'page' => 'conductores'];
+    $nav['principal'][] = ['href' => 'pendientes_secretarias.php','icon' => 'fa-user-tie', 'label' => 'Sec. Pendientes', 'page' => 'secretarias', 'badge' => $gBadgeSec];
+    $nav['principal'][] = ['href' => 'secretarias_activas.php', 'icon' => 'fa-briefcase', 'label' => 'Sec. Activas', 'page' => 'secretarias_activas'];
     $nav['principal'][] = ['href' => 'viajes.php',    'icon' => 'fa-route',     'label' => 'Viajes',      'page' => 'viajes'];
     
     $nav['Pasajeros'] = [

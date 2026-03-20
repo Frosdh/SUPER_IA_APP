@@ -23,7 +23,7 @@ if ($conductorId <= 0 || $latitud === '' || $longitud === '') {
     exit;
 }
 
-$stmt = $conn->prepare("UPDATE conductores SET latitud = ?, longitud = ? WHERE id = ?");
+$stmt = $conn->prepare("UPDATE conductores SET latitud = ?, longitud = ?, ultima_ubicacion = NOW() WHERE id = ?");
 if (!$stmt) {
     echo json_encode([
         "status" => "error",

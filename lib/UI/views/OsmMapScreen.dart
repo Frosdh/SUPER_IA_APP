@@ -20,6 +20,7 @@ import 'package:fu_uber/Core/Services/DiscountCodeService.dart';
 import 'package:fu_uber/Core/Models/DiscountCodeModel.dart';
 import 'package:fu_uber/Core/Preferences/DiscountPreferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 // Centro de Cuenca, Ecuador
 final LatLng CUENCA_CENTER = LatLng(-2.9001285, -79.0058965);
@@ -47,6 +48,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final MapController _mapController = MapController();
   final TextEditingController _searchController = TextEditingController();
+  final PanelController _panelController = PanelController();
   bool _rutaInicialProcesada = false;
   Map<String, dynamic>? _viajeRepetidoPendiente;
 
@@ -76,6 +78,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   Timer? _searchDebounce;
   Timer? _pickupDebounce;
   Timer? _destinoDebounce;
+  double _panelPosition = 0.0; // 0.0 = colapsado, 1.0 = expandido
 
   // ── Categorías ────────────────────────────────────
   List<CategoriaModel> _categorias = [];
@@ -94,6 +97,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   LatLng? _conductorUbicacion; // posición en tiempo real del conductor
   Timer? _simulacionTimer;
   Timer? _pollingTimer;
+  Timer? _nearbyDriversTimer;
   int? _viajeId;
   bool _perfilMostrado = false; // Para mostrar el modal del conductor solo 1 vez
 
@@ -108,6 +112,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     _cargarNombreUsuario();
     _cargarCategorias();
     _cargarFavoritosYRecientes();
+
+    // Refresco automático de conductores cercanos cada 20 segundos
+    _nearbyDriversTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
+      if (mounted && _estadoViaje == EstadoViaje.ninguno) {
+        _cargarConductoresCercanos();
+      }
+    });
   }
 
   @override
@@ -117,6 +128,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     _destinoDebounce?.cancel();
     _simulacionTimer?.cancel();
     _pollingTimer?.cancel();
+    _nearbyDriversTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -161,7 +173,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         final response = await http.post(
           Uri.parse(url),
           headers: {'ngrok-skip-browser-warning': 'true'},
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 20));
         print('>>> [CAT] HTTP ${response.statusCode} desde $url');
         if (response.statusCode == 200) {
           print('>>> [CAT] Body: ${response.body}');
@@ -259,14 +271,40 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
   void _iniciarAgregarParada() {
     if (_destino == null) return;
+
+    // Si ya estamos con la búsqueda abierta y usamos el mapa, esto sirve para CONFIRMAR
+    if (_agregandoParada && _seleccionandoDestinoMapa) {
+      final centro = _mapController.center;
+      if (centro != null) {
+        _agregarParadaSeleccionada(PlaceResult(
+          displayName: _searchController.text.isNotEmpty ? _searchController.text : 'Parada intermedia',
+          shortName: _searchController.text.isNotEmpty ? _searchController.text : 'Parada',
+          lat: centro.latitude,
+          lon: centro.longitude,
+        ));
+        setState(() {
+          _seleccionandoDestinoMapa = false;
+          _actualizandoDestinoMapa = false;
+        });
+      }
+      return;
+    }
+
     setState(() {
       _agregandoParada = true;
+      _seleccionandoDestinoMapa = true; // ACTIVAR AUTOMÁTICAMENTE para que aparezca el selector
       _searchController.clear();
       _sugerencias = [];
       _mostrandoSugerencias = false;
       _mostrandoRecientes = _recientes.isNotEmpty;
       _searchFeedback = '';
     });
+    
+    // Centrar el mapa para empezar a elegir la parada
+    _mapController.move(
+      _mapController.center ?? _miUbicacion,
+      _mapController.zoom ?? 15.0,
+    );
   }
 
   Future<void> _eliminarParada(int index) async {
@@ -349,13 +387,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           'origen_lng':    (_puntoRecogida ?? _miUbicacion).longitude.toString(),
           'destino_lat':   (_destino?.latitude  ?? 0.0).toString(),
           'destino_lng':   (_destino?.longitude ?? 0.0).toString(),
-        }).timeout(const Duration(seconds: 8));
+        }).timeout(const Duration(seconds: 20));
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           if (data['status'] == 'success') {
             print('>>> [VIAJE] Creado con ID: ${data['viaje_id']}');
-            return data['viaje_id'] as int;
+            return int.tryParse(data['viaje_id'].toString()) ?? 0;
           }
         }
       } catch (e) {
@@ -451,7 +489,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       try {
         final response = await http.post(Uri.parse(url), body: {
           'viaje_id': viajeId.toString(),
-        }).timeout(const Duration(seconds: 6));
+        }).timeout(const Duration(seconds: 20));
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
           if (data['status'] == 'success') return (data as Map).cast<String, dynamic>();
@@ -1229,7 +1267,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             'lng': (_puntoRecogida ?? _miUbicacion).longitude.toString(),
             'categoria_id': categoriaId.toString(),
           },
-        ).timeout(const Duration(seconds: 8));
+        ).timeout(const Duration(seconds: 20));
 
         if (response.statusCode == 200) {
           final data = json.decode(response.body);
@@ -1687,13 +1725,23 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         _calculandoRuta = false;
       });
       _recalcularPrecio();
-      if (recenterMap) {
+      if (recenterMap && puntosRuta.length >= 2) {
+        // Calcular el centro de todos los puntos de la ruta (incluyendo paradas)
+        double minLat = puntosRuta[0].latitude;
+        double maxLat = puntosRuta[0].latitude;
+        double minLng = puntosRuta[0].longitude;
+        double maxLng = puntosRuta[0].longitude;
+
+        for (var p in puntosRuta) {
+          if (p.latitude < minLat) minLat = p.latitude;
+          if (p.latitude > maxLat) maxLat = p.latitude;
+          if (p.longitude < minLng) minLng = p.longitude;
+          if (p.longitude > maxLng) maxLng = p.longitude;
+        }
+
         _mapController.move(
-          LatLng(
-            (origenRuta.latitude + destino.latitude) / 2,
-            (origenRuta.longitude + destino.longitude) / 2,
-          ),
-          13.0,
+          LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2),
+          _mapController.zoom ?? 13.0,
         );
       }
     }
@@ -1766,6 +1814,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _puntoRecogida = nuevoPunto;
       _origenNombre = nombre;
       _actualizandoRecogida = false;
+      _ajustandoRecogida = false; // AUTO-APAGAR para bloquear ubicación
     });
 
     _cargarConductoresCercanos();
@@ -1783,6 +1832,19 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     );
     if (!mounted) return;
 
+    if (_agregandoParada) {
+      // Si estamos añadiendo una parada, SOLO actualizamos el texto de búsqueda
+      // para que el usuario pueda ver el nombre y confirmar.
+      setState(() {
+        _searchController.text = nombre;
+        _actualizandoDestinoMapa = false;
+        _searchFeedback = '';
+        _mostrandoSugerencias = false;
+        // NO auto-apagamos aquí porque el flujo de paradas requiere confirmación manual
+      });
+      return;
+    }
+
     setState(() {
       _destino = nuevoPunto;
       _destinoNombre = nombre;
@@ -1790,6 +1852,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       _mostrandoPanel = true;
       _calculandoRuta = true;
       _actualizandoDestinoMapa = false;
+      
+      // SOLO auto-apagamos si NO estamos añadiendo una parada
+      if (!_agregandoParada) {
+        _seleccionandoDestinoMapa = false;
+      }
+      
       _rutaInfo = null;
       _rutaPuntos = [];
       _sugerencias = [];
@@ -1800,14 +1868,31 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     await _calcularRuta(nuevoPunto, recenterMap: false);
   }
 
-  // ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
+    bool isViajando = _estadoViaje != EstadoViaje.ninguno;
+    double minH = (_mostrandoPanel || isViajando) ? 140 : 0;
+    double maxH = MediaQuery.of(context).size.height * 0.7;
+    double currentPanelHeight = minH + (maxH - minH) * _panelPosition;
+
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: ConstantColors.backgroundDark,
-      body: Stack(
-        children: [
+      body: SlidingUpPanel(
+        controller: _panelController,
+        minHeight: minH,
+        maxHeight: maxH,
+        parallaxEnabled: true,
+        parallaxOffset: 0.5,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        color: ConstantColors.backgroundCard,
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: const Offset(0, -5))
+        ],
+        onPanelSlide: (pos) => setState(() => _panelPosition = pos),
+        panel: _buildPanelContent(),
+        body: Stack(
+          children: [
           // ── MAPA ────────────────────────────────────────────────
           FlutterMap(
             mapController: _mapController,
@@ -1937,7 +2022,9 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     onTap: () => _mostrarInfoConductor(conductor),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.9),
+                        color: conductor.estado == 'libre' 
+                            ? Colors.green.withOpacity(0.9)
+                            : Colors.deepOrange.withOpacity(0.9),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                         boxShadow: [
@@ -1960,74 +2047,6 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             ],
           ),
 
-          if (_ajustandoRecogida || _seleccionandoDestinoMapa)
-            IgnorePointer(
-              child: Center(
-                child: Transform.translate(
-                  offset: Offset(0, -24),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: ConstantColors.backgroundCard.withOpacity(0.95),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: ConstantColors.borderColor),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (_actualizandoRecogida || _actualizandoDestinoMapa)
-                              SizedBox(
-                                width: 12,
-                                height: 12,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    ConstantColors.primaryViolet,
-                                  ),
-                                ),
-                              )
-                            else
-                              Icon(
-                                Icons.open_with_rounded,
-                                color: ConstantColors.primaryViolet,
-                                size: 14,
-                              ),
-                            SizedBox(width: 8),
-                            Text(
-                              _ajustandoRecogida
-                                  ? (_actualizandoRecogida
-                                      ? 'Actualizando recogida...'
-                                      : 'Mueve el mapa para ajustar recogida')
-                                  : (_actualizandoDestinoMapa
-                                      ? 'Actualizando destino...'
-                                      : 'Mueve el mapa para elegir destino'),
-                              style: TextStyle(
-                                color: ConstantColors.textWhite,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Icon(
-                        _ajustandoRecogida
-                            ? Icons.location_on_rounded
-                            : Icons.place_rounded,
-                        color: _ajustandoRecogida
-                            ? ConstantColors.primaryViolet
-                            : Colors.orangeAccent,
-                        size: 42,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
 
           // ── BARRA SUPERIOR ───────────────────────────────────────
           Positioned(
@@ -2238,7 +2257,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           // ── BOTÓN MI UBICACIÓN ──────────────────────────────────
           Positioned(
             right: 16,
-            bottom: (_mostrandoPanel || _estadoViaje != EstadoViaje.ninguno) ? 300 : 100,
+            bottom: currentPanelHeight + 16,
             child: GestureDetector(
               onTap: _centrarEnMiUbicacion,
               child: Container(
@@ -2256,7 +2275,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           if (_estadoViaje == EstadoViaje.ninguno)
             Positioned(
               right: 16,
-              bottom: (_mostrandoPanel || _estadoViaje != EstadoViaje.ninguno) ? 356 : 156,
+              bottom: currentPanelHeight + 72,
               child: GestureDetector(
                 onTap: _toggleAjusteRecogida,
                 child: AnimatedContainer(
@@ -2306,9 +2325,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           if (_estadoViaje == EstadoViaje.ninguno)
             Positioned(
               right: 16,
-              bottom: (_mostrandoPanel || _estadoViaje != EstadoViaje.ninguno)
-                  ? 412
-                  : 212,
+              bottom: currentPanelHeight + 128,
               child: GestureDetector(
                 onTap: _toggleSeleccionDestinoMapa,
                 child: AnimatedContainer(
@@ -2350,6 +2367,49 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // ── BOTÓN AÑADIR PARADA (FAB Independiente) ──────────────
+          if (_mostrandoPanel && _estadoViaje == EstadoViaje.ninguno && _paradasIntermedias.length < 3)
+            Positioned(
+              right: 16,
+              bottom: currentPanelHeight + 184,
+              child: GestureDetector(
+                onTap: _iniciarAgregarParada,
+                child: AnimatedContainer(
+                  duration: Duration(milliseconds: 180),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _agregandoParada
+                        ? ConstantColors.primaryViolet
+                        : ConstantColors.backgroundCard,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: _agregandoParada
+                          ? ConstantColors.primaryViolet
+                          : ConstantColors.borderColor,
+                    ),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 8, offset: Offset(0, 4)),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add_location_alt_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                      SizedBox(width: 8),
+                      Text(
+                        _agregandoParada ? 'Confirmar Parada' : 'Añadir parada',
+                        style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
@@ -2427,477 +2487,356 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               ),
             ),
 
-          // ── PANEL INFERIOR (ruta + categorías + confirmar) ──────
-          if (_mostrandoPanel && _estadoViaje == EstadoViaje.ninguno)
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 36),
-                decoration: BoxDecoration(
-                  color: ConstantColors.backgroundCard,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border.all(color: ConstantColors.borderColor),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: Offset(0, -5))],
-                ),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  // Handle
-                  Container(width: 40, height: 4,
-                    decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
-                  SizedBox(height: 16),
-
-                  // Origen → Destino
-                  Row(children: [
-                    Column(children: [
-                      Icon(Icons.circle, size: 10, color: ConstantColors.primaryBlue),
-                      Container(width: 2, height: 24, color: ConstantColors.borderColor),
-                      Icon(Icons.location_on, size: 16, color: ConstantColors.primaryViolet),
-                    ]),
-                    SizedBox(width: 12),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(_origenNombre, style: TextStyle(color: ConstantColors.textGrey, fontSize: 13),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                      SizedBox(height: 14),
-                      Text(_destinoNombre, style: TextStyle(color: ConstantColors.textWhite, fontSize: 14, fontWeight: FontWeight.w600),
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    ])),
-                  ]),
-
-                  if (_paradasIntermedias.isNotEmpty) ...[
-                    SizedBox(height: 14),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Paradas intermedias',
-                        style: TextStyle(
-                          color: ConstantColors.textGrey,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 10),
-                    ..._paradasIntermedias.asMap().entries.map((entry) => Container(
-                      margin: EdgeInsets.only(bottom: 8),
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: ConstantColors.backgroundLight,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: ConstantColors.borderColor),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 22,
-                            height: 22,
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.16),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text(
-                                '${entry.key + 1}',
-                                style: TextStyle(
-                                  color: Colors.orange.shade300,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              entry.value.nombre,
-                              style: TextStyle(
-                                color: ConstantColors.textWhite,
-                                fontSize: 13,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => _eliminarParada(entry.key),
-                            child: Icon(
-                              Icons.close_rounded,
-                              color: ConstantColors.textGrey,
-                              size: 18,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )).toList(),
-                  ],
-
-                  if (_destino != null && _paradasIntermedias.length < 3) ...[
-                    SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: _iniciarAgregarParada,
-                      child: Container(
-                        width: double.infinity,
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          
+          if (_ajustandoRecogida || _seleccionandoDestinoMapa || _agregandoParada)
+            IgnorePointer(
+              child: Center(
+                child: Transform.translate(
+                  offset: const Offset(0, -24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: _agregandoParada
-                              ? ConstantColors.primaryViolet.withOpacity(0.14)
-                              : ConstantColors.backgroundLight,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _agregandoParada
-                                ? ConstantColors.primaryViolet
-                                : ConstantColors.borderColor,
-                          ),
+                          color: ConstantColors.backgroundCard.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: ConstantColors.borderColor),
                         ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                              Icons.add_location_alt_rounded,
-                              color: _agregandoParada
-                                  ? ConstantColors.primaryViolet
-                                  : ConstantColors.textGrey,
-                              size: 18,
-                            ),
-                            SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                _agregandoParada
-                                    ? 'Selecciona una parada desde la búsqueda superior'
-                                    : 'Añadir parada',
-                                style: TextStyle(
-                                  color: _agregandoParada
-                                      ? ConstantColors.primaryViolet
-                                      : ConstantColors.textWhite,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
+                            if (_actualizandoRecogida || _actualizandoDestinoMapa)
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    ConstantColors.primaryViolet,
+                                  ),
                                 ),
+                              )
+                            else
+                              Icon(
+                                Icons.open_with_rounded,
+                                color: ConstantColors.primaryViolet,
+                                size: 14,
+                              ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _ajustandoRecogida
+                                  ? (_actualizandoRecogida
+                                      ? 'Actualizando recogida...'
+                                      : 'Mueve el mapa y pulsa "LISTO"')
+                                  : (_actualizandoDestinoMapa
+                                      ? 'Actualizando destino...'
+                                      : 'Mueve el mapa y pulsa "CONFIRMAR"'),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
-
-                  SizedBox(height: 16),
-                  Divider(color: ConstantColors.dividerColor),
-                  SizedBox(height: 12),
-
-                  // ── SELECTOR DE TIPO DE VEHÍCULO ──────────────
-                  if (_categorias.isNotEmpty) ...[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text('Tipo de vehículo',
-                        style: TextStyle(color: ConstantColors.textGrey, fontSize: 12, fontWeight: FontWeight.w500)),
-                    ),
-                    SizedBox(height: 10),
-                    SizedBox(
-                      height: 80,
-                      child: ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _categorias.length,
-                        itemBuilder: (_, i) {
-                          final cat = _categorias[i];
-                          final isSelected = _categoriaSeleccionada?.id == cat.id;
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() => _categoriaSeleccionada = cat);
-                              _recalcularPrecio();
-                              _cargarConductoresCercanos();
-                            },
-                            child: AnimatedContainer(
-                              duration: Duration(milliseconds: 200),
-                              margin: EdgeInsets.only(right: 10),
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? ConstantColors.primaryViolet.withOpacity(0.15)
-                                    : ConstantColors.backgroundLight,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(
-                                  color: isSelected ? ConstantColors.primaryViolet : ConstantColors.borderColor,
-                                  width: isSelected ? 2 : 1,
-                                ),
-                              ),
-                              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                Text(cat.icono, style: TextStyle(fontSize: 22)),
-                                SizedBox(height: 4),
-                                Text(cat.nombre,
-                                  style: TextStyle(
-                                    color: isSelected ? ConstantColors.primaryViolet : ConstantColors.textWhite,
-                                    fontSize: 12, fontWeight: FontWeight.w600,
-                                  )),
-                              ]),
-                            ),
-                          );
-                        },
+                      const SizedBox(height: 8),
+                      Icon(
+                        _ajustandoRecogida
+                            ? Icons.location_on_rounded
+                            : (_agregandoParada 
+                                ? Icons.add_location_alt_rounded 
+                                : Icons.place_rounded),
+                        color: _ajustandoRecogida
+                            ? ConstantColors.primaryViolet
+                            : (_agregandoParada ? Colors.deepOrange : Colors.orangeAccent),
+                        size: 42,
                       ),
-                    ),
-                    SizedBox(height: 12),
-                    Divider(color: ConstantColors.dividerColor),
-                    SizedBox(height: 12),
-                  ],
-
-                  // ── INFO DE RUTA ──────────────────────────────
-                  _calculandoRuta
-                      ? Center(child: Column(children: [
-                          SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3,
-                            valueColor: AlwaysStoppedAnimation<Color>(ConstantColors.primaryViolet))),
-                          SizedBox(height: 8),
-                          Text('Calculando ruta...', style: TextStyle(color: ConstantColors.textGrey, fontSize: 13)),
-                        ]))
-                      : _rutaInfo != null
-                          ? Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-                              _buildInfoChip(Icons.straighten_rounded, '${_rutaInfo!.distanciaKm.toStringAsFixed(1)} km', 'Distancia'),
-                              _buildInfoChip(Icons.access_time_rounded, '${_rutaInfo!.duracionMin} min', 'Tiempo'),
-                              _buildInfoChip(Icons.attach_money_rounded, '\$${_precioCalculado.toStringAsFixed(2)}', 'Precio', highlight: true),
-                            ])
-                          : SizedBox.shrink(),
-
-                  SizedBox(height: 20),
-
-                  // ── BOTÓN CONFIRMAR ───────────────────────────
-                  GestureDetector(
-                    onTap: _calculandoRuta ? null : _mostrarConfirmacion,
-                    child: Container(
-                      width: double.infinity, height: 56,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [ConstantColors.primaryViolet, ConstantColors.primaryBlue],
-                          begin: Alignment.centerLeft, end: Alignment.centerRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [BoxShadow(color: ConstantColors.primaryViolet.withOpacity(0.4), blurRadius: 16, offset: Offset(0, 6))],
-                      ),
-                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                        _calculandoRuta
-                            ? SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                            : Icon(Icons.directions_car_rounded, color: Colors.white, size: 22),
-                        SizedBox(width: 10),
-                        Text(
-                          _calculandoRuta ? 'Calculando...'
-                              : _precioCalculado > 0 ? 'Pedir viaje · \$${_precioCalculado.toStringAsFixed(2)}'
-                              : 'Pedir viaje',
-                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
-                        ),
-                      ]),
-                    ),
+                    ],
                   ),
-                ]),
-              ),
-            ),
-
-          // ── PANEL: BUSCANDO CONDUCTOR ─────────────────────────
-          if (_estadoViaje == EstadoViaje.buscando)
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 40),
-                decoration: BoxDecoration(
-                  color: ConstantColors.backgroundCard,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border.all(color: ConstantColors.borderColor),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: Offset(0, -5))],
                 ),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width: 40, height: 4,
-                    decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
-                  SizedBox(height: 28),
-                  Stack(alignment: Alignment.center, children: [
-                    Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, color: ConstantColors.primaryViolet.withOpacity(0.12))),
-                    Container(width: 56, height: 56, decoration: BoxDecoration(shape: BoxShape.circle, color: ConstantColors.primaryViolet.withOpacity(0.2))),
-                    SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3, valueColor: AlwaysStoppedAnimation<Color>(ConstantColors.primaryViolet))),
-                  ]),
-                  SizedBox(height: 20),
-                  Text('Buscando conductor...', style: TextStyle(color: ConstantColors.textWhite, fontSize: 18, fontWeight: FontWeight.w700)),
-                  SizedBox(height: 8),
-                  Text('Estamos encontrando el mejor conductor cerca de ti',
-                    style: TextStyle(color: ConstantColors.textGrey, fontSize: 13, height: 1.4), textAlign: TextAlign.center),
-                  SizedBox(height: 16),
-                  // Categoría seleccionada
-                  if (_categoriaSeleccionada != null)
-                    Container(
-                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: ConstantColors.primaryViolet.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: ConstantColors.primaryViolet.withOpacity(0.3)),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text(_categoriaSeleccionada!.icono, style: TextStyle(fontSize: 16)),
-                        SizedBox(width: 6),
-                        Text(_categoriaSeleccionada!.nombre,
-                          style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 13, fontWeight: FontWeight.w600)),
-                        SizedBox(width: 8),
-                        Text('· \$${_precioCalculado.toStringAsFixed(2)}',
-                          style: TextStyle(color: ConstantColors.textGrey, fontSize: 13)),
-                      ]),
-                    ),
-                  SizedBox(height: 16),
-                  // Ruta resumida
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.backgroundLight,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: ConstantColors.borderColor),
-                    ),
-                    child: Row(children: [
-                      Icon(Icons.circle, size: 8, color: ConstantColors.primaryBlue),
-                      SizedBox(width: 8),
-                      Expanded(child: Text(_origenNombre, style: TextStyle(color: ConstantColors.textGrey, fontSize: 12), overflow: TextOverflow.ellipsis)),
-                      Icon(Icons.arrow_forward_rounded, size: 14, color: ConstantColors.textGrey),
-                      SizedBox(width: 8),
-                      Icon(Icons.location_on, size: 14, color: ConstantColors.primaryViolet),
-                      SizedBox(width: 4),
-                      Expanded(child: Text(_destinoNombre, style: TextStyle(color: ConstantColors.textWhite, fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-                    ]),
-                  ),
-                  SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: _cancelarViaje,
-                    child: Container(
-                      width: double.infinity, height: 52,
-                      decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
-                      ),
-                      child: Center(child: Text('Cancelar búsqueda',
-                        style: TextStyle(color: Colors.redAccent, fontSize: 15, fontWeight: FontWeight.w600))),
-                    ),
-                  ),
-                ]),
-              ),
-            ),
-
-          // ── PANEL: CONDUCTOR ASIGNADO / EN CAMINO / EN VIAJE ─────
-          if ((_estadoViaje == EstadoViaje.conductorAsignado ||
-               _estadoViaje == EstadoViaje.enCamino ||
-               _estadoViaje == EstadoViaje.enViaje) && _conductorData != null)
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(20, 20, 20, 40),
-                decoration: BoxDecoration(
-                  color: ConstantColors.backgroundCard,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                  border: Border.all(color: ConstantColors.borderColor),
-                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 20, offset: Offset(0, -5))],
-                ),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width: 40, height: 4,
-                    decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
-                  SizedBox(height: 16),
-                  Row(children: [
-                    Icon(
-                      _estadoViaje == EstadoViaje.enViaje
-                          ? Icons.directions_car_filled_rounded
-                          : Icons.check_circle_rounded,
-                      color: _estadoViaje == EstadoViaje.enViaje
-                          ? Colors.orangeAccent
-                          : Colors.greenAccent,
-                      size: 20,
-                    ),
-                    SizedBox(width: 8),
-                    Text(
-                      _estadoViaje == EstadoViaje.enViaje
-                          ? '¡Estás en viaje!'
-                          : _estadoViaje == EstadoViaje.enCamino
-                              ? '¡Tu conductor está en camino!'
-                              : '¡Conductor asignado!',
-                      style: TextStyle(
-                        color: _estadoViaje == EstadoViaje.enViaje
-                            ? Colors.orangeAccent
-                            : Colors.greenAccent,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Spacer(),
-                    if (_estadoViaje != EstadoViaje.enViaje)
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: ConstantColors.primaryViolet.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text('${_conductorData!['eta_min']} min',
-                          style: TextStyle(color: ConstantColors.primaryViolet, fontWeight: FontWeight.w700, fontSize: 13)),
-                      ),
-                  ]),
-                  SizedBox(height: 14),
-                  Divider(color: ConstantColors.dividerColor),
-                  SizedBox(height: 14),
-                  Row(children: [
-                    GestureDetector(
-                      onTap: _mostrarPerfilConductor,
-                      child: Stack(
-                        alignment: Alignment.bottomRight,
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
-                            child: Text(_conductorData!['inicial'],
-                              style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 24, fontWeight: FontWeight.bold)),
-                          ),
-                          Container(
-                            width: 18, height: 18,
-                            decoration: BoxDecoration(
-                              color: ConstantColors.primaryViolet,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: ConstantColors.backgroundCard, width: 1.5),
-                            ),
-                            child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 11),
-                          ),
-                        ],
-                      ),
-                    ),
-                    SizedBox(width: 14),
-                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(_conductorData!['nombre'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
-                      SizedBox(height: 4),
-                      Row(children: [
-                        Icon(Icons.star_rounded, color: Colors.amber, size: 16),
-                        SizedBox(width: 4),
-                        Text('${_conductorData!['calificacion']}  ·  ${_conductorData!['viajes']} viajes',
-                          style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
-                      ]),
-                    ])),
-                    Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                      Text(_conductorData!['auto'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 13, fontWeight: FontWeight.w600)),
-                      SizedBox(height: 2),
-                      Text('${_conductorData!['color']} · ${_conductorData!['placa']}',
-                        style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
-                    ]),
-                  ]),
-                  if (_estadoViaje != EstadoViaje.enViaje) ...[
-                    SizedBox(height: 20),
-                    GestureDetector(
-                      onTap: _cancelarViaje,
-                      child: Container(
-                        width: double.infinity, height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
-                        ),
-                        child: Center(child: Text('Cancelar viaje',
-                          style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.w600))),
-                      ),
-                    ),
-                  ],
-                ]),
               ),
             ),
         ],
       ),
+    ),
+  );
+}
+
+  Widget _buildPanelContent() {
+    if (_estadoViaje == EstadoViaje.buscando) {
+      return _buildBuscandoPanel();
+    }
+    if ((_estadoViaje == EstadoViaje.conductorAsignado ||
+         _estadoViaje == EstadoViaje.enCamino ||
+         _estadoViaje == EstadoViaje.enViaje) && _conductorData != null) {
+      return _buildEstadoViajePanel();
+    }
+    if (_mostrandoPanel && _estadoViaje == EstadoViaje.ninguno) {
+      return _buildRutaPanel();
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _buildRutaPanel() {
+    return SingleChildScrollView(
+      physics: const ClampingScrollPhysics(),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Row(children: [
+              Column(children: [
+                Icon(Icons.circle, size: 10, color: ConstantColors.primaryBlue),
+                Container(width: 2, height: 24, color: ConstantColors.borderColor),
+                Icon(Icons.location_on, size: 16, color: ConstantColors.primaryViolet),
+              ]),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(_origenNombre, style: TextStyle(color: ConstantColors.textGrey, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 14),
+                Text(_destinoNombre, style: TextStyle(color: ConstantColors.textWhite, fontSize: 14, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ])),
+            ]),
+            if (_paradasIntermedias.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              ..._paradasIntermedias.asMap().entries.map((entry) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(color: ConstantColors.backgroundLight, borderRadius: BorderRadius.circular(12), border: Border.all(color: ConstantColors.borderColor)),
+                child: Row(children: [
+                  CircleAvatar(radius: 11, backgroundColor: Colors.orange.withOpacity(0.16), child: Text('${entry.key + 1}', style: TextStyle(color: Colors.orange.shade300, fontSize: 11, fontWeight: FontWeight.bold))),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(entry.value.nombre, style: TextStyle(color: ConstantColors.textWhite, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  GestureDetector(onTap: () => _eliminarParada(entry.key), child: Icon(Icons.close_rounded, color: ConstantColors.textGrey, size: 18)),
+                ]),
+              )).toList(),
+            ],
+            if (!_ajustandoRecogida && !_seleccionandoDestinoMapa && !_agregandoParada) ...[
+              const SizedBox(height: 16),
+              Divider(color: ConstantColors.dividerColor),
+              const SizedBox(height: 12),
+              if (_categorias.isNotEmpty) ...[
+                Align(alignment: Alignment.centerLeft, child: Text('Tipo de vehículo', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12, fontWeight: FontWeight.w500))),
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 80,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _categorias.length,
+                    itemBuilder: (_, i) {
+                      final cat = _categorias[i];
+                      final isSelected = _categoriaSeleccionada?.id == cat.id;
+                      return GestureDetector(
+                        onTap: () {
+                          setState(() => _categoriaSeleccionada = cat);
+                          _recalcularPrecio();
+                        },
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          margin: const EdgeInsets.only(right: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected ? ConstantColors.primaryViolet.withOpacity(0.15) : ConstantColors.backgroundLight,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: isSelected ? ConstantColors.primaryViolet : ConstantColors.borderColor, width: isSelected ? 2 : 1),
+                          ),
+                          child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Text(cat.icono, style: const TextStyle(fontSize: 22)),
+                            const SizedBox(height: 4),
+                            Text(cat.nombre, style: TextStyle(color: isSelected ? ConstantColors.primaryViolet : ConstantColors.textWhite, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Divider(color: ConstantColors.dividerColor),
+              ],
+              const SizedBox(height: 12),
+              _calculandoRuta 
+                ? const Center(child: CircularProgressIndicator()) 
+                : Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                    _buildInfoChip(Icons.straighten_rounded, '${_rutaInfo?.distanciaKm.toStringAsFixed(1)} km', 'Distancia'),
+                    _buildInfoChip(Icons.access_time_rounded, '${_rutaInfo?.duracionMin} min', 'Tiempo'),
+                    _buildInfoChip(Icons.attach_money_rounded, '\$${_precioCalculado.toStringAsFixed(2)}', 'Precio', highlight: true),
+                  ]),
+              const SizedBox(height: 20),
+              GestureDetector(
+                onTap: _calculandoRuta ? null : _mostrarConfirmacion,
+                child: Container(
+                  width: double.infinity, height: 56,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [ConstantColors.primaryViolet, ConstantColors.primaryBlue]),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: ConstantColors.primaryViolet.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))],
+                  ),
+                  child: Center(child: Text(_calculandoRuta ? 'Calculando...' : 'Pedir viaje', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700))),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBuscandoPanel() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 40, height: 4,
+          decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 28),
+        Stack(alignment: Alignment.center, children: [
+          Container(width: 80, height: 80, decoration: BoxDecoration(shape: BoxShape.circle, color: ConstantColors.primaryViolet.withOpacity(0.12))),
+          Container(width: 56, height: 56, decoration: BoxDecoration(shape: BoxShape.circle, color: ConstantColors.primaryViolet.withOpacity(0.2))),
+          SizedBox(width: 36, height: 36, child: CircularProgressIndicator(strokeWidth: 3, valueColor: AlwaysStoppedAnimation<Color>(ConstantColors.primaryViolet))),
+        ]),
+        const SizedBox(height: 20),
+        Text('Buscando conductor...', style: TextStyle(color: ConstantColors.textWhite, fontSize: 18, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Text('Estamos encontrando el mejor conductor cerca de ti',
+          style: TextStyle(color: ConstantColors.textGrey, fontSize: 13, height: 1.4), textAlign: TextAlign.center),
+        const SizedBox(height: 16),
+        if (_categoriaSeleccionada != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: ConstantColors.primaryViolet.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: ConstantColors.primaryViolet.withOpacity(0.3)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Text(_categoriaSeleccionada!.icono, style: const TextStyle(fontSize: 16)),
+              const SizedBox(width: 6),
+              Text(_categoriaSeleccionada!.nombre,
+                style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 13, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              Text('· \$${_precioCalculado.toStringAsFixed(2)}',
+                style: TextStyle(color: ConstantColors.textGrey, fontSize: 13)),
+            ]),
+          ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(color: ConstantColors.backgroundLight, borderRadius: BorderRadius.circular(12), border: Border.all(color: ConstantColors.borderColor)),
+          child: Row(children: [
+            Icon(Icons.circle, size: 8, color: ConstantColors.primaryBlue),
+            const SizedBox(width: 8),
+            Expanded(child: Text(_origenNombre, style: TextStyle(color: ConstantColors.textGrey, fontSize: 12), overflow: TextOverflow.ellipsis)),
+            Icon(Icons.arrow_forward_rounded, size: 14, color: ConstantColors.textGrey),
+            const SizedBox(width: 8),
+            Icon(Icons.location_on, size: 14, color: ConstantColors.primaryViolet),
+            const SizedBox(width: 4),
+            Expanded(child: Text(_destinoNombre, style: TextStyle(color: ConstantColors.textWhite, fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+          ]),
+        ),
+        const SizedBox(height: 20),
+        GestureDetector(
+          onTap: _cancelarViaje,
+          child: Container(
+            width: double.infinity, height: 52,
+            decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.redAccent.withOpacity(0.4))),
+            child: const Center(child: Text('Cancelar búsqueda', style: TextStyle(color: Colors.redAccent, fontSize: 15, fontWeight: FontWeight.w600))),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _buildEstadoViajePanel() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Container(width: 40, height: 4,
+          decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
+        const SizedBox(height: 16),
+        Row(children: [
+          Icon(
+            _estadoViaje == EstadoViaje.enViaje ? Icons.directions_car_filled_rounded : Icons.check_circle_rounded,
+            color: _estadoViaje == EstadoViaje.enViaje ? Colors.orangeAccent : Colors.greenAccent,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _estadoViaje == EstadoViaje.enViaje
+                ? '¡Estás en viaje!'
+                : _estadoViaje == EstadoViaje.enCamino ? '¡Tu conductor está en camino!' : '¡Conductor asignado!',
+            style: TextStyle(
+              color: _estadoViaje == EstadoViaje.enViaje ? Colors.orangeAccent : Colors.greenAccent,
+              fontSize: 15, fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          if (_estadoViaje != EstadoViaje.enViaje)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(color: ConstantColors.primaryViolet.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
+              child: Text('${_conductorData!['eta_min']} min',
+                style: TextStyle(color: ConstantColors.primaryViolet, fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+        ]),
+        const SizedBox(height: 14),
+        Divider(color: ConstantColors.dividerColor),
+        const SizedBox(height: 14),
+        Row(children: [
+          GestureDetector(
+            onTap: _mostrarPerfilConductor,
+            child: Stack(alignment: Alignment.bottomRight, children: [
+              CircleAvatar(
+                radius: 30, backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
+                child: Text(_conductorData!['inicial'], style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 24, fontWeight: FontWeight.bold)),
+              ),
+              Container(
+                width: 18, height: 18,
+                decoration: BoxDecoration(color: ConstantColors.primaryViolet, shape: BoxShape.circle, border: Border.all(color: ConstantColors.backgroundCard, width: 1.5)),
+                child: const Icon(Icons.info_outline_rounded, color: Colors.white, size: 11),
+              ),
+            ]),
+          ),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(_conductorData!['nombre'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Row(children: [
+              const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+              const SizedBox(width: 4),
+              Text('${_conductorData!['calificacion']}  ·  ${_conductorData!['viajes']} viajes',
+                style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+            ]),
+          ])),
+          Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            Text(_conductorData!['auto'], style: TextStyle(color: ConstantColors.textWhite, fontSize: 13, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text('${_conductorData!['color']} · ${_conductorData!['placa']}',
+              style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+          ]),
+        ]),
+        if (_estadoViaje != EstadoViaje.enViaje) ...[
+          const SizedBox(height: 20),
+          GestureDetector(
+            onTap: _cancelarViaje,
+            child: Container(
+              width: double.infinity, height: 48,
+              decoration: BoxDecoration(color: Colors.red.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.redAccent.withOpacity(0.4))),
+              child: const Center(child: Text('Cancelar viaje', style: TextStyle(color: Colors.redAccent, fontSize: 14, fontWeight: FontWeight.w600))),
+            ),
+          ),
+        ],
+      ]),
     );
   }
 
   Widget _buildInfoChip(IconData icon, String value, String label, {bool highlight = false}) {
     return Column(children: [
       Icon(icon, color: highlight ? ConstantColors.primaryViolet : ConstantColors.textGrey, size: 20),
-      SizedBox(height: 4),
+      const SizedBox(height: 4),
       Text(value, style: TextStyle(color: highlight ? ConstantColors.primaryViolet : ConstantColors.textWhite, fontSize: 15, fontWeight: FontWeight.w700)),
       Text(label, style: TextStyle(color: ConstantColors.textSubtle, fontSize: 11)),
     ]);

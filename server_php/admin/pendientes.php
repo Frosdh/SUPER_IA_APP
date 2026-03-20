@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['con
         $stmt->execute([$cId]);
         $msg = ['tipo' => 'success', 'texto' => 'Conductor aprobado correctamente.'];
     } elseif ($_POST['action'] === 'rechazar') {
-        $stmt = $pdo->prepare("UPDATE conductores SET estado = 'rechazado' WHERE id = ?");
+        $stmt = $pdo->prepare("UPDATE conductores SET verificado = 2 WHERE id = ?");
         $stmt->execute([$cId]);
         $msg = ['tipo' => 'warning', 'texto' => 'Conductor rechazado.'];
     }
@@ -30,7 +30,7 @@ $stmt = $pdo->query("
            (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'rechazado') AS docs_rechazados
     FROM conductores c
     LEFT JOIN vehiculos v ON c.id = v.conductor_id
-    WHERE c.verificado = 0 AND c.estado != 'rechazado'
+    WHERE c.verificado = 0
     ORDER BY c.creado_en DESC
 ");
 $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);

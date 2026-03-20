@@ -37,6 +37,7 @@ $sql = "
         c.telefono,
         c.latitud,
         c.longitud,
+        c.estado,
         c.calificacion_promedio,
         v.categoria_id,
         v.placa,
@@ -52,7 +53,7 @@ $sql = "
         ) AS distancia_km
     FROM conductores c
     INNER JOIN vehiculos v ON v.conductor_id = c.id
-    WHERE c.estado = 'libre'
+    WHERE c.estado IN ('libre', 'ocupado')
       AND c.verificado = 1
       AND c.latitud IS NOT NULL
       AND c.longitud IS NOT NULL
@@ -87,6 +88,7 @@ while ($row = $result->fetch_assoc()) {
         "telefono" => $row['telefono'] ?? '',
         "latitud" => floatval($row['latitud']),
         "longitud" => floatval($row['longitud']),
+        "estado" => $row['estado'] ?? 'libre',
         "calificacion" => floatval($row['calificacion_promedio'] ?? 5.0),
         "categoria_id" => intval($row['categoria_id']),
         "placa" => $row['placa'] ?? '',

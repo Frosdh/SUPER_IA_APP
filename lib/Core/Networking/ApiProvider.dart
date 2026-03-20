@@ -469,6 +469,31 @@ class ApiProvider {
     }
   }
 
+  // ── Guarda el token FCM del conductor en el servidor ─────────
+  Future<bool> syncDriverFcmToken({
+    required int conductorId,
+    required String tokenFcm,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/actualizar_token_fcm_conductor.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'conductor_id': conductorId.toString(),
+          'token_fcm': tokenFcm,
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        return data['status'] == 'success';
+      }
+    } catch (e) {
+      print('>>> [DRIVER_FCM] Error sincronizando token: $e');
+    }
+    return false;
+  }
+
   // ── Obtiene la lista de cooperativas para el registro ────────
   Future<Map<String, dynamic>> obtenerCooperativas() async {
     final url = '${Constants.apiBaseUrl}/obtener_cooperativas.php';

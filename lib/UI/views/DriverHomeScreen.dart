@@ -8,6 +8,8 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
 import 'package:fu_uber/Core/Services/OsmService.dart';
+import 'package:fu_uber/Core/Services/PushNotificationService.dart';
+import 'package:fu_uber/Core/Services/BackgroundLocationService.dart';
 import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
 import 'package:fu_uber/UI/views/DriverProfileScreen.dart';
 import 'package:fu_uber/UI/views/DriverTripHistoryScreen.dart';
@@ -38,10 +40,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   bool _updatingLocation = false;
   bool _sendingLocation = false;
   bool _respondingRequest = false;
+  bool _fetchingRequest = false;
   bool _updatingRideStatus = false;
   Timer? _requestPollingTimer;
-  Timer? _locationTimer;
   Timer? _ridePollingTimer;
+  StreamSubscription<Position>? _positionSubscription;
 
   // ── Mapa con ruta ──────────────────────────────────
   final MapController _mapController = MapController();
@@ -72,9 +75,9 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   @override
   void dispose() {
     _requestPollingTimer?.cancel();
-    _locationTimer?.cancel();
     _ridePollingTimer?.cancel();
     _mapTimer?.cancel();
+    _positionSubscription?.cancel();
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -317,20 +320,42 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       return;
     }
 
-    setState(() => _updatingStatus = false);
-
     if (response['status'] != 'success') {
+      setState(() => _updatingStatus = false);
       _showMessage(response['message']?.toString() ?? 'No se pudo actualizar el estado');
       return;
     }
 
     await DriverPrefs.saveDriverStatus(nextStatus);
 
+    // Cuando el conductor se conecta: sincronizar FCM + arrancar servicio background
+    if (nextStatus == 'libre') {
+      // 1. Guardar token FCM (silencioso — nunca crashea la app)
+      try {
+        final fcmToken = await PushNotificationService.getToken();
+        if (fcmToken.isNotEmpty) {
+          await _apiProvider.syncDriverFcmToken(
+            conductorId: _driverId,
+            tokenFcm: fcmToken,
+          );
+          print('>>> [DRIVER_FCM] Token FCM sincronizado al conectarse');
+        }
+      } catch (e) {
+        print('>>> [DRIVER_FCM] Error al sincronizar token (no crítico): $e');
+      }
+
+      // 2. (stub) BackgroundLocationService ya no usa foreground service nativo
+      await BackgroundLocationService.start();
+    } else {
+      await BackgroundLocationService.stop();
+    }
+
     if (!mounted) {
       return;
     }
 
     setState(() {
+      _updatingStatus = false;
       _driverStatus = nextStatus;
       if (nextStatus != 'libre') {
         _pendingRequest = null;
@@ -341,15 +366,34 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   void _restartLocationUpdates() {
-    _locationTimer?.cancel();
+    _positionSubscription?.cancel();
+
     if (_driverId <= 0 || _driverStatus == 'desconectado') {
+      BackgroundLocationService.stop();
       return;
     }
 
-    _sendLocationUpdate(silent: true);
-    _locationTimer = Timer.periodic(Duration(seconds: 15), (_) {
-      _sendLocationUpdate(silent: true);
+    // El Foreground Service se encarga de enviar la ubicación cada 15s al servidor
+    BackgroundLocationService.start();
+    
+    // El Stream se encarga de actualizar el mapa LOCALMENTE en tiempo real (UI)
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 5, 
+      ),
+    ).listen((Position position) {
+      if (mounted) {
+        final pos = LatLng(position.latitude, position.longitude);
+        setState(() {
+          _miPosActual = pos;
+          _miUbicacion = pos;
+          _lastLocationText = '${position.latitude.toStringAsFixed(5)}, ${position.longitude.toStringAsFixed(5)}';
+        });
+      }
     });
+
+    _sendLocationUpdate(silent: true);
   }
 
   Future<void> _sendLocationUpdate({bool silent = false}) async {
@@ -372,7 +416,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 10),
       );
+
+      // Guardar coordenadas para referencia de background
+      await DriverPrefs.saveLastLocation(position.latitude, position.longitude);
 
       final response = await _apiProvider.updateDriverLocation(
         conductorId: _driverId,
@@ -537,6 +585,16 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
   }
 
   Future<void> _fetchPendingRequest() async {
+    if (_fetchingRequest) return; // evitar solapamiento si el server tarda más de 5s
+    _fetchingRequest = true;
+    try {
+      await _doFetchPendingRequest();
+    } finally {
+      _fetchingRequest = false;
+    }
+  }
+
+  Future<void> _doFetchPendingRequest() async {
     final response = await _apiProvider.getDriverPendingRequest(
       conductorId: _driverId,
     );
@@ -581,9 +639,18 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
 
     setState(() => _respondingRequest = true);
 
+    final viajeIdRaw = req['viaje_id'];
+    final viajeId = viajeIdRaw is int
+        ? viajeIdRaw
+        : int.tryParse(viajeIdRaw?.toString() ?? '') ?? 0;
+    if (viajeId <= 0) {
+      setState(() => _respondingRequest = false);
+      return;
+    }
+
     final response = await _apiProvider.respondDriverRequest(
       conductorId: _driverId,
-      viajeId: req['viaje_id'] as int,
+      viajeId: viajeId,
       accion: accion,
     );
 

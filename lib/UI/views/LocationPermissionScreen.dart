@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
+import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
 import 'package:fu_uber/Core/ProviderModels/PermissionHandlerModel.dart';
+import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
 import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
@@ -50,7 +52,14 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
       );
       if (mounted && !_yaNavego) {
         _yaNavego = true;
-        Navigator.of(context).pushReplacementNamed(OsmMapScreen.route);
+        
+        // Verificar si es conductor para decidir la ruta
+        bool driverLoggedIn = await DriverPrefs.isDriverLoggedIn();
+        if (driverLoggedIn) {
+          Navigator.of(context).pushReplacementNamed(DriverHomeScreen.route);
+        } else {
+          Navigator.of(context).pushReplacementNamed(OsmMapScreen.route);
+        }
       }
     } catch (_) {
       // Si falla, el usuario verá el botón para intentar de nuevo
