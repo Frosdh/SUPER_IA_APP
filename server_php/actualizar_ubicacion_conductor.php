@@ -12,8 +12,21 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 $conductorId = isset($_POST['conductor_id']) ? intval($_POST['conductor_id']) : 0;
+$telefono = isset($_POST['telefono']) ? trim($_POST['telefono']) : '';
 $latitud = isset($_POST['latitud']) ? trim($_POST['latitud']) : '';
 $longitud = isset($_POST['longitud']) ? trim($_POST['longitud']) : '';
+
+// Fallback: si no viene ID pero sí teléfono, buscar el ID
+if ($conductorId <= 0 && $telefono !== '') {
+    $stmtId = $conn->prepare("SELECT id FROM conductores WHERE telefono = ?");
+    $stmtId->bind_param("s", $telefono);
+    $stmtId->execute();
+    $resId = $stmtId->get_result();
+    if ($rowId = $resId->fetch_assoc()) {
+        $conductorId = $rowId['id'];
+    }
+    $stmtId->close();
+}
 
 if ($conductorId <= 0 || $latitud === '' || $longitud === '') {
     echo json_encode([

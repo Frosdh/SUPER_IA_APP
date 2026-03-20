@@ -20,6 +20,10 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await localNotifications.initialize(const InitializationSettings(android: androidSettings));
   
   // Mostrar la notificación
+  await localNotifications
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(PushNotificationService.channel);
+      
   PushNotificationService._showNotificationWithPlugin(localNotifications, message);
 }
 
@@ -30,7 +34,7 @@ class PushNotificationService {
   static bool _initialized = false;
 
   static const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel', // id
+    'high_importance_channel_v2', // id
     'Notificaciones de Viaje', // title
     description: 'Este canal se usa para avisar sobre nuevos viajes.', // description
     importance: Importance.max,

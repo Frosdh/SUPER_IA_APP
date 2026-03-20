@@ -45,8 +45,8 @@ class MyTaskHandler extends TaskHandler {
       final isDriver = await DriverPrefs.isDriverLoggedIn();
       if (!isDriver) return;
 
-      final String phone = await DriverPrefs.getDriverPhone();
-      if (phone.isEmpty) return;
+      final int id = await DriverPrefs.getDriverId();
+      if (id <= 0) return;
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
@@ -56,7 +56,7 @@ class MyTaskHandler extends TaskHandler {
         Uri.parse('${Constants.apiBaseUrl}/actualizar_ubicacion_conductor.php'),
         headers: {'ngrok-skip-browser-warning': 'true'},
         body: {
-          'telefono': phone,
+          'conductor_id': id.toString(),
           'latitud': position.latitude.toString(),
           'longitud': position.longitude.toString(),
         },
