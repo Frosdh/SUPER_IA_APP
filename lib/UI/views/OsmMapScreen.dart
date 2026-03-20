@@ -1905,9 +1905,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                subdomains: ['a', 'b', 'c'],
-                userAgentPackageName: 'com.sahdeepsingh.fu_uber',
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                tileProvider: NetworkTileProvider(
+                  headers: {
+                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                  },
+                ),
                 additionalOptions: {'attribution': '© OpenStreetMap contributors'},
               ),
               if (_rutaPuntos.isNotEmpty)

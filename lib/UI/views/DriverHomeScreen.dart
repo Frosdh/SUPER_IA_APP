@@ -1298,7 +1298,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.fu_uber',
+                tileProvider: NetworkTileProvider(
+                  headers: {
+                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                  },
+                ),
               ),
               MarkerLayer(markers: [
                 Marker(
@@ -1572,7 +1576,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
           children: [
             TileLayer(
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.example.fu_uber',
+              tileProvider: NetworkTileProvider(
+                headers: {
+                  'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                },
+              ),
             ),
             // Ruta del conductor al pasajero
             if (_rutaSolicitud.isNotEmpty)
@@ -1889,7 +1897,11 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.fu_uber',
+                tileProvider: NetworkTileProvider(
+                  headers: {
+                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                  },
+                ),
               ),
               if (_rutaPuntos.isNotEmpty)
                 PolylineLayer(polylines: [

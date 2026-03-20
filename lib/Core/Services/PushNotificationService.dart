@@ -203,9 +203,10 @@ class PushNotificationService {
 
     final String title = notification?.title ?? message.data['title'] ?? 'Nueva actualización';
     final String body = notification?.body ?? message.data['body'] ?? 'Tienes un nuevo mensaje.';
+    final int id = notification?.hashCode ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
     plugin.show(
-      notification.hashCode,
+      id,
       title,
       body,
       NotificationDetails(
@@ -214,7 +215,7 @@ class PushNotificationService {
           channel.name,
           channelDescription: channel.description,
           importance: Importance.max,
-          priority: Priority.high,
+          priority: Priority.max,
           ticker: 'ticker',
           icon: '@mipmap/ic_launcher',
           // Esto es lo que hace que la notificación "salte" (Heads-up)

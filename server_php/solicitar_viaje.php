@@ -203,20 +203,26 @@ if (!empty($conductoresLibres) && file_exists($serviceAccountPath)) {
 
     function _sendFcm($accessToken, $projectId, $token, $title, $body, $data = []) {
         $message = [
-            'token'        => $token,
-            'notification' => ['title' => $title, 'body' => $body],
-            'android'      => [
-                'priority'     => 'high',
-                'notification' => [
-                    'channel_id'              => 'high_importance_channel',
-                    'notification_priority'   => 'PRIORITY_MAX',
-                    'default_vibrate_timings' => true,
-                    'default_sound'           => true,
-                ],
+            'token' => $token,
+            'data'  => [
+                'title'     => $title,
+                'body'      => $body,
+                'viaje_id'  => isset($data['viaje_id']) ? $data['viaje_id'] : '',
+                'tipo'      => 'nuevo_viaje',
+                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
+            ],
+            'android' => [
+                'priority' => 'high',
+                'ttl'      => '3600s',
             ],
         ];
+        // Merge additional data if provided, ensuring all values are strings
         if (!empty($data)) {
-            $message['data'] = (object) array_map('strval', $data);
+            foreach ($data as $key => $value) {
+                if (!isset($message['data'][$key])) { // Only add if not already set by the fixed structure
+                    $message['data'][$key] = strval($value);
+                }
+            }
         }
         $ch = curl_init("https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send");
         curl_setopt_array($ch, [
