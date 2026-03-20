@@ -5,13 +5,23 @@
 // ============================================================
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+if (!isset($_SESSION['admin_logged_in']) && !isset($_SESSION['secretary_logged_in'])) {
     header('Location: login.php');
     exit;
 }
 
-// Obtener lista de conductores para el selector
-$conductores = $pdo->query("SELECT id, nombre, telefono FROM conductores ORDER BY nombre ASC")->fetchAll();
+$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isSecretary = isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] === true;
+$coopId = $_SESSION['cooperativa_id'] ?? 0;
+
+// Obtener lista de conductores (filtrada si es secretaria)
+if ($isAdmin) {
+    $conductores = $pdo->query("SELECT id, nombre, telefono FROM conductores ORDER BY nombre ASC")->fetchAll();
+} else {
+    $stmt = $pdo->prepare("SELECT id, nombre, telefono FROM conductores WHERE cooperativa_id = ? ORDER BY nombre ASC");
+    $stmt->execute([$coopId]);
+    $conductores = $stmt->fetchAll();
+}
 
 $currentPage = 'historial_rutas';
 ?>

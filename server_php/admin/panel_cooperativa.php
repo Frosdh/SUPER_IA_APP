@@ -68,23 +68,11 @@ $conductores = $stmt->fetchAll();
 <body>
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar Simple -->
-            <div class="col-md-2 sidebar" style="min-height: 100vh;">
-                <div class="brand">
-                    <i class="fas fa-briefcase"></i>
-                    <span><?= htmlspecialchars($coopName) ?></span>
-                </div>
-                <div style="margin-top:20px;"></div>
-                <a href="#" class="active"><i class="fas fa-home"></i> Dashboard</a>
-                <a href="mapa_coop.php"><i class="fas fa-map-marked-alt"></i> Ver Mapa</a>
-                <a href="viajes_coop.php"><i class="fas fa-route"></i> Historial de Viajes</a>
-                
-                <div class="logout-link" style="margin-top: auto; padding-top: 20px;">
-                    <div class="section-label">Cuenta</div>
-                    <p class="text-muted px-3" style="font-size: 11px;">Hola, <?= htmlspecialchars($secName) ?></p>
-                    <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
-                </div>
-            </div>
+            <!-- Sidebar Compartido -->
+            <?php 
+            $currentPage = 'dashboard';
+            include '_sidebar.php'; 
+            ?>
 
             <!-- Main Content -->
             <div class="col-md-10 main-content bg-light p-4">
