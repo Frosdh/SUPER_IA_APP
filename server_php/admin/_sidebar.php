@@ -11,6 +11,7 @@ $nav = [
     'principal' => [
         ['href' => $isSecretary ? 'panel_cooperativa.php' : 'index.php', 'icon' => 'fa-home', 'label' => 'Dashboard', 'page' => 'dashboard'],
         ['href' => $isSecretary ? 'mapa_coop.php' : 'mapa.php', 'icon' => 'fa-map-marked-alt', 'label' => 'Mapa en vivo', 'page' => 'mapa'],
+        ['href' => 'historial_rutas.php', 'icon' => 'fa-road', 'label' => 'Historial GPS', 'page' => 'historial_rutas'],
         ['href' => $isSecretary ? 'viajes_coop.php' : 'viajes.php', 'icon' => 'fa-route', 'label' => 'Historial de Viajes', 'page' => 'viajes'],
     ],
 ];
