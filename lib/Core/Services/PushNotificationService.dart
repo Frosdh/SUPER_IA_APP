@@ -34,7 +34,7 @@ class PushNotificationService {
   static bool _initialized = false;
 
   static const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel_v2', // id
+    'high_importance_channel_v3', // id
     'Notificaciones de Viaje', // title
     description: 'Este canal se usa para avisar sobre nuevos viajes.', // description
     importance: Importance.max,

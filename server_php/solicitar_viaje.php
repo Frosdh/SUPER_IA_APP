@@ -4,17 +4,37 @@ ignore_user_abort(true);
 set_time_limit(300);
 
 // ============================================================
-// solicitar_viaje.php - Crea un viaje nuevo con estado 'pedido'
-// y envía notificación FCM a conductores libres cercanos.
+// solicitar_viaje.php - Versión de DEPURECIÓN ROBUSTA
 // ============================================================
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST");
 
+// --- LOGGING EN BASE DE DATOS ---
+function _log_to_db($conn, $viajeId, $conductorId, $token, $code, $response) {
+    try {
+        if (!$conn || $conn->connect_error) {
+            // No podemos loguear si no hay conexión
+            return;
+        }
+        $stmt = $conn->prepare("
+            INSERT INTO fcm_debug_logs (viaje_id, conductor_id, token_fcm, response_code, response_text) 
+            VALUES (?, ?, ?, ?, ?)
+        ");
+        if ($stmt) {
+            $stmt->bind_param("iisis", $viajeId, $conductorId, $token, $code, $response);
+            $stmt->execute();
+            $stmt->close();
+        }
+    } catch (Exception $e) {}
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     echo json_encode(["status" => "error", "message" => "Metodo no permitido"]);
     exit;
 }
+
+_log_to_db($conn, 0, 0, 'SISTEMA', 200, "Script iniciado via POST");
 
 $telefono      = isset($_POST['telefono'])      ? trim($_POST['telefono'])           : '';
 $origen_texto  = isset($_POST['origen_texto'])  ? trim($_POST['origen_texto'])       : '';
@@ -26,252 +46,166 @@ $origen_lat    = isset($_POST['origen_lat'])    ? floatval($_POST['origen_lat'])
 $origen_lng    = isset($_POST['origen_lng'])    ? floatval($_POST['origen_lng'])     : null;
 $destino_lat   = isset($_POST['destino_lat'])   ? floatval($_POST['destino_lat'])    : null;
 $destino_lng   = isset($_POST['destino_lng'])   ? floatval($_POST['destino_lng'])    : null;
+$categoria_id  = isset($_POST['categoria_id'])  ? intval($_POST['categoria_id'])     : 1;
 
 if (empty($telefono)) {
+    _log_to_db($conn, 0, 0, 'SISTEMA', 400, "ERROR: Falta parametro telefono en POST");
     echo json_encode(["status" => "error", "message" => "El telefono es requerido"]);
     exit;
 }
 
-// Buscar usuario por teléfono
+// 1. Buscar usuario
 $stmt = $conn->prepare("SELECT id FROM usuarios WHERE telefono = ? AND activo = 1 LIMIT 1");
-$stmt->bind_param("s", $telefono);
-$stmt->execute();
-$stmt->bind_result($usuario_id);
-$usuarioEncontrado = $stmt->fetch();
-$stmt->close();
+if (!$stmt) {
+    _log_to_db($conn, 0, 0, 'SISTEMA', 500, "ERROR SQL Prepare Usuario: " . $conn->error);
+} else {
+    $stmt->bind_param("s", $telefono);
+    $stmt->execute();
+    $stmt->bind_result($usuario_id);
+    $usuarioEncontrado = $stmt->fetch();
+    $stmt->close();
+}
 
 if (!$usuarioEncontrado) {
+    _log_to_db($conn, 0, 0, 'SISTEMA', 404, "ERROR: Usuario con tel $telefono no encontrado o inactivo");
     echo json_encode(["status" => "error", "message" => "Usuario no encontrado"]);
     $conn->close();
     exit;
 }
 
-$categoria_id = isset($_POST['categoria_id']) ? intval($_POST['categoria_id']) : 1;
+_log_to_db($conn, 0, 0, 'SISTEMA', 200, "Usuario ID $usuario_id validado. Creando registro de viaje...");
 
-// Crear el viaje con estado 'pedido'
+// 2. Crear viaje
 $insert = $conn->prepare("
     INSERT INTO viajes
-        (usuario_id, conductor_id, categoria_id,
-         origen_texto, destino_texto,
+        (usuario_id, conductor_id, categoria_id, origen_texto, destino_texto,
          origen_lat, origen_lng, destino_lat, destino_lng,
-         distancia_km, duracion_min, tarifa_total,
-         estado, fecha_pedido)
-    VALUES
-        (?, NULL, ?,
-         ?, ?,
-         ?, ?, ?, ?,
-         ?, ?, ?,
-         'pedido', NOW())
+         distancia_km, duracion_min, tarifa_total, estado, fecha_pedido)
+    VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pedido', NOW())
 ");
 
-$insert->bind_param(
-    "iissdddddid",
-    $usuario_id, $categoria_id,
-    $origen_texto, $destino_texto,
-    $origen_lat, $origen_lng, $destino_lat, $destino_lng,
-    $distancia_km, $duracion_min, $tarifa_total
-);
-
-if (!$insert->execute()) {
-    echo json_encode([
-        "status"  => "error",
-        "message" => "Error al crear viaje: " . $insert->error
-    ]);
+if (!$insert) {
+    _log_to_db($conn, 0, 0, 'SISTEMA', 500, "ERROR SQL Prepare Viajes: " . $conn->error);
+} else {
+    $insert->bind_param("iissdddddid", $usuario_id, $categoria_id, $origen_texto, $destino_texto, $origen_lat, $origen_lng, $destino_lat, $destino_lng, $distancia_km, $duracion_min, $tarifa_total);
+    if (!$insert->execute()) {
+        _log_to_db($conn, 0, 0, 'SISTEMA', 500, "ERROR SQL Execute Viajes: " . $insert->error);
+    }
+    $viaje_id = $conn->insert_id;
     $insert->close();
-    $conn->close();
+}
+
+if (!isset($viaje_id) || $viaje_id <= 0) {
+    _log_to_db($conn, 0, 0, 'SISTEMA', 500, "FATAL: No se pudo crear el viaje en la DB.");
+    echo json_encode(["status" => "error", "message" => "Error al crear viaje"]);
     exit;
 }
 
-$viaje_id = $conn->insert_id;
-$insert->close();
+_log_to_db($conn, $viaje_id, 0, 'SISTEMA', 200, "Viaje ID $viaje_id guardado. Respondiendo al app y buscando conductores...");
 
-// ─── RESPUESTA RÁPIDA AL CLIENTE ─────────────────────────────────────────────
-// Enviamos el ID al pasajero de inmediato y seguimos procesando FCM en background.
-$response = [
-    "status"   => "success",
-    "message"  => "Viaje creado correctamente",
-    "viaje_id" => (int)$viaje_id
-];
+// --- RESPUESTA RÁPIDA (Background) ---
+$response = ["status" => "success", "message" => "Viaje creado", "viaje_id" => (int)$viaje_id];
 ob_start();
 echo json_encode($response);
 $size = ob_get_length();
 header("Content-Length: $size");
 header("Connection: close");
-header("Content-Type: application/json");
 ob_end_flush();
 ob_flush();
 flush();
-if (function_exists('fastcgi_finish_request')) {
-    fastcgi_finish_request();
-}
-// ─────────────────────────────────────────────────────────────────────────────
+if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); }
 
-// ─── Notificaciones FCM a conductores libres cercanos ───────────────────────
-
-$fcmEnviados = 0;
-$fcmErrores  = [];
-
-// Buscar conductores libres con token_fcm.
-// Si el pasajero envió coordenadas, filtramos por radio de 6 km usando Haversine.
-// Si no hay coordenadas, notificamos a todos los libres con token.
+// 3. Buscar conductores
+$radioKm = 6.0;
 if ($origen_lat !== null && $origen_lng !== null) {
-    $radioKm = 6.0;
-    $sqlConductores = "
-        SELECT id, nombre, token_fcm,
-            (6371 * ACOS(
-                COS(RADIANS(?)) * COS(RADIANS(latitud)) *
-                COS(RADIANS(longitud) - RADIANS(?)) +
-                SIN(RADIANS(?)) * SIN(RADIANS(latitud))
-            )) AS distancia_km
-        FROM conductores
-        WHERE estado = 'libre'
-          AND token_fcm IS NOT NULL
-          AND token_fcm <> ''
-          AND latitud IS NOT NULL
-          AND longitud IS NOT NULL
-          AND (categoria_id = ? OR ? = 0)
-        HAVING distancia_km <= ?
-        ORDER BY distancia_km ASC
-        LIMIT 20
-    ";
-    $stmtC = $conn->prepare($sqlConductores);
-    $stmtC->bind_param("dddiid", $origen_lat, $origen_lng, $origen_lat, $categoria_id, $categoria_id, $radioKm);
+    $sqlC = "SELECT c.id, c.nombre, c.token_fcm, 
+             (6371 * ACOS(COS(RADIANS(?)) * COS(RADIANS(c.latitud)) * COS(RADIANS(c.longitud) - RADIANS(?)) + SIN(RADIANS(?)) * SIN(RADIANS(c.latitud)))) AS dist 
+             FROM conductores c
+             LEFT JOIN vehiculos v ON v.conductor_id = c.id
+             WHERE c.estado = 'libre' AND c.token_fcm IS NOT NULL AND c.token_fcm <> '' AND c.latitud IS NOT NULL AND c.longitud IS NOT NULL 
+             AND (v.categoria_id = ? OR ? = 0) HAVING dist <= ? ORDER BY dist ASC LIMIT 15";
+    $stmtC = $conn->prepare($sqlC);
+    if ($stmtC) { $stmtC->bind_param("dddiid", $origen_lat, $origen_lng, $origen_lat, $categoria_id, $categoria_id, $radioKm); }
 } else {
-    $sqlConductores = "
-        SELECT id, nombre, token_fcm
-        FROM conductores
-        WHERE estado = 'libre'
-          AND token_fcm IS NOT NULL
-          AND token_fcm <> ''
-          AND (categoria_id = ? OR ? = 0)
-        ORDER BY id ASC
-        LIMIT 20
-    ";
-    $stmtC = $conn->prepare($sqlConductores);
-    $stmtC->bind_param("ii", $categoria_id, $categoria_id);
+    $sqlC = "SELECT c.id, c.nombre, c.token_fcm 
+             FROM conductores c
+             LEFT JOIN vehiculos v ON v.conductor_id = c.id
+             WHERE c.estado = 'libre' AND c.token_fcm IS NOT NULL AND c.token_fcm <> '' 
+             AND (v.categoria_id = ? OR ? = 0) ORDER BY c.id ASC LIMIT 15";
+    $stmtC = $conn->prepare($sqlC);
+    if ($stmtC) { $stmtC->bind_param("ii", $categoria_id, $categoria_id); }
+}
+
+if (!$stmtC) {
+    _log_to_db($conn, $viaje_id, 0, 'SISTEMA', 500, "ERROR SQL Prepare Conductores: " . $conn->error);
+    exit;
 }
 
 $stmtC->execute();
-$resConductores = $stmtC->get_result();
-$conductoresLibres = $resConductores->fetch_all(MYSQLI_ASSOC);
+$resC = $stmtC->get_result();
+$conductores = $resC->fetch_all(MYSQLI_ASSOC);
 $stmtC->close();
-$conn->close();
 
-// Enviar FCM solo si hay conductores y existe el archivo de credenciales
+_log_to_db($conn, $viaje_id, 0, 'SISTEMA', 200, "Conductores libres encontrados: " . count($conductores));
+
+// 4. Notificaciones FCM
 $serviceAccountPath = __DIR__ . '/firebase_service_account.json';
-
-if (!empty($conductoresLibres) && file_exists($serviceAccountPath)) {
-
-    // ── Helpers FCM v1 ───────────────────────────────────────────
-    function _b64u($data) {
-        return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
-    }
-
+if (!empty($conductores) && file_exists($serviceAccountPath)) {
+    
+    function _b64u($data) { return rtrim(strtr(base64_encode($data), '+/', '-_'), '='); }
     function _fcmAccessToken($path) {
         $creds = json_decode(file_get_contents($path), true);
-        $header  = ['alg' => 'RS256', 'typ' => 'JWT'];
-        $now     = time();
-        $claims  = [
-            'iss'   => $creds['client_email'],
+        $header = ['alg' => 'RS256', 'typ' => 'JWT'];
+        $now = time();
+        $claims = [
+            'iss' => $creds['client_email'],
             'scope' => 'https://www.googleapis.com/auth/firebase.messaging',
-            'aud'   => 'https://oauth2.googleapis.com/token',
-            'exp'   => $now + 3600,
-            'iat'   => $now,
+            'aud' => 'https://oauth2.googleapis.com/token',
+            'exp' => $now + 3600, 'iat' => $now
         ];
         $input = _b64u(json_encode($header)) . '.' . _b64u(json_encode($claims));
-        $key   = openssl_pkey_get_private($creds['private_key']);
+        $key = openssl_pkey_get_private($creds['private_key']);
         openssl_sign($input, $sig, $key, 'sha256WithRSAEncryption');
         $jwt = $input . '.' . _b64u($sig);
-
         $ch = curl_init('https://oauth2.googleapis.com/token');
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_HTTPHEADER     => ['Content-Type: application/x-www-form-urlencoded'],
-            CURLOPT_POSTFIELDS     => http_build_query([
-                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion'  => $jwt,
-            ]),
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded'],
+            CURLOPT_POSTFIELDS => http_build_query(['grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer', 'assertion'  => $jwt])
         ]);
-        $res  = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-        if ($code !== 200) throw new Exception("Token OAuth fallido: $res");
+        $res = curl_exec($ch); curl_close($ch);
         $json = json_decode($res, true);
-        return [$json['access_token'], $creds['project_id']];
+        return [$json['access_token'] ?? null, $creds['project_id']];
     }
 
     function _sendFcm($accessToken, $projectId, $token, $title, $body, $data = []) {
-        $message = [
-            'token' => $token,
-            'data'  => [
-                'title'     => $title,
-                'body'      => $body,
-                'viaje_id'  => isset($data['viaje_id']) ? $data['viaje_id'] : '',
-                'tipo'      => 'nuevo_viaje',
-                'click_action' => 'FLUTTER_NOTIFICATION_CLICK',
-            ],
-            'android' => [
-                'priority' => 'high',
-                'ttl'      => '3600s',
-            ],
-        ];
-        // Merge additional data if provided, ensuring all values are strings
-        if (!empty($data)) {
-            foreach ($data as $key => $value) {
-                if (!isset($message['data'][$key])) { // Only add if not already set by the fixed structure
-                    $message['data'][$key] = strval($value);
-                }
-            }
-        }
+        $message = ['token' => (string)$token, 'data' => array_merge(['title' => (string)$title, 'body' => (string)$body], array_map('strval', $data)), 'android' => ['priority' => 'high']];
         $ch = curl_init("https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send");
         curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST           => true,
-            CURLOPT_HTTPHEADER     => [
-                'Authorization: Bearer ' . $accessToken,
-                'Content-Type: application/json; charset=UTF-8',
-            ],
-            CURLOPT_POSTFIELDS => json_encode(['message' => $message]),
+            CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken, 'Content-Type: application/json; charset=UTF-8'],
+            CURLOPT_POSTFIELDS => json_encode(['message' => $message])
         ]);
-        $res  = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+        $res = curl_exec($ch); $code = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
         return [$code, $res];
     }
-    // ─────────────────────────────────────────────────────────────
 
     try {
         list($accessToken, $projectId) = _fcmAccessToken($serviceAccountPath);
-
-        $titulo  = '¡Nuevo viaje disponible!';
-        $cuerpo  = "De: {$origen_texto}\nHacia: {$destino_texto}\n\$" . number_format($tarifa_total, 2);
-        $dataMap = [
-            'tipo'          => 'nuevo_viaje',
-            'viaje_id'      => (string) $viaje_id,
-            'origen_texto'  => $origen_texto,
-            'destino_texto' => $destino_texto,
-            'tarifa_total'  => (string) $tarifa_total,
-            'origen_lat'    => $origen_lat  !== null ? (string) $origen_lat  : '',
-            'origen_lng'    => $origen_lng  !== null ? (string) $origen_lng  : '',
-        ];
-
-        foreach ($conductoresLibres as $conductor) {
-            list($httpCode, ) = _sendFcm(
-                $accessToken, $projectId,
-                $conductor['token_fcm'],
-                $titulo, $cuerpo, $dataMap
-            );
-            if ($httpCode >= 200 && $httpCode < 300) {
-                $fcmEnviados++;
-            } else {
-                $fcmErrores[] = "conductor_id={$conductor['id']} HTTP=$httpCode";
+        if (!$accessToken) {
+            _log_to_db($conn, $viaje_id, 0, 'SISTEMA', 500, "ERROR: No token FCM OAuth2");
+        } else {
+            $titulo = '¡Nuevo viaje disponible!';
+            $cuerpo = "Rutas: $origen_texto -> $destino_texto";
+            foreach ($conductores as $c) {
+                list($status, $res) = _sendFcm($accessToken, $projectId, $c['token_fcm'], $titulo, $cuerpo, ['tipo' => 'nuevo_viaje', 'viaje_id' => (string)$viaje_id]);
+                _log_to_db($conn, $viaje_id, $c['id'], $c['token_fcm'], $status, $res);
             }
         }
     } catch (Exception $e) {
-        $fcmErrores[] = $e->getMessage();
+        _log_to_db($conn, $viaje_id, 0, 'ERROR_CODE', 0, $e->getMessage());
     }
 }
 
-// El script continúa aquí enviando notificaciones FCM sin que el usuario espere.
+$conn->close();
 ?>
