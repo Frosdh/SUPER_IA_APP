@@ -12,7 +12,7 @@ $nav = [
         ['href' => $isSecretary ? 'panel_cooperativa.php' : 'index.php', 'icon' => 'fa-home', 'label' => 'Dashboard', 'page' => 'dashboard'],
         ['href' => $isSecretary ? 'mapa_coop.php' : 'mapa.php', 'icon' => 'fa-map-marked-alt', 'label' => 'Mapa en vivo', 'page' => 'mapa'],
         ['href' => 'historial_rutas.php', 'icon' => 'fa-road', 'label' => 'Historial GPS', 'page' => 'historial_rutas'],
-        ['href' => $isSecretary ? 'viajes_coop.php' : 'viajes.php', 'icon' => 'fa-route', 'label' => 'Historial de Viajes', 'page' => 'viajes'],
+        ['href' => $isSecretary ? 'viajes_coop.php?historico=1' : 'viajes.php?historico=1', 'icon' => 'fa-history', 'label' => 'Historial de Viajes', 'page' => 'viajes_hist'],
     ],
 ];
 
@@ -28,11 +28,11 @@ if (!$isSecretary) {
         $gBadgeCond = 0; $gBadgeSec = 0;
     }
 
-    $nav['principal'][] = ['href' => 'pendientes.php','icon' => 'fa-user-clock', 'label' => 'Cond. Pendientes', 'page' => 'pendientes', 'badge' => $gBadgeCond];
-    $nav['principal'][] = ['href' => 'activos.php',   'icon' => 'fa-id-badge',  'label' => 'Cond. Activos', 'page' => 'conductores'];
+    $nav['principal'][] = ['href' => 'pendientes.php',   'icon' => 'fa-user-clock', 'label' => 'Cond. Pendientes', 'page' => 'pendientes', 'badge' => $gBadgeCond];
+    $nav['principal'][] = ['href' => 'activos.php',      'icon' => 'fa-id-badge',  'label' => 'Cond. Activos',     'page' => 'conductores'];
     $nav['principal'][] = ['href' => 'pendientes_secretarias.php','icon' => 'fa-user-tie', 'label' => 'Sec. Pendientes', 'page' => 'secretarias', 'badge' => $gBadgeSec];
-    $nav['principal'][] = ['href' => 'secretarias_activas.php', 'icon' => 'fa-briefcase', 'label' => 'Sec. Activas', 'page' => 'secretarias_activas'];
-    $nav['principal'][] = ['href' => 'viajes.php',    'icon' => 'fa-route',     'label' => 'Viajes',      'page' => 'viajes'];
+    $nav['principal'][] = ['href' => 'secretarias_activas.php', 'icon' => 'fa-briefcase', 'label' => 'Sec. Activas',    'page' => 'secretarias_activas'];
+    $nav['principal'][] = ['href' => 'viajes.php',       'icon' => 'fa-route',     'label' => 'Viajes en Curso',   'page' => 'viajes_live'];
     
     $nav['Pasajeros'] = [
         ['href' => 'usuarios.php',  'icon' => 'fa-users',          'label' => 'Usuarios',     'page' => 'usuarios'],
@@ -70,7 +70,17 @@ if (!$isSecretary) {
     <?php endforeach; ?>
 
     <div class="logout-link">
+        <div class="section-label">Sistema</div>
+        <a href="javascript:void(0)" onclick="GeoMove.toggleDarkMode()">
+            <i id="dark-mode-icon" class="fas fa-moon"></i> Modo Oscuro
+        </a>
+        <div style="margin-top: 15px;"></div>
         <div class="section-label">Cuenta</div>
-        <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
+        <a href="logout.php" style="color:rgba(252,165,165,.8) !important;">
+            <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+        </a>
     </div>
 </div>
+
+<!-- Core JS for interactive features -->
+<script src="admin.js"></script>

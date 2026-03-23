@@ -79,8 +79,7 @@ $currentPage = 'conductores';
             <table class="table mb-0">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Conductor</th>
+                        <th class="ps-3">Conductor</th>
                         <th>Cédula / Teléfono</th>
                         <th>Vehículo</th>
                         <th class="text-center">Calificación</th>
@@ -99,8 +98,7 @@ $currentPage = 'conductores';
                         $initials = strtoupper(substr($a['nombre'], 0, 1));
                     ?>
                     <tr>
-                        <td class="text-muted"><?= $a['id'] ?></td>
-                        <td>
+                        <td class="ps-3">
                             <div class="d-flex align-items-center gap-2">
                                 <div class="avatar" style="font-size:13px;width:34px;height:34px;"><?= $initials ?></div>
                                 <span class="fw-semibold"><?= htmlspecialchars($a['nombre']) ?></span>

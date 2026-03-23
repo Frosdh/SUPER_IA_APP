@@ -21,6 +21,7 @@ class _DriverStep2ScreenState extends State<DriverStep2Screen> {
   final _cedulaCtrl      = TextEditingController();
   final _passCtrl        = TextEditingController();
   final _confirmCtrl     = TextEditingController();
+  String _countryPrefix  = '+593';
 
   final _api = ApiProvider();
   bool _loadingCoops = false;
@@ -72,12 +73,55 @@ class _DriverStep2ScreenState extends State<DriverStep2Screen> {
     widget.data
       ..nombre   = _nombreCtrl.text.trim()
       ..email    = _emailCtrl.text.trim()
-      ..telefono = _telefonoCtrl.text.trim()
+      ..telefono = '$_countryPrefix${_telefonoCtrl.text.trim()}'
       ..cedula   = _cedulaCtrl.text.trim()
       ..password = _passCtrl.text.trim();
     Navigator.push(context, MaterialPageRoute(
       builder: (_) => DriverStep3Screen(data: widget.data),
     ));
+  }
+
+  void _showPrefixPicker() {
+    final prefixes = [
+      {'name': 'Ecuador', 'code': '+593'},
+      {'name': 'Estados Unidos', 'code': '+1'},
+      {'name': 'Colombia', 'code': '+57'},
+      {'name': 'Perú', 'code': '+51'},
+      {'name': 'Argentina', 'code': '+54'},
+      {'name': 'Chile', 'code': '+56'},
+      {'name': 'España', 'code': '+34'},
+      {'name': 'México', 'code': '+52'},
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ConstantColors.backgroundDark,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Selecciona tu país', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 15),
+            Expanded(
+              child: ListView.builder(
+                itemCount: prefixes.length,
+                itemBuilder: (context, i) => ListTile(
+                  leading: const Icon(Icons.public_rounded, color: ConstantColors.primaryBlue),
+                  title: Text(prefixes[i]['name']!, style: const TextStyle(color: Colors.white)),
+                  trailing: Text(prefixes[i]['code']!, style: const TextStyle(color: ConstantColors.textGrey, fontWeight: FontWeight.bold)),
+                  onTap: () {
+                    setState(() => _countryPrefix = prefixes[i]['code']!);
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _field({
@@ -179,13 +223,43 @@ class _DriverStep2ScreenState extends State<DriverStep2Screen> {
                                   if (!val.contains('@') || !val.contains('.')) return 'Correo inválido';
                                   return null;
                                 }),
-                              _field(ctrl: _telefonoCtrl, label: 'Teléfono (10 dígitos)', icon: Icons.phone_outlined,
-                                keyboard: TextInputType.phone,
-                                formatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
-                                validator: (v) {
-                                  if ((v ?? '').trim().length != 10) return 'Debe tener 10 dígitos';
-                                  return null;
-                                }),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  GestureDetector(
+                                    onTap: _showPrefixPicker,
+                                    child: Container(
+                                      height: 58,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      margin: const EdgeInsets.only(right: 8),
+                                      decoration: BoxDecoration(
+                                        color: ConstantColors.backgroundCard,
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(color: ConstantColors.borderColor.withOpacity(0.9)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.public_rounded, color: ConstantColors.primaryBlue, size: 18),
+                                          const SizedBox(width: 6),
+                                          Text(_countryPrefix, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: _field(ctrl: _telefonoCtrl, label: 'Teléfono', icon: Icons.phone_outlined,
+                                      keyboard: TextInputType.phone,
+                                      formatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(12)],
+                                      validator: (v) {
+                                        final val = (v ?? '').trim();
+                                        if (val.isEmpty) return 'Ingresa tu número';
+                                        if (val.length < 7) return 'Número muy corto';
+                                        return null;
+                                      }),
+                                  ),
+                                ],
+                              ),
                               _field(ctrl: _cedulaCtrl, label: 'Cédula (10 dígitos)', icon: Icons.credit_card_outlined,
                                 keyboard: TextInputType.number,
                                 formatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],

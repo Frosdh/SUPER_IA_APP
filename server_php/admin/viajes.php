@@ -10,20 +10,70 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     exit;
 }
 
-// Obtener viajes activos (pedido, aceptado, en_curso)
-$stmt = $pdo->query("
+$f_canton = $_GET['canton'] ?? '';
+$f_coop   = $_GET['coop_id'] ?? '';
+$f_cat    = $_GET['cat_id']   ?? '';
+$isHist   = isset($_GET['historico']) && $_GET['historico'] == '1';
+
+$whereExtra = "";
+$params = [];
+if ($f_canton !== '') {
+    $whereExtra .= " AND cond.canton = ?";
+    $params[] = $f_canton;
+}
+if ($f_coop !== '') {
+    $whereExtra .= " AND cond.cooperativa_id = ?";
+    $params[] = $f_coop;
+}
+if ($f_cat !== '') {
+    $whereExtra .= " AND v.categoria_id = ?";
+    $params[] = $f_cat;
+}
+
+// Determinar estados según el modo (Histórico vs Activo)
+$estadosFiltro = $isHist ? "('terminado', 'cancelado')" : "('pedido', 'aceptado', 'en_curso')";
+
+// Obtener viajes
+$stmt = $pdo->prepare("
     SELECT v.id, v.estado, v.fecha_pedido, v.tarifa_total,
            u.nombre as cliente, u.telefono as cliente_telefono,
-           cond.nombre as conductor, cond.telefono as conductor_telefono
+           cond.nombre as conductor, cond.telefono as conductor_telefono,
+           (SELECT nombre FROM categorias WHERE id = v.categoria_id) AS categoria
     FROM viajes v
     JOIN usuarios u ON v.usuario_id = u.id
     LEFT JOIN conductores cond ON v.conductor_id = cond.id
-    WHERE v.estado IN ('pedido', 'aceptado', 'en_curso')
+    WHERE v.estado IN $estadosFiltro $whereExtra
     ORDER BY v.fecha_pedido DESC
+    LIMIT " . ($isHist ? "100" : "50") . "
 ");
+$stmt->execute($params);
 $viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$currentPage = 'viajes';
+$currentPage     = $isHist ? 'viajes_hist' : 'viajes_live';
+
+// ── Manejo de AJAX ──────────────────────────────────────────
+if (isset($_GET['ajax'])) {
+    if (count($viajes) === 0) {
+        echo '<div class="text-center py-5 text-muted"><i class="fas fa-car fa-3x mb-3 text-secondary opacity-50"></i><h5>No se encontraron resultados</h5></div>';
+    } else {
+        echo '<div class="table-responsive"><table class="table table-hover"><thead><tr><th>Hora Inicio</th><th>Cliente</th><th>Conductor Asignado</th><th>Tarifa Aprox.</th><th>Estado</th></tr></thead><tbody>';
+        foreach ($viajes as $v) {
+            $cls = 'est-pedido';
+            if($v['estado'] == 'aceptado') $cls = 'est-aceptado';
+            if($v['estado'] == 'en_curso') $cls = 'est-encurso';
+            echo "<tr>
+                    <td>".date('H:i', strtotime($v['fecha_pedido']))."</td>
+                    <td>".htmlspecialchars($v['cliente'])."<br><small class='text-muted'><i class='fas fa-phone fa-sm'></i> ".htmlspecialchars($v['cliente_telefono'])."</small></td>
+                    <td>".($v['conductor'] ? "<span class='fw-bold'>".htmlspecialchars($v['conductor'])."</span><br><small class='text-muted'><i class='fas fa-phone fa-sm'></i> ".htmlspecialchars($v['conductor_telefono'])."</small>" : "<span class='text-muted fst-italic'>Buscando...</span>")."</td>
+                    <td class='fw-bold text-success'>$".number_format((float)$v['tarifa_total'], 2)."</td>
+                    <td><span class='badge-estado $cls'>".str_replace('_', ' ', $v['estado'])."</span></td>
+                  </tr>";
+        }
+        echo '</tbody></table></div>';
+    }
+    exit;
+}
+
 $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
 ?>
 <!DOCTYPE html>
@@ -31,7 +81,7 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove Admin - Viajes en Curso</title>
+    <title>GeoMove Admin - <?= $isHist ? 'Historial de Viajes' : 'Viajes en Curso' ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="admin.css">
@@ -44,6 +94,8 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
         .est-pedido { background: #cff4fc; color: #055160; }
         .est-aceptado { background: #fff3cd; color: #856404; }
         .est-encurso { background: #d1e7dd; color: #0f5132; }
+        .est-terminado { background: #cfe2ff; color: #084298; }
+        .est-cancelado { background: #f8d7da; color: #842029; }
     </style>
 </head>
 <body>
@@ -53,9 +105,76 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
 <?php include '_sidebar.php'; ?>
 
             <div class="col-md-10 content">
-                <h2 class="mb-4 fw-bold">Monitoreo de Viajes Activos</h2>
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2 class="fw-bold mb-0">
+                        <i class="fas <?= $isHist ? 'fa-history' : 'fa-route' ?> me-2 text-primary"></i>
+                        <?= $isHist ? 'Historial de Viajes' : 'Viajes en Curso' ?>
+                    </h2>
+                </div>
+                
+                <?php if ($isHist): ?>
+                    <p class="text-muted small mb-4">Consulta los servicios ya finalizados o cancelados en la plataforma.</p>
+                <?php else: ?>
+                    <p class="text-muted small mb-4">Monitoreo en tiempo real de los servicios que se están realizando o solicitando ahora.</p>
+                <?php endif; ?>
 
-                <div class="data-table p-3">
+                <!-- Filtros -->
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body">
+                        <form id="filter-form" method="GET" class="row g-3 align-items-end" onsubmit="handleFilter(event)">
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Cantón</label>
+                                <select name="canton" class="form-select">
+                                    <option value="">Todos</option>
+                                    <?php
+                                    $cantones = $pdo->query("SELECT DISTINCT canton FROM conductores WHERE canton IS NOT NULL")->fetchAll();
+                                    foreach($cantones as $c) {
+                                        $sel = ($f_canton == $c['canton']) ? 'selected' : '';
+                                        echo "<option value='{$c['canton']}' $sel>{$c['canton']}</option>";
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small fw-bold">Cooperativa</label>
+                                <select name="coop_id" class="form-select">
+                                    <option value="">Todas</option>
+                                    <?php
+                                    $coops = $pdo->query("SELECT id, nombre FROM cooperativas")->fetchAll();
+                                    foreach($coops as $co) {
+                                        $sel = ($f_coop == $co['id']) ? 'selected' : '';
+                                        echo "<option value='{$co['id']}' $sel>{$co['nombre']}</option>";
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small fw-bold">Categoría</label>
+                                <select name="cat_id" class="form-select">
+                                    <option value="">Todas</option>
+                                    <?php
+                                    $cats = $pdo->query("SELECT id, nombre FROM categorias")->fetchAll();
+                                    foreach($cats as $ca) {
+                                        $sel = ($f_cat == $ca['id']) ? 'selected' : '';
+                                        echo "<option value='{$ca['id']}' $sel>{$ca['nombre']}</option>";
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search me-1"></i> Filtrar</button>
+                            </div>
+                            <div class="col-md-2">
+                                <a href="viajes.php<?= $isHist ? '?historico=1' : '' ?>" class="btn btn-outline-secondary w-100">Limpiar</a>
+                            </div>
+                            <?php if ($isHist): ?>
+                                <input type="hidden" name="historico" value="1">
+                            <?php endif; ?>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="container-viajes" class="data-table p-3">
                     <?php if (count($viajes) === 0): ?>
                         <div class="text-center py-5 text-muted">
                             <i class="fas fa-car fa-3x mb-3 text-secondary opacity-50"></i>
@@ -66,7 +185,6 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
-                                        <th>ID Viaje</th>
                                         <th>Hora Inicio</th>
                                         <th>Cliente</th>
                                         <th>Conductor Asignado</th>
@@ -81,7 +199,6 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                                         if($v['estado'] == 'en_curso') $cls = 'est-encurso';
                                     ?>
                                     <tr>
-                                        <td class="text-muted fw-bold">#<?= $v['id'] ?></td>
                                         <td><?= date('H:i', strtotime($v['fecha_pedido'])) ?></td>
                                         <td>
                                             <?= htmlspecialchars($v['cliente']) ?><br>
@@ -107,5 +224,20 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
             </div>
         </div>
     </div>
+    <script>
+        function handleFilter(e) {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData).toString();
+            const currentUrl = window.location.pathname + '?' + params;
+            
+            // Usar nuestro helper global
+            GeoMove.fetchWithSkeleton(currentUrl, 'container-viajes', 6);
+            
+            // Actualizar URL sin recargar
+            window.history.pushState({}, '', currentUrl);
+        }
+    </script>
 </body>
 </html>

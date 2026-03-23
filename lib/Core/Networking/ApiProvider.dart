@@ -199,6 +199,31 @@ class ApiProvider {
     return <String, dynamic>{'status': 'error', 'message': 'Error de conexión'};
   }
 
+  // Nuevo método: El conductor cancela con motivo (para reasignación)
+  Future<Map<String, dynamic>> cancelRideWithReason({
+    required int viajeId,
+    required int conductorId,
+    required String motivo,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/cancelar_conductor_motivo.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'viaje_id': viajeId.toString(),
+          'conductor_id': conductorId.toString(),
+          'motivo': motivo,
+        },
+      ).timeout(const Duration(seconds: 8));
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+    } catch (e) {
+      print('>>> [CANCELAR_MOTIVO] Error: $e');
+    }
+    return <String, dynamic>{'status': 'error', 'message': 'Error de conexión'};
+  }
+
   // Consulta el estado actual de un viaje (usado por el conductor para detectar cancelación).
   Future<Map<String, dynamic>> getRideStatus({required int viajeId}) async {
     final url = '${Constants.apiBaseUrl}/estado_viaje.php';
@@ -370,7 +395,10 @@ class ApiProvider {
     required int anio,
     required int categoriaId,
     String email  = '',
-    String ciudad = 'Cuenca',
+    String ciudad = '',
+    String pais   = 'Ecuador',
+    String provincia = '',
+    String canton    = '',
     String tipoConductor = 'independiente',
     int? cooperativaId,
   }) async {
@@ -383,6 +411,9 @@ class ApiProvider {
         'cedula':       cedula,
         'password':     password,
         'ciudad':       ciudad,
+        'pais':         pais,
+        'provincia':    provincia,
+        'canton':       canton,
         'marca':        marca,
         'modelo':       modelo,
         'placa':        placa,

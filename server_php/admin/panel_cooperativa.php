@@ -57,12 +57,12 @@ $conductores = $stmt->fetchAll();
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="admin.css">
     <style>
-        .card-stat { border-radius: 15px; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: 0.3s; }
-        .card-stat:hover { transform: translateY(-5s); }
+        .card-stat { border-radius: 15px; border: none; box-shadow: var(--shadow); transition: 0.3s; background: var(--card); }
+        .card-stat:hover { transform: translateY(-5px); }
         .status-dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-        .bg-libre { background-color: #22c55e; }
-        .bg-ocupado { background-color: #eab308; }
-        .bg-desconectado { background-color: #94a3b8; }
+        .bg-libre { background-color: var(--accent); }
+        .bg-ocupado { background-color: var(--warning); }
+        .bg-desconectado { background-color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -75,7 +75,7 @@ $conductores = $stmt->fetchAll();
             ?>
 
             <!-- Main Content -->
-            <div class="col-md-10 main-content bg-light p-4">
+            <div class="col-md-10 main-content p-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h2 class="fw-bold">Dashboard de Cooperativa</h2>
                     <span class="badge bg-primary px-3 py-2">Rol: Secretaria</span>
@@ -84,7 +84,7 @@ $conductores = $stmt->fetchAll();
                 <!-- Stats -->
                 <div class="row g-4 mb-4">
                     <div class="col-md-3">
-                        <div class="card card-stat p-4 bg-white">
+                        <div class="card card-stat p-4">
                             <div class="d-flex align-items-center">
                                 <div class="bg-primary bg-opacity-10 p-2 rounded-circle me-3">
                                     <i class="fas fa-users text-primary fs-5"></i>
@@ -97,7 +97,7 @@ $conductores = $stmt->fetchAll();
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card card-stat p-4 bg-white">
+                        <div class="card card-stat p-4">
                             <div class="d-flex align-items-center">
                                 <div class="bg-success bg-opacity-10 p-2 rounded-circle me-3">
                                     <i class="fas fa-satellite-dish text-success fs-5"></i>
@@ -110,7 +110,7 @@ $conductores = $stmt->fetchAll();
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card card-stat p-4 bg-white">
+                        <div class="card card-stat p-4">
                             <div class="d-flex align-items-center">
                                 <div class="bg-warning bg-opacity-10 p-2 rounded-circle me-3">
                                     <i class="fas fa-file-invoice text-warning fs-5"></i>
@@ -123,7 +123,7 @@ $conductores = $stmt->fetchAll();
                         </div>
                     </div>
                     <div class="col-md-3">
-                        <div class="card card-stat p-4 bg-white">
+                        <div class="card card-stat p-4">
                             <div class="d-flex align-items-center">
                                 <div class="bg-info bg-opacity-10 p-2 rounded-circle me-3">
                                     <i class="fas fa-dollar-sign text-info fs-5"></i>
@@ -138,8 +138,8 @@ $conductores = $stmt->fetchAll();
                 </div>
 
                 <!-- Drivers Table -->
-                <div class="card border-none shadow-sm rounded-4">
-                    <div class="card-header bg-white py-3 border-bottom">
+                <div class="card border-0 shadow-sm rounded-4" style="background: var(--card);">
+                    <div class="card-header bg-transparent py-3 border-bottom">
                         <h5 class="mb-0 fw-bold">Nuestra Flota de Conductores</h5>
                     </div>
                     <div class="card-body p-0">
@@ -168,7 +168,7 @@ $conductores = $stmt->fetchAll();
                                                 </div>
                                                 <div>
                                                     <div class="fw-bold"><?= htmlspecialchars($c['nombre']) ?></div>
-                                                    <div class="text-muted small">ID: #<?= $c['id'] ?></div>
+                                                    <div class="text-muted small">Cédula: <?= htmlspecialchars($c['cedula'] ?? '—') ?></div>
                                                 </div>
                                             </div>
                                         </td>

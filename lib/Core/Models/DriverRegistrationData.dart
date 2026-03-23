@@ -5,6 +5,9 @@ import 'dart:io';
 class DriverRegistrationData {
   // ── Paso 1: Ciudad ──────────────────────────────────────────
   String ciudad;
+  String pais;
+  String provincia;
+  String canton;
 
   // ── Paso 2: Datos personales ────────────────────────────────
   String nombre;
@@ -40,7 +43,10 @@ class DriverRegistrationData {
   int?   cooperativaId;
 
   DriverRegistrationData({
-    this.ciudad             = 'Cuenca',
+    this.ciudad             = '',
+    this.pais               = 'Ecuador',
+    this.provincia          = '',
+    this.canton             = '',
     this.nombre             = '',
     this.email              = '',
     this.telefono           = '',

@@ -280,7 +280,6 @@ $currentPage = 'dashboard';
                         <table class="table mb-0">
                             <thead>
                                 <tr>
-                                    <th>#</th>
                                     <th>Conductor</th>
                                     <th class="text-center">Viajes</th>
                                     <th class="text-center">Ingresos</th>
@@ -290,18 +289,16 @@ $currentPage = 'dashboard';
                             <tbody>
                                 <?php foreach ($topConductores as $i => $c): ?>
                                 <tr>
-                                    <td>
+                                    <td class="fw-semibold">
                                         <?php if ($i === 0): ?>
-                                            <i class="fas fa-trophy text-warning"></i>
+                                            <i class="fas fa-trophy text-warning me-1"></i>
                                         <?php elseif ($i === 1): ?>
-                                            <i class="fas fa-medal" style="color:#aaa"></i>
+                                            <i class="fas fa-medal me-1" style="color:#aaa"></i>
                                         <?php elseif ($i === 2): ?>
-                                            <i class="fas fa-medal" style="color:#cd7f32"></i>
-                                        <?php else: ?>
-                                            <span class="text-muted"><?= $i+1 ?></span>
+                                            <i class="fas fa-medal me-1" style="color:#cd7f32"></i>
                                         <?php endif; ?>
+                                        <?= htmlspecialchars($c['nombre']) ?>
                                     </td>
-                                    <td class="fw-semibold"><?= htmlspecialchars($c['nombre']) ?></td>
                                     <td class="text-center">
                                         <span class="badge bg-light text-dark"><?= $c['viajes'] ?></span>
                                     </td>
@@ -341,8 +338,7 @@ $currentPage = 'dashboard';
                         <table class="table mb-0">
                             <thead>
                                 <tr>
-                                    <th>Ruta</th>
-                                    <th>Pasajero</th>
+                                    <th class="ps-3">Pasajero</th>
                                     <th class="text-center">Tarifa</th>
                                     <th class="text-center">Estado</th>
                                     <th class="text-center">Hora</th>
@@ -351,7 +347,8 @@ $currentPage = 'dashboard';
                             <tbody>
                                 <?php foreach ($viajesRecientes as $v): ?>
                                 <tr>
-                                    <td>
+                                    <td class="ps-3">
+                                        <div class="fw-semibold"><?= htmlspecialchars($v['pasajero'] ?? '–') ?></div>
                                         <div class="small fw-semibold text-truncate" style="max-width:160px"
                                              title="<?= htmlspecialchars($v['origen_texto']) ?>">
                                             <i class="fas fa-map-marker-alt text-danger me-1"></i>
@@ -363,7 +360,6 @@ $currentPage = 'dashboard';
                                             <?= htmlspecialchars($v['destino_texto']) ?>
                                         </div>
                                     </td>
-                                    <td class="small"><?= htmlspecialchars($v['pasajero'] ?? '—') ?></td>
                                     <td class="text-center fw-semibold text-success">
                                         $<?= number_format($v['tarifa_total'], 2) ?>
                                     </td>
@@ -442,6 +438,15 @@ new Chart(document.getElementById('chartLinea'), {
             y:  { type: 'linear', position: 'left',  beginAtZero: true, ticks: { stepSize: 1, font: { size: 11 } }, grid: { color: '#f0f0f0' } },
             y1: { type: 'linear', position: 'right', beginAtZero: true, ticks: { callback: v => '$' + v, font: { size: 11 } }, grid: { drawOnChartArea: false } },
             x:  { ticks: { font: { size: 11 } }, grid: { color: '#f5f5f5' } }
+        },
+        onClick: (e, activeEls) => {
+            if (activeEls.length > 0) {
+                const idx = activeEls[0].index;
+                const dia = labeles[idx];
+                const trips = serieViajes[idx];
+                const money = serieIngresos[idx];
+                GeoMove.showToast(`Detalle: ${dia}`, `Hubo ${trips} viajes con ingresos de $${money.toFixed(2)}`, 'info');
+            }
         }
     }
 });

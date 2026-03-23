@@ -32,6 +32,30 @@ $stmt = $pdo->prepare("
 $stmt->execute([$coopId]);
 $viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+// ── Manejo de AJAX ──────────────────────────────────────────
+if (isset($_GET['ajax'])) {
+    if (count($viajes) === 0) {
+        echo '<div class="text-center py-5 text-muted"><i class="fas fa-route fa-3x mb-3 text-secondary opacity-50"></i><h5>No se encontraron registros</h5></div>';
+    } else {
+        echo '<div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th class="ps-4">Fecha</th><th>Cliente</th><th>Conductor</th><th>Ruta</th><th class="text-center">Tarifa</th><th class="text-center">Estado</th></tr></thead><tbody>';
+        foreach ($viajes as $v) {
+            echo "<tr>
+                    <td class='ps-4'><strong>".date('d/m/Y H:i', strtotime($v['fecha_pedido']))."</strong></td>
+                    <td><strong>".htmlspecialchars($v['cliente'])."</strong><br><small class='text-muted'>".htmlspecialchars($v['cliente_telefono'])."</small></td>
+                    <td><strong>".htmlspecialchars($v['conductor'])."</strong><br><small class='text-muted'>".htmlspecialchars($v['conductor_telefono'])."</small></td>
+                    <td>
+                        <div class='small text-truncate' style='max-width:200px'><i class='fas fa-circle text-success me-1' style='font-size:8px'></i> ".htmlspecialchars($v['origen_texto'])."</div>
+                        <div class='small text-truncate' style='max-width:200px'><i class='fas fa-map-marker-alt text-danger me-1' style='font-size:8px'></i> ".htmlspecialchars($v['destino_texto'])."</div>
+                    </td>
+                    <td class='text-center fw-bold text-success'>$".number_format((float)$v['tarifa_total'], 2)."</td>
+                    <td class='text-center'>".estadoBadge($v['estado'])."</td>
+                  </tr>";
+        }
+        echo '</tbody></table></div>';
+    }
+    exit;
+}
+
 function estadoBadge($e) {
     return match($e) {
         'terminado' => '<span class="badge bg-success">Completado</span>',
@@ -61,19 +85,34 @@ $currentPage = 'viajes';
             <?php include '_sidebar.php'; ?>
             <div class="col-md-10 content">
                 <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h2 class="fw-bold mb-0">Historial de Viajes de la Cooperativa</h2>
+                    <h2 class="fw-bold mb-0">Historial de Viajes</h2>
                     <div class="text-end">
                         <small class="text-muted d-block">Cooperativa</small>
                         <span class="fw-bold text-primary"><?= htmlspecialchars($coopName) ?></span>
                     </div>
                 </div>
 
-                <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+                <!-- Buscador AJAX (Opcional, pero útil) -->
+                <div class="card border-0 shadow-sm mb-4 rounded-4" style="background: var(--card);">
+                    <div class="card-body">
+                        <form id="filter-form" class="row g-3 align-items-end" onsubmit="handleFilter(event)">
+                            <div class="col-md-8">
+                                <label class="form-label small fw-bold">Búsqueda rápida</label>
+                                <input type="text" name="search" class="form-control" placeholder="Buscar por cliente o conductor...">
+                            </div>
+                            <div class="col-md-4">
+                                <button type="submit" class="btn btn-primary w-100"><i class="fas fa-search me-2"></i>Filtrar</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="container-viajes" class="card border-0 shadow-sm rounded-4 overflow-hidden" style="background: var(--card);">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
                             <thead class="bg-light">
                                 <tr>
-                                    <th class="ps-4">ID / Fecha</th>
+                                    <th class="ps-4">Fecha</th>
                                     <th>Cliente</th>
                                     <th>Conductor</th>
                                     <th>Ruta (Origen -> Destino)</th>
@@ -85,8 +124,7 @@ $currentPage = 'viajes';
                                 <?php foreach ($viajes as $v): ?>
                                 <tr>
                                     <td class="ps-4">
-                                        <div class="fw-bold text-muted">#<?= $v['id'] ?></div>
-                                        <div class="small"><?= date('d/m/Y H:i', strtotime($v['fecha_pedido'])) ?></div>
+                                        <div class="fw-bold"><?= date('d/m/Y H:i', strtotime($v['fecha_pedido'])) ?></div>
                                     </td>
                                     <td>
                                         <div class="fw-bold"><?= htmlspecialchars($v['cliente']) ?></div>
@@ -122,5 +160,13 @@ $currentPage = 'viajes';
             </div>
         </div>
     </div>
+    <script>
+        function handleFilter(e) {
+            e.preventDefault();
+            const form = e.target;
+            const params = new URLSearchParams(new FormData(form)).toString();
+            GeoMove.fetchWithSkeleton(window.location.pathname + '?' + params, 'container-viajes', 8);
+        }
+    </script>
 </body>
 </html>

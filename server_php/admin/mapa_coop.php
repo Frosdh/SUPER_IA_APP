@@ -27,15 +27,15 @@ $currentPage = 'mapa';
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="admin.css">
     <style>
-        .map-wrapper { display:flex; flex-direction:column; height:100vh; padding:20px; gap:14px; }
+        .map-wrapper { display:flex; flex-direction:column; height:100vh; padding:20px; gap:14px; background: var(--bg); color: var(--text); }
         .map-header { display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
         .stats-row { display:flex; gap:12px; flex-shrink:0; }
-        .stat-pill { background:#fff; border-radius:10px; padding:10px 18px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 10px rgba(0,0,0,.06); font-size:13px; }
+        .stat-pill { background:var(--card); border-radius:10px; padding:10px 18px; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-sm); font-size:13px; color: var(--text); }
         .dot { width:10px; height:10px; border-radius:50%; }
-        .dot-libre { background:#11998e; }
-        .dot-ocupado { background:#f46b45; }
-        #mapa { width:100%; height:calc(100vh - 220px); border-radius:14px; box-shadow:0 4px 20px rgba(0,0,0,.10); }
-        .status-bar { background:#fff; border-radius:10px; padding:8px 16px; font-size:12px; color:#6c757d; display:flex; align-items:center; gap:16px; }
+        .dot-libre { background:var(--accent); }
+        .dot-ocupado { background:var(--warning); }
+        #mapa { width:100%; height:calc(100vh - 220px); border-radius:14px; box-shadow:var(--shadow); }
+        .status-bar { background:var(--card); border-radius:10px; padding:8px 16px; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:16px; }
     </style>
 </head>
 <body>
@@ -46,7 +46,7 @@ $currentPage = 'mapa';
         include '_sidebar.php'; 
         ?>
         <div class="col-md-10">
-            <div class="map-wrapper text-dark">
+            <div class="map-wrapper">
                 <div class="map-header">
                     <div>
                         <h4 class="fw-bold mb-0">Mapa de Flota: <?= htmlspecialchars($coopName) ?></h4>

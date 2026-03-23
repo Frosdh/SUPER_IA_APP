@@ -809,64 +809,38 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     final ride = _activeRide;
     if (ride == null) return;
 
-    // Solo permitir cancelar si el viaje aún no ha iniciado
     final estado = ride['estado']?.toString() ?? '';
     if (estado == 'iniciado') {
       _showMessage('No puedes cancelar un viaje que ya está en curso');
       return;
     }
 
-    // Confirmación
-    final confirmar = await showDialog<bool>(
+    // LISTA DE MOTIVOS
+    final motivos = [
+      'Tráfico muy intenso',
+      'Emergencia personal',
+      'Problema con el vehículo',
+      'Otro inconveniente'
+    ];
+
+    final motivoSeleccionado = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: ConstantColors.backgroundCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('¿Cancelar viaje?',
-            style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700)),
-        content: Text(
-          'El pasajero será notificado y el viaje quedará cancelado.',
-          style: TextStyle(color: ConstantColors.textGrey, fontSize: 14, height: 1.5),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Text('¿Por qué cancelas?',
+            style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w800, fontSize: 18)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: motivos.map((m) => ListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(m, style: TextStyle(color: ConstantColors.textGrey, fontSize: 15)),
+            trailing: Icon(Icons.chevron_right, color: ConstantColors.primaryBlue, size: 20),
+            onTap: () => Navigator.pop(context, m),
+          )).toList(),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('No, continuar', style: TextStyle(color: ConstantColors.primaryBlue)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: Text('Sí, cancelar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-    if (confirmar != true) return;
-
-    setState(() => _updatingRideStatus = true);
-
-    final viajeIdRaw = ride['viaje_id'];
-    final viajeId = viajeIdRaw is int
-        ? viajeIdRaw
-        : int.tryParse(viajeIdRaw?.toString() ?? '') ?? 0;
-
-    // 1. Cancelar viaje en el servidor
-    if (viajeId > 0) {
-      await _apiProvider.cancelRide(viajeId: viajeId);
-    }
-
-    // 2. Liberar al conductor en el servidor
-    await _apiProvider.updateDriverStatus(conductorId: _driverId, estado: 'libre');
-
-    if (!mounted) return;
-
-    // 3. Limpiar estado local
-    _ridePollingTimer?.cancel();
-    _mapTimer?.cancel();
-    await DriverPrefs.clearActiveRide();
-    await DriverPrefs.saveDriverStatus('libre');
-
-    setState(() {
-      _activeRide = null;
       _driverStatus = 'libre';
       _rutaPuntos = [];
       _miUbicacion = null;

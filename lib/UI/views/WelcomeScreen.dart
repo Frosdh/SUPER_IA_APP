@@ -181,7 +181,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Movilidad inteligente en Cuenca',
+                          'Movilidad inteligente en tu ciudad',
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.55),
                             fontSize: 14,

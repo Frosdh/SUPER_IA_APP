@@ -24,6 +24,9 @@ $telefono       = isset($_POST['telefono'])     ? trim($_POST['telefono'])     :
 $cedula         = isset($_POST['cedula'])       ? trim($_POST['cedula'])       : '';
 $password_plain = isset($_POST['password'])     ? trim($_POST['password'])     : '';
 $ciudad         = isset($_POST['ciudad'])       ? trim($_POST['ciudad'])       : 'Cuenca';
+$pais           = isset($_POST['pais'])         ? trim($_POST['pais'])         : 'Ecuador';
+$provincia      = isset($_POST['provincia'])    ? trim($_POST['provincia'])    : 'Azuay';
+$canton         = isset($_POST['canton'])       ? trim($_POST['canton'])       : 'Cuenca';
 
 // Datos del Vehículo
 $marca        = isset($_POST['marca'])        ? trim($_POST['marca'])        : '';
@@ -89,10 +92,10 @@ $conn->begin_transaction();
 try {
     // Insertar conductor (verificado=0 → pendiente, estado=desconectado)
     $stmt = $conn->prepare(
-        "INSERT INTO conductores (nombre, email, telefono, cedula, pass_hash, ciudad, estado, verificado, calificacion_promedio, tipo_conductor, cooperativa_id)
-         VALUES (?, ?, ?, ?, ?, ?, 'desconectado', 0, 5.00, ?, ?)"
+        "INSERT INTO conductores (nombre, email, telefono, cedula, pass_hash, ciudad, pais, provincia, canton, estado, verificado, calificacion_promedio, tipo_conductor, cooperativa_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'desconectado', 0, 5.00, ?, ?)"
     );
-    $stmt->bind_param("sssssssi", $nombre, $email, $telefono, $cedula, $pass_hash, $ciudad, $tipo_conductor, $cooperativa_id);
+    $stmt->bind_param("ssssssssssi", $nombre, $email, $telefono, $cedula, $pass_hash, $ciudad, $pais, $provincia, $canton, $tipo_conductor, $cooperativa_id);
     $stmt->execute();
     $conductor_id = $conn->insert_id;
     $stmt->close();

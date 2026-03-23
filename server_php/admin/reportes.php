@@ -10,6 +10,9 @@ require_once __DIR__ . '/db_admin.php';
 $rango  = $_GET['rango']  ?? 'mes';
 $desde  = $_GET['desde']  ?? '';
 $hasta  = $_GET['hasta']  ?? '';
+$f_canton = $_GET['canton'] ?? '';
+$f_coop   = $_GET['coop_id'] ?? '';
+$f_cat    = $_GET['cat_id']   ?? '';
 
 switch ($rango) {
     case 'hoy':
@@ -40,6 +43,22 @@ switch ($rango) {
 $fechaDesdeSQL = $fechaDesde . ' 00:00:00';
 $fechaHastaSQL = $fechaHasta . ' 23:59:59';
 
+$whereBase = "WHERE v.fecha_pedido BETWEEN ? AND ?";
+$paramsBase = [$fechaDesdeSQL, $fechaHastaSQL];
+
+if ($f_canton !== '') {
+    $whereBase .= " AND (SELECT canton FROM conductores WHERE id = v.conductor_id) = ?";
+    $paramsBase[] = $f_canton;
+}
+if ($f_coop !== '') {
+    $whereBase .= " AND (SELECT cooperativa_id FROM conductores WHERE id = v.conductor_id) = ?";
+    $paramsBase[] = $f_coop;
+}
+if ($f_cat !== '') {
+    $whereBase .= " AND v.categoria_id = ?";
+    $paramsBase[] = $f_cat;
+}
+
 // ── Totales del período ──────────────────────────────────────────────
 $totales = $pdo->prepare("
     SELECT
@@ -48,11 +67,11 @@ $totales = $pdo->prepare("
         SUM(CASE WHEN estado='cancelado' THEN 1 ELSE 0 END) AS cancelados,
         COALESCE(SUM(CASE WHEN estado='terminado' THEN tarifa_total ELSE 0 END), 0) AS ingresos,
         COUNT(DISTINCT conductor_id) AS conductores_activos,
-        COUNT(DISTINCT usuario_id)   AS pasajeros_activos
-    FROM viajes
-    WHERE fecha_pedido BETWEEN ? AND ?
+        COUNT(DISTINCT v.usuario_id)   AS pasajeros_activos
+    FROM viajes v
+    $whereBase
 ");
-$totales->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+$totales->execute($paramsBase);
 $t = $totales->fetch();
 
 // ── Nuevos usuarios en el período ────────────────────────────────────
@@ -62,15 +81,15 @@ $nUsuarios = $nuevosUsuarios->fetchColumn();
 
 // ── Viajes e ingresos por día ─────────────────────────────────────────
 $porDia = $pdo->prepare("
-    SELECT DATE(fecha_pedido) AS dia,
+    SELECT DATE(v.fecha_pedido) AS dia,
            COUNT(*) AS viajes,
-           COALESCE(SUM(CASE WHEN estado='terminado' THEN tarifa_total ELSE 0 END),0) AS ingresos
-    FROM viajes
-    WHERE fecha_pedido BETWEEN ? AND ?
+           COALESCE(SUM(CASE WHEN v.estado='terminado' THEN v.tarifa_total ELSE 0 END),0) AS ingresos
+    FROM viajes v
+    $whereBase
     GROUP BY dia
     ORDER BY dia
 ");
-$porDia->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+$porDia->execute($paramsBase);
 $diasData = $porDia->fetchAll();
 
 $labels    = array_column($diasData, 'dia');
@@ -84,12 +103,12 @@ $topConductores = $pdo->prepare("
            COALESCE(SUM(v.tarifa_total),0) AS total
     FROM viajes v
     JOIN conductores c ON c.id = v.conductor_id
-    WHERE v.estado='terminado' AND v.fecha_pedido BETWEEN ? AND ?
+    $whereBase AND v.estado='terminado'
     GROUP BY v.conductor_id
     ORDER BY total DESC
     LIMIT 10
 ");
-$topConductores->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+$topConductores->execute($paramsBase);
 $conductoresTop = $topConductores->fetchAll();
 
 // ── Top 10 pasajeros ─────────────────────────────────────────────────
@@ -99,12 +118,12 @@ $topPasajeros = $pdo->prepare("
            COALESCE(SUM(v.tarifa_total),0) AS total
     FROM viajes v
     JOIN usuarios u ON u.id = v.usuario_id
-    WHERE v.estado='terminado' AND v.fecha_pedido BETWEEN ? AND ?
+    $whereBase AND v.estado='terminado'
     GROUP BY v.usuario_id
     ORDER BY total DESC
     LIMIT 10
 ");
-$topPasajeros->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+$topPasajeros->execute($paramsBase);
 $pasajerosTop = $topPasajeros->fetchAll();
 
 // ── Viajes recientes (últimos 50) ────────────────────────────────────
@@ -116,21 +135,21 @@ $viajes = $pdo->prepare("
     FROM viajes v
     LEFT JOIN usuarios    u ON u.id = v.usuario_id
     LEFT JOIN conductores c ON c.id = v.conductor_id
-    WHERE v.fecha_pedido BETWEEN ? AND ?
+    $whereBase
     ORDER BY v.fecha_pedido DESC
     LIMIT 50
 ");
-$viajes->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+$viajes->execute($paramsBase);
 $viajesLista = $viajes->fetchAll();
 
 // ── Viajes por estado (donut) ────────────────────────────────────────
 $estados = $pdo->prepare("
-    SELECT estado, COUNT(*) AS total
-    FROM viajes
-    WHERE fecha_pedido BETWEEN ? AND ?
-    GROUP BY estado
+    SELECT v.estado, COUNT(*) AS total
+    FROM viajes v
+    $whereBase
+    GROUP BY v.estado
 ");
-$estados->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+$estados->execute($paramsBase);
 $estadosData   = $estados->fetchAll();
 $estadosLabels = array_column($estadosData, 'estado');
 $estadosCounts = array_column($estadosData, 'total');
@@ -204,17 +223,64 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
         <!-- Filtros -->
         <div class="card border-0 shadow-sm mb-4 no-print">
             <div class="card-body py-3">
-                <form method="GET" class="d-flex flex-wrap align-items-center gap-2">
-                    <span class="fw-semibold me-2"><i class="fas fa-calendar me-1 text-muted"></i>Período:</span>
-                    <?php foreach (['hoy'=>'Hoy','semana'=>'Esta semana','mes'=>'Este mes','año'=>'Este año'] as $k=>$v): ?>
-                    <a href="?rango=<?= $k ?>" class="btn btn-outline-secondary btn-rango <?= $rango==$k?'active':'' ?>"><?= $v ?></a>
-                    <?php endforeach; ?>
-                    <div class="d-flex align-items-center gap-2 ms-2">
-                        <input type="hidden" name="rango" value="personalizado">
-                        <input type="date" name="desde" value="<?= $fechaDesde ?>" class="form-control form-control-sm" style="width:150px">
-                        <span>–</span>
-                        <input type="date" name="hasta" value="<?= $fechaHasta ?>" class="form-control form-control-sm" style="width:150px">
-                        <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+                <form method="GET">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <span class="fw-semibold small"><i class="fas fa-calendar me-1 text-muted"></i>Período:</span>
+                            <?php 
+                            $rangos = ['hoy'=>'Hoy','semana'=>'Semana','mes'=>'Mes','anio'=>'Año'];
+                            foreach($rangos as $k=>$v): 
+                                $active = ($rango==$k) ? 'active' : '';
+                            ?>
+                                <a href="?rango=<?= $k ?>&canton=<?= $f_canton ?>&coop_id=<?= $f_coop ?>" class="btn btn-outline-secondary btn-rango <?= $active ?>" style="padding:4px 10px; font-size:12px;"><?= $v ?></a>
+                            <?php endforeach; ?>
+                        </div>
+                        <div class="col-auto d-flex align-items-center gap-1 ms-2">
+                            <input type="hidden" name="rango" value="personalizado">
+                            <input type="date" name="desde" value="<?= $fechaDesde ?>" class="form-control form-control-sm" style="width:135px">
+                            <span>–</span>
+                            <input type="date" name="hasta" value="<?= $fechaHasta ?>" class="form-control form-control-sm" style="width:135px">
+                        </div>
+                        <div class="col-auto">
+                           <select name="canton" class="form-select form-select-sm" style="width:140px">
+                               <option value="">Cantón: Todos</option>
+                               <?php
+                               $cantones = $pdo->query("SELECT DISTINCT canton FROM conductores WHERE canton IS NOT NULL")->fetchAll();
+                               foreach($cantones as $c) {
+                                   $sel = ($f_canton == $c['canton']) ? 'selected' : '';
+                                   echo "<option value='{$c['canton']}' $sel>{$c['canton']}</option>";
+                               }
+                               ?>
+                           </select>
+                        </div>
+                        <div class="col-auto">
+                           <select name="coop_id" class="form-select form-select-sm" style="width:150px">
+                               <option value="">Coop: Todas</option>
+                               <?php
+                               $coops = $pdo->query("SELECT id, nombre FROM cooperativas")->fetchAll();
+                               foreach($coops as $co) {
+                                   $sel = ($f_coop == $co['id']) ? 'selected' : '';
+                                   echo "<option value='{$co['id']}' $sel>{$co['nombre']}</option>";
+                               }
+                               ?>
+                           </select>
+                        </div>
+                        <div class="col-auto">
+                           <select name="cat_id" class="form-select form-select-sm" style="width:140px">
+                               <option value="">Categoría: Todas</option>
+                               <?php
+                               $cats = $pdo->query("SELECT id, nombre FROM categorias")->fetchAll();
+                               foreach($cats as $ca) {
+                                   $sel = ($f_cat == $ca['id']) ? 'selected' : '';
+                                   echo "<option value='{$ca['id']}' $sel>{$ca['nombre']}</option>";
+                               }
+                               ?>
+                           </select>
+                        </div>
+                        <div class="col-auto">
+                            <button type="submit" class="btn btn-primary btn-sm px-3">Aplicar</button>
+                            <a href="reportes.php" class="btn btn-outline-secondary btn-sm px-3 ms-1">Limpiar</a>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -364,12 +430,11 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                 <div class="table-responsive">
                     <table class="table table-sm table-hover">
                         <thead class="table-dark">
-                            <tr><th>#</th><th>Fecha</th><th>Pasajero</th><th>Conductor</th><th>Origen</th><th>Destino</th><th class="text-end">Tarifa</th><th>Estado</th></tr>
+                            <tr><th>Fecha</th><th>Pasajero</th><th>Conductor</th><th>Origen</th><th>Destino</th><th class="text-end">Tarifa</th><th>Estado</th></tr>
                         </thead>
                         <tbody>
                         <?php foreach ($viajesLista as $v): ?>
                         <tr>
-                            <td class="text-muted"><?= $v['id'] ?></td>
                             <td><small><?= date('d/m/y H:i', strtotime($v['fecha_pedido'])) ?></small></td>
                             <td><?= htmlspecialchars($v['pasajero'] ?? '–') ?></td>
                             <td><?= htmlspecialchars($v['conductor'] ?? '–') ?></td>

@@ -162,7 +162,7 @@ function estrellas($n) {
                         <?= strtoupper(substr($u['nombre'], 0, 1)) ?>
                     </div>
                     <h5 class="fw-bold mb-1"><?= htmlspecialchars($u['nombre']) ?></h5>
-                    <p class="text-muted small mb-3">Pasajero · ID #<?= $u['id'] ?></p>
+                    <p class="text-muted small mb-3">Pasajero Registrado</p>
 
                     <?php if ($u['activo']): ?>
                         <span class="badge-activo"><i class="fas fa-circle me-1" style="font-size:8px"></i>Cuenta Activa</span>
@@ -284,7 +284,7 @@ function estrellas($n) {
                             <thead>
                                 <tr>
                                     <th>#</th>
-                                    <th>Ruta</th>
+                                    <th class="ps-3">Hora Inicio</th>
                                     <th>Conductor</th>
                                     <th class="text-center">Tarifa</th>
                                     <th class="text-center">Calif.</th>
@@ -296,18 +296,7 @@ function estrellas($n) {
                                 <?php foreach ($viajes as $v): ?>
                                 <tr>
                                     <td class="text-muted">#<?= $v['id'] ?></td>
-                                    <td>
-                                        <div class="small fw-semibold text-truncate" style="max-width:160px"
-                                             title="<?= htmlspecialchars($v['origen_texto']) ?>">
-                                            <i class="fas fa-map-marker-alt text-danger me-1"></i>
-                                            <?= htmlspecialchars($v['origen_texto']) ?>
-                                        </div>
-                                        <div class="small text-muted text-truncate" style="max-width:160px"
-                                             title="<?= htmlspecialchars($v['destino_texto']) ?>">
-                                            <i class="fas fa-flag-checkered text-success me-1"></i>
-                                            <?= htmlspecialchars($v['destino_texto']) ?>
-                                        </div>
-                                    </td>
+                                    <td class="ps-3"><?= date('H:i', strtotime($v['fecha_pedido'])) ?></td>
                                     <td class="small"><?= htmlspecialchars($v['conductor_nombre'] ?? '—') ?></td>
                                     <td class="text-center fw-semibold text-success">
                                         $<?= number_format($v['tarifa_total'], 2) ?>

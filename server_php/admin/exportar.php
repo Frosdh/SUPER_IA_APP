@@ -11,6 +11,27 @@ $hasta = $_GET['hasta'] ?? date('Y-m-d');
 
 $fechaDesdeSQL = $desde . ' 00:00:00';
 $fechaHastaSQL = $hasta . ' 23:59:59';
+
+$f_canton = $_GET['canton'] ?? '';
+$f_coop   = $_GET['coop_id'] ?? '';
+$f_cat    = $_GET['cat_id']   ?? '';
+
+$whereBase  = "WHERE v.fecha_pedido BETWEEN ? AND ?";
+$paramsBase = [$fechaDesdeSQL, $fechaHastaSQL];
+
+if ($f_canton !== '') {
+    $whereBase .= " AND v.canton = ?";
+    $paramsBase[] = $f_canton;
+}
+if ($f_coop !== '') {
+    $whereBase .= " AND (SELECT cooperativa_id FROM conductores WHERE id = v.conductor_id) = ?";
+    $paramsBase[] = $f_coop;
+}
+if ($f_cat !== '') {
+    $whereBase .= " AND v.categoria_id = ?";
+    $paramsBase[] = $f_cat;
+}
+
 $bom = "\xEF\xBB\xBF";
 
 function clean($v) { return str_replace(["\r","\n","\t"],' ', $v ?? ''); }
@@ -29,10 +50,10 @@ if ($tipo === 'viajes') {
         FROM viajes v
         LEFT JOIN usuarios    u ON u.id = v.usuario_id
         LEFT JOIN conductores c ON c.id = v.conductor_id
-        WHERE v.fecha_pedido BETWEEN ? AND ?
+        $whereBase
         ORDER BY v.fecha_pedido DESC
     ");
-    $stmt->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+    $stmt->execute($paramsBase);
     $out = fopen('php://output','w');
     fputs($out, $bom);
     fputcsv($out, ['ID','Fecha','Estado','Pasajero','Tel. Pasajero','Conductor','Tel. Conductor','Origen','Destino','Distancia (km)','Duración (min)','Tarifa ($)','Calificación','Descuento ($)','Código Descuento'], ';');
@@ -67,10 +88,20 @@ if ($tipo === 'conductores') {
                SUM(CASE WHEN v.estado='cancelado' THEN 1 ELSE 0 END) AS cancelaciones
         FROM conductores c
         LEFT JOIN viajes v ON v.conductor_id = c.id AND v.fecha_pedido BETWEEN ? AND ?
+        WHERE 1=1
+        " . ($f_canton !== '' ? " AND c.canton = ? " : "") . "
+        " . ($f_coop !== '' ? " AND c.cooperativa_id = ? " : "") . "
+        " . ($f_cat !== '' ? " AND c.categoria_id = ? " : "") . "
         GROUP BY c.id
         ORDER BY ingresos DESC
     ");
-    $stmt->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+    
+    $paramsC = [$fechaDesdeSQL, $fechaHastaSQL];
+    if ($f_canton !== '') $paramsC[] = $f_canton;
+    if ($f_coop !== '')   $paramsC[] = $f_coop;
+    if ($f_cat !== '')    $paramsC[] = $f_cat;
+    
+    $stmt->execute($paramsC);
     $out = fopen('php://output','w');
     fputs($out, $bom);
     fputcsv($out, ['ID','Nombre','Teléfono','Email','Verificado','Viajes','Ingresos Brutos ($)','Comisión Empresa ($)','Ganancias Netas ($)','Calificación Prom.','Cancelaciones'], ';');
@@ -130,16 +161,16 @@ if ($tipo === 'ingresos') {
     $cfg = $pdo->query("SELECT valor FROM configuracion WHERE clave='comision_empresa'")->fetch();
     $comision = floatval($cfg['valor'] ?? 20);
     $stmt = $pdo->prepare("
-        SELECT DATE(fecha_pedido) AS dia,
+        SELECT DATE(v.fecha_pedido) AS dia,
                COUNT(*) AS total_viajes,
-               SUM(CASE WHEN estado='terminado' THEN 1 ELSE 0 END) AS terminados,
-               SUM(CASE WHEN estado='cancelado' THEN 1 ELSE 0 END) AS cancelados,
-               COALESCE(SUM(CASE WHEN estado='terminado' THEN tarifa_total ELSE 0 END),0) AS ingresos
-        FROM viajes
-        WHERE fecha_pedido BETWEEN ? AND ?
+               SUM(CASE WHEN v.estado='terminado' THEN 1 ELSE 0 END) AS terminados,
+               SUM(CASE WHEN v.estado='cancelado' THEN 1 ELSE 0 END) AS cancelados,
+               COALESCE(SUM(CASE WHEN v.estado='terminado' THEN v.tarifa_total ELSE 0 END),0) AS ingresos
+        FROM viajes v
+        $whereBase
         GROUP BY dia ORDER BY dia
     ");
-    $stmt->execute([$fechaDesdeSQL, $fechaHastaSQL]);
+    $stmt->execute($paramsBase);
     $out = fopen('php://output','w');
     fputs($out, $bom);
     fputcsv($out, ['Fecha','Total Viajes','Terminados','Cancelados','Ingresos Brutos ($)','Comisión Empresa ($)','Ganancias Conductores ($)'], ';');

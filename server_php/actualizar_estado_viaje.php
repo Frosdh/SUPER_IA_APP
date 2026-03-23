@@ -131,6 +131,42 @@ try {
     }
 
     $conn->commit();
+
+    // ── NOTIFICAR AL PASAJERO EN TIEMPO REAL ─────────────────────────
+    try {
+        require_once __DIR__ . '/fcm_helper.php';
+        $sql_usr = "SELECT u.token_fcm FROM viajes v JOIN usuarios u ON v.usuario_id = u.id WHERE v.id = ? LIMIT 1";
+        $stmt_u = $conn->prepare($sql_usr);
+        $stmt_u->bind_param("i", $viajeId);
+        $stmt_u->execute();
+        $res_u = $stmt_u->get_result()->fetch_assoc();
+        
+        if ($res_u && !empty($res_u['token_fcm'])) {
+            list($token, $proj) = _fcmAccessToken(__DIR__ . '/firebase_service_account.json');
+            if ($token) {
+                $titulo = "Actualización de Viaje";
+                $mensaje = "El estado de tu viaje ha cambiado a $estado";
+                
+                if ($estado === 'en_camino') {
+                    $titulo = "¡Conductor en camino! 🚗";
+                    $mensaje = "Tu conductor ya se dirige a recogerte.";
+                } elseif ($estado === 'iniciado') {
+                    $titulo = "¡Tu conductor ha llegado! 🤗";
+                    $mensaje = "El conductor está en el punto de recogida. ¡Sube al vehículo!";
+                } elseif ($estado === 'terminado') {
+                    $titulo = "Viaje Finalizado ✨";
+                    $mensaje = "Gracias por viajar con GeoMove. ¡Esperamos verte pronto!";
+                }
+                
+                _sendFcm($token, $proj, $res_u['token_fcm'], $titulo, $mensaje, [
+                    'viaje_id' => $viajeId, 
+                    'estado' => $estado
+                ]);
+            }
+        }
+    } catch (Exception $e) { /* No bloquear */ }
+    // ────────────────────────────────────────────────────────────────
+
     echo json_encode([
         "status" => "success",
         "message" => "Estado actualizado",

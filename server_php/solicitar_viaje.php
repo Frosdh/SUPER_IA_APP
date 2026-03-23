@@ -123,17 +123,21 @@ if ($origen_lat !== null && $origen_lng !== null) {
              FROM conductores c
              LEFT JOIN vehiculos v ON v.conductor_id = c.id
              WHERE c.estado = 'libre' AND c.token_fcm IS NOT NULL AND c.token_fcm <> '' AND c.latitud IS NOT NULL AND c.longitud IS NOT NULL 
-             AND (v.categoria_id = ? OR ? = 0) HAVING dist <= ? ORDER BY dist ASC LIMIT 15";
+             AND (v.categoria_id = ? OR ? = 0)
+             AND NOT EXISTS (SELECT 1 FROM solicitud_viajes sv WHERE sv.viaje_id = ? AND sv.conductor_id = c.id AND sv.estado = 'rechazado')
+             HAVING dist <= ? ORDER BY dist ASC LIMIT 15";
     $stmtC = $conn->prepare($sqlC);
-    if ($stmtC) { $stmtC->bind_param("dddiid", $origen_lat, $origen_lng, $origen_lat, $categoria_id, $categoria_id, $radioKm); }
+    if ($stmtC) { $stmtC->bind_param("dddiidi", $origen_lat, $origen_lng, $origen_lat, $categoria_id, $categoria_id, $viaje_id, $radioKm); }
 } else {
     $sqlC = "SELECT c.id, c.nombre, c.token_fcm 
              FROM conductores c
              LEFT JOIN vehiculos v ON v.conductor_id = c.id
              WHERE c.estado = 'libre' AND c.token_fcm IS NOT NULL AND c.token_fcm <> '' 
-             AND (v.categoria_id = ? OR ? = 0) ORDER BY c.id ASC LIMIT 15";
+             AND (v.categoria_id = ? OR ? = 0)
+             AND NOT EXISTS (SELECT 1 FROM solicitud_viajes sv WHERE sv.viaje_id = ? AND sv.conductor_id = c.id AND sv.estado = 'rechazado')
+             ORDER BY c.id ASC LIMIT 15";
     $stmtC = $conn->prepare($sqlC);
-    if ($stmtC) { $stmtC->bind_param("ii", $categoria_id, $categoria_id); }
+    if ($stmtC) { $stmtC->bind_param("iii", $categoria_id, $categoria_id, $viaje_id); }
 }
 
 if (!$stmtC) {

@@ -155,11 +155,11 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
         <h4 class="fw-bold mb-4"><i class="fas fa-id-card me-2 text-purple"></i>Revisión de conductor</h4>
 
         <?php if ($msg): ?>
-        <div class="alert alert-<?= $msgType ?> alert-dismissible fade show" role="alert">
-            <i class="fas fa-<?= $msgType === 'success' ? 'check-circle' : 'exclamation-circle' ?> me-2"></i>
-            <?= htmlspecialchars($msg) ?>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
+        <script>
+            window.addEventListener('DOMContentLoaded', () => {
+                GeoMove.showToast('Actualizado', '<?= addslashes($msg) ?>', '<?= $msgType === "success" ? "success" : ($msgType === "danger" ? "error" : "warning") ?>');
+            });
+        </script>
         <?php endif; ?>
 
         <div class="row">

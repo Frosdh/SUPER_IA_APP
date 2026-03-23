@@ -78,12 +78,12 @@ $currentPage = 'conductores';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="admin.css">
     <style>
-        .content { padding:28px; }
-        .doc-card { background:#fff; border-radius:14px; overflow:hidden; box-shadow:0 3px 12px rgba(0,0,0,.07); margin-bottom:20px; }
-        .doc-card .doc-img { width:100%; height:220px; object-fit:cover; background:#e9ecef; display:flex; align-items:center; justify-content:center; }
+        .content { padding:28px; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .doc-card { background: var(--card); border-radius:14px; overflow:hidden; box-shadow: var(--shadow-sm); margin-bottom:20px; color: var(--text); }
+        .doc-card .doc-img { width:100%; height:220px; object-fit:cover; background: var(--border); display:flex; align-items:center; justify-content:center; }
         .doc-card .doc-img img { width:100%; height:220px; object-fit:cover; cursor:pointer; }
-        .profile-photo { width:110px; height:110px; border-radius:50%; object-fit:cover; border:4px solid #6b11ff; }
-        .info-card { background:#fff; border-radius:14px; padding:22px; box-shadow:0 3px 12px rgba(0,0,0,.07); }
+        .profile-photo { width:110px; height:110px; border-radius:50%; object-fit:cover; border:4px solid var(--primary); }
+        .info-card { background: var(--card); border-radius:14px; padding:22px; box-shadow: var(--shadow-sm); color: var(--text); }
     </style>
 </head>
 <body>
@@ -104,7 +104,7 @@ $currentPage = 'conductores';
                     <?php if (!empty($c['foto_perfil'])): ?>
                         <img src="data:image/jpeg;base64,<?= $c['foto_perfil'] ?>" class="profile-photo mb-3">
                     <?php else: ?>
-                        <div class="mx-auto mb-3 p-4 bg-light rounded-circle" style="width:110px;"><i class="fas fa-user fa-3x text-secondary"></i></div>
+                        <div class="mx-auto mb-3 p-4 rounded-circle" style="width:110px; background: var(--border);"><i class="fas fa-user fa-3x text-secondary"></i></div>
                     <?php endif; ?>
                     <h5 class="fw-bold mb-1"><?= htmlspecialchars($c['nombre']) ?></h5>
                     <div class="mb-3">
@@ -159,7 +159,7 @@ $currentPage = 'conductores';
                                     <?= estadoBadge($estado) ?>
                                 </div>
                                 <?php if ($doc && !empty($doc['notas'])): ?>
-                                    <div class="mt-2 p-2 bg-light rounded small text-danger">
+                                    <div class="mt-2 p-2 rounded small text-danger" style="background: rgba(239, 68, 68, 0.1);">
                                         <strong>Nota admin:</strong> <?= htmlspecialchars($doc['notas']) ?>
                                     </div>
                                 <?php endif; ?>

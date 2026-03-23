@@ -10,29 +10,50 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['conductor_id'])) {
     $cId = (int)$_POST['conductor_id'];
     if ($_POST['action'] === 'aprobar') {
-        $stmt = $pdo->prepare("UPDATE conductores SET verificado = 1, estado = 'libre' WHERE id = ?");
-        $stmt->execute([$cId]);
-        $msg = ['tipo' => 'success', 'texto' => 'Conductor aprobado correctamente.'];
-    } elseif ($_POST['action'] === 'rechazar') {
-        $stmt = $pdo->prepare("UPDATE conductores SET verificado = 2 WHERE id = ?");
-        $stmt->execute([$cId]);
-        $msg = ['tipo' => 'warning', 'texto' => 'Conductor rechazado.'];
-    }
+    $stmt = $pdo->prepare("UPDATE conductores SET verificado = 1, estado = 'libre' WHERE id = ?");
+    $stmt->execute([$cId]);
+    $msg = ['tipo' => 'success', 'texto' => 'Conductor aprobado correctamente.'];
+} elseif ($_POST['action'] === 'rechazar') {
+    $stmt = $pdo->prepare("UPDATE conductores SET verificado = 2 WHERE id = ?");
+    $stmt->execute([$cId]);
+    $msg = ['tipo' => 'warning', 'texto' => 'Conductor rechazado.'];
+}
+}
+
+$f_canton = $_GET['canton'] ?? '';
+$f_coop   = $_GET['coop_id'] ?? '';
+$f_cat    = $_GET['cat_id']   ?? '';
+
+$whereExtra = "";
+$params = [];
+if ($f_canton !== '') {
+$whereExtra .= " AND c.canton = ?";
+$params[] = $f_canton;
+}
+if ($f_coop !== '') {
+$whereExtra .= " AND c.cooperativa_id = ?";
+$params[] = $f_coop;
+}
+if ($f_cat !== '') {
+$whereExtra .= " AND c.categoria_id = ?";
+$params[] = $f_cat;
 }
 
 // Listar pendientes con foto de perfil y progreso de documentos
-$stmt = $pdo->query("
-    SELECT c.id, c.nombre, c.telefono, c.cedula, c.email, c.ciudad, c.creado_en,
-           c.foto_perfil,
-           v.marca, v.modelo, v.placa, v.color, v.anio,
-           (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id) AS docs_total,
-           (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'aprobado') AS docs_aprobados,
-           (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'rechazado') AS docs_rechazados
-    FROM conductores c
-    LEFT JOIN vehiculos v ON c.id = v.conductor_id
-    WHERE c.verificado = 0
-    ORDER BY c.creado_en DESC
+$stmt = $pdo->prepare("
+SELECT c.id, c.nombre, c.telefono, c.cedula, c.email, c.ciudad, c.canton, c.creado_en,
+       c.foto_perfil,
+       v.marca, v.modelo, v.placa, v.color, v.anio,
+       (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id) AS docs_total,
+       (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'aprobado') AS docs_aprobados,
+       (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'rechazado') AS docs_rechazados,
+       (SELECT nombre FROM categorias WHERE id = c.categoria_id) AS nom_categoria
+FROM conductores c
+LEFT JOIN vehiculos v ON c.id = v.conductor_id
+WHERE c.verificado = 0 $whereExtra
+ORDER BY c.creado_en DESC
 ");
+$stmt->execute($params);
 $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $currentPage = 'pendientes';
@@ -97,7 +118,7 @@ $totalPendientes = count($pendientes);
 
         <!-- Main content -->
         <div class="col-md-10 content">
-            <div class="d-flex align-items-center justify-content-between mb-4">
+            <div class="d-flex align-items-center justify-content-between mb-2">
                 <div>
                     <h2 class="fw-bold mb-0">Conductores Pendientes</h2>
                     <p class="text-muted mb-0" style="font-size:.9rem">
@@ -107,6 +128,59 @@ $totalPendientes = count($pendientes);
                 <span class="badge bg-warning text-dark fs-6 px-3 py-2 rounded-pill">
                     <i class="fas fa-clock me-1"></i> <?= count($pendientes) ?> pendiente<?= count($pendientes) !== 1 ? 's' : '' ?>
                 </span>
+            </div>
+
+            <!-- Filtros de búsqueda -->
+            <div class="card shadow-sm border-0 mb-4 bg-light">
+                <div class="card-body py-2">
+                    <form method="GET" class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Cantón</label>
+                            <select name="canton" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                <?php
+                                $cantones = $pdo->query("SELECT DISTINCT canton FROM conductores WHERE canton IS NOT NULL AND canton != ''")->fetchAll();
+                                foreach($cantones as $c) {
+                                    $sel = ($f_canton == $c['canton']) ? 'selected' : '';
+                                    echo "<option value='{$c['canton']}' $sel>{$c['canton']}</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Cooperativa</label>
+                            <select name="coop_id" class="form-select form-select-sm">
+                                <option value="">Todas</option>
+                                <?php
+                                $coops = $pdo->query("SELECT id, nombre FROM cooperativas")->fetchAll();
+                                foreach($coops as $co) {
+                                    $sel = ($f_coop == $co['id']) ? 'selected' : '';
+                                    echo "<option value='{$co['id']}' $sel>{$co['nombre']}</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Categoría</label>
+                            <select name="cat_id" class="form-select form-select-sm">
+                                <option value="">Todas</option>
+                                <?php
+                                $cats = $pdo->query("SELECT id, nombre FROM categorias")->fetchAll();
+                                foreach($cats as $ca) {
+                                    $sel = ($f_cat == $ca['id']) ? 'selected' : '';
+                                    echo "<option value='{$ca['id']}' $sel>{$ca['nombre']}</option>";
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-sm btn-primary w-100"><i class="fas fa-search me-1"></i> Filtrar</button>
+                        </div>
+                        <div class="col-md-2">
+                            <a href="pendientes.php" class="btn btn-sm btn-outline-secondary w-100">Limpiar</a>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <?php if (isset($msg)): ?>

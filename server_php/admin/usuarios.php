@@ -232,7 +232,7 @@ $currentPage = 'usuarios';
                                     <div class="avatar"><?= htmlspecialchars($inicial) ?></div>
                                     <div>
                                         <div class="fw-semibold"><?= htmlspecialchars($u['nombre']) ?></div>
-                                        <small class="text-muted">ID #<?= $u['id'] ?> · Desde <?= date('d/m/Y', strtotime($u['creado_en'])) ?></small>
+                                        <small class="text-muted">Desde <?= date('d/m/Y', strtotime($u['creado_en'])) ?></small>
                                     </div>
                                 </div>
                             </td>
