@@ -86,10 +86,11 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: viewInsets.bottom),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          color: ConstantColors.backgroundCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+          border: Border.all(color: ConstantColors.borderColor.withOpacity(0.5)),
         ),
         child: Form(
           key: _otpFormKey,
@@ -101,27 +102,28 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
                 children: <Widget>[
                   Center(
                     child: Container(
-                      width: 46,
-                      height: 5,
+                      width: 40,
+                      height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.black12,
-                        borderRadius: BorderRadius.circular(20),
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
-                  SizedBox(height: 20),
-                  Text(
+                  const SizedBox(height: 24),
+                  const Text(
                     'Verifica tu correo',
                     style: TextStyle(
+                      color: Colors.white,
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: 10),
+                  const SizedBox(height: 10),
                   Text(
-                    'Ingresa el codigo de 6 digitos enviado a ${verificationModel.email ?? ''}.',
+                    'Ingresa el código de 6 dígitos enviado a ${verificationModel.email ?? ''}.',
                     style: TextStyle(
-                      color: Colors.black54,
+                      color: ConstantColors.textGrey,
                       fontSize: 14,
                     ),
                   ),

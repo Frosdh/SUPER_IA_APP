@@ -16,6 +16,7 @@ import 'package:fu_uber/Core/Preferences/RecentPlacesService.dart';
 import 'package:fu_uber/Core/Services/OsmService.dart';
 import 'package:fu_uber/Core/Services/SOSService.dart';
 import 'package:fu_uber/Core/Services/ShareTripService.dart';
+import 'package:fu_uber/UI/views/ChatScreen.dart';
 import 'package:fu_uber/Core/Services/DiscountCodeService.dart';
 import 'package:fu_uber/Core/Models/DiscountCodeModel.dart';
 import 'package:fu_uber/Core/Preferences/DiscountPreferences.dart';
@@ -435,6 +436,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             'placa': conductor['placa'] ?? '',
             'color': conductor['color'] ?? '',
             'eta_min': conductor['eta_min'] ?? 3,
+            'telefono': conductor['telefono']?.toString() ?? '',
           };
         });
         // Mostrar perfil del conductor automáticamente (solo la primera vez)
@@ -819,6 +821,87 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   }
 
   // ── Enviar SOS a todos los contactos de emergencia ────
+  /// Toque simple en SOS → cuenta regresiva de 5 s y auto-envío.
+  /// Permite cancelar antes de que termine.
+  Future<void> _sosConCuentaRegresiva() async {
+    int cuenta = 5;
+    bool cancelado = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            // Ticker interno del diálogo
+            Future.doWhile(() async {
+              await Future.delayed(const Duration(seconds: 1));
+              if (!ctx.mounted || cancelado) return false;
+              cuenta--;
+              setDialogState(() {});
+              if (cuenta <= 0) {
+                Navigator.of(dialogCtx).pop();
+                return false;
+              }
+              return true;
+            });
+
+            return AlertDialog(
+              backgroundColor: Colors.red.shade900,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.warning_rounded,
+                      color: Colors.white, size: 48),
+                  const SizedBox(height: 12),
+                  const Text(
+                    '¡EMERGENCIA!',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enviando SOS en $cuenta segundos…',
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white54),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      onPressed: () {
+                        cancelado = true;
+                        Navigator.of(dialogCtx).pop();
+                      },
+                      child: const Text('Cancelar',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (!cancelado && mounted) {
+      await _enviarSOS();
+    }
+  }
+
   Future<void> _enviarSOS() async {
     try {
       // Obtener nombre de usuario
@@ -1871,8 +1954,18 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   @override
   Widget build(BuildContext context) {
     bool isViajando = _estadoViaje != EstadoViaje.ninguno;
-    double minH = (_mostrandoPanel || isViajando) ? 140 : 0;
-    double maxH = MediaQuery.of(context).size.height * 0.7;
+    double minH = (_mostrandoPanel || isViajando) ? 24 : 0;
+    
+    // Altura dinámica: Menos espacio si solo hay un destino, más si hay paradas
+    double maxH;
+    if (isViajando) {
+      maxH = MediaQuery.of(context).size.height * 0.40; // Altura compacta para seguimiento
+    } else if (_paradasIntermedias.isEmpty) {
+      maxH = MediaQuery.of(context).size.height * 0.52; // Altura ideal para 1 destino + tipos de vehículo
+    } else {
+      maxH = MediaQuery.of(context).size.height * 0.72; // Altura para viajes con paradas
+    }
+
     double currentPanelHeight = minH + (maxH - minH) * _panelPosition;
 
     return Scaffold(
@@ -1882,8 +1975,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         controller: _panelController,
         minHeight: minH,
         maxHeight: maxH,
-        parallaxEnabled: true,
-        parallaxOffset: 0.5,
+        parallaxEnabled: false,
+        parallaxOffset: 0.0,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         color: ConstantColors.backgroundCard,
         boxShadow: [
@@ -2426,7 +2519,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               _estadoViaje == EstadoViaje.enViaje)
             Positioned(
               right: 16,
-              bottom: 450,
+              bottom: 512,
               child: GestureDetector(
                 onTap: _compartirViaje,
                 child: AnimatedContainer(
@@ -2455,6 +2548,58 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               ),
             ),
 
+          // ── BOTÓN CHAT (Durante viaje activo) ────────────────────
+          if ((_estadoViaje == EstadoViaje.conductorAsignado ||
+                  _estadoViaje == EstadoViaje.enCamino ||
+                  _estadoViaje == EstadoViaje.enViaje) &&
+              _conductorData != null)
+            Positioned(
+              right: 16,
+              bottom: 446,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pushNamed(
+                    context,
+                    ChatScreen.route,
+                    arguments: {
+                      'viaje_id':     _viajeId ?? 0,
+                      'remitente':    'pasajero',
+                      'nombre_otro':  _conductorData?['nombre'] ?? 'Conductor',
+                      'telefono_otro': _conductorData?['telefono'] ?? '',
+                    },
+                  );
+                },
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: ConstantColors.primaryViolet,
+                    boxShadow: [
+                      BoxShadow(
+                        color: ConstantColors.primaryViolet.withOpacity(0.5),
+                        blurRadius: 12,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.chat_rounded,
+                          color: Colors.white, size: 22),
+                      const SizedBox(height: 2),
+                      const Text('CHAT',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
           // ── BOTÓN SOS (Durante viaje activo) ─────────────────────
           if (_estadoViaje == EstadoViaje.conductorAsignado ||
               _estadoViaje == EstadoViaje.enCamino ||
@@ -2463,7 +2608,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               right: 16,
               bottom: 380,
               child: GestureDetector(
-                onLongPress: _enviarSOS,
+                onTap: _sosConCuentaRegresiva,   // tap = cuenta regresiva 5s
+                onLongPress: _enviarSOS,          // long press = envío inmediato
                 child: AnimatedContainer(
                   duration: Duration(milliseconds: 200),
                   width: 56, height: 56,

@@ -79,6 +79,15 @@ class _VehicleRegistrationScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Handle
+            Container(
+              width: 40, height: 4,
+              margin: const EdgeInsets.only(top: 16, bottom: 8),
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.camera_alt, color: Colors.white),
               title: const Text('Tomar foto', style: TextStyle(color: Colors.white)),

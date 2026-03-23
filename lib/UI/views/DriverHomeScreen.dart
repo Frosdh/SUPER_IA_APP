@@ -13,8 +13,10 @@ import 'package:fu_uber/Core/Services/BackgroundLocationService.dart';
 import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
 import 'package:fu_uber/UI/views/DriverProfileScreen.dart';
 import 'package:fu_uber/UI/views/DriverTripHistoryScreen.dart';
+import 'package:fu_uber/UI/views/ChatScreen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:sliding_up_panel/sliding_up_panel.dart';
 
 class DriverHomeScreen extends StatefulWidget {
   static const String route = '/driver_home';
@@ -26,6 +28,14 @@ class DriverHomeScreen extends StatefulWidget {
 class _DriverHomeScreenState extends State<DriverHomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final ApiProvider _apiProvider = ApiProvider();
+
+  // Panel para viaje activo
+  final PanelController _activeRidePanelController = PanelController();
+  final PanelController _requestPanelController = PanelController();
+  final PanelController _mainPanelController = PanelController();
+  double _currentPanelHeight = 24.0;
+  double _requestPanelHeight = 24.0;
+  double _mainPanelHeight = 24.0;
 
   int _driverId = 0;
   String _driverName = '';
@@ -150,7 +160,13 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           // Handle
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(
+              color: Colors.white24,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
           const SizedBox(height: 20),
 
           // Icono de éxito
@@ -841,6 +857,40 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
         ),
         actions: [
           TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('No cancelar',
+                style: TextStyle(color: ConstantColors.textGrey)),
+          ),
+        ],
+      ),
+    );
+
+    if (motivoSeleccionado == null || !mounted) return;
+
+    final viajeIdRaw = ride['viaje_id'];
+    final viajeId = viajeIdRaw is int
+        ? viajeIdRaw
+        : int.tryParse(viajeIdRaw?.toString() ?? '') ?? 0;
+    if (viajeId <= 0) return;
+
+    setState(() => _updatingRideStatus = true);
+
+    try {
+      await _apiProvider.updateRideStatus(
+        conductorId: _driverId,
+        viajeId: viajeId,
+        estado: 'cancelado',
+      );
+    } catch (_) {}
+
+    _ridePollingTimer?.cancel();
+    _mapTimer?.cancel();
+    await DriverPrefs.clearActiveRide();
+    await DriverPrefs.saveDriverStatus('libre');
+    if (!mounted) return;
+
+    setState(() {
+      _activeRide = null;
       _driverStatus = 'libre';
       _rutaPuntos = [];
       _miUbicacion = null;
@@ -1263,203 +1313,215 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
       extendBodyBehindAppBar: true,
-      body: Stack(
-        children: [
-          // ── Mapa pantalla completa ──────────────────────
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(initialCenter: miPos, initialZoom: 15.0),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                tileProvider: NetworkTileProvider(
-                  headers: {
-                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
-                  },
-                ),
-              ),
-              MarkerLayer(markers: [
-                Marker(
-                  point: miPos,
-                  width: 56,
-                  height: 56,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: conectado ? ConstantColors.primaryBlue : Colors.grey.shade600,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                      boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 10)],
-                    ),
-                    child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 28),
-                  ),
-                ),
-              ]),
-            ],
-          ),
-
-          // ── Barra superior: nombre + botones ───────────
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 12,
-            left: 16,
-            right: 16,
-            child: Row(
+      body: SlidingUpPanel(
+        controller: _mainPanelController,
+        minHeight: 24,
+        maxHeight: 220, // Altura ajustada para el botón y chips
+        parallaxEnabled: false,
+        color: Colors.transparent,
+        onPanelSlide: (position) {
+          setState(() {
+            _mainPanelHeight = 24 + (position * (220 - 24));
+          });
+        },
+        body: Stack(
+          children: [
+            // ── Mapa pantalla completa ──────────────────────
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(initialCenter: miPos, initialZoom: 15.0),
               children: [
-                // Nombre del conductor
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.backgroundCard.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: ConstantColors.borderColor),
-                      boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  tileProvider: NetworkTileProvider(
+                    headers: {
+                      'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                    },
+                  ),
+                ),
+                MarkerLayer(markers: [
+                  Marker(
+                    point: miPos,
+                    width: 56,
+                    height: 56,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: conectado ? ConstantColors.primaryBlue : Colors.grey.shade600,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 3),
+                        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 10)],
+                      ),
+                      child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 28),
                     ),
-                    child: Row(children: [
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: ConstantColors.primaryBlue.withOpacity(0.2),
-                        child: Icon(Icons.person, color: ConstantColors.primaryBlue, size: 18),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _driverName,
-                          style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ]),
                   ),
-                ),
-                const SizedBox(width: 8),
-                // Botón perfil
-                _btnTopCircle(
-                  icon: Icons.person_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DriverProfileScreen()),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Botón historial
-                _btnTopCircle(
-                  icon: Icons.history_rounded,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => DriverTripHistoryScreen(driverId: _driverId)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                // Botón logout
-                _btnTopCircle(icon: Icons.logout_rounded, onTap: _logout),
+                ]),
               ],
             ),
-          ),
 
-          // ── Badge estado (centro-superior) ─────────────
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 80,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 300),
-                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                decoration: BoxDecoration(
-                  color: conectado
-                      ? ConstantColors.success.withOpacity(0.92)
-                      : Colors.grey.shade700.withOpacity(0.92),
-                  borderRadius: BorderRadius.circular(30),
-                  boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
-                ),
-                child: Text(
-                  conectado ? '● En línea — esperando viajes' : '● Desconectado',
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
-                ),
-              ),
-            ),
-          ),
-
-          // ── Botón centrar mapa ──────────────────────────
-          Positioned(
-            bottom: 200,
-            right: 16,
-            child: GestureDetector(
-              onTap: () {
-                try { _mapController.move(miPos, 15.0); } catch (_) {}
-              },
-              child: Container(
-                width: 46, height: 46,
-                decoration: BoxDecoration(
-                  color: ConstantColors.backgroundCard,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ConstantColors.borderColor),
-                  boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
-                ),
-                child: Icon(Icons.my_location_rounded, color: ConstantColors.primaryBlue, size: 22),
-              ),
-            ),
-          ),
-
-          // ── Panel inferior ─────────────────────────────
-          Positioned(
-            bottom: 0, left: 0, right: 0,
-            child: Container(
-              padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(context).padding.bottom + 24),
-              decoration: BoxDecoration(
-                color: ConstantColors.backgroundCard,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-                border: Border.all(color: ConstantColors.borderColor),
-                boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, offset: const Offset(0, -4))],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+            // ── Barra superior: nombre + botones ───────────
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 16,
+              right: 16,
+              child: Row(
                 children: [
-                  // Handle
-                  Container(
-                    width: 40, height: 4,
-                    margin: const EdgeInsets.only(bottom: 18),
-                    decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2)),
-                  ),
-
-                  // Botón principal: Conectar / Desconectar
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: conectado ? Colors.redAccent : ConstantColors.success,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  // Nombre del conductor
+                  Expanded(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.backgroundCard.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: ConstantColors.borderColor),
+                        boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
                       ),
-                      onPressed: _updatingStatus ? null : _toggleStatus,
-                      child: _updatingStatus
-                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                          : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                              Icon(conectado ? Icons.power_settings_new_rounded : Icons.check_circle_rounded,
-                                  color: Colors.white, size: 22),
-                              const SizedBox(width: 10),
-                              Text(
-                                conectado ? 'Desconectarme' : 'Conectarme para recibir viajes',
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
-                              ),
-                            ]),
+                      child: Row(children: [
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: ConstantColors.primaryBlue.withOpacity(0.2),
+                          child: Icon(Icons.person, color: ConstantColors.primaryBlue, size: 18),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _driverName,
+                            style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ]),
                     ),
                   ),
-
-                  const SizedBox(height: 14),
-
-                  // Info rápida: teléfono y última ubicación
-                  Row(children: [
-                    Expanded(child: _buildInfoChip(Icons.phone_rounded, _driverPhone)),
-                    const SizedBox(width: 10),
-                    Expanded(child: _buildInfoChip(Icons.location_on_rounded, _lastLocationText)),
-                  ]),
+                  const SizedBox(width: 8),
+                  // Botón perfil
+                  _btnTopCircle(
+                    icon: Icons.person_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const DriverProfileScreen()),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Botón historial
+                  _btnTopCircle(
+                    icon: Icons.history_rounded,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => DriverTripHistoryScreen(driverId: _driverId)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Botón logout
+                  _btnTopCircle(icon: Icons.logout_rounded, onTap: _logout),
                 ],
               ),
             ),
+
+            // ── Badge estado (centro-superior) ─────────────
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 80,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: conectado
+                        ? ConstantColors.success.withOpacity(0.92)
+                        : Colors.grey.shade700.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
+                  ),
+                  child: Text(
+                    conectado ? '● En línea — esperando viajes' : '● Desconectado',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Botón centrar mapa ──────────────────────────
+            Positioned(
+              bottom: _mainPanelHeight + 16,
+              right: 16,
+              child: GestureDetector(
+                onTap: () {
+                  try { _mapController.move(miPos, 15.0); } catch (_) {}
+                },
+                child: Container(
+                  width: 46, height: 46,
+                  decoration: BoxDecoration(
+                    color: ConstantColors.backgroundCard,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: ConstantColors.borderColor),
+                    boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
+                  ),
+                  child: Icon(Icons.my_location_rounded, color: ConstantColors.primaryBlue, size: 22),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // ── Panel inferior ─────────────────────────────
+        panel: Container(
+          padding: EdgeInsets.fromLTRB(20, 12, 20, MediaQuery.of(context).padding.bottom + 20),
+          decoration: BoxDecoration(
+            color: ConstantColors.backgroundCard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: ConstantColors.borderColor),
+            boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, offset: const Offset(0, -4))],
           ),
-        ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+
+              // Botón principal: Conectar / Desconectar
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: conectado ? Colors.redAccent : ConstantColors.success,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                  ),
+                  onPressed: _updatingStatus ? null : _toggleStatus,
+                  child: _updatingStatus
+                      ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                      : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(conectado ? Icons.power_settings_new_rounded : Icons.check_circle_rounded,
+                              color: Colors.white, size: 22),
+                          const SizedBox(width: 10),
+                          Text(
+                            conectado ? 'Desconectarme' : 'Conectarme para recibir viajes',
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15),
+                          ),
+                        ]),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              // Info rápida: teléfono y última ubicación
+              Row(children: [
+                Expanded(child: _buildInfoChip(Icons.phone_rounded, _driverPhone)),
+                const SizedBox(width: 10),
+                Expanded(child: _buildInfoChip(Icons.location_on_rounded, _lastLocationText)),
+              ]),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1519,247 +1581,276 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
     final pickupLng = double.tryParse(req['origen_lng']?.toString() ?? '');
     final pickupPoint = (pickupLat != null && pickupLng != null) ? LatLng(pickupLat, pickupLng) : null;
 
-    // Centro inicial: punto de recogida del pasajero
     final centroMapa = pickupPoint ?? _miPosActual ?? const LatLng(-2.9001285, -79.0058965);
+
+    final double panelMaxHeight = (telefono.isNotEmpty) ? 460 : 400;
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              color: ConstantColors.backgroundCard.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: IconButton(
-              icon: Icon(Icons.logout, color: ConstantColors.textWhite),
-              onPressed: _logout,
-            ),
-          ),
-        ],
-      ),
-      body: Stack(children: [
-        // ── Mapa pantalla completa ──────────────────────
-        FlutterMap(
-          mapController: _solicitudMapController,
-          options: MapOptions(initialCenter: centroMapa, initialZoom: 14.5),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              tileProvider: NetworkTileProvider(
-                headers: {
-                  'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
-                },
-              ),
-            ),
-            // Ruta del conductor al pasajero
-            if (_rutaSolicitud.isNotEmpty)
-              PolylineLayer(polylines: [
-                Polyline(points: _rutaSolicitud, color: ConstantColors.primaryBlue, strokeWidth: 5.0),
-              ]),
-            MarkerLayer(markers: [
-              // Pasajero (verde)
-              if (pickupPoint != null)
-                Marker(
-                  point: pickupPoint, width: 52, height: 68,
-                  child: Column(children: [
-                    Container(
-                      width: 44, height: 44,
-                      decoration: BoxDecoration(
-                        color: Colors.green.shade600,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2.5),
-                        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
-                      ),
-                      child: const Icon(Icons.person_pin_rounded, color: Colors.white, size: 26),
-                    ),
-                    Container(width: 2, height: 18, color: Colors.green.shade600),
-                  ]),
-                ),
-              // Conductor (azul)
-              if (_miPosActual != null)
-                Marker(
-                  point: _miPosActual!, width: 44, height: 44,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: ConstantColors.primaryBlue,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 6)],
-                    ),
-                    child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 24),
-                  ),
-                ),
-            ]),
-          ],
-        ),
-
-        // ── Badge "Nueva solicitud" (arriba izquierda) ───
-        Positioned(
-          top: MediaQuery.of(context).padding.top + 12,
-          left: 16,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: ConstantColors.backgroundCard.withOpacity(0.93),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: ConstantColors.warning.withOpacity(0.5)),
-              boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
-            ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              if (_calculandoRutaSolicitud)
-                SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(ConstantColors.warning)))
-              else
-                Icon(Icons.notifications_active_rounded, color: ConstantColors.warning, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                _calculandoRutaSolicitud ? 'Calculando ruta...' : 'Nueva solicitud de viaje',
-                style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-            ]),
-          ),
-        ),
-
-        // ── Panel inferior con info del pasajero ─────────
-        Positioned(
-          bottom: 0, left: 0, right: 0,
-          child: Container(
-            padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
-            decoration: BoxDecoration(
-              color: ConstantColors.backgroundCard,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, offset: const Offset(0, -4))],
-            ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
-
-              // Pasajero
-              Row(children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
-                  child: Icon(Icons.person, color: ConstantColors.primaryViolet, size: 24),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(pasajero, style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
-                  if (telefono.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(telefono, style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
-                  ],
-                ])),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: ConstantColors.success.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text('\$$tarifa', style: TextStyle(color: ConstantColors.success, fontWeight: FontWeight.w800, fontSize: 16)),
-                ),
-              ]),
-              const SizedBox(height: 12),
-
-              // Ruta texto
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: ConstantColors.backgroundDark.withOpacity(0.4),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(children: [
-                  Row(children: [
-                    Container(width: 8, height: 8, decoration: BoxDecoration(color: Colors.green.shade500, shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(origen, style: TextStyle(color: ConstantColors.textWhite, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ]),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Container(width: 8, height: 8, decoration: BoxDecoration(color: ConstantColors.primaryViolet, shape: BoxShape.circle)),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(destino, style: TextStyle(color: ConstantColors.textWhite, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ]),
-                ]),
-              ),
-              const SizedBox(height: 10),
-
-              // Métricas
-              Row(children: [
-                _buildMiniMetric('Distancia', '$distancia km'),
-                const SizedBox(width: 10),
-                _buildMiniMetric('Duración', '$duracion min'),
-                const SizedBox(width: 10),
-                _buildMiniMetric('Ganancia', '\$$tarifa'),
-              ]),
-              const SizedBox(height: 14),
-
-              // Botón llamar (si hay teléfono)
-              if (telefono.isNotEmpty) ...[
-                GestureDetector(
-                  onTap: () async {
-                    final uri = Uri.parse('tel:$telefono');
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    } else {
-                      _showMessage('No se pudo abrir el marcador');
-                    }
+      body: SlidingUpPanel(
+        controller: _requestPanelController,
+        minHeight: 24,
+        maxHeight: panelMaxHeight,
+        parallaxEnabled: false,
+        color: Colors.transparent,
+        onPanelSlide: (position) {
+          setState(() {
+            _requestPanelHeight = 24 + (position * (panelMaxHeight - 24));
+          });
+        },
+        body: Stack(children: [
+          // ── Mapa pantalla completa ──────────────────────
+          FlutterMap(
+            mapController: _solicitudMapController,
+            options: MapOptions(initialCenter: centroMapa, initialZoom: 14.5),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                tileProvider: NetworkTileProvider(
+                  headers: {
+                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
                   },
-                  child: Container(
-                    width: double.infinity,
-                    height: 46,
-                    margin: const EdgeInsets.only(bottom: 10),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.primaryBlue.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: ConstantColors.primaryBlue.withOpacity(0.5)),
-                    ),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.phone_rounded, color: ConstantColors.primaryBlue, size: 18),
-                      const SizedBox(width: 8),
-                      Text('Llamar a $pasajero  ($telefono)', style: TextStyle(color: ConstantColors.primaryBlue, fontWeight: FontWeight.w700, fontSize: 13)),
+                ),
+              ),
+              if (_rutaSolicitud.isNotEmpty)
+                PolylineLayer(polylines: [
+                  Polyline(points: _rutaSolicitud, color: ConstantColors.primaryBlue, strokeWidth: 5.0),
+                ]),
+              MarkerLayer(markers: [
+                if (pickupPoint != null)
+                  Marker(
+                    point: pickupPoint, width: 52, height: 68,
+                    child: Column(children: [
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: Colors.green.shade600,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2.5),
+                          boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
+                        ),
+                        child: const Icon(Icons.person_pin_rounded, color: Colors.white, size: 26),
+                      ),
+                      Container(width: 2, height: 18, color: Colors.green.shade600),
                     ]),
                   ),
-                ),
-              ],
+                if (_miPosActual != null)
+                  Marker(
+                    point: _miPosActual!, width: 44, height: 44,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: ConstantColors.primaryBlue,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 6)],
+                      ),
+                      child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 24),
+                    ),
+                  ),
+              ]),
+            ],
+          ),
 
-              // Botones aceptar / rechazar
-              Row(children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.redAccent),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _respondingRequest ? null : () => _handleRequest('rechazar'),
-                    child: Text('Rechazar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700, fontSize: 15)),
-                  ),
+          // ── Botón salir (arriba derecha) ──
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            right: 16,
+            child: GestureDetector(
+              onTap: _logout,
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: ConstantColors.backgroundCard.withOpacity(0.9),
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ConstantColors.success,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _respondingRequest ? null : () => _handleRequest('aceptar'),
-                    child: _respondingRequest
-                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                        : const Text('Aceptar viaje', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
-                  ),
+                child: Icon(Icons.logout_rounded, color: ConstantColors.textWhite, size: 20),
+              ),
+            ),
+          ),
+
+          // ── Badge "Nueva solicitud" ──
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 12,
+            left: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundCard.withOpacity(0.93),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: ConstantColors.warning.withOpacity(0.5)),
+                boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                if (_calculandoRutaSolicitud)
+                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(ConstantColors.warning)))
+                else
+                  Icon(Icons.notifications_active_rounded, color: ConstantColors.warning, size: 16),
+                const SizedBox(width: 8),
+                Text(
+                  _calculandoRutaSolicitud ? 'Calculando ruta...' : 'Nueva solicitud de viaje',
+                  style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 13),
                 ),
               ]),
-            ]),
+            ),
           ),
+
+          // Botón Recenter
+          Positioned(
+            bottom: _requestPanelHeight + 16,
+            right: 16,
+            child: GestureDetector(
+              onTap: () {
+                try { _solicitudMapController.move(centroMapa, 14.5); } catch (_) {}
+              },
+              child: Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: ConstantColors.backgroundCard,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: ConstantColors.borderColor),
+                  boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
+                ),
+                child: Icon(Icons.my_location_rounded, color: ConstantColors.primaryBlue, size: 22),
+              ),
+            ),
+          ),
+        ]),
+
+        // ── Panel inferior deslizable ──
+        panel: Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          decoration: BoxDecoration(
+            color: ConstantColors.backgroundCard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: ConstantColors.borderColor),
+            boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, offset: const Offset(0, -4))],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Handle
+            Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4))),
+
+            // Pasajero
+            Row(children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
+                child: Icon(Icons.person, color: ConstantColors.primaryViolet, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(pasajero, style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
+                if (telefono.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(telefono, style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+                ],
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: ConstantColors.success.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('\$$tarifa', style: TextStyle(color: ConstantColors.success, fontWeight: FontWeight.w800, fontSize: 16)),
+              ),
+            ]),
+            const SizedBox(height: 12),
+
+            // Ruta texto
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundDark.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(children: [
+                Row(children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: Colors.green.shade500, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(origen, style: TextStyle(color: ConstantColors.textWhite, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ]),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Container(width: 8, height: 8, decoration: BoxDecoration(color: ConstantColors.primaryViolet, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(destino, style: TextStyle(color: ConstantColors.textWhite, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ]),
+              ]),
+            ),
+            const SizedBox(height: 10),
+
+            // Métricas
+            Row(children: [
+              _buildMiniMetric('Distancia', '$distancia km'),
+              const SizedBox(width: 10),
+              _buildMiniMetric('Duración', '$duracion min'),
+              const SizedBox(width: 10),
+              _buildMiniMetric('Ganancia', '\$$tarifa'),
+            ]),
+            const SizedBox(height: 18),
+
+            // Botón llamar (si hay teléfono)
+            if (telefono.isNotEmpty) ...[
+              GestureDetector(
+                onTap: () async {
+                  final uri = Uri.parse('tel:$telefono');
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri);
+                  } else {
+                    _showMessage('No se pudo abrir el marcador');
+                  }
+                },
+                child: Container(
+                  width: double.infinity, height: 48,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: ConstantColors.primaryBlue.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: ConstantColors.primaryBlue.withOpacity(0.5)),
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.phone_rounded, color: ConstantColors.primaryBlue, size: 18),
+                    const SizedBox(width: 8),
+                    Text('Llamar al pasajero', style: TextStyle(color: ConstantColors.primaryBlue, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ]),
+                ),
+              ),
+            ],
+
+            // Botones aceptar / rechazar
+            Row(children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: _respondingRequest ? null : () => _handleRequest('rechazar'),
+                  child: const Text('Rechazar', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.w700, fontSize: 15)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ConstantColors.success,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: _respondingRequest ? null : () => _handleRequest('aceptar'),
+                  child: _respondingRequest
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                      : const Text('Aceptar viaje', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                ),
+              ),
+            ]),
+          ]),
         ),
-      ]),
+      ),
     );
   }
 
@@ -1844,363 +1935,351 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
       estadoColor = ConstantColors.primaryBlue;
     }
 
+    // Altura del panel según estado
+    final double panelMaxHeight = (estado == 'iniciado') ? 360 : 460;
+
     return Scaffold(
-      key: _scaffoldKey,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 12),
-            decoration: BoxDecoration(
-              color: ConstantColors.backgroundCard.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: IconButton(icon: Icon(Icons.logout, color: ConstantColors.textWhite), onPressed: _logout),
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // ── Mapa pantalla completa ──────────────────────
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(initialCenter: miPos, initialZoom: 14.5),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                tileProvider: NetworkTileProvider(
-                  headers: {
-                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
-                  },
-                ),
-              ),
-              if (_rutaPuntos.isNotEmpty)
-                PolylineLayer(polylines: [
-                  Polyline(points: _rutaPuntos, color: colorRuta, strokeWidth: 5.5),
-                ]),
-              MarkerLayer(markers: [
-                // Mi posición (carro)
-                Marker(
-                  point: miPos, width: 48, height: 48,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: ConstantColors.primaryBlue,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 2.5),
-                      boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
-                    ),
-                    child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 26),
+      body: SlidingUpPanel(
+        controller: _activeRidePanelController,
+        minHeight: 24,
+        maxHeight: panelMaxHeight,
+        parallaxEnabled: false,
+        color: Colors.transparent,
+        onPanelSlide: (position) {
+          setState(() {
+            _currentPanelHeight = 24 + (position * (panelMaxHeight - 24));
+          });
+        },
+        body: Stack(
+          children: [
+            // ── Mapa pantalla completa ──────────────────────
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(initialCenter: miPos, initialZoom: 14.5),
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  tileProvider: NetworkTileProvider(
+                    headers: {
+                      'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                    },
                   ),
                 ),
-                // Punto de recogida (persona verde)
-                if (pickupPoint != null)
+                if (_rutaPuntos.isNotEmpty)
+                  PolylineLayer(polylines: [
+                    Polyline(points: _rutaPuntos, color: colorRuta, strokeWidth: 5.5),
+                  ]),
+                MarkerLayer(markers: [
+                  // Mi posición (carro)
                   Marker(
-                    point: pickupPoint, width: 44, height: 56,
-                    child: Column(children: [
-                      Container(
-                        width: 38, height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.green.shade600,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 6)],
-                        ),
-                        child: const Icon(Icons.person, color: Colors.white, size: 22),
-                      ),
-                      Container(width: 2, height: 14, color: Colors.green.shade600),
-                    ]),
-                  ),
-                // Punto de destino (bandera violeta) — solo en viaje iniciado
-                if (destPoint != null && estado == 'iniciado')
-                  Marker(
-                    point: destPoint, width: 44, height: 56,
-                    child: Column(children: [
-                      Container(
-                        width: 38, height: 38,
-                        decoration: BoxDecoration(
-                          color: ConstantColors.primaryViolet,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 2),
-                          boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 6)],
-                        ),
-                        child: const Icon(Icons.flag_rounded, color: Colors.white, size: 22),
-                      ),
-                      Container(width: 2, height: 14, color: ConstantColors.primaryViolet),
-                    ]),
-                  ),
-              ]),
-            ],
-          ),
-
-          // ── Badge estado (arriba izquierda) ────────────
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 12,
-            left: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: ConstantColors.backgroundCard.withOpacity(0.93),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: estadoColor.withOpacity(0.5)),
-                boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                if (_calculandoRuta)
-                  SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(estadoColor)))
-                else
-                  Container(width: 8, height: 8, decoration: BoxDecoration(color: estadoColor, shape: BoxShape.circle)),
-                SizedBox(width: 8),
-                Text(estadoLabel, style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 13)),
-              ]),
-            ),
-          ),
-
-          // ── Botón flotante "¡He llegado!" (solo en en_camino) ──
-          if (estado == 'en_camino')
-            Positioned(
-              bottom: 230,
-              left: 24,
-              right: 24,
-              child: GestureDetector(
-                onTap: _updatingRideStatus ? null : () => _setRideStatus('iniciado'),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade600,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(color: Colors.green.shade700.withOpacity(0.6), blurRadius: 16, offset: const Offset(0, 6)),
-                    ],
-                  ),
-                  child: _updatingRideStatus
-                      ? const Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white))))
-                      : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          const Icon(Icons.where_to_vote_rounded, color: Colors.white, size: 24),
-                          const SizedBox(width: 10),
-                          const Text('¡He llegado!  —  Pasajero recogido', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16)),
-                        ]),
-                ),
-              ),
-            ),
-
-          // ── Botón centrar mapa ──────────────────────────
-          Positioned(
-            bottom: 260,
-            right: 16,
-            child: GestureDetector(
-              onTap: () {
-                try { _mapController.move(miPos, 14.5); } catch (_) {}
-              },
-              child: Container(
-                width: 44, height: 44,
-                decoration: BoxDecoration(
-                  color: ConstantColors.backgroundCard,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: ConstantColors.borderColor),
-                  boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
-                ),
-                child: Icon(Icons.my_location_rounded, color: ConstantColors.primaryBlue, size: 22),
-              ),
-            ),
-          ),
-
-          // ── Panel inferior ─────────────────────────────
-          Positioned(
-            bottom: 0, left: 0, right: 0,
-            child: Container(
-              padding: EdgeInsets.fromLTRB(20, 16, 20, MediaQuery.of(context).padding.bottom + 20),
-              decoration: BoxDecoration(
-                color: ConstantColors.backgroundCard,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                border: Border.all(color: ConstantColors.borderColor),
-                boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, offset: Offset(0, -4))],
-              ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                // Handle
-                Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(color: ConstantColors.borderColor, borderRadius: BorderRadius.circular(2))),
-
-                // Pasajero + tarifa
-                Row(children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: ConstantColors.primaryBlue.withOpacity(0.2),
-                    child: Icon(Icons.person, color: ConstantColors.primaryBlue, size: 24),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(pasajero, style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
-                    SizedBox(height: 3),
-                    Text(
-                      estado == 'iniciado' ? 'Destino: $destino' : 'Recogida: $origen',
-                      style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ])),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.success.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text('\$$tarifa', style: TextStyle(color: ConstantColors.success, fontWeight: FontWeight.w800, fontSize: 16)),
-                  ),
-                ]),
-
-                SizedBox(height: 14),
-
-                // ── Botones de contacto y navegación ─────────────
-                Row(children: [
-                  // Llamar al pasajero
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: _llamarPasajero,
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: ConstantColors.primaryBlue.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: ConstantColors.primaryBlue.withOpacity(0.5)),
-                        ),
-                        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.phone_rounded, color: ConstantColors.primaryBlue, size: 18),
-                          SizedBox(width: 6),
-                          Text('Llamar', style: TextStyle(color: ConstantColors.primaryBlue, fontWeight: FontWeight.w700, fontSize: 13)),
-                        ]),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  // Google Maps
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _abrirNavegacion(waze: false),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.green.withOpacity(0.5)),
-                        ),
-                        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.map_rounded, color: Colors.green.shade400, size: 18),
-                          SizedBox(width: 6),
-                          Text('Maps', style: TextStyle(color: Colors.green.shade400, fontWeight: FontWeight.w700, fontSize: 13)),
-                        ]),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  // Waze
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _abrirNavegacion(waze: true),
-                      child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.cyan.withOpacity(0.10),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: Colors.cyan.withOpacity(0.5)),
-                        ),
-                        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                          Icon(Icons.navigation_rounded, color: Colors.cyan.shade300, size: 18),
-                          SizedBox(width: 6),
-                          Text('Waze', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.w700, fontSize: 13)),
-                        ]),
-                      ),
-                    ),
-                  ),
-                ]),
-
-                SizedBox(height: 14),
-                Divider(color: ConstantColors.dividerColor),
-                SizedBox(height: 12),
-
-                // Botones de acción
-                Row(children: [
-                  // En camino
-                  if (estado == 'aceptado')
-                    Expanded(
-                      child: _botonAccion(
-                        label: 'En camino',
-                        icono: Icons.directions_car_rounded,
+                    point: miPos, width: 48, height: 48,
+                    child: Container(
+                      decoration: BoxDecoration(
                         color: ConstantColors.primaryBlue,
-                        cargando: _updatingRideStatus,
-                        onTap: () => _setRideStatus('en_camino'),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2.5),
+                        boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
                       ),
-                    ),
-                  if (estado == 'aceptado') SizedBox(width: 10),
-
-                  // Iniciar viaje (He llegado)
-                  if (estado == 'aceptado' || estado == 'en_camino')
-                    Expanded(
-                      child: _botonAccion(
-                        label: estado == 'en_camino' ? '¡He llegado!' : 'Iniciar',
-                        icono: Icons.flag_rounded,
-                        color: Colors.orangeAccent,
-                        cargando: _updatingRideStatus,
-                        onTap: () => _setRideStatus('iniciado'),
-                      ),
-                    ),
-
-                  // En viaje solo muestra finalizar
-                  if (estado == 'iniciado') ...[
-                    Expanded(
-                      child: _botonAccion(
-                        label: 'Finalizar viaje',
-                        icono: Icons.check_circle_rounded,
-                        color: ConstantColors.success,
-                        cargando: _updatingRideStatus,
-                        onTap: () => _setRideStatus('terminado'),
-                      ),
-                    ),
-                  ],
-                ]),
-
-                // Finalizar siempre disponible si no está en estado 'iniciado'
-                if (estado != 'iniciado') ...[
-                  SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      onPressed: _updatingRideStatus ? null : () => _setRideStatus('terminado'),
-                      child: Text('Finalizar viaje', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                      child: const Icon(Icons.directions_car_rounded, color: Colors.white, size: 26),
                     ),
                   ),
-                ],
-
-                // Botón cancelar (solo disponible antes de iniciar el viaje)
-                if (estado != 'iniciado') ...[
-                  SizedBox(height: 6),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _updatingRideStatus ? null : _cancelarViaje,
-                      icon: Icon(Icons.cancel_outlined, color: Colors.redAccent.withOpacity(0.8), size: 16),
-                      label: Text(
-                        'Cancelar viaje',
-                        style: TextStyle(
-                          color: Colors.redAccent.withOpacity(0.8),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                  // Punto de recogida (persona verde)
+                  if (pickupPoint != null)
+                    Marker(
+                      point: pickupPoint, width: 44, height: 56,
+                      child: Column(children: [
+                        Container(
+                          width: 38, height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.green.shade600,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                          ),
+                          child: const Icon(Icons.person, color: Colors.white, size: 22),
                         ),
-                      ),
+                        Container(width: 2, height: 14, color: Colors.green.shade600),
+                      ]),
+                    ),
+                  // Punto de destino (bandera violeta) — solo en viaje iniciado
+                  if (destPoint != null && estado == 'iniciado')
+                    Marker(
+                      point: destPoint, width: 44, height: 56,
+                      child: Column(children: [
+                        Container(
+                          width: 38, height: 38,
+                          decoration: BoxDecoration(
+                            color: ConstantColors.primaryViolet,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                            boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                          ),
+                          child: const Icon(Icons.flag_rounded, color: Colors.white, size: 22),
+                        ),
+                        Container(width: 2, height: 14, color: ConstantColors.primaryViolet),
+                      ]),
+                    ),
+                ]),
+              ],
+            ),
+
+            // ── Badge estado (arriba izquierda) ────────────
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: ConstantColors.backgroundCard.withOpacity(0.93),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: estadoColor.withOpacity(0.5)),
+                  boxShadow: [BoxShadow(color: Colors.black38, blurRadius: 8)],
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_calculandoRuta)
+                    SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(estadoColor)))
+                  else
+                    Container(width: 8, height: 8, decoration: BoxDecoration(color: estadoColor, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Text(estadoLabel, style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 13)),
+                ]),
+              ),
+            ),
+
+            // ── Botón centrar mapa ──────────────────────────
+            Positioned(
+              bottom: _currentPanelHeight + 16,
+              right: 16,
+              child: GestureDetector(
+                onTap: () {
+                  try { _mapController.move(miPos, 14.5); } catch (_) {}
+                },
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: ConstantColors.backgroundCard,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: ConstantColors.borderColor),
+                    boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 8)],
+                  ),
+                  child: Icon(Icons.my_location_rounded, color: ConstantColors.primaryBlue, size: 22),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // ── Panel inferior deslizable ─────────────────────
+        panel: Container(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          decoration: BoxDecoration(
+            color: ConstantColors.backgroundCard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: ConstantColors.borderColor),
+            boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, offset: const Offset(0, -4))],
+          ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // Handle
+            Container(
+              width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(4)),
+            ),
+
+            // Pasajero + tarifa
+            Row(children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: ConstantColors.primaryBlue.withOpacity(0.2),
+                child: Icon(Icons.person, color: ConstantColors.primaryBlue, size: 24),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(pasajero, style: TextStyle(color: ConstantColors.textWhite, fontSize: 16, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(
+                  estado == 'iniciado' ? 'Destino: $destino' : 'Recogida: $origen',
+                  style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: ConstantColors.success.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text('\$$tarifa', style: TextStyle(color: ConstantColors.success, fontWeight: FontWeight.w800, fontSize: 16)),
+              ),
+            ]),
+
+            const SizedBox(height: 18),
+
+            // ── Botones de contacto y navegación ─────────────
+            Row(children: [
+              // Llamar al pasajero
+              Expanded(
+                child: GestureDetector(
+                  onTap: _llamarPasajero,
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: ConstantColors.primaryBlue.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: ConstantColors.primaryBlue.withOpacity(0.5)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.phone_rounded, color: ConstantColors.primaryBlue, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('Llamar', style: TextStyle(color: ConstantColors.primaryBlue, fontWeight: FontWeight.w700, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Chat con el pasajero
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    final ride = _activeRide;
+                    if (ride == null) return;
+                    final viajeIdRaw = ride['viaje_id'];
+                    final viajeId = viajeIdRaw is int
+                        ? viajeIdRaw
+                        : int.tryParse(viajeIdRaw?.toString() ?? '') ?? 0;
+                    Navigator.pushNamed(
+                      context,
+                      ChatScreen.route,
+                      arguments: {
+                        'viaje_id':     viajeId,
+                        'remitente':    'conductor',
+                        'nombre_otro':  ride['pasajero_nombre']?.toString() ?? 'Pasajero',
+                        'telefono_otro': ride['pasajero_telefono']?.toString() ?? '',
+                      },
+                    );
+                  },
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: ConstantColors.primaryViolet.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: ConstantColors.primaryViolet.withOpacity(0.5)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.chat_rounded, color: ConstantColors.primaryViolet, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('Chat', style: TextStyle(color: ConstantColors.primaryViolet, fontWeight: FontWeight.w700, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 12),
+
+            Row(children: [
+              // Abrir en Maps
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _abrirNavegacion(waze: false),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: ConstantColors.success.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: ConstantColors.success.withOpacity(0.4)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.map_rounded, color: ConstantColors.success, size: 18),
+                      const SizedBox(width: 6),
+                      const Text('Maps', style: TextStyle(color: ConstantColors.success, fontWeight: FontWeight.w700, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              // Abrir en Waze
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _abrirNavegacion(waze: true),
+                  child: Container(
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.cyan.withOpacity(0.10),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(color: Colors.cyan.withOpacity(0.5)),
+                    ),
+                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Icon(Icons.navigation_rounded, color: Colors.cyan.shade300, size: 18),
+                      SizedBox(width: 6),
+                      Text('Waze', style: TextStyle(color: Colors.cyan.shade300, fontWeight: FontWeight.w700, fontSize: 14)),
+                    ]),
+                  ),
+                ),
+              ),
+            ]),
+
+            const SizedBox(height: 16),
+            Divider(color: ConstantColors.borderColor.withOpacity(0.5)),
+            const SizedBox(height: 16),
+
+            // Botones de acción
+            Row(children: [
+              if (estado == 'aceptado')
+                Expanded(
+                  child: _botonAccion(
+                    label: 'En camino',
+                    icono: Icons.directions_car_rounded,
+                    color: ConstantColors.primaryBlue,
+                    cargando: _updatingRideStatus,
+                    onTap: () => _setRideStatus('en_camino'),
+                  ),
+                ),
+              if (estado == 'aceptado') const SizedBox(width: 10),
+
+              if (estado == 'aceptado' || estado == 'en_camino')
+                Expanded(
+                  child: _botonAccion(
+                    label: estado == 'en_camino' ? '¡He llegado!' : 'Ya voy',
+                    icono: Icons.flag_rounded,
+                    color: Colors.orangeAccent,
+                    cargando: _updatingRideStatus,
+                    onTap: () => _setRideStatus(estado == 'en_camino' ? 'iniciado' : 'en_camino'),
+                  ),
+                ),
+
+              if (estado == 'iniciado') ...[
+                Expanded(
+                  child: _botonAccion(
+                    label: 'Finalizar viaje',
+                    icono: Icons.check_circle_rounded,
+                    color: ConstantColors.success,
+                    cargando: _updatingRideStatus,
+                    onTap: () => _setRideStatus('terminado'),
+                  ),
+                ),
+              ],
+            ]),
+
+            if (estado != 'iniciado') ...[
+              const SizedBox(height: 6),
+              Center(
+                child: TextButton.icon(
+                  onPressed: _updatingRideStatus ? null : _cancelarViaje,
+                  icon: Icon(Icons.cancel_outlined, color: Colors.redAccent.withOpacity(0.8), size: 16),
+                  label: Text(
+                    'Cancelar viaje',
+                    style: TextStyle(
+                      color: Colors.redAccent.withOpacity(0.8),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ],
-              ]),
-            ),
-          ),
-        ],
+                ),
+              ),
+            ],
+          ]),
+        ),
       ),
     );
   }

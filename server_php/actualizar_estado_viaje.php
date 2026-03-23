@@ -158,10 +158,11 @@ try {
                     $mensaje = "Gracias por viajar con GeoMove. ¡Esperamos verte pronto!";
                 }
                 
-                _sendFcm($token, $proj, $res_u['token_fcm'], $titulo, $mensaje, [
+                list($status, $resp) = _sendFcm($token, $proj, $res_u['token_fcm'], $titulo, $mensaje, [
                     'viaje_id' => $viajeId, 
                     'estado' => $estado
                 ]);
+                _log_fcm_to_db($conn, $viajeId, 0, $res_u['token_fcm'], $status, $resp);
             }
         }
     } catch (Exception $e) { /* No bloquear */ }

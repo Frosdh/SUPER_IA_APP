@@ -3,6 +3,8 @@ import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Preferences/RideHistoryService.dart';
 import 'package:fu_uber/UI/views/OsmMapScreen.dart';
 import 'package:fu_uber/UI/views/ReportarObjetoPerdidoScreen.dart';
+import 'package:fu_uber/UI/views/ReceiptScreen.dart';
+import 'package:fu_uber/UI/views/DisputeScreen.dart';
 
 class RideHistoryScreen extends StatefulWidget {
   static const String route = '/ride_history';
@@ -296,7 +298,7 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
               ),
             ],
             SizedBox(height: 14),
-            // ── Botones de acción ───────────────────────────────────
+            // ── Botones de acción fila 1 ─────────────────────────────
             Row(
               children: [
                 // Repetir viaje
@@ -395,6 +397,117 @@ class _RideHistoryScreenState extends State<RideHistoryScreen> {
                     ),
                   ),
                 ],
+              ],
+            ),
+
+            // ── Botones de acción fila 2: Recibo + Disputar ─────────
+            SizedBox(height: 10),
+            Row(
+              children: [
+                // Ver recibo
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        ReceiptScreen.route,
+                        arguments: {
+                          'viaje_id':         viaje['id'] ?? 0,
+                          'origen':           viaje['origen'] ?? '',
+                          'destino':          viaje['destino'] ?? '',
+                          'distancia_km':     viaje['distancia_km'] ?? 0,
+                          'duracion_min':     viaje['duracion_min'] ?? 0,
+                          'precio':           viaje['precio'] ?? 0,
+                          'conductor_nombre': viaje['conductor_nombre'] ?? '',
+                          'conductor_auto':   viaje['conductor_auto'] ?? '',
+                          'conductor_placa':  viaje['conductor_placa'] ?? '',
+                          'fecha':            viaje['fecha'] ?? '',
+                          'descuento':        viaje['descuento'] ?? 0,
+                          'tarifa_base':      viaje['tarifa_base'] ?? 0,
+                          'precio_km':        viaje['precio_km'] ?? 0,
+                          'precio_minuto':    viaje['precio_minuto'] ?? 0,
+                          'categoria_nombre': viaje['categoria_nombre'] ?? '',
+                          'metodo_pago':      viaje['metodo_pago'] ?? 'cash',
+                        },
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.primaryBlue.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: ConstantColors.primaryBlue.withOpacity(0.35),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.receipt_rounded,
+                              color: ConstantColors.primaryBlue, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Ver recibo',
+                            style: TextStyle(
+                              color: ConstantColors.primaryBlue,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                SizedBox(width: 10),
+
+                // Disputar cobro
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(
+                        context,
+                        DisputeScreen.route,
+                        arguments: {
+                          'viaje_id':         viaje['id'] ?? 0,
+                          'origen':           viaje['origen'] ?? '',
+                          'destino':          viaje['destino'] ?? '',
+                          'precio':           viaje['precio'] ?? 0,
+                          'fecha':            viaje['fecha'] ?? '',
+                          'conductor_nombre': viaje['conductor_nombre'] ?? '',
+                          'metodo_pago':      viaje['metodo_pago'] ?? 'cash',
+                        },
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.error.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: ConstantColors.error.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.flag_rounded,
+                              color: ConstantColors.error, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Disputar cobro',
+                            style: TextStyle(
+                              color: ConstantColors.error,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ],

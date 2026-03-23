@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:fu_uber/Core/Constants/colorConstants.dart';
 import 'package:fu_uber/Core/Networking/ApiProvider.dart';
 import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
+import 'package:fu_uber/UI/views/DriverEarningsScreen.dart';
 
 class DriverProfileScreen extends StatefulWidget {
   static const String route = '/driver_profile';
@@ -170,6 +171,8 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
                   _buildEstadoCuenta(),
                   const SizedBox(height: 20),
                   _buildStatsRow(),
+                  const SizedBox(height: 16),
+                  _buildGananciasButton(),
                   const SizedBox(height: 24),
                   _buildSectionTitle('Datos personales', Icons.person_outline_rounded),
                   const SizedBox(height: 12),
@@ -311,6 +314,56 @@ class _DriverProfileScreenState extends State<DriverProfileScreen> {
         color: const Color(0xFFf59e0b),
       )),
     ]);
+  }
+
+  Widget _buildGananciasButton() {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, DriverEarningsScreen.route),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFF22c55e).withOpacity(0.15),
+              const Color(0xFF16a34a).withOpacity(0.08),
+            ],
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFF22c55e).withOpacity(0.4)),
+        ),
+        child: Row(children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFF22c55e).withOpacity(0.18),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.trending_up_rounded,
+                color: Color(0xFF22c55e), size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Mis ganancias',
+                  style: TextStyle(
+                      color: ConstantColors.textWhite,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text('Ver comisiones, tarifa neta y historial',
+                  style: TextStyle(
+                      color: ConstantColors.textGrey, fontSize: 11)),
+            ]),
+          ),
+          Icon(Icons.chevron_right_rounded,
+              color: const Color(0xFF22c55e), size: 22),
+        ]),
+      ),
+    );
   }
 
   Widget _statCard({required IconData icon, required String label, required String value, required Color color}) {

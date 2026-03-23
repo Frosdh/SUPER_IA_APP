@@ -38,6 +38,13 @@ import 'package:fu_uber/UI/views/RideCompletedScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
 import 'package:fu_uber/UI/views/DriverProfileScreen.dart';
 import 'package:fu_uber/UI/views/WelcomeScreen.dart';
+import 'package:fu_uber/UI/views/PayPhoneWebViewScreen.dart';
+import 'package:fu_uber/UI/views/PaymentHistoryScreen.dart';
+import 'package:fu_uber/UI/views/ReceiptScreen.dart';
+import 'package:fu_uber/UI/views/WalletScreen.dart';
+import 'package:fu_uber/UI/views/DisputeScreen.dart';
+import 'package:fu_uber/UI/views/DriverEarningsScreen.dart';
+import 'package:fu_uber/UI/views/ChatScreen.dart';
 import 'package:provider/provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -196,6 +203,15 @@ class MyApp extends StatelessWidget {
           HelpFaqScreen.route: (context) => HelpFaqScreen(),
           EmergencyContactsScreen.route: (context) =>
               EmergencyContactsScreen(),
+          PayPhoneWebViewScreen.route: (context) =>
+              const PayPhoneWebViewScreen(),
+          PaymentHistoryScreen.route: (context) =>
+              const PaymentHistoryScreen(),
+          ReceiptScreen.route:        (context) => const ReceiptScreen(),
+          WalletScreen.route:         (context) => const WalletScreen(),
+          DisputeScreen.route:        (context) => const DisputeScreen(),
+          DriverEarningsScreen.route: (context) => const DriverEarningsScreen(),
+          ChatScreen.route:           (context) => const ChatScreen(),
         },
         home: SplashScreen(),
       ),

@@ -39,10 +39,21 @@ class _DriverStep3ScreenState extends State<DriverStep3Screen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(titulo,
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+              // Handle
+              Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(titulo,
+                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
               const SizedBox(height: 16),
               ListTile(
                 leading: Container(

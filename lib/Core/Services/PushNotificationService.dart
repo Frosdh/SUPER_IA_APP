@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -34,10 +35,18 @@ class PushNotificationService {
   static bool _initialized = false;
 
   static const AndroidNotificationChannel channel = AndroidNotificationChannel(
-    'high_importance_channel_v3', // id
-    'Notificaciones de Viaje', // title
-    description: 'Este canal se usa para avisar sobre nuevos viajes.', // description
+    'high_importance_channel_v3',
+    'Notificaciones de Viaje',
+    description: 'Este canal se usa para avisar sobre nuevos viajes.',
     importance: Importance.max,
+    playSound: true,
+  );
+
+  static const AndroidNotificationChannel chatChannel = AndroidNotificationChannel(
+    'chat_channel_v1',
+    'Mensajes de Chat',
+    description: 'Mensajes en tiempo real entre pasajero y conductor.',
+    importance: Importance.high,
     playSound: true,
   );
 
@@ -58,13 +67,19 @@ class PushNotificationService {
 
     // Handle message when app is in foreground
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      _showLocalNotification(message);
-      _mostrarDialogoForeground(message);
+      final tipo = message.data['tipo'] ?? '';
+      if (tipo == 'chat_mensaje') {
+        // Notificación estilo chat — solo burbuja, sin diálogo
+        _showChatNotification(message);
+      } else {
+        _showLocalNotification(message);
+        _mostrarDialogoForeground(message);
+      }
     });
 
-    // Handle message when app is opened from a notification
+    // Handle message when app is opened from a notification (tap)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      print('>>> [FCM] onMessageOpenedApp: ${message.data}');
+      _navegarDesdeTap(message);
     });
 
     // Configurar notificaciones locales para Android
@@ -75,6 +90,10 @@ class PushNotificationService {
     await _localNotifications
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
+
+    await _localNotifications
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(chatChannel);
 
     final token = await _messaging.getToken();
     if (token != null && token.isNotEmpty) {
@@ -115,58 +134,53 @@ class PushNotificationService {
   }
 
   static Future<void> syncTokenWithBackend({bool force = false}) async {
-    String phone = await AuthPrefs.getUserPhone();
-    
-    // Si no hay teléfono de pasajero, intentar con el de conductor
-    if (phone.isEmpty) {
-      phone = await DriverPrefs.getDriverPhone();
-    }
-    
     final token = await AuthPrefs.getFcmToken();
     final syncedToken = await AuthPrefs.getSyncedFcmToken();
 
-    if (phone.trim().isEmpty || token.trim().isEmpty) return;
+    if (token.trim().isEmpty) return;
     if (!force && syncedToken == token) return;
 
-    // Intentar sincronizar con ambos endpoints por seguridad
-    final urls = <String>[
-      '${Constants.apiBaseUrl}/actualizar_token_fcm_conductor.php',
-      '${Constants.apiBaseUrl}/actualizar_token_fcm.php',
-    ];
+    // ── Determinar si es conductor o pasajero y usar SOLO el endpoint correcto ──
+    // Esto evita que el token del conductor quede guardado en la tabla de usuarios
+    // (lo que causaba que las notificaciones para el pasajero llegaran al conductor)
+    final conductorId = await DriverPrefs.getDriverId();
+    final esConductor = conductorId != 0;
 
-    for (final url in urls) {
-      try {
-        final Map<String, String> body = {
-          'token_fcm': token,
-        };
-        
-        // El endpoint de conductor usa 'conductor_id' o 'telefono'? 
-        // Revisando ApiProvider, usa 'conductor_id'.
-        if (url.contains('conductor')) {
-          final id = await DriverPrefs.getDriverId();
-          if (id == 0) continue;
-          body['conductor_id'] = id.toString();
-        } else {
-          body['telefono'] = phone;
-        }
+    try {
+      final Map<String, String> body = {'token_fcm': token};
+      String url;
 
-        final response = await http.post(
-          Uri.parse(url),
-          headers: {'ngrok-skip-browser-warning': 'true'},
-          body: body,
-        ).timeout(const Duration(seconds: 10));
+      if (esConductor) {
+        // Solo sincronizar como conductor
+        url = '${Constants.apiBaseUrl}/actualizar_token_fcm_conductor.php';
+        body['conductor_id'] = conductorId.toString();
+      } else {
+        // Solo sincronizar como pasajero
+        final phone = await AuthPrefs.getUserPhone();
+        if (phone.trim().isEmpty) return;
+        url = '${Constants.apiBaseUrl}/actualizar_token_fcm.php';
+        body['telefono'] = phone;
+      }
 
-        if (response.statusCode != 200) continue;
+      print('>>> [FCM] Sincronizando como ${esConductor ? "conductor" : "pasajero"} en $url');
 
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+        body: body,
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
         if (data['status'] == 'success') {
           await AuthPrefs.saveSyncedFcmToken(token);
-          print('>>> [FCM] Token sincronizado');
-          return;
+          print('>>> [FCM] Token sincronizado correctamente');
         }
-      } catch (e) {
-        print('>>> [FCM] Error sincronizando token en $url: $e');
+      } else {
+        print('>>> [FCM] Error HTTP ${response.statusCode}');
       }
+    } catch (e) {
+      print('>>> [FCM] Error general en syncTokenWithBackend: $e');
     }
   }
 
@@ -199,10 +213,9 @@ class PushNotificationService {
   static void _showNotificationWithPlugin(
       FlutterLocalNotificationsPlugin plugin, RemoteMessage message) {
     RemoteNotification? notification = message.notification;
-    AndroidNotification? android = message.notification?.android;
 
     final String title = notification?.title ?? message.data['title'] ?? 'Nueva actualización';
-    final String body = notification?.body ?? message.data['body'] ?? 'Tienes un nuevo mensaje.';
+    final String body  = notification?.body  ?? message.data['body']  ?? 'Tienes un nuevo mensaje.';
     final int id = notification?.hashCode ?? DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
     plugin.show(
@@ -218,11 +231,88 @@ class PushNotificationService {
           priority: Priority.max,
           ticker: 'ticker',
           icon: '@mipmap/ic_launcher',
-          // Esto es lo que hace que la notificación "salte" (Heads-up)
           fullScreenIntent: true,
           category: AndroidNotificationCategory.call,
         ),
       ),
     );
+  }
+
+  // ── Notificación estilo burbuja de chat ───────────────────
+  static void _showChatNotification(RemoteMessage message) {
+    final String nombre  = message.data['nombre']  ?? 'Mensaje nuevo';
+    final String texto   = message.data['mensaje'] ?? message.data['body'] ?? '';
+    final String viajeId = message.data['viaje_id'] ?? '0';
+    final String remitente = message.data['remitente'] ?? 'pasajero';
+
+    // ID estable por viaje para agrupar mensajes del mismo chat
+    final int notifId = int.tryParse(viajeId) ?? 0;
+
+    // Estilo de mensajería (igual a WhatsApp / Telegram)
+    final pessoa = Person(
+      name: nombre,
+      bot: false,
+    );
+
+    final mensajeStyle = MessagingStyleInformation(
+      pessoa,
+      conversationTitle: nombre,
+      groupConversation: false,
+      messages: [
+        Message(
+          texto,
+          DateTime.now(),
+          pessoa,
+        ),
+      ],
+    );
+
+    _localNotifications.show(
+      notifId,
+      nombre,
+      texto,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'chat_channel_v1',
+          'Mensajes de Chat',
+          channelDescription: 'Mensajes entre pasajero y conductor',
+          importance: Importance.high,
+          priority: Priority.high,
+          styleInformation: mensajeStyle,
+          icon: '@mipmap/ic_launcher',
+          color: const Color(0xFF7C3AED), // violeta GeoMove
+          // Datos para cuando el usuario toca la notificación
+          additionalFlags: Int32List.fromList(<int>[4]), // FLAG_AUTO_CANCEL
+        ),
+      ),
+      payload: 'chat|$viajeId|$remitente',
+    );
+  }
+
+  // ── Navegar cuando el usuario toca una notificación ───────
+  static void _navegarDesdeTap(RemoteMessage message) {
+    final tipo    = message.data['tipo']     ?? '';
+    final viajeId = int.tryParse(message.data['viaje_id'] ?? '0') ?? 0;
+
+    if (tipo == 'chat_mensaje' && viajeId > 0) {
+      final context = _navigatorKey?.currentState?.overlay?.context;
+      if (context == null) return;
+
+      final remitente  = message.data['remitente'] ?? 'pasajero';
+      // El otro es el contrario al remitente que envió
+      final miRol      = remitente == 'pasajero' ? 'conductor' : 'pasajero';
+      final nombreOtro = message.data['nombre'] ?? 'Usuario';
+
+      Navigator.pushNamed(
+        context,
+        '/chat',
+        arguments: {
+          'viaje_id':     viajeId,
+          'remitente':    miRol,
+          'nombre_otro':  nombreOtro,
+          'telefono_otro': '',
+        },
+      );
+    }
   }
 }

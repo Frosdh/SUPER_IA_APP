@@ -10,6 +10,8 @@ import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
 import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
 import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
 import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
+import 'package:fu_uber/UI/views/PaymentHistoryScreen.dart';
+import 'package:fu_uber/UI/views/WalletScreen.dart';
 import 'package:fu_uber/UI/views/SignIn.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -339,6 +341,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Icons.directions_car,
                       'Mis viajes',
                       () => Navigator.pushNamed(context, RideHistoryScreen.route),
+                    ),
+                    Divider(color: ConstantColors.dividerColor, height: 1),
+                    _accionTile(
+                      Icons.account_balance_wallet_rounded,
+                      'Mi billetera',
+                      () => Navigator.pushNamed(context, WalletScreen.route),
+                      color: ConstantColors.primaryViolet,
+                    ),
+                    Divider(color: ConstantColors.dividerColor, height: 1),
+                    _accionTile(
+                      Icons.receipt_long_rounded,
+                      'Historial de pagos',
+                      () => Navigator.pushNamed(context, PaymentHistoryScreen.route),
                     ),
                     Divider(color: ConstantColors.dividerColor, height: 1),
                     _accionTile(
