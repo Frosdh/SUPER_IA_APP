@@ -11,9 +11,11 @@ if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_i
 } elseif (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
     $user_role = 'supervisor';
     $user_id = $_SESSION['supervisor_id'];
+    // Obtener el id real del supervisor desde la tabla supervisor (si es necesario)
+    // Suponiendo que $_SESSION['supervisor_id'] es el UUID de la tabla supervisor
 } elseif (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
     $user_role = 'asesor';
-    $user_id = $_SESSION['asesor_id'];
+    $user_id = $_SESSION['asesor_id']; // ID de la tabla asesor
 } else {
     header('Location: login.php?role=admin');
     exit;
@@ -21,75 +23,113 @@ if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_i
 
 // Construir query según el rol del usuario
 if ($user_role === 'super_admin' || $user_role === 'admin') {
-    // SuperAdmin y Admin ven todas las operaciones
+    // SuperAdmin y Admin ven todas las operaciones de crédito
     $query = "
-        SELECT oc.id_opera_creditito, c.nombre, c.apellidos, oc.cantidad, oc.estado, oc.fecha_creacion, 
-               u.nombres as asesor_nombre
-        FROM operacion_credito oc
-        JOIN clientes c ON oc.cliente_id = c.id_cliente
-        LEFT JOIN usuarios u ON c.asesor_id_fk = u.id_usuario
-        ORDER BY oc.fecha_creacion DESC
+        SELECT 
+            cp.id as id_credito,
+            cl.nombre as cliente_nombre,
+            cl.cedula as cliente_cedula,
+            cp.monto_aprobado as cantidad,
+            cp.estado_credito as estado,
+            cp.created_at as fecha_creacion,
+            u.nombre as asesor_nombre
+        FROM credito_proceso cp
+        JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
+        LEFT JOIN asesor a ON cp.asesor_id = a.id
+        LEFT JOIN usuario u ON a.usuario_id = u.id
+        ORDER BY cp.created_at DESC
     ";
     $col_asesor = true;
 } elseif ($user_role === 'supervisor') {
-    // Supervisor ve operaciones de sus asesores
+    // Supervisor ve créditos de los asesores a su cargo
     $query = "
-        SELECT oc.id_opera_creditito, c.nombre, c.apellidos, oc.cantidad, oc.estado, oc.fecha_creacion, 
-               u.nombres as asesor_nombre
-        FROM operacion_credito oc
-        JOIN clientes c ON oc.cliente_id = c.id_cliente
-        LEFT JOIN usuarios u ON c.asesor_id_fk = u.id_usuario
-        WHERE c.asesor_id_fk IN (
-            SELECT id_usuario FROM usuarios WHERE supervisor_id_fk = $user_id
-        )
-        ORDER BY oc.fecha_creacion DESC
+        SELECT 
+            cp.id as id_credito,
+            cl.nombre as cliente_nombre,
+            cl.cedula as cliente_cedula,
+            cp.monto_aprobado as cantidad,
+            cp.estado_credito as estado,
+            cp.created_at as fecha_creacion,
+            u.nombre as asesor_nombre
+        FROM credito_proceso cp
+        JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
+        LEFT JOIN asesor a ON cp.asesor_id = a.id
+        LEFT JOIN usuario u ON a.usuario_id = u.id
+        WHERE a.supervisor_id = :supervisor_id
+        ORDER BY cp.created_at DESC
     ";
     $col_asesor = true;
 } else {
-    // Asesor ve solo sus operaciones
+    // Asesor ve solo los créditos que él mismo ha gestionado
     $query = "
-        SELECT oc.id_opera_creditito, c.nombre, c.apellidos, oc.cantidad, oc.estado, oc.fecha_creacion
-        FROM operacion_credito oc
-        JOIN clientes c ON oc.cliente_id = c.id_cliente
-        WHERE c.asesor_id_fk = $user_id
-        ORDER BY oc.fecha_creacion DESC
+        SELECT 
+            cp.id as id_credito,
+            cl.nombre as cliente_nombre,
+            cl.cedula as cliente_cedula,
+            cp.monto_aprobado as cantidad,
+            cp.estado_credito as estado,
+            cp.created_at as fecha_creacion
+        FROM credito_proceso cp
+        JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
+        WHERE cp.asesor_id = :asesor_id
+        ORDER BY cp.created_at DESC
     ";
     $col_asesor = false;
 }
 
-$operaciones = $pdo->query($query)->fetchAll();
+// Ejecutar consulta con parámetros según rol
+$stmt = $pdo->prepare($query);
+if ($user_role === 'supervisor') {
+    $stmt->execute([':supervisor_id' => $user_id]);
+} elseif ($user_role === 'asesor') {
+    $stmt->execute([':asesor_id' => $user_id]);
+} else {
+    $stmt->execute();
+}
+$operaciones = $stmt->fetchAll();
 
 // Estadísticas según el rol
 if ($user_role === 'super_admin' || $user_role === 'admin') {
-    $stats = $pdo->query("
+    $statsQuery = "
         SELECT 
             COUNT(*) as total_operaciones,
-            COUNT(CASE WHEN estado='completado' THEN 1 END) as completadas,
-            SUM(cantidad) as monto_total
-        FROM operacion_credito
-    ")->fetch();
+            COUNT(CASE WHEN estado_credito = 'desembolsado' THEN 1 END) as completadas,
+            SUM(monto_aprobado) as monto_total
+        FROM credito_proceso
+    ";
+    $statsStmt = $pdo->query($statsQuery);
 } elseif ($user_role === 'supervisor') {
-    $stats = $pdo->query("
+    $statsQuery = "
         SELECT 
             COUNT(*) as total_operaciones,
-            COUNT(CASE WHEN estado='completado' THEN 1 END) as completadas,
-            SUM(cantidad) as monto_total
-        FROM operacion_credito oc
-        JOIN clientes c ON oc.cliente_id = c.id_cliente
-        WHERE c.asesor_id_fk IN (
-            SELECT id_usuario FROM usuarios WHERE supervisor_id_fk = $user_id
-        )
-    ")->fetch();
+            COUNT(CASE WHEN cp.estado_credito = 'desembolsado' THEN 1 END) as completadas,
+            SUM(cp.monto_aprobado) as monto_total
+        FROM credito_proceso cp
+        JOIN asesor a ON cp.asesor_id = a.id
+        WHERE a.supervisor_id = :supervisor_id
+    ";
+    $statsStmt = $pdo->prepare($statsQuery);
+    $statsStmt->execute([':supervisor_id' => $user_id]);
 } else {
-    $stats = $pdo->query("
+    $statsQuery = "
         SELECT 
             COUNT(*) as total_operaciones,
-            COUNT(CASE WHEN estado='completado' THEN 1 END) as completadas,
-            SUM(cantidad) as monto_total
-        FROM operacion_credito oc
-        JOIN clientes c ON oc.cliente_id = c.id_cliente
-        WHERE c.asesor_id_fk = $user_id
-    ")->fetch();
+            COUNT(CASE WHEN estado_credito = 'desembolsado' THEN 1 END) as completadas,
+            SUM(monto_aprobado) as monto_total
+        FROM credito_proceso
+        WHERE asesor_id = :asesor_id
+    ";
+    $statsStmt = $pdo->prepare($statsQuery);
+    $statsStmt->execute([':asesor_id' => $user_id]);
+}
+$stats = $statsStmt->fetch();
+
+if (!$stats) {
+    $stats = [
+        'total_operaciones' => 0,
+        'completadas' => 0,
+        'monto_total' => 0
+    ];
 }
 
 $currentPage = 'operaciones';
@@ -100,7 +140,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Operaciones</title>
+    <title>COAC Finance - Operaciones de Crédito</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -200,6 +240,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         .table tbody tr:hover { background: #fafbff; }
         .badge-completed { background: #10b981; }
         .badge-pending { background: #f59e0b; }
+        .badge-prospect { background: #3b82f6; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
@@ -208,7 +249,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
 </head>
 <body>
 
-<!-- SIDEBAR -->
+<!-- SIDEBAR (igual que antes, no se modifica) -->
 <div class="sidebar">
     <div class="sidebar-brand">
         <i class="fas fa-chart-pie"></i> COAC Finance
@@ -372,18 +413,18 @@ $is_supervisor_ui = ($user_role === 'supervisor');
             </div>
             <div class="stat-card">
                 <div class="number" style="color: #10b981;"><?php echo $stats['completadas']; ?></div>
-                <div class="label">Completadas</div>
+                <div class="label">Desembolsadas</div>
             </div>
             <div class="stat-card">
-                <div class="number" style="color: #3182fe;">$<?php echo number_format($stats['monto_total'], 2); ?></div>
-                <div class="label">Monto Total</div>
+                <div class="number" style="color: #3182fe;">$<?php echo number_format($stats['monto_total'] ?? 0, 2); ?></div>
+                <div class="label">Monto Total Aprobado</div>
             </div>
         </div>
 
         <!-- TABLA DE OPERACIONES -->
         <div class="table-card">
             <div class="card-header-custom">
-                <h6>📊 Listado de Operaciones</h6>
+                <h6>📊 Listado de Procesos de Crédito</h6>
             </div>
             
             <table class="table table-hover">
@@ -391,10 +432,11 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                     <tr>
                         <th>ID</th>
                         <th>Cliente</th>
+                        <th>Cédula</th>
                         <?php if ($col_asesor): ?>
                         <th>Asesor Asignado</th>
                         <?php endif; ?>
-                        <th>Monto</th>
+                        <th>Monto Aprobado</th>
                         <th>Estado</th>
                         <th>Fecha Creación</th>
                         <th>Acciones</th>
@@ -403,32 +445,48 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                 <tbody>
                     <?php if (empty($operaciones)): ?>
                     <tr>
-                        <td colspan="<?php echo $col_asesor ? 7 : 6; ?>" class="text-center py-4">
-                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay operaciones registradas
+                        <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
+                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay operaciones de crédito registradas
                         </td>
                     </tr>
                     <?php else: ?>
-                        <?php foreach ($operaciones as $opera): ?>
+                        <?php foreach ($operaciones as $op): ?>
                         <tr>
-                            <td><strong>#<?php echo $opera['id_opera_creditito']; ?></strong></td>
-                            <td><?php echo htmlspecialchars($opera['nombre'] . ' ' . $opera['apellidos']); ?></td>
+                            <td><strong><?php echo htmlspecialchars(substr($op['id_credito'], 0, 8)); ?>…</strong></td>
+                            <td><?php echo htmlspecialchars($op['cliente_nombre']); ?></td>
+                            <td><?php echo htmlspecialchars($op['cliente_cedula'] ?? 'N/A'); ?></td>
                             <?php if ($col_asesor): ?>
-                            <td><?php echo htmlspecialchars($opera['asesor_nombre'] ?? 'Sin asignar'); ?></td>
+                            <td><?php echo htmlspecialchars($op['asesor_nombre'] ?? 'Sin asignar'); ?></td>
                             <?php endif; ?>
-                            <td><strong>$<?php echo number_format($opera['cantidad'], 2); ?></strong></td>
+                            <td><strong>$<?php echo number_format($op['cantidad'] ?? 0, 2); ?></strong></td>
                             <td>
                                 <?php 
-                                $estado = strtolower($opera['estado']);
-                                if ($estado === 'completado') {
-                                    echo '<span class="badge badge-completed" style="color: white;">✓ Completado</span>';
-                                } else {
-                                    echo '<span class="badge badge-pending" style="color: white;">⏳ ' . ucfirst($estado) . '</span>';
+                                $estado = strtolower($op['estado'] ?? 'prospectado');
+                                $badgeClass = '';
+                                $label = '';
+                                switch ($estado) {
+                                    case 'desembolsado':
+                                        $badgeClass = 'badge-completed';
+                                        $label = '✓ Desembolsado';
+                                        break;
+                                    case 'aprobado':
+                                        $badgeClass = 'badge-completed';
+                                        $label = '✓ Aprobado';
+                                        break;
+                                    case 'rechazado':
+                                        $badgeClass = 'badge-pending';
+                                        $label = '✗ Rechazado';
+                                        break;
+                                    default:
+                                        $badgeClass = 'badge-pending';
+                                        $label = '⏳ ' . ucfirst(str_replace('_', ' ', $estado));
                                 }
                                 ?>
+                                <span class="badge <?php echo $badgeClass; ?>" style="color: white;"><?php echo $label; ?></span>
                             </td>
-                            <td><?php echo date('d/m/Y H:i', strtotime($opera['fecha_creacion'])); ?></td>
+                            <td><?php echo date('d/m/Y H:i', strtotime($op['fecha_creacion'])); ?></td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-outline-primary" title="Ver detalles">
+                                <a href="detalle_credito.php?id=<?php echo $op['id_credito']; ?>" class="btn btn-sm btn-outline-primary" title="Ver detalles">
                                     <i class="fas fa-eye"></i>
                                 </a>
                             </td>

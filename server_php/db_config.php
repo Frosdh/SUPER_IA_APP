@@ -5,11 +5,10 @@
 // Agregar a .gitignore: server_php/db_config.php
 // ============================================================
 
-$db_host     = "127.0.0.1";
-$db_port     = 3306;
+$db_host     = "localhost";
 $db_name     = "base_super_ia";
 $db_user     = "root";
-$db_password = "";
+$db_password = '';
 
 $conn = new mysqli($db_host, $db_user, $db_password, $db_name);
 

@@ -1,0 +1,74 @@
+[10-Apr-2026 20:34:20 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/db_admin.php on line 9
+[10-Apr-2026 20:34:20 UTC] PHP Warning:  Cannot modify header information - headers already sent by (output started at /home/corporat/public_html/SUPER_IA/server_php/admin/supervisor_index.php:1) in /home/corporat/public_html/SUPER_IA/server_php/admin/supervisor_index.php on line 9
+[10-Apr-2026 20:35:14 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/db_admin.php on line 9
+[10-Apr-2026 20:35:14 UTC] PHP Warning:  Cannot modify header information - headers already sent by (output started at /home/corporat/public_html/SUPER_IA/server_php/admin/supervisor_index.php:1) in /home/corporat/public_html/SUPER_IA/server_php/admin/supervisor_index.php on line 9
+[10-Apr-2026 20:42:54 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/db_admin_superIA.php on line 8
+[10-Apr-2026 20:42:54 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 11
+[10-Apr-2026 20:42:54 UTC] PHP Warning:  Cannot modify header information - headers already sent by (output started at /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php:1) in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 16
+[10-Apr-2026 20:43:05 UTC] Clientes Query Error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fb7d136215435b00ca228c5d30ac4078' in 'WHERE'
+[10-Apr-2026 20:43:06 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.operacion_credito' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php:60
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php(60): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php on line 60
+[10-Apr-2026 20:43:10 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.alertas' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php:61
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php(61): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php on line 61
+[10-Apr-2026 20:43:12 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.operacion_credito' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php:60
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php(60): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php on line 60
+[10-Apr-2026 20:43:15 UTC] Error fetching clientes for asesor usr_69d80652e63ba2.40018101: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:43:15 UTC] Error fetching clientes for asesor usr_69d81107b91b69.96617300: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:43:32 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/db_admin_superIA.php on line 8
+[10-Apr-2026 20:43:32 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 11
+[10-Apr-2026 20:43:32 UTC] PHP Warning:  Cannot modify header information - headers already sent by (output started at /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php:1) in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 16
+[10-Apr-2026 20:43:54 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/db_admin_superIA.php on line 8
+[10-Apr-2026 20:43:54 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 11
+[10-Apr-2026 20:43:54 UTC] PHP Warning:  Cannot modify header information - headers already sent by (output started at /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php:1) in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 16
+[10-Apr-2026 20:44:14 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/db_admin_superIA.php on line 8
+[10-Apr-2026 20:44:14 UTC] PHP Warning:  session_start(): Session cannot be started after headers have already been sent in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 11
+[10-Apr-2026 20:44:14 UTC] PHP Warning:  Cannot modify header information - headers already sent by (output started at /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php:1) in /home/corporat/public_html/SUPER_IA/server_php/admin/mapa_vivo_superIA.php on line 16
+[10-Apr-2026 20:44:19 UTC] Clientes Query Error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fb7d136215435b00ca228c5d30ac4078' in 'WHERE'
+[10-Apr-2026 20:44:22 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.operacion_credito' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php:60
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php(60): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php on line 60
+[10-Apr-2026 20:44:26 UTC] Error fetching clientes for asesor usr_69d80652e63ba2.40018101: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:44:26 UTC] Error fetching clientes for asesor usr_69d81107b91b69.96617300: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:44:36 UTC] Error fetching clientes for asesor usr_69d80652e63ba2.40018101: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:44:36 UTC] Error fetching clientes for asesor usr_69d81107b91b69.96617300: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:47:17 UTC] Clientes Query Error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fb7d136215435b00ca228c5d30ac4078' in 'WHERE'
+[10-Apr-2026 20:47:20 UTC] Clientes Query Error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fb7d136215435b00ca228c5d30ac4078' in 'WHERE'
+[10-Apr-2026 20:47:21 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.operacion_credito' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php:60
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php(60): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/operaciones.php on line 60
+[10-Apr-2026 20:54:35 UTC] Clientes Query Error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fb7d136215435b00ca228c5d30ac4078' in 'WHERE'
+[10-Apr-2026 20:54:37 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.alertas' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php:61
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php(61): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php on line 61
+[10-Apr-2026 20:55:25 UTC] Error fetching clientes for asesor usr_69d80652e63ba2.40018101: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:55:25 UTC] Error fetching clientes for asesor usr_69d81107b91b69.96617300: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 20:57:22 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.alertas' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php:61
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php(61): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php on line 61
+[10-Apr-2026 20:57:39 UTC] PHP Fatal error:  Uncaught PDOException: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'corporat_base_super_ia.alertas' doesn't exist in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php:61
+Stack trace:
+#0 /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php(61): PDO->query('\r\n        SELEC...')
+#1 {main}
+  thrown in /home/corporat/public_html/SUPER_IA/server_php/admin/alertas.php on line 61
+[10-Apr-2026 21:03:00 UTC] Error fetching clientes for asesor usr_69d80652e63ba2.40018101: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 21:03:00 UTC] Error fetching clientes for asesor usr_69d81107b91b69.96617300: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 21:08:44 UTC] Clientes Query Error: SQLSTATE[42S22]: Column not found: 1054 Unknown column 'fb7d136215435b00ca228c5d30ac4078' in 'WHERE'
+[10-Apr-2026 21:08:52 UTC] Error fetching clientes for asesor usr_69d80652e63ba2.40018101: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row
+[10-Apr-2026 21:08:52 UTC] Error fetching clientes for asesor usr_69d81107b91b69.96617300: SQLSTATE[21000]: Cardinality violation: 1242 Subquery returns more than 1 row

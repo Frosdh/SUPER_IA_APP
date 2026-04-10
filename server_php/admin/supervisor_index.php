@@ -1,5 +1,11 @@
-﻿<?php
+<?php
+session_start();   // <-- NUEVO: lo primero de todo
+
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 require_once 'db_admin.php';
+// ... el resto igual
 
 if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in'] !== true) {
     header('Location: login.php?role=supervisor');
@@ -10,21 +16,23 @@ $supervisor_id = $_SESSION['supervisor_id'];
 $supervisor_nombre = $_SESSION['supervisor_nombre'];
 
 try {
-    $stats = $pdo->query("
-        SELECT 
+    $stmt = $pdo->prepare("
+        SELECT
             COUNT(DISTINCT a.id) as total_asesores,
             COUNT(DISTINCT a.usuario_id) as total_usuarios_asesor
         FROM asesor a
-        WHERE a.supervisor_id = '$supervisor_id'
-    ")->fetch();
-    
+        WHERE a.supervisor_id = ?
+    ");
+    $stmt->execute([$supervisor_id]);
+    $stats = $stmt->fetch();
+
     if (!$stats) {
         $stats = [
             'total_asesores' => 0,
             'total_usuarios_asesor' => 0
         ];
     }
-} catch (PDOException $e) {
+} catch (Exception $e) {
     $stats = [
         'total_asesores' => 0,
         'total_usuarios_asesor' => 0

@@ -47,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['super_admin_email'] = $super_admin['email'];
             $_SESSION['super_admin_nombre'] = $super_admin['nombre'];
             $_SESSION['super_admin_rol'] = 'gerente_general';
+            session_write_close();
             header('Location: super_admin_index.php');
             exit;
         } else {
@@ -66,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_email'] = $admin['email'];
             $_SESSION['admin_nombre'] = $admin['nombre'];
             $_SESSION['admin_rol'] = $admin['rol'];
+            session_write_close();
             header('Location: index.php');
             exit;
         } else {
@@ -85,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['supervisor_email'] = $supervisor['email'];
             $_SESSION['supervisor_nombre'] = $supervisor['nombre'];
             $_SESSION['supervisor_rol'] = 'supervisor';
+            session_write_close();
             header('Location: supervisor_index.php');
             exit;
         } else {
@@ -104,6 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['asesor_email'] = $asesor['email'];
             $_SESSION['asesor_nombre'] = $asesor['nombre'];
             $_SESSION['asesor_rol'] = 'asesor';
+            session_write_close();
             header('Location: asesor_index.php');
             exit;
         } else {

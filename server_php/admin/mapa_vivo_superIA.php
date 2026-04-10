@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 // ============================================================
 // admin/mapa_vivo.php — Mapa en Tiempo Real de Asesores
 // Real-time GPS tracking map for advisors
