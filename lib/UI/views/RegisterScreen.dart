@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/Core/Services/PushNotificationService.dart';
-import 'package:fu_uber/UI/views/OsmMapScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/ProviderModels/VerificationModel.dart';
+import 'package:super_ia/Core/Services/PushNotificationService.dart';
+import 'package:super_ia/UI/views/OsmMapScreen.dart';
 import 'package:provider/provider.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -97,17 +97,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     }
 
-    await AuthPrefs.saveUserSession(
-      telefono: _phoneController.text.trim(),
-      nombre: _nameController.text.trim(),
-      email: _emailController.text.trim(),
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Solicitud enviada. Tu cuenta requiere aprobación para poder ingresar.',
+        ),
+      ),
     );
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => OsmMapScreen()),
-      (_) => false,
-    );
+    Navigator.pop(context);
   }
 
   Widget _buildProgressBar(bool active) {

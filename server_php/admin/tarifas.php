@@ -1,7 +1,10 @@
 <?php
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isSuperAdmin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
+
+if (!$isAdmin && !$isSuperAdmin) {
     header('Location: login.php');
     exit;
 }
@@ -104,7 +107,11 @@ $radioKm     = $cfgRows['radio_busqueda_conductores_km'] ?? 5;
 $comision    = $cfgRows['comision_empresa_porcentaje']   ?? 15;
 $mantenimiento = ($cfgRows['mantenimiento_modo'] ?? 'false') === 'true';
 
-$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado=0")->fetchColumn();
+try {
+    $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado=0")->fetchColumn();
+} catch (Exception $e) {
+    $totalPendientes = 0;
+}
 
 $currentPage = 'tarifas';
 ?>

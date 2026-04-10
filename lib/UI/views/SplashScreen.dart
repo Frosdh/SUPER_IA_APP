@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
-import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
-import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
-import 'package:fu_uber/UI/views/OnboardingScreen.dart';
-import 'package:fu_uber/UI/views/WelcomeScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Preferences/DriverPrefs.dart';
+import 'package:super_ia/UI/views/DriverHomeScreen.dart';
+import 'package:super_ia/UI/views/LocationPermissionScreen.dart';
+import 'package:super_ia/UI/views/OnboardingScreen.dart';
+import 'package:super_ia/UI/views/WelcomeScreen.dart';
 
 class SplashScreen extends StatefulWidget {
   static const String route = '/splash';
@@ -131,7 +130,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   .createShader(bounds);
                             },
                             child: Text(
-                              'GeoMove',
+                              'Super_IA',
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: 40,
@@ -188,7 +187,7 @@ class _SplashScreenState extends State<SplashScreen>
                         ),
                         SizedBox(height: 14),
                         Text(
-                          'GeoMove',
+                          'Super_IA',
                           style: TextStyle(
                             color: ConstantColors.textSubtle,
                             fontSize: 12,

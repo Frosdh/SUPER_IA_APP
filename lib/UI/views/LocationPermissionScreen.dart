@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
-import 'package:fu_uber/Core/ProviderModels/PermissionHandlerModel.dart';
-import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
-import 'package:fu_uber/UI/views/OsmMapScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/DriverPrefs.dart';
+import 'package:super_ia/Core/ProviderModels/PermissionHandlerModel.dart';
+import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
+import 'package:super_ia/UI/views/DriverHomeScreen.dart';
+import 'package:super_ia/UI/views/OsmMapScreen.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
 
@@ -21,6 +22,7 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
   late AnimationController loadingController;
   late Animation<double> animation;
   bool _yaNavego = false;
+  bool _autoPermissionRequested = false;
 
   @override
   void dispose() {
@@ -41,6 +43,11 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
       }
     });
     loadingController.forward();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Provider.of<PermissionHandlerModel>(context, listen: false).bootstrap();
+    });
   }
 
   /// Intenta obtener la posición actual y navega al mapa OSM
@@ -58,6 +65,8 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
         if (driverLoggedIn) {
           Navigator.of(context).pushReplacementNamed(DriverHomeScreen.route);
         } else {
+          // Para asesores: si existe asesor_id guardado, se iniciará el envío en segundo plano.
+          await BackgroundLocationService.start();
           Navigator.of(context).pushReplacementNamed(OsmMapScreen.route);
         }
       }
@@ -69,74 +78,125 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
   @override
   Widget build(BuildContext context) {
     final permModel = Provider.of<PermissionHandlerModel>(context);
-    return Material(
-      child: Container(
-        child: Stack(
-          children: <Widget>[
-            SpringEffect(),
-            permModel.isLocationPerGiven
-                ? Align(
-                    alignment: const Alignment(0, 0.5),
-                    child: permModel.isLocationSerGiven
-                        ? const Text("Fetching Location...")
-                        : InkResponse(
-                            onTap: () {
-                              permModel.requestLocationServiceToEnable();
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Container(
-                                color: ConstantColors.PrimaryColor,
-                                height: 40,
-                                width: double.infinity,
-                                child: const Text(
-                                  "Location Service Not Enabled",
-                                  style: TextStyle(
-                                      fontSize: 20, color: Colors.white),
-                                ),
-                              ),
-                            ),
-                          ),
-                  )
-                : Align(
-                    alignment: Alignment.bottomCenter,
-                    child: InkResponse(
-                      onTap: () {
-                        permModel.requestAppLocationPermission();
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Container(
-                          color: ConstantColors.PrimaryColor,
-                          height: 60,
-                          width: double.infinity,
-                          child: const Center(
-                              child: Text(
-                            "Location Permission is Not Given",
-                            style:
-                                TextStyle(fontSize: 15, color: Colors.white),
-                          )),
-                        ),
-                      ),
-                    ),
-                  )
-          ],
-        ),
-      ),
-    );
-  }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final permModel = Provider.of<PermissionHandlerModel>(context);
-    if (permModel.isLocationPerGiven &&
-        permModel.isLocationSerGiven &&
-        !_yaNavego) {
+    // Auto-solicitar permiso 1 vez al entrar (evita que el usuario se quede en pantalla vacía).
+    if (!_autoPermissionRequested && !permModel.isLocationPerGiven) {
+      _autoPermissionRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        permModel.requestAppLocationPermission();
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (!mounted) return;
+          permModel.bootstrap();
+        });
+      });
+    }
+
+    // Provider notifies rebuilds but does NOT trigger didChangeDependencies.
+    // So we trigger the navigation attempt from build (post-frame) once ready.
+    if (permModel.isLocationPerGiven && permModel.isLocationSerGiven && !_yaNavego) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _intentarNavegar();
       });
     }
+
+    return Scaffold(
+      backgroundColor: ConstantColors.backgroundDark,
+      body: SafeArea(
+        child: Stack(
+          children: <Widget>[
+            SpringEffect(),
+            Align(
+              alignment: const Alignment(0, -0.25),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(Icons.my_location, color: Colors.white, size: 34),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Permiso de ubicación',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      permModel.isLocationPerGiven
+                          ? (permModel.isLocationSerGiven
+                              ? 'Obteniendo ubicación…'
+                              : 'Activa el GPS para continuar')
+                          : 'Necesitamos tu ubicación para abrir el mapa',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.75),
+                        fontSize: 13,
+                        height: 1.35,
+                      ),
+                    ),
+                    if (permModel.isLocationPerGiven && permModel.isLocationSerGiven)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 14),
+                        child: SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(strokeWidth: 2.5),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Align(
+              alignment: Alignment.bottomCenter,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: ConstantColors.PrimaryColor,
+                    ),
+                    onPressed: () async {
+                      if (!permModel.isLocationPerGiven) {
+                        permModel.requestAppLocationPermission();
+                        await Future.delayed(const Duration(milliseconds: 600));
+                        await permModel.bootstrap();
+                        return;
+                      }
+                      if (!permModel.isLocationSerGiven) {
+                        permModel.requestLocationServiceToEnable();
+                        await Future.delayed(const Duration(milliseconds: 600));
+                        await permModel.bootstrap();
+                        return;
+                      }
+                      await _intentarNavegar();
+                    },
+                    child: Text(
+                      !permModel.isLocationPerGiven
+                          ? 'Dar permiso de ubicación'
+                          : (!permModel.isLocationSerGiven
+                              ? 'Activar GPS'
+                              : 'Continuar al mapa'),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

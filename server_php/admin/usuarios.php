@@ -1,84 +1,81 @@
 <?php
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    header('Location: login.php');
+// Verificar sesión de super_admin o admin
+if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true) {
+    $user_role = 'super_admin';
+    $user_id = $_SESSION['super_admin_id'];
+    $user_nombre = $_SESSION['super_admin_nombre'];
+    $user_rol = $_SESSION['super_admin_rol'];
+} elseif (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+    $user_role = 'admin';
+    $user_id = $_SESSION['admin_id'];
+    $user_nombre = $_SESSION['admin_nombre'];
+    $user_rol = $_SESSION['admin_rol'];
+} else {
+    header('Location: login.php?role=admin');
     exit;
 }
 
-// ── Parámetros de búsqueda y filtro ───────────────────────────
-$busqueda  = trim($_GET['q']      ?? '');
-$filtro    = trim($_GET['estado'] ?? 'todos');
-$pagina    = max(1, intval($_GET['p'] ?? 1));
-$porPagina = 15;
-$offset    = ($pagina - 1) * $porPagina;
-
-// ── Acción rápida (activar/desactivar) ────────────────────────
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['user_id'])) {
-    $uid = intval($_POST['user_id']);
-    if ($_POST['action'] === 'activar') {
-        $pdo->prepare("UPDATE usuarios SET activo=1 WHERE id=?")->execute([$uid]);
-    } elseif ($_POST['action'] === 'desactivar') {
-        $pdo->prepare("UPDATE usuarios SET activo=0 WHERE id=?")->execute([$uid]);
-    }
-    // Redirigir para evitar re-POST
-    $qs = http_build_query(['q' => $busqueda, 'estado' => $filtro, 'p' => $pagina]);
-    header("Location: usuarios.php?$qs");
-    exit;
-}
-
-// ── Construcción de la consulta ───────────────────────────────
-$where  = "WHERE 1=1";
-$params = [];
-
-if ($busqueda !== '') {
-    $where   .= " AND (u.nombre LIKE ? OR u.telefono LIKE ? OR u.email LIKE ?)";
-    $like     = "%$busqueda%";
-    $params[] = $like; $params[] = $like; $params[] = $like;
-}
-
-if ($filtro === 'activos') {
-    $where .= " AND u.activo = 1";
-} elseif ($filtro === 'inactivos') {
-    $where .= " AND u.activo = 0";
-}
-
-// Total para paginación
-$stmtTotal = $pdo->prepare("SELECT COUNT(*) FROM usuarios u $where");
-$stmtTotal->execute($params);
-$totalRegistros = (int) $stmtTotal->fetchColumn();
-$totalPaginas   = max(1, ceil($totalRegistros / $porPagina));
-
-// Usuarios con conteo de viajes
-$sql = "
-    SELECT u.id, u.nombre, u.telefono, u.email, u.activo,
-           u.saldo_billetera, u.creado_en,
-           COUNT(v.id)                                          AS total_viajes,
-           COALESCE(SUM(v.tarifa_total), 0)                    AS gasto_total,
-           MAX(v.fecha_pedido)                                  AS ultimo_viaje
+// Obtener todos los usuarios
+$usuarios = $pdo->query("
+    SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, r.nombre as rol, u.activo
     FROM usuarios u
-    LEFT JOIN viajes v ON v.usuario_id = u.id AND v.estado = 'terminado'
-    $where
-    GROUP BY u.id
-    ORDER BY u.creado_en DESC
-    LIMIT $porPagina OFFSET $offset
-";
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$usuarios = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    JOIN roles r ON u.id_rol_fk = r.id_rol
+    ORDER BY u.nombres ASC
+")->fetchAll();
 
-// Totales globales para las tarjetas resumen
-$totales = $pdo->query("
-    SELECT
-        COUNT(*)                            AS total,
-        SUM(activo = 1)                     AS activos,
-        SUM(activo = 0)                     AS inactivos,
-        SUM(saldo_billetera)                AS saldo_total
-    FROM usuarios
-")->fetch(PDO::FETCH_ASSOC);
+// Obtener todos los admins
+$admins = $pdo->query("
+    SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, r.nombre as rol, u.activo
+    FROM usuarios u
+    JOIN roles r ON u.id_rol_fk = r.id_rol
+    WHERE u.id_rol_fk = 2
+    ORDER BY u.nombres ASC
+")->fetchAll();
 
-// Pendientes conductores para badge
-$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado=0")->fetchColumn();
+// Obtener todos los supervisores
+$supervisores = $pdo->query("
+    SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, r.nombre as rol, u.activo
+    FROM usuarios u
+    JOIN roles r ON u.id_rol_fk = r.id_rol
+    WHERE u.id_rol_fk = 3
+    ORDER BY u.nombres ASC
+")->fetchAll();
+
+// Obtener todos los asesores
+$asesores = $pdo->query("
+    SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, r.nombre as rol, u.activo
+    FROM usuarios u
+    JOIN roles r ON u.id_rol_fk = r.id_rol
+    WHERE u.id_rol_fk = 4
+    ORDER BY u.nombres ASC
+")->fetchAll();
+
+// Obtener cooperativas con supervisores
+$cooperativas = $pdo->query("
+    SELECT DISTINCT c.id_cooperativa, c.nombre
+    FROM cooperativa c
+    ORDER BY c.nombre ASC
+")->fetchAll();
+
+// Obtener supervisores por cooperativa
+$supervisoresPorCoop = $pdo->query("
+    SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, r.nombre as rol, u.activo
+    FROM usuarios u
+    JOIN roles r ON u.id_rol_fk = r.id_rol
+    WHERE u.id_rol_fk = 3 AND u.activo = 1
+    ORDER BY u.nombres ASC
+")->fetchAll();
+
+// Obtener todos los admins para la jerarquía
+$adminsHierarquia = $pdo->query("
+    SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, r.nombre as rol
+    FROM usuarios u
+    JOIN roles r ON u.id_rol_fk = r.id_rol
+    WHERE u.id_rol_fk IN (1, 2)
+    ORDER BY u.nombres ASC
+")->fetchAll();
 
 $currentPage = 'usuarios';
 ?>
@@ -87,236 +84,468 @@ $currentPage = 'usuarios';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove Admin — Usuarios / Pasajeros</title>
+    <title>COAC Finance - Usuarios</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="admin.css">
     <style>
-        /* ── Tarjetas resumen ── */
-        .stat-card { background:#fff; border-radius:14px; padding:22px 24px; box-shadow:0 4px 16px rgba(0,0,0,.06); }
-        .stat-card h3 { font-size:30px; font-weight:700; margin:0; color:#24243e; }
-        .stat-card p  { color:#6c757d; margin:0; font-size:14px; font-weight:500; }
-        .icon-box { width:48px; height:48px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; color:#fff; }
-        .bg-purple { background:linear-gradient(135deg,#6b11ff,#9b51e0); }
-        .bg-blue   { background:linear-gradient(135deg,#3182fe,#5b9cfc); }
-        .bg-green  { background:linear-gradient(135deg,#11998e,#38ef7d); }
-        .bg-orange { background:linear-gradient(135deg,#f46b45,#eea849); }
-
-        /* ── Tabla ── */
-        .table-card { background:#fff; border-radius:14px; box-shadow:0 4px 16px rgba(0,0,0,.06); overflow:hidden; }
-        .table thead th { background:#f8f9fa; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#6c757d; border:none; padding:14px 16px; }
-        .table tbody td { padding:14px 16px; vertical-align:middle; border-color:#f0f0f0; }
-        .table tbody tr:hover { background:#fafbff; }
-
-        /* ── Avatar ── */
-        .avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#6b11ff,#9b51e0); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:16px; flex-shrink:0; }
-
-        /* ── Badge estados ── */
-        .badge-activo   { background:#d4edda; color:#155724; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; }
-        .badge-inactivo { background:#f8d7da; color:#721c24; padding:5px 12px; border-radius:20px; font-size:12px; font-weight:600; }
-
-        /* ── Paginación ── */
-        .pagination .page-link { border-radius:8px !important; margin:0 2px; border:none; color:#6b11ff; }
-        .pagination .page-item.active .page-link { background:#6b11ff; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; display: flex; height: 100vh; }
+        .sidebar {
+            width: 230px;
+            background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%);
+            color: white;
+            padding: 20px 0;
+            overflow-y: auto;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+        }
+        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
+        .sidebar-brand i { margin-right: 10px; color: #7c3aed; }
+        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
+        .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
+        .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
+        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+        @media (max-width: 1200px) {
+            .sidebar { width: 200px; }
+            .main-content { margin-left: 200px; }
+        }
+        @media (max-width: 768px) {
+            .sidebar { width: 180px; }
+            .main-content { margin-left: 180px; }
+        }
+        .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
+        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .btn-logout { background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; }
+        .btn-logout:hover { background: rgba(255, 255, 255, 0.3); }
+        .content-area { flex: 1; overflow-y: auto; padding: 30px; }
+        .page-header { margin-bottom: 30px; }
+        .page-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #1f2937; }
+        .table-card { background: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); overflow: hidden; }
+        .table-card .card-header-custom { padding: 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .table-card h6 { font-weight: 700; margin: 0; font-size: 16px; }
+        .table { margin-bottom: 0; }
+        .table thead th { background: #f8f9fa; font-size: 11px; text-transform: uppercase; color: #6c757d; border: none; padding: 14px; }
+        .table tbody td { padding: 14px; vertical-align: middle; border-color: #f5f5f5; }
+        .table tbody tr:hover { background: #fafbff; }
+        .badge-success { background: #10b981; }
+        .badge-danger { background: #ef4444; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
     </style>
 </head>
 <body>
-<div class="container-fluid p-0">
-<div class="row g-0">
 
-<?php include '_sidebar.php'; ?>
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="fas fa-crown"></i> COAC Finance
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Principal</div>
+        <a href="<?php echo ($user_role === 'super_admin') ? 'super_admin_index.php' : 'index.php'; ?>" class="sidebar-link">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="mapa_vivo.php" class="sidebar-link">
+            <i class="fas fa-map"></i> Mapa en Vivo
+        </a>
+        <a href="mapa_calor.php" class="sidebar-link">
+            <i class="fas fa-fire"></i> Mapa de Calor
+        </a>
+        <a href="historial_rutas.php" class="sidebar-link">
+            <i class="fas fa-history"></i> Historial de Viajes
+        </a>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Gestión</div>
+        <a href="usuarios.php" class="sidebar-link active">
+            <i class="fas fa-users"></i> Usuarios
+        </a>
+        <a href="clientes.php" class="sidebar-link">
+            <i class="fas fa-briefcase"></i> Clientes
+        </a>
+        <a href="operaciones.php" class="sidebar-link">
+            <i class="fas fa-handshake"></i> Operaciones
+        </a>
+        <a href="alertas.php" class="sidebar-link">
+            <i class="fas fa-bell"></i> Alertas
+        </a>
+    </div>
 
-    <!-- ── CONTENIDO ── -->
-    <div class="col-md-10 content">
-
-        <!-- Encabezado -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h4 class="fw-bold mb-0"><i class="fas fa-users me-2 text-primary"></i>Usuarios / Pasajeros</h4>
-                <small class="text-muted">Gestión de todas las cuentas de pasajeros registrados</small>
-            </div>
-        </div>
-
-        <!-- Tarjetas resumen -->
-        <div class="row g-3 mb-4">
-            <div class="col-md-3">
-                <div class="stat-card d-flex justify-content-between align-items-center">
-                    <div><h3><?= number_format($totales['total']) ?></h3><p>Total Usuarios</p></div>
-                    <div class="icon-box bg-purple"><i class="fas fa-users"></i></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card d-flex justify-content-between align-items-center">
-                    <div><h3><?= number_format($totales['activos']) ?></h3><p>Activos</p></div>
-                    <div class="icon-box bg-green"><i class="fas fa-user-check"></i></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card d-flex justify-content-between align-items-center">
-                    <div><h3><?= number_format($totales['inactivos']) ?></h3><p>Inactivos</p></div>
-                    <div class="icon-box bg-orange"><i class="fas fa-user-slash"></i></div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="stat-card d-flex justify-content-between align-items-center">
-                    <div><h3>$<?= number_format($totales['saldo_total'], 2) ?></h3><p>Saldo Total Billeteras</p></div>
-                    <div class="icon-box bg-blue"><i class="fas fa-wallet"></i></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Barra de búsqueda y filtros -->
-        <div class="table-card mb-4">
-            <div class="p-3 border-bottom">
-                <form method="GET" class="row g-2 align-items-center">
-                    <div class="col-md-6">
-                        <div class="input-group">
-                            <span class="input-group-text bg-white border-end-0">
-                                <i class="fas fa-search text-muted"></i>
-                            </span>
-                            <input type="text" name="q" class="form-control border-start-0 ps-0"
-                                   placeholder="Buscar por nombre, teléfono o correo..."
-                                   value="<?= htmlspecialchars($busqueda) ?>">
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <select name="estado" class="form-select">
-                            <option value="todos"    <?= $filtro==='todos'    ? 'selected':'' ?>>Todos los estados</option>
-                            <option value="activos"  <?= $filtro==='activos'  ? 'selected':'' ?>>Solo activos</option>
-                            <option value="inactivos"<?= $filtro==='inactivos'? 'selected':'' ?>>Solo inactivos</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-filter me-1"></i>Filtrar
-                        </button>
-                    </div>
-                    <?php if ($busqueda || $filtro !== 'todos'): ?>
-                    <div class="col-md-1">
-                        <a href="usuarios.php" class="btn btn-outline-secondary w-100" title="Limpiar filtros">
-                            <i class="fas fa-times"></i>
-                        </a>
-                    </div>
-                    <?php endif; ?>
-                </form>
-            </div>
-
-            <!-- Tabla de usuarios -->
-            <?php if (empty($usuarios)): ?>
-            <div class="text-center py-5 text-muted">
-                <i class="fas fa-users fa-3x mb-3 opacity-25"></i>
-                <p class="mb-0">No se encontraron usuarios<?= $busqueda ? " para \"$busqueda\"" : '' ?>.</p>
-            </div>
-            <?php else: ?>
-            <div class="table-responsive">
-                <table class="table mb-0">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th>Contacto</th>
-                            <th class="text-center">Viajes</th>
-                            <th class="text-center">Gasto Total</th>
-                            <th class="text-center">Último Viaje</th>
-                            <th class="text-center">Estado</th>
-                            <th class="text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php foreach ($usuarios as $u):
-                            $inicial = strtoupper(substr($u['nombre'], 0, 1));
-                        ?>
-                        <tr>
-                            <!-- Avatar + nombre -->
-                            <td>
-                                <div class="d-flex align-items-center gap-2">
-                                    <div class="avatar"><?= htmlspecialchars($inicial) ?></div>
-                                    <div>
-                                        <div class="fw-semibold"><?= htmlspecialchars($u['nombre']) ?></div>
-                                        <small class="text-muted">Desde <?= date('d/m/Y', strtotime($u['creado_en'])) ?></small>
-                                    </div>
-                                </div>
-                            </td>
-                            <!-- Contacto -->
-                            <td>
-                                <div><?= htmlspecialchars($u['telefono']) ?></div>
-                                <small class="text-muted"><?= htmlspecialchars($u['email'] ?? '—') ?></small>
-                            </td>
-                            <!-- Viajes -->
-                            <td class="text-center">
-                                <span class="badge bg-light text-dark fs-6 px-3">
-                                    <?= number_format($u['total_viajes']) ?>
-                                </span>
-                            </td>
-                            <!-- Gasto total -->
-                            <td class="text-center fw-semibold text-success">
-                                $<?= number_format($u['gasto_total'], 2) ?>
-                            </td>
-                            <!-- Último viaje -->
-                            <td class="text-center">
-                                <?php if ($u['ultimo_viaje']): ?>
-                                    <small><?= date('d/m/Y', strtotime($u['ultimo_viaje'])) ?></small>
-                                <?php else: ?>
-                                    <small class="text-muted">Sin viajes</small>
-                                <?php endif; ?>
-                            </td>
-                            <!-- Estado -->
-                            <td class="text-center">
-                                <?php if ($u['activo']): ?>
-                                    <span class="badge-activo"><i class="fas fa-circle me-1" style="font-size:8px"></i>Activo</span>
-                                <?php else: ?>
-                                    <span class="badge-inactivo"><i class="fas fa-circle me-1" style="font-size:8px"></i>Inactivo</span>
-                                <?php endif; ?>
-                            </td>
-                            <!-- Acciones -->
-                            <td class="text-center">
-                                <div class="d-flex justify-content-center gap-1">
-                                    <a href="ver_usuario.php?id=<?= $u['id'] ?>"
-                                       class="btn btn-sm btn-outline-primary" title="Ver detalles">
-                                        <i class="fas fa-eye"></i>
-                                    </a>
-                                    <form method="POST" class="m-0"
-                                          onsubmit="return confirm('¿<?= $u['activo'] ? 'Desactivar' : 'Activar' ?> a <?= htmlspecialchars($u['nombre'], ENT_QUOTES) ?>?')">
-                                        <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-                                        <input type="hidden" name="action"  value="<?= $u['activo'] ? 'desactivar' : 'activar' ?>">
-                                        <button type="submit"
-                                                class="btn btn-sm <?= $u['activo'] ? 'btn-outline-danger' : 'btn-outline-success' ?>"
-                                                title="<?= $u['activo'] ? 'Desactivar cuenta' : 'Activar cuenta' ?>">
-                                            <i class="fas <?= $u['activo'] ? 'fa-user-slash' : 'fa-user-check' ?>"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Paginación y contador -->
-            <div class="d-flex justify-content-between align-items-center p-3 border-top">
-                <small class="text-muted">
-                    Mostrando <?= ($offset + 1) ?>–<?= min($offset + $porPagina, $totalRegistros) ?>
-                    de <?= number_format($totalRegistros) ?> usuarios
-                </small>
-                <?php if ($totalPaginas > 1): ?>
-                <nav>
-                    <ul class="pagination pagination-sm mb-0">
-                        <?php for ($i = 1; $i <= $totalPaginas; $i++):
-                            $qs = http_build_query(['q' => $busqueda, 'estado' => $filtro, 'p' => $i]);
-                        ?>
-                        <li class="page-item <?= $i === $pagina ? 'active' : '' ?>">
-                            <a class="page-link" href="?<?= $qs ?>"><?= $i ?></a>
-                        </li>
-                        <?php endfor; ?>
-                    </ul>
-                </nav>
-                <?php endif; ?>
-            </div>
-            <?php endif; ?>
-        </div>
-
-    </div><!-- /content -->
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Configuración</div>
+        <a href="#" class="sidebar-link">
+            <i class="fas fa-cog"></i> Configuración
+        </a>
+    </div>
 </div>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+    <!-- NAVBAR -->
+    <div class="navbar-custom">
+        <h2><?php echo ($user_role === 'super_admin') ? '👑' : '🎯'; ?> COAC Finance - <?php echo ucfirst(str_replace('_', ' ', $user_role)); ?></h2>
+        <div class="user-info">
+            <div>
+                <strong><?php echo htmlspecialchars($user_nombre); ?></strong><br>
+                <small><?php echo htmlspecialchars($user_rol); ?></small>
+            </div>
+            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
+        </div>
+    </div>
+    
+    <!-- CONTENT -->
+    <div class="content-area">
+
+        <div class="page-header">
+            <h1><i class="fas fa-users me-2"></i>Usuarios del Sistema</h1>
+            <p class="text-muted mt-2">Total de usuarios: <strong><?php echo count($usuarios); ?></strong></p>
+        </div>
+
+        <!-- TABS -->
+        <ul class="nav nav-tabs mb-4" id="usuariosTabs" style="background: white; border-radius: 12px 12px 0 0; padding: 15px; flex-wrap: wrap;">
+            <li class="nav-item">
+                <a class="nav-link active" id="tab-todos" data-bs-toggle="tab" href="#todas" role="tab">
+                    <i class="fas fa-list me-2"></i>Todos (<?php echo count($usuarios); ?>)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="tab-admins" data-bs-toggle="tab" href="#admins" role="tab">
+                    <i class="fas fa-crown me-2"></i>Admins (<?php echo count($admins); ?>)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="tab-supervisores" data-bs-toggle="tab" href="#supervisores" role="tab">
+                    <i class="fas fa-user-tie me-2"></i>Supervisores (<?php echo count($supervisores); ?>)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="tab-asesores" data-bs-toggle="tab" href="#asesores" role="tab">
+                    <i class="fas fa-briefcase me-2"></i>Asesores (<?php echo count($asesores); ?>)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" id="tab-jerarquia" data-bs-toggle="tab" href="#jerarquia" role="tab">
+                    <i class="fas fa-sitemap me-2"></i>Jerarquía
+                </a>
+            </li>
+        </ul>
+
+        <!-- TAB CONTENT -->
+        <div class="tab-content" id="usuariosTabContent">
+            
+            <!-- TAB 1: TODOS LOS USUARIOS -->
+            <div class="tab-pane fade show active" id="todas" role="tabpanel">
+                <div class="table-card">
+                    <div class="card-header-custom">
+                        <h6>👥 Listado Completo</h6>
+                    </div>
+                    
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Nombre Completo</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($usuarios as $usuario): ?>
+                            <tr>
+                                <td><strong><?php echo $usuario['id_usuario']; ?></strong></td>
+                                <td><?php echo htmlspecialchars($usuario['usuario']); ?></td>
+                                <td><?php echo htmlspecialchars($usuario['nombres'] . ' ' . $usuario['apellidos']); ?></td>
+                                <td><?php echo htmlspecialchars($usuario['email']); ?></td>
+                                <td>
+                                    <span class="badge" style="background: linear-gradient(135deg, #6b11ff, #7c3aed); color: white;">
+                                        <?php echo htmlspecialchars($usuario['rol']); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <?php if ($usuario['activo']): ?>
+                                        <span class="badge badge-success">✓ Activo</span>
+                                    <?php else: ?>
+                                        <span class="badge badge-danger">✗ Inactivo</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <a href="#" class="btn btn-sm btn-outline-primary" title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 2: ADMINS -->
+            <div class="tab-pane fade" id="admins" role="tabpanel">
+                <div class="table-card">
+                    <div class="card-header-custom">
+                        <h6>👑 Administradores del Sistema</h6>
+                    </div>
+                    
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Nombre Completo</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($admins) > 0): ?>
+                                <?php foreach ($admins as $admin): ?>
+                                <tr>
+                                    <td><strong><?php echo $admin['id_usuario']; ?></strong></td>
+                                    <td><?php echo htmlspecialchars($admin['usuario']); ?></td>
+                                    <td><?php echo htmlspecialchars($admin['nombres'] . ' ' . $admin['apellidos']); ?></td>
+                                    <td><?php echo htmlspecialchars($admin['email']); ?></td>
+                                    <td>
+                                        <span class="badge" style="background: linear-gradient(135deg, #dc2626, #991b1b); color: white;">
+                                            <?php echo htmlspecialchars($admin['rol']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($admin['activo']): ?>
+                                            <span class="badge badge-success">✓ Activo</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-danger">✗ Inactivo</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <a href="#" class="btn btn-sm btn-outline-primary" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: #9ca3af; padding: 30px;">
+                                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                                        No hay administradores registrados
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 3: SUPERVISORES -->
+            <div class="tab-pane fade" id="supervisores" role="tabpanel">
+                <div class="table-card">
+                    <div class="card-header-custom">
+                        <h6>👔 Supervisores</h6>
+                    </div>
+                    
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Nombre Completo</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($supervisores) > 0): ?>
+                                <?php foreach ($supervisores as $supervisor): ?>
+                                <tr>
+                                    <td><strong><?php echo $supervisor['id_usuario']; ?></strong></td>
+                                    <td><?php echo htmlspecialchars($supervisor['usuario']); ?></td>
+                                    <td><?php echo htmlspecialchars($supervisor['nombres'] . ' ' . $supervisor['apellidos']); ?></td>
+                                    <td><?php echo htmlspecialchars($supervisor['email']); ?></td>
+                                    <td>
+                                        <span class="badge" style="background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white;">
+                                            <?php echo htmlspecialchars($supervisor['rol']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($supervisor['activo']): ?>
+                                            <span class="badge badge-success">✓ Activo</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-danger">✗ Inactivo</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <a href="#" class="btn btn-sm btn-outline-primary" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: #9ca3af; padding: 30px;">
+                                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                                        No hay supervisores registrados
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 4: ASESORES -->
+            <div class="tab-pane fade" id="asesores" role="tabpanel">
+                <div class="table-card">
+                    <div class="card-header-custom">
+                        <h6>💼 Asesores</h6>
+                    </div>
+                    
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Usuario</th>
+                                <th>Nombre Completo</th>
+                                <th>Email</th>
+                                <th>Rol</th>
+                                <th>Estado</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (count($asesores) > 0): ?>
+                                <?php foreach ($asesores as $asesor): ?>
+                                <tr>
+                                    <td><strong><?php echo $asesor['id_usuario']; ?></strong></td>
+                                    <td><?php echo htmlspecialchars($asesor['usuario']); ?></td>
+                                    <td><?php echo htmlspecialchars($asesor['nombres'] . ' ' . $asesor['apellidos']); ?></td>
+                                    <td><?php echo htmlspecialchars($asesor['email']); ?></td>
+                                    <td>
+                                        <span class="badge" style="background: linear-gradient(135deg, #10b981, #059669); color: white;">
+                                            <?php echo htmlspecialchars($asesor['rol']); ?>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <?php if ($asesor['activo']): ?>
+                                            <span class="badge badge-success">✓ Activo</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-danger">✗ Inactivo</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <a href="#" class="btn btn-sm btn-outline-primary" title="Editar">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <tr>
+                                    <td colspan="7" style="text-align: center; color: #9ca3af; padding: 30px;">
+                                        <i class="fas fa-inbox" style="font-size: 24px; margin-bottom: 10px; display: block;"></i>
+                                        No hay asesores registrados
+                                    </td>
+                                </tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 5: JERARQUÍA ORGANIZACIONAL -->
+            <div class="tab-pane fade" id="jerarquia" role="tabpanel">
+                <div class="table-card" style="background: #fff;">
+                    <div class="card-header-custom">
+                        <h6>🏢 Estructura Organizacional: Admin → Supervisores → Asesores</h6>
+                    </div>
+                    
+                    <div style="padding: 25px;">
+                        <!-- ADMINS -->
+                        <?php if (count($adminsHierarquia) > 0): ?>
+                            <?php foreach ($adminsHierarquia as $admin): ?>
+                            <div class="org-item" style="margin-bottom: 30px;">
+                                <div style="display: flex; align-items: center; padding: 15px; background: linear-gradient(135deg, #dc2626, #b91c1c); color: white; border-radius: 8px; margin-bottom: 15px;">
+                                    <i class="fas fa-crown" style="font-size: 20px; margin-right: 12px;"></i>
+                                    <div style="flex: 1;">
+                                        <strong><?php echo htmlspecialchars($admin['nombres'] . ' ' . $admin['apellidos']); ?></strong>
+                                        <div style="font-size: 12px; opacity: 0.9;">Administrador (<?php echo htmlspecialchars($admin['rol']); ?>)</div>
+                                    </div>
+                                    <span style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 4px 12px; border-radius: 12px;">
+                                        ID: <?php echo $admin['id_usuario']; ?>
+                                    </span>
+                                </div>
+
+                                <!-- SUPERVISORES -->
+                                <div style="margin-left: 20px; border-left: 2px solid #e5e7eb; padding-left: 20px;">
+                                    <?php if (empty($supervisoresPorCoop)): ?>
+                                        <p style="color: #9ca3af; font-style: italic;">No hay supervisores asignados</p>
+                                    <?php else: ?>
+                                        <?php foreach ($supervisoresPorCoop as $supervisor): ?>
+                                        <div style="margin-bottom: 20px;">
+                                            <div style="display: flex; align-items: center; padding: 12px; background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; border-radius: 6px; margin-bottom: 10px;">
+                                                <i class="fas fa-user-tie" style="margin-right: 10px;"></i>
+                                                <div style="flex: 1;">
+                                                    <strong><?php echo htmlspecialchars($supervisor['nombres'] . ' ' . $supervisor['apellidos']); ?></strong>
+                                                    <div style="font-size: 11px; opacity: 0.85;"><?php echo htmlspecialchars($supervisor['email']); ?></div>
+                                                </div>
+                                                <span style="font-size: 11px; background: rgba(255,255,255,0.2); padding: 3px 10px; border-radius: 10px;">
+                                                    Supervisor
+                                                </span>
+                                            </div>
+
+                                            <!-- ASESORES -->
+                                            <div style="margin-left: 15px; border-left: 2px solid #bfdbfe; padding-left: 15px;">
+                                                <?php if (empty($asesores)): ?>
+                                                    <div style="color: #9ca3af; font-size: 12px; font-style: italic; padding: 8px;">
+                                                        <i class="fas fa-info-circle me-2"></i>Sin asesores asignados
+                                                    </div>
+                                                <?php else: ?>
+                                                    <?php foreach ($asesores as $asesor): ?>
+                                                    <div style="display: flex; align-items: center; padding: 10px; background: linear-gradient(135deg, #10b981, #059669); color: white; border-radius: 6px; margin-bottom: 8px; font-size: 14px;">
+                                                        <i class="fas fa-briefcase" style="margin-right: 10px;"></i>
+                                                        <div style="flex: 1;">
+                                                            <strong><?php echo htmlspecialchars($asesor['nombres'] . ' ' . $asesor['apellidos']); ?></strong>
+                                                            <div style="font-size: 10px; opacity: 0.85;"><?php echo htmlspecialchars($asesor['email']); ?></div>
+                                                        </div>
+                                                        <span style="font-size: 10px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 8px;">
+                                                            Asesor
+                                                        </span>
+                                                    </div>
+                                                    <?php endforeach; ?>
+                                                <?php endif; ?>
+                                            </div>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                        <div style="padding: 20px; background: #fef2f2; border-radius: 8px; color: #dc2626;">
+                            <i class="fas fa-alert-triangle me-2"></i>No hay administradores registrados
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

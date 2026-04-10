@@ -1,4 +1,4 @@
-import 'package:fu_uber/Core/Models/UserPlaces.dart';
+import 'package:super_ia/Core/Models/UserPlaces.dart';
 
 class UserDetails {
   late String uuid;

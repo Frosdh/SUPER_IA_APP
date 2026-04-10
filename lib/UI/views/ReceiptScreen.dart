@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Pantalla de recibo/factura de un viaje completado.

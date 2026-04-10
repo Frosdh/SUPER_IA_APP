@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Constants/Constants.dart';
-import 'package:fu_uber/Core/Services/PayPhoneService.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Services/PayPhoneService.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 /// Resultado que se devuelve al hacer pop de esta pantalla.

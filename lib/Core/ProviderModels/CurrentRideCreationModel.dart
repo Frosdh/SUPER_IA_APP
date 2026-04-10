@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Enums/Enums.dart';
+import 'package:super_ia/Core/Enums/Enums.dart';
 
 class CurrentRideCreationModel extends ChangeNotifier {
   late RideType selectedRideType;

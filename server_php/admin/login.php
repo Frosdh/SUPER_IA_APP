@@ -1,80 +1,113 @@
 <?php
 require_once 'db_admin.php';
 
+if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true) {
+    header('Location: super_admin_index.php');
+    exit;
+}
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
     header('Location: index.php');
     exit;
 }
-if (isset($_SESSION['family_logged_in']) && $_SESSION['family_logged_in'] === true) {
-    header('Location: mapa_familiar.php');
+if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
+    header('Location: supervisor_index.php');
     exit;
 }
-if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] === true) {
-    header('Location: panel_cooperativa.php');
+if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
+    header('Location: asesor_index.php');
     exit;
 }
 
-$role = $_GET['role'] ?? 'admin'; // 'admin', 'family', 'secretary'
+$role = $_GET['role'] ?? 'admin'; // 'super_admin', 'admin', 'supervisor', 'asesor'
 $role_labels = [
+    'super_admin' => ['title' => 'Super Administrador', 'subtitle' => 'Ingresa credenciales de super administrador'],
     'admin' => ['title' => 'Admin Panel', 'subtitle' => 'Ingresa credenciales de administrador'],
-    'family' => ['title' => 'Familia/Amigos', 'subtitle' => 'Ingresa credenciales del conductor'],
-    'secretary' => ['title' => 'Panel Secretaria', 'subtitle' => 'Ingresa tu usuario de cooperativa']
+    'supervisor' => ['title' => 'Panel Supervisor', 'subtitle' => 'Ingresa credenciales de supervisor'],
+    'asesor' => ['title' => 'Panel Asesor', 'subtitle' => 'Ingresa credenciales de asesor']
 ];
 $current_label = $role_labels[$role] ?? $role_labels['admin'];
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $user = $_POST['username'] ?? '';
+    $email = $_POST['email'] ?? '';
     $pass = $_POST['password'] ?? '';
     $login_role = $_POST['role'] ?? 'admin';
 
-    if ($login_role === 'admin') {
-        // 1. Intentar como administrador (hardcoded)
-        if ($user === 'admin' && $pass === 'Admin123!') {
+    if ($login_role === 'super_admin') {
+        // Super Administrador
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+                               FROM usuario
+                               WHERE email = ? AND rol = 'gerente_general' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+        $stmt->execute([$email]);
+        $super_admin = $stmt->fetch();
+        
+        if ($super_admin && password_verify($pass, $super_admin['password_hash'])) {
+            $_SESSION['super_admin_logged_in'] = true;
+            $_SESSION['super_admin_id'] = $super_admin['id'];
+            $_SESSION['super_admin_email'] = $super_admin['email'];
+            $_SESSION['super_admin_nombre'] = $super_admin['nombre'];
+            $_SESSION['super_admin_rol'] = 'gerente_general';
+            header('Location: super_admin_index.php');
+            exit;
+        } else {
+            $error = 'Credenciales de super administrador incorrectas.';
+        }
+    } elseif ($login_role === 'admin') {
+        // Administrador (jefe_agencia)
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+                               FROM usuario
+                               WHERE email = ? AND (rol = 'jefe_agencia' OR rol = 'gerente_general') AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+        $stmt->execute([$email]);
+        $admin = $stmt->fetch();
+        
+        if ($admin && password_verify($pass, $admin['password_hash'])) {
             $_SESSION['admin_logged_in'] = true;
+            $_SESSION['admin_id'] = $admin['id'];
+            $_SESSION['admin_email'] = $admin['email'];
+            $_SESSION['admin_nombre'] = $admin['nombre'];
+            $_SESSION['admin_rol'] = $admin['rol'];
             header('Location: index.php');
             exit;
         } else {
             $error = 'Credenciales de administrador incorrectas.';
         }
-    } elseif ($login_role === 'family') {
-        // 2. Intentar como conductor (para seguimiento familiar)
-        $stmt = $pdo->prepare("SELECT id, nombre, pass_hash FROM conductores WHERE (telefono = ? OR cedula = ?) AND verificado = 1 LIMIT 1");
-        $stmt->execute([$user, $user]);
-        $conductor = $stmt->fetch();
-
-        if ($conductor && password_verify($pass, $conductor['pass_hash'])) {
-            $_SESSION['family_logged_in'] = true;
-            $_SESSION['conductor_id'] = (int)$conductor['id'];
-            $_SESSION['conductor_nombre'] = $conductor['nombre'];
-            header('Location: mapa_familiar.php');
+    } elseif ($login_role === 'supervisor') {
+        // Supervisor
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+                               FROM usuario
+                               WHERE email = ? AND rol = 'supervisor' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+        $stmt->execute([$email]);
+        $supervisor = $stmt->fetch();
+        
+        if ($supervisor && password_verify($pass, $supervisor['password_hash'])) {
+            $_SESSION['supervisor_logged_in'] = true;
+            $_SESSION['supervisor_id'] = $supervisor['id'];
+            $_SESSION['supervisor_email'] = $supervisor['email'];
+            $_SESSION['supervisor_nombre'] = $supervisor['nombre'];
+            $_SESSION['supervisor_rol'] = 'supervisor';
+            header('Location: supervisor_index.php');
             exit;
         } else {
-            $error = 'Datos de conductor no encontrados o contraseña incorrecta.';
+            $error = 'Credenciales de supervisor incorrectas.';
         }
-    } elseif ($login_role === 'secretary') {
-        // 3. Intentar como secretaria
-        $stmt = $pdo->prepare("SELECT id, usuario, pass_hash, cooperativa_id, nombre, verificado FROM secretarias WHERE usuario = ? LIMIT 1");
-        $stmt->execute([$user]);
-        $sec = $stmt->fetch();
-
-        if ($sec && password_verify($pass, $sec['pass_hash'])) {
-            if (!isset($sec['verificado']) || (int)$sec['verificado'] === 1) {
-                $_SESSION['secretary_logged_in'] = true;
-                $_SESSION['secretary_id'] = (int)$sec['id'];
-                $_SESSION['secretary_name'] = $sec['nombre'];
-                $_SESSION['cooperativa_id'] = (int)$sec['cooperativa_id'];
-                header('Location: panel_cooperativa.php');
-                exit;
-            } elseif ((int)$sec['verificado'] === 0) {
-                $error = 'Tu cuenta ha sido creada y está pendiente de revisión por el administrador.';
-            } else {
-                $_SESSION['resubir_sec_id'] = (int)$sec['id'];
-                header('Location: resubir_credencial.php');
-                exit;
-            }
+    } elseif ($login_role === 'asesor') {
+        // Asesor
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+                               FROM usuario
+                               WHERE email = ? AND rol = 'asesor' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+        $stmt->execute([$email]);
+        $asesor = $stmt->fetch();
+        
+        if ($asesor && password_verify($pass, $asesor['password_hash'])) {
+            $_SESSION['asesor_logged_in'] = true;
+            $_SESSION['asesor_id'] = $asesor['id'];
+            $_SESSION['asesor_email'] = $asesor['email'];
+            $_SESSION['asesor_nombre'] = $asesor['nombre'];
+            $_SESSION['asesor_rol'] = 'asesor';
+            header('Location: asesor_index.php');
+            exit;
         } else {
-            $error = 'Usuario de secretaria incorrecto o contraseña inválida.';
+            $error = 'Credenciales de asesor incorrectas.';
         }
     }
 }
@@ -84,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove Admin — Iniciar Sesión</title>
+    <title>COAC Finance — Iniciar Sesión</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -122,11 +155,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-wrapper">
         <div class="login-left">
             <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
-            <h1>GeoMove Admin</h1>
-            <p>Panel de administración centralizado para gestionar conductores, viajes y usuarios de la plataforma Fuber.</p>
+            <h1>COAC Finance</h1>
+            <p>Sistema de gestión integral para supervisión de operaciones, clientes y créditos de COAC Finance.</p>
             <div class="feature"><div class="fi"><i class="fas fa-chart-line"></i></div><span>Dashboard con estadísticas en tiempo real</span></div>
-            <div class="feature"><div class="fi"><i class="fas fa-map-marked-alt"></i></div><span>Mapa en vivo de conductores activos</span></div>
-            <div class="feature"><div class="fi"><i class="fas fa-shield-alt"></i></div><span>Gestión de documentos y verificaciones</span></div>
+            <div class="feature"><div class="fi"><i class="fas fa-users-gear"></i></div><span>Gestión de supervisores y asesores</span></div>
+            <div class="feature"><div class="fi"><i class="fas fa-shield-alt"></i></div><span>Seguimiento de operaciones de crédito</span></div>
         </div>
         <div class="login-right">
             <div class="form-title"><?= htmlspecialchars($current_label['title']) ?></div>
@@ -137,8 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="POST">
                 <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
                 <div class="inp-group">
-                    <label>Usuario</label>
-                    <div class="inp-wrap"><i class="fas fa-user"></i><input type="text" name="username" placeholder="Ingresa tu usuario" required autocomplete="off"></div>
+                    <label>Correo Electrónico</label>
+                    <div class="inp-wrap"><i class="fas fa-envelope"></i><input type="email" name="email" placeholder="Ingresa tu correo" required autocomplete="off"></div>
                 </div>
                 <div class="inp-group">
                     <label>Contraseña</label>
@@ -146,15 +179,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión</button>
                 
-                <?php if ($role === 'secretary'): ?>
-                    <a href="registro_secretaria.php" class="btn-back mt-3" style="background: rgba(107,17,255,0.05); border-color: rgba(107,17,255,0.2); color: var(--primary-color);">
-                        <i class="fas fa-user-plus me-2"></i>Crear Cuenta de Secretaria
-                    </a>
+                <?php if ($role === 'admin'): ?>
+                <a href="registro_admin.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Admin</a>
+                <?php elseif ($role === 'supervisor'): ?>
+                <a href="registro_supervisor.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Supervisor</a>
+                <?php elseif ($role === 'asesor'): ?>
+                <a href="registro_asesor_publico.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Asesor</a>
                 <?php endif; ?>
 
                 <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Cambiar de Rol</a>
             </form>
-            <div class="login-footer">GeoMove App · Fuber Platform &copy; 2026</div>
+            <div class="login-footer">COAC Finance &copy; 2026</div>
         </div>
     </div>
 </body>

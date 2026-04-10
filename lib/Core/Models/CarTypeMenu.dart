@@ -1,4 +1,4 @@
-import 'package:fu_uber/Core/Enums/Enums.dart';
+import 'package:super_ia/Core/Enums/Enums.dart';
 
 class CarTypeMenu {
   final String image;

@@ -1,8 +1,8 @@
-import 'package:fu_uber/Core/Enums/Enums.dart';
-import 'package:fu_uber/Core/Models/CarTypeMenu.dart';
-import 'package:fu_uber/Core/Models/Drivers.dart';
-import 'package:fu_uber/Core/Models/UserDetails.dart';
-import 'package:fu_uber/Core/Models/UserPlaces.dart';
+import 'package:super_ia/Core/Enums/Enums.dart';
+import 'package:super_ia/Core/Models/CarTypeMenu.dart';
+import 'package:super_ia/Core/Models/Drivers.dart';
+import 'package:super_ia/Core/Models/UserDetails.dart';
+import 'package:super_ia/Core/Models/UserPlaces.dart';
 import 'package:latlong2/latlong.dart';
 
 class DemoData {

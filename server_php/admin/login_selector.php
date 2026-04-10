@@ -6,11 +6,11 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
     header('Location: index.php');
     exit;
 }
-if (isset($_SESSION['family_logged_in']) && $_SESSION['family_logged_in'] === true) {
+if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
     header('Location: mapa_familiar.php');
     exit;
 }
-if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] === true) {
+if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
     header('Location: panel_cooperativa.php');
     exit;
 }
@@ -20,7 +20,7 @@ if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove — Seleccionar Rol</title>
+    <title>COAC Finance — Seleccionar Rol</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -36,7 +36,7 @@ if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] 
             color: #f8fafc;
         }
         .container {
-            max-width: 1000px;
+            max-width: 1400px;
             padding: 2rem;
         }
         .header-section {
@@ -57,14 +57,14 @@ if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] 
         }
         .role-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 2rem;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
         }
         .role-card {
             background: rgba(30, 41, 59, 0.7);
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 24px;
-            padding: 3rem 2rem;
+            padding: 2rem 1.5rem;
             text-align: center;
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -82,15 +82,15 @@ if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] 
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(99, 102, 241, 0.2);
         }
         .icon-box {
-            width: 80px;
-            height: 80px;
+            width: 70px;
+            height: 70px;
             background: linear-gradient(135deg, #6366f1, #a855f7);
             border-radius: 20px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2rem;
-            margin-bottom: 1.5rem;
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
             box-shadow: 0 10px 20px rgba(99, 102, 241, 0.3);
         }
         .role-card h2 {
@@ -121,11 +121,21 @@ if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] 
 <body>
     <div class="container">
         <div class="header-section">
-            <h1>Bienvenido a GeoMove</h1>
+            <h1>Bienvenido a COAC Finance</h1>
             <p>Selecciona tu perfil para continuar al inicio de sesión</p>
         </div>
 
         <div class="role-grid">
+            <!-- SUPER ADMIN ROLE -->
+            <a href="login.php?role=super_admin" class="role-card">
+                <div class="icon-box">
+                    <i class="fas fa-crown"></i>
+                </div>
+                <h2>Super Administrador</h2>
+                <p>Control total del sistema, gestión de administradores y supervisión completa.</p>
+                <div class="btn-enter">Ingresar</div>
+            </a>
+
             <!-- ADMIN ROLE -->
             <a href="login.php?role=admin" class="role-card">
                 <div class="icon-box">
@@ -136,23 +146,23 @@ if (isset($_SESSION['secretary_logged_in']) && $_SESSION['secretary_logged_in'] 
                 <div class="btn-enter">Ingresar</div>
             </a>
 
-            <!-- FAMILY ROLE -->
-            <a href="login.php?role=family" class="role-card">
+            <!-- SUPERVISOR ROLE -->
+            <a href="login.php?role=supervisor" class="role-card">
                 <div class="icon-box">
-                    <i class="fas fa-users"></i>
+                    <i class="fas fa-users-gear"></i>
                 </div>
-                <h2>Familia/Amigos</h2>
-                <p>Seguimiento en tiempo real y seguridad para conductores autorizados.</p>
+                <h2>Supervisor</h2>
+                <p>Supervisión de operaciones, asesores y seguimiento de créditos.</p>
                 <div class="btn-enter">Ingresar</div>
             </a>
 
-            <!-- SECRETARY ROLE -->
-            <a href="login.php?role=secretary" class="role-card">
+            <!-- ASESOR ROLE -->
+            <a href="login.php?role=asesor" class="role-card">
                 <div class="icon-box">
-                    <i class="fas fa-briefcase"></i>
+                    <i class="fas fa-handshake"></i>
                 </div>
-                <h2>Secretaria</h2>
-                <p>Control de flota, documentación y monitoreo de su cooperativa.</p>
+                <h2>Asesor</h2>
+                <p>Gestión de clientes, análisis de operaciones y seguimiento de créditos.</p>
                 <div class="btn-enter">Ingresar</div>
             </a>
         </div>

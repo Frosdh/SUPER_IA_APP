@@ -7,22 +7,22 @@
 
 /* ── Variables ─────────────────────────────────────────────── */
 :root {
-    --primary:        #6b11ff;
-    --primary-end:    #3182fe;
-    --accent:         #11998e;
-    --accent-end:     #38ef7d;
+    --primary:        #FBBF24;
+    --primary-end:    #F59E0B;
+    --accent:         #FCD34D;
+    --accent-end:     #FEF08A;
     --danger:         #ef4444;
     --warning:        #f59e0b;
-    --bg:             #f0f4ff;
+    --bg:             #FFFBF0;
     --card:           #ffffff;
     --text:           #1e293b;
     --text-muted:     #64748b;
-    --border:         #e2e8f0;
-    --sidebar-from:   #1e1b4b;
-    --sidebar-to:     #2d2a6e;
-    --shadow-sm:      0 1px 4px rgba(107,17,255,.06);
-    --shadow:         0 4px 24px rgba(107,17,255,.09);
-    --shadow-lg:      0 8px 40px rgba(107,17,255,.14);
+    --border:         #FFE5B5;
+    --sidebar-from:   #92400E;
+    --sidebar-to:     #B45309;
+    --shadow-sm:      0 1px 4px rgba(251,191,36,.06);
+    --shadow:         0 4px 24px rgba(251,191,36,.09);
+    --shadow-lg:      0 8px 40px rgba(251,191,36,.14);
     --radius:         14px;
     --radius-sm:      9px;
     --transition:     .22s ease;
@@ -77,7 +77,7 @@ body {
     background: rgba(255,255,255,.04);
 }
 
-.sidebar .brand i { color: #a78bfa; font-size: 20px; }
+.sidebar .brand i { color: #FCD34D; font-size: 20px; }
 
 .sidebar .section-label {
     font-size: 9.5px;
@@ -106,19 +106,19 @@ body {
 .sidebar a:hover {
     background: rgba(255,255,255,.1);
     color: #fff;
-    border-left-color: rgba(167,139,250,.5);
+    border-left-color: rgba(252,179,36,.7);
     transform: translateX(2px);
 }
 
 .sidebar a.active {
-    background: linear-gradient(90deg, rgba(107,17,255,.35), rgba(49,130,254,.15));
+    background: linear-gradient(90deg, rgba(251,191,36,.35), rgba(245,158,11,.15));
     color: #fff;
-    border-left: 3px solid #a78bfa;
+    border-left: 3px solid #FCD34D;
     font-weight: 600;
 }
 
 .sidebar a i { width: 18px; text-align: center; font-size: 14px; opacity: .85; }
-.sidebar a.active i { opacity: 1; color: #a78bfa; }
+.sidebar a.active i { opacity: 1; color: #FCD34D; }
 
 .sidebar .logout-link {
     margin-top: auto;
@@ -190,8 +190,8 @@ body {
     box-shadow: 0 4px 12px rgba(0,0,0,.15);
 }
 
-.bg-purple { background: linear-gradient(135deg,#6b11ff,#9b51e0); }
-.bg-blue   { background: linear-gradient(135deg,#3182fe,#5b9cfc); }
+.bg-yellow { background: linear-gradient(135deg,#FBBF24,#F59E0B); }
+.bg-amber   { background: linear-gradient(135deg,#FCD34D,#FEF08A); }
 .bg-green  { background: linear-gradient(135deg,#11998e,#38ef7d); }
 .bg-orange { background: linear-gradient(135deg,#f46b45,#eea849); }
 .bg-red    { background: linear-gradient(135deg,#ef4444,#f87171); }

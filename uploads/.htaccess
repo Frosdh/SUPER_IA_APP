@@ -1,0 +1,17 @@
+# Proteger directorio de uploads
+<FilesMatch "\.(php|php3|php4|php5|php7|php8|phtml|phar|shtml|pht|phps|pgif|pjpeg|pjpg|plzh)$">
+    Deny from all
+</FilesMatch>
+
+# Permitir descarga de archivos permitidos
+<FilesMatch "\.(pdf|jpg|jpeg|png|gif|doc|docx|xls|xlsx)$">
+    Allow from all
+</FilesMatch>
+
+# Deshabilitar listado de directorios
+Options -Indexes
+
+# Prevenir acceso a archivos ocultos
+<FilesMatch "^\.">
+    Deny from all
+</FilesMatch>

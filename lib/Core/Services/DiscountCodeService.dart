@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:fu_uber/Core/Constants/Constants.dart';
-import 'package:fu_uber/Core/Models/DiscountCodeModel.dart';
-import 'package:fu_uber/Core/Preferences/DiscountPreferences.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Models/DiscountCodeModel.dart';
+import 'package:super_ia/Core/Preferences/DiscountPreferences.dart';
 
 class DiscountCodeService {
   /// Validar un código de descuento en el servidor

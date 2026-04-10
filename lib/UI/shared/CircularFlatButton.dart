@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
 
 typedef OnPressed = void Function();
 

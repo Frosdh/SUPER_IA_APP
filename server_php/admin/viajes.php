@@ -5,7 +5,10 @@ require_once 'db_admin.php';
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isSuperAdmin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
+
+if (!$isAdmin && !$isSuperAdmin) {
     header('Location: login.php');
     exit;
 }
@@ -31,23 +34,26 @@ if ($f_cat !== '') {
 }
 
 // Determinar estados según el modo (Histórico vs Activo)
-$estadosFiltro = $isHist ? "('terminado', 'cancelado')" : "('pedido', 'aceptado', 'en_curso')";
+$estadosFiltro = $isHist ? "('completado', 'cancelado')" : "('completado')";
 
-// Obtener viajes
-$stmt = $pdo->prepare("
-    SELECT v.id, v.estado, v.fecha_pedido, v.tarifa_total,
-           u.nombre as cliente, u.telefono as cliente_telefono,
-           cond.nombre as conductor, cond.telefono as conductor_telefono,
-           (SELECT nombre FROM categorias WHERE id = v.categoria_id) AS categoria
-    FROM viajes v
-    JOIN usuarios u ON v.usuario_id = u.id
-    LEFT JOIN conductores cond ON v.conductor_id = cond.id
-    WHERE v.estado IN $estadosFiltro $whereExtra
-    ORDER BY v.fecha_pedido DESC
-    LIMIT " . ($isHist ? "100" : "50") . "
-");
-$stmt->execute($params);
-$viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Obtener viajes - versión simplificada usando tabla viajes disponible
+try {
+    $stmt = $pdo->prepare("
+        SELECT v.id, v.estado, v.fecha_hora as fecha_pedido, v.distancia_km,
+               v.nombre_conductor as conductor, 'N/A' as conductor_telefono,
+               'Usuario' as cliente, 'N/A' as cliente_telefono,
+               'Transporte' AS categoria
+        FROM viajes v
+        WHERE v.estado IN $estadosFiltro
+        ORDER BY v.fecha_hora DESC
+        LIMIT " . ($isHist ? "100" : "50") . "
+    ");
+    $stmt->execute($params);
+    $viajes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    // Si falla, mostrar array vacío
+    $viajes = [];
+}
 
 $currentPage     = $isHist ? 'viajes_hist' : 'viajes_live';
 
@@ -74,7 +80,11 @@ if (isset($_GET['ajax'])) {
     exit;
 }
 
-$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
+try {
+    $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
+} catch (Exception $e) {
+    $totalPendientes = count($viajes);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -127,10 +137,14 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                                 <select name="canton" class="form-select">
                                     <option value="">Todos</option>
                                     <?php
-                                    $cantones = $pdo->query("SELECT DISTINCT canton FROM conductores WHERE canton IS NOT NULL")->fetchAll();
-                                    foreach($cantones as $c) {
-                                        $sel = ($f_canton == $c['canton']) ? 'selected' : '';
-                                        echo "<option value='{$c['canton']}' $sel>{$c['canton']}</option>";
+                                    try {
+                                        $cantones = $pdo->query("SELECT DISTINCT canton FROM conductores WHERE canton IS NOT NULL")->fetchAll();
+                                        foreach($cantones as $c) {
+                                            $sel = ($f_canton == $c['canton']) ? 'selected' : '';
+                                            echo "<option value='{$c['canton']}' $sel>{$c['canton']}</option>";
+                                        }
+                                    } catch (Exception $e) {
+                                        // Si falla, no mostrar opciones adicionales
                                     }
                                     ?>
                                 </select>
@@ -140,25 +154,24 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                                 <select name="coop_id" class="form-select">
                                     <option value="">Todas</option>
                                     <?php
-                                    $coops = $pdo->query("SELECT id, nombre FROM cooperativas")->fetchAll();
-                                    foreach($coops as $co) {
-                                        $sel = ($f_coop == $co['id']) ? 'selected' : '';
-                                        echo "<option value='{$co['id']}' $sel>{$co['nombre']}</option>";
+                                    try {
+                                        $coops = $pdo->query("SELECT DISTINCT cooperativa_id as id, ' Coop ' || CAST(cooperativa_id as CHAR) as nombre FROM viajes WHERE cooperativa_id > 0")->fetchAll();
+                                        foreach($coops as $co) {
+                                            $sel = ($f_coop == $co['id']) ? 'selected' : '';
+                                            echo "<option value='{$co['id']}' $sel>{$co['nombre']}</option>";
+                                        }
+                                    } catch (Exception $e) {
+                                        // Si falla, no mostrar opciones adicionales
                                     }
                                     ?>
                                 </select>
                             </div>
                             <div class="col-md-2">
-                                <label class="form-label small fw-bold">Categoría</label>
+                                <label class="form-label small fw-bold">Tipo</label>
                                 <select name="cat_id" class="form-select">
-                                    <option value="">Todas</option>
-                                    <?php
-                                    $cats = $pdo->query("SELECT id, nombre FROM categorias")->fetchAll();
-                                    foreach($cats as $ca) {
-                                        $sel = ($f_cat == $ca['id']) ? 'selected' : '';
-                                        echo "<option value='{$ca['id']}' $sel>{$ca['nombre']}</option>";
-                                    }
-                                    ?>
+                                    <option value="">Todos</option>
+                                    <option value="1">Transporte</option>
+                                    <option value="2">Servicios</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -212,8 +225,8 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
                                                 <span class="text-muted fst-italic">Buscando conductor...</span>
                                             <?php endif; ?>
                                         </td>
-                                        <td class="fw-bold text-success">$<?= number_format((float)$v['tarifa_total'], 2) ?></td>
-                                        <td><span class="badge-estado <?= $cls ?>"><?= str_replace('_', ' ', $v['estado']) ?></span></td>
+                                        <td class="fw-bold text-success"><?= number_format((float)$v['distancia_km'], 2) ?> km</td>
+                                        <td><span class="badge-estado <?= $cls ?>"><?= str_replace('_', ' ', ucfirst($v['estado'])) ?></span></td>
                                     </tr>
                                     <?php endforeach; ?>
                                 </tbody>

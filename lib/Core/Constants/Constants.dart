@@ -7,7 +7,7 @@ class Constants {
   static const currentRoutePolylineId = "currentRoutePolyline";
   static const driverMarkerId = "CurrentDriverMarker";
   static const driverOriginPolyId = "driverOriginPolyLine";
-  static const apiBaseUrl = "http://corporativoqbank.com/fuber_api";
+  static const apiBaseUrl = "http://192.168.100.45/FUBER_APP/server_php";
 
   // ─── PayPhone ────────────────────────────────────────────────────────────
   /// Reemplaza con tu token real de PayPhone (obtenido en app.payphone.app → Integración → Token)

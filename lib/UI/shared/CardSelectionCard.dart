@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Models/CarTypeMenu.dart';
-import 'package:fu_uber/Core/Utils/BasicShapeUtils.dart';
+import 'package:super_ia/Core/Models/CarTypeMenu.dart';
+import 'package:super_ia/Core/Utils/BasicShapeUtils.dart';
 
 class CarSelectionCard extends StatelessWidget {
   final CarTypeMenu carTypeMenu;

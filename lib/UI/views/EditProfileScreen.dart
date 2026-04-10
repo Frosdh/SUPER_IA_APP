@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/Constants.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Models/TransactionModel.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/Preferences/RideHistoryService.dart';
-import 'package:fu_uber/Core/Preferences/TransactionHistoryService.dart';
-import 'package:fu_uber/Core/Services/PayPhoneService.dart';
-import 'package:fu_uber/UI/views/PayPhoneWebViewScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Models/TransactionModel.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Preferences/RideHistoryService.dart';
+import 'package:super_ia/Core/Preferences/TransactionHistoryService.dart';
+import 'package:super_ia/Core/Services/PayPhoneService.dart';
+import 'package:super_ia/UI/views/PayPhoneWebViewScreen.dart';
 
 class RideCompletedScreen extends StatefulWidget {
   static const String route = '/ride_completed';

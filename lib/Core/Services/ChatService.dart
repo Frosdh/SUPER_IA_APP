@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'package:fu_uber/Core/Constants/Constants.dart';
-import 'package:fu_uber/Core/Models/ChatMessage.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Models/ChatMessage.dart';
 import 'package:http/http.dart' as http;
 
 class ChatService {

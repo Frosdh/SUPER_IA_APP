@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/RideHistoryService.dart';
-import 'package:fu_uber/UI/views/OsmMapScreen.dart';
-import 'package:fu_uber/UI/views/ReportarObjetoPerdidoScreen.dart';
-import 'package:fu_uber/UI/views/ReceiptScreen.dart';
-import 'package:fu_uber/UI/views/DisputeScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/RideHistoryService.dart';
+import 'package:super_ia/UI/views/OsmMapScreen.dart';
+import 'package:super_ia/UI/views/ReportarObjetoPerdidoScreen.dart';
+import 'package:super_ia/UI/views/ReceiptScreen.dart';
+import 'package:super_ia/UI/views/DisputeScreen.dart';
 
 class RideHistoryScreen extends StatefulWidget {
   static const String route = '/ride_history';

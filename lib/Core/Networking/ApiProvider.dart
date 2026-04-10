@@ -1,10 +1,55 @@
+import 'dart:async';
 import 'dart:convert';
 
-import 'package:fu_uber/Core/Constants/Constants.dart';
-import 'package:fu_uber/Core/Models/NearbyDriverMapModel.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Models/NearbyDriverMapModel.dart';
 import 'package:http/http.dart' as http;
 
 class ApiProvider {
+  Future<Map<String, dynamic>> loginAsesor({
+    required String email,
+    required String password,
+  }) async {
+    final url = '${Constants.apiBaseUrl}/login_asesor.php';
+    try {
+      final response = await http
+          .post(
+            Uri.parse(url),
+            body: {
+              'email': email,
+              'password': password,
+            },
+          )
+          .timeout(const Duration(seconds: 10));
+
+      print('>>> [ASESOR_LOGIN] HTTP ${response.statusCode} desde $url');
+      if (response.statusCode != 200) {
+        print('>>> [ASESOR_LOGIN] Body (non-200): ${response.body}');
+      } else {
+        print('>>> [ASESOR_LOGIN] Body: ${response.body}');
+      }
+
+      if (response.statusCode != 200) {
+        return <String, dynamic>{
+          'status': 'error',
+          'message': 'No se pudo conectar con el servidor',
+        };
+      }
+
+      return json.decode(response.body) as Map<String, dynamic>;
+    } on TimeoutException {
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'Tiempo de espera agotado. Verifica tu red/IP del servidor.',
+      };
+    } catch (e) {
+      return <String, dynamic>{
+        'status': 'error',
+        'message': 'Error de red: $e',
+      };
+    }
+  }
+
   Future<Map<String, dynamic>> loginDriver({
     required String identificador,
     required String password,

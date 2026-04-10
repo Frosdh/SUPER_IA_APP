@@ -1,50 +1,22 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:fu_uber/Core/ProviderModels/CurrentRideCreationModel.dart';
-import 'package:fu_uber/Core/ProviderModels/NearbyDriversModel.dart';
-import 'package:fu_uber/Core/ProviderModels/PermissionHandlerModel.dart';
-import 'package:fu_uber/Core/ProviderModels/UINotifiersModel.dart';
-import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
-import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/Core/Services/PushNotificationService.dart';
-import 'package:fu_uber/Core/Services/BackgroundLocationService.dart';
-import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
-import 'package:fu_uber/UI/views/LocationPermissionScreen.dart';
-import 'package:fu_uber/UI/views/OnboardingScreen.dart';
-import 'package:fu_uber/UI/views/ProfileScreen.dart';
-import 'package:fu_uber/UI/views/SignIn.dart';
-import 'package:fu_uber/UI/views/SplashScreen.dart';
-import 'package:fu_uber/UI/views/RegisterScreen.dart';
-import 'package:fu_uber/UI/views/EditProfileScreen.dart';
-import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
-import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
-import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
-import 'package:fu_uber/UI/views/DriverRegistrationScreen.dart';
-import 'package:fu_uber/UI/views/VehicleRegistrationScreen.dart';
-import 'package:fu_uber/UI/views/DriverWaitingScreen.dart';
-import 'package:fu_uber/UI/views/DriverStep1Screen.dart';
-import 'package:fu_uber/UI/views/DriverStep2Screen.dart';
-import 'package:fu_uber/UI/views/DriverStep3Screen.dart';
-import 'package:fu_uber/UI/views/DriverStep4Screen.dart';
-import 'package:fu_uber/UI/views/DriverStep5Screen.dart';
-import 'package:fu_uber/UI/views/DriverStep6Screen.dart';
-import 'package:fu_uber/UI/views/DriverTripHistoryScreen.dart';
-import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
-import 'package:fu_uber/UI/views/OsmMapScreen.dart';
-import 'package:fu_uber/UI/views/RideCompletedScreen.dart';
-import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
-import 'package:fu_uber/UI/views/DriverProfileScreen.dart';
-import 'package:fu_uber/UI/views/WelcomeScreen.dart';
-import 'package:fu_uber/UI/views/PayPhoneWebViewScreen.dart';
-import 'package:fu_uber/UI/views/PaymentHistoryScreen.dart';
-import 'package:fu_uber/UI/views/ReceiptScreen.dart';
-import 'package:fu_uber/UI/views/WalletScreen.dart';
-import 'package:fu_uber/UI/views/DisputeScreen.dart';
-import 'package:fu_uber/UI/views/DriverEarningsScreen.dart';
-import 'package:fu_uber/UI/views/ChatScreen.dart';
+import 'package:super_ia/Core/ProviderModels/VerificationModel.dart';
+import 'package:super_ia/Core/ProviderModels/PermissionHandlerModel.dart';
+import 'package:super_ia/UI/views/SplashScreen.dart';
+import 'package:super_ia/UI/views/OnboardingScreen.dart';
+import 'package:super_ia/UI/views/WelcomeScreen.dart';
+import 'package:super_ia/UI/views/SignIn.dart';
+import 'package:super_ia/UI/views/RegisterScreen.dart';
+import 'package:super_ia/UI/views/AsesorRegistrationScreen.dart';
+import 'package:super_ia/UI/views/LocationPermissionScreen.dart';
+import 'package:super_ia/UI/views/OsmMapScreen.dart';
+import 'package:super_ia/UI/views/DriverHomeScreen.dart';
+import 'package:super_ia/UI/views/DriverLoginScreen.dart';
+import 'package:super_ia/UI/views/ProfileScreen.dart';
+import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 import 'package:provider/provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -54,16 +26,8 @@ void main() async {
 
   try {
     await Firebase.initializeApp();
-    await PushNotificationService.initialize(navigatorKey);
   } catch (e) {
-    print('>>> [FCM] Firebase no inicializado: $e');
-  }
-
-  // Inicializar Foreground Service para ubicación en background
-  try {
-    await BackgroundLocationService.initialize();
-  } catch (e) {
-    print('>>> [BG_SERVICE] No se pudo inicializar: $e');
+    print('>>> Firebase no inicializado: $e');
   }
 
   SystemChrome.setSystemUIOverlayStyle(
@@ -92,27 +56,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider<PermissionHandlerModel>(
-          create: (_) => PermissionHandlerModel(),
-        ),
         ChangeNotifierProvider<VerificationModel>(
           create: (_) => VerificationModel(),
         ),
-        ChangeNotifierProvider<NearbyDriversModel>(
-          create: (_) => NearbyDriversModel(),
-        ),
-        ChangeNotifierProvider<UserDetailsModel>(
-          create: (_) => UserDetailsModel(),
-        ),
-        ChangeNotifierProvider<CurrentRideCreationModel>(
-          create: (_) => CurrentRideCreationModel(),
-        ),
-        ChangeNotifierProvider<UINotifiersModel>(
-          create: (_) => UINotifiersModel(),
+        ChangeNotifierProvider<PermissionHandlerModel>(
+          create: (_) => PermissionHandlerModel(),
         ),
       ],
       child: MaterialApp(
-        title: 'GeoMove',
+        title: 'SUPER_IA - Gestión Comercial',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           brightness: Brightness.dark,
@@ -171,47 +123,21 @@ class MyApp extends StatelessWidget {
         ),
         navigatorKey: navigatorKey,
         routes: {
-          SplashScreen.route: (context) => SplashScreen(),
-          OnboardingScreen.route: (context) => OnboardingScreen(),
-          WelcomeScreen.route: (context) => WelcomeScreen(),
-          SignInPage.route: (context) => SignInPage(),
-          RegisterScreen.route: (context) => RegisterScreen(),
-          '/driver_registration': (context) => DriverRegistrationScreen(),
-          '/vehicle_registration': (context) {
-            final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-            return VehicleRegistrationScreen(
-              nombre: args['nombre'],
-              cedula: args['cedula'],
-              telefono: args['telefono'],
-              password: args['password'],
-            );
-          },
-          '/driver_waiting': (context) => DriverWaitingScreen(),
+          '/splash': (context) => SplashScreen(),
+          '/onboarding': (context) => OnboardingScreen(),
+          '/welcome': (context) => WelcomeScreen(),
+          '/signin': (context) => SignInPage(),
+          '/register': (context) => RegisterScreen(),
+          '/asesor-registration': (context) => AsesorRegistrationScreen(),
           DriverLoginScreen.route: (context) => DriverLoginScreen(),
-          DriverStep1Screen.route: (context) => DriverStep1Screen(),
           DriverHomeScreen.route: (context) => DriverHomeScreen(),
-          DriverProfileScreen.route: (context) => const DriverProfileScreen(),
-          LocationPermissionScreen.route: (context) =>
-              LocationPermissionScreen(),
+          LocationPermissionScreen.route: (context) => LocationPermissionScreen(),
           OsmMapScreen.route: (context) => OsmMapScreen(),
           ProfileScreen.route: (context) => ProfileScreen(),
-          RideCompletedScreen.route: (context) => RideCompletedScreen(),
-          RideHistoryScreen.route: (context) => RideHistoryScreen(),
-          EditProfileScreen.route: (context) => EditProfileScreen(),
-          FavoritePlacesScreen.route: (context) =>
-              FavoritePlacesScreen(),
-          HelpFaqScreen.route: (context) => HelpFaqScreen(),
-          EmergencyContactsScreen.route: (context) =>
-              EmergencyContactsScreen(),
-          PayPhoneWebViewScreen.route: (context) =>
-              const PayPhoneWebViewScreen(),
-          PaymentHistoryScreen.route: (context) =>
-              const PaymentHistoryScreen(),
-          ReceiptScreen.route:        (context) => const ReceiptScreen(),
-          WalletScreen.route:         (context) => const WalletScreen(),
-          DisputeScreen.route:        (context) => const DisputeScreen(),
-          DriverEarningsScreen.route: (context) => const DriverEarningsScreen(),
-          ChatScreen.route:           (context) => const ChatScreen(),
+          '/nueva-encuesta': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+            return NuevaEncuestaScreen(tipoTarea: args?['tipoTarea'] ?? 'prospecto_nuevo');
+          },
         },
         home: SplashScreen(),
       ),

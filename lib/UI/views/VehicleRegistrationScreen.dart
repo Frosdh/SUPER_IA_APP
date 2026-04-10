@@ -2,9 +2,9 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Networking/ApiProvider.dart';
-import 'package:fu_uber/UI/views/DriverWaitingScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Networking/ApiProvider.dart';
+import 'package:super_ia/UI/views/DriverWaitingScreen.dart';
 import 'package:image_picker/image_picker.dart';
 
 class VehicleRegistrationScreen extends StatefulWidget {

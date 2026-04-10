@@ -9,6 +9,13 @@
 .history
 .svn/
 
+# Copilot/Claude worktrees (local-only)
+.claude/
+.kilo/
+
+# Spreadsheets / binary docs (local-only)
+*.xlsx
+
 # IntelliJ related
 *.iml
 *.ipr
@@ -74,3 +81,6 @@
 server_php/firebase_service_account.json
 server_php/email_config.php
 server_php/db_config.php
+
+# Uploaded credentials should not be versioned
+server_php/admin/solicitudes_admin/*.pdf

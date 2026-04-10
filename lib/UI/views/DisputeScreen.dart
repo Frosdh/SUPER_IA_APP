@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:http/http.dart' as http;
 
 /// Pantalla para solicitar un reembolso o abrir una disputa de cobro.

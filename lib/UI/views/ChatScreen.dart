@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Models/ChatMessage.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
-import 'package:fu_uber/Core/Services/ChatService.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Models/ChatMessage.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Preferences/DriverPrefs.dart';
+import 'package:super_ia/Core/Services/ChatService.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatScreen extends StatefulWidget {

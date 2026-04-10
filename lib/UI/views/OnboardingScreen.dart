@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/UI/views/WelcomeScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/UI/views/WelcomeScreen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   static const String route = '/onboarding';
@@ -20,28 +20,28 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
   final List<OnboardingData> _pages = [
     OnboardingData(
-      icon: Icons.location_on_rounded,
-      iconColor: Color(0xFFA78BFA),
-      title: 'Tu destino,\nen segundos',
+      icon: Icons.app_registration_rounded,
+      iconColor: Color(0xFF003D7A),
+      title: 'Tu registro\nen segundos',
       subtitle:
-          'Ingresa a donde quieres ir y encuentra conductores cerca de ti en tiempo real.',
-      gradientColors: [Color(0xFF1A0A3D), Color(0xFF0D0D1A)],
+          'Completa tu perfil rápidamente y comienza a gestionar tus actividades comerciales en tiempo real.',
+      gradientColors: [Color(0xFFFFC800), Color(0xFFFFD700)],
     ),
     OnboardingData(
       icon: Icons.security_rounded,
-      iconColor: Color(0xFF60A5FA),
+      iconColor: Color(0xFF003D7A),
       title: 'Seguro y\nconfiable',
       subtitle:
-          'Todos nuestros conductores estan verificados. Comparte tu viaje en tiempo real con familiares.',
-      gradientColors: [Color(0xFF0A1A3D), Color(0xFF0D0D1A)],
+          'Todos nuestros datos se guardan de forma segura y eficiente a tiempo real.',
+      gradientColors: [Color(0xFFFFD700), Color(0xFFFFC800)],
     ),
     OnboardingData(
-      icon: Icons.payments_rounded,
-      iconColor: Color(0xFF818CF8),
-      title: 'Paga como\nprefieras',
+      icon: Icons.assignment_rounded,
+      iconColor: Color(0xFF003D7A),
+      title: 'Encuesta como\nprefieras',
       subtitle:
-          'Efectivo o transferencia bancaria. Ves el precio antes de confirmar.',
-      gradientColors: [Color(0xFF0D0A3D), Color(0xFF0D0D1A)],
+          'Escoges tareas y sectores que desees. Realiza encuestas comerciales y crediticias donde quieras.',
+      gradientColors: [Color(0xFFFFC800), Color(0xFFFFD700)],
     ),
   ];
 
@@ -160,12 +160,19 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                             width: double.infinity,
                             height: 56,
                             decoration: BoxDecoration(
-                              gradient: ConstantColors.buttonGradient,
+                              gradient: const LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  Color(0xFF003D7A),
+                                  Color(0xFF1E5A96),
+                                ],
+                              ),
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
                                   color:
-                                      ConstantColors.primaryViolet.withOpacity(0.4),
+                                      const Color(0xFF003D7A).withOpacity(0.4),
                                   blurRadius: 20,
                                   offset: Offset(0, 8),
                                 ),
@@ -269,7 +276,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                 Text(
                   data.subtitle,
                   style: TextStyle(
-                    color: ConstantColors.textGrey,
+                    color: Colors.black87,
                     fontSize: compactHeight ? 15 : 16,
                     height: 1.6,
                     fontWeight: FontWeight.w400,

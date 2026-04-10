@@ -1,5 +1,5 @@
 import 'package:flutter/cupertino.dart';
-import 'package:fu_uber/Core/Repository/Repository.dart';
+import 'package:super_ia/Core/Repository/Repository.dart';
 
 class VerificationModel extends ChangeNotifier {
   final Repository _repository = Repository();

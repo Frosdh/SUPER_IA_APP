@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Models/DriverRegistrationData.dart';
-import 'package:fu_uber/Core/Services/OsmService.dart';
-import 'package:fu_uber/UI/views/DriverStep2Screen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Models/DriverRegistrationData.dart';
+import 'package:super_ia/Core/Services/OsmService.dart';
+import 'package:super_ia/UI/views/DriverStep2Screen.dart';
 
 class DriverStep1Screen extends StatefulWidget {
   static const String route = '/driver_step1';

@@ -1,118 +1,178 @@
 <?php
-// ============================================================
-// admin/mapa_coop.php — Mapa filtrado por cooperativa
-// ============================================================
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['secretary_logged_in']) || $_SESSION['secretary_logged_in'] !== true) {
-    header('Location: login_selector.php');
+$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isSuperAdmin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
+
+if (!$isAdmin && !$isSuperAdmin) {
+    header('Location: login.php?role=admin');
     exit;
 }
 
-$coopId = $_SESSION['cooperativa_id'];
-$stmt = $pdo->prepare("SELECT nombre FROM cooperativas WHERE id = ?");
-$stmt->execute([$coopId]);
-$coopName = $stmt->fetchColumn() ?? 'Mi Cooperativa';
+// Obtener cooperativas
+$cooperativas = $pdo->query("
+    SELECT id, nombre FROM cooperativa
+    ORDER BY nombre ASC
+")->fetchAll(PDO::FETCH_ASSOC);
 
-$currentPage = 'mapa';
+$currentPage = 'mapa_coop';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove — Mapa <?= htmlspecialchars($coopName) ?></title>
+    <title>Mapa de Cooperativas - COAC Finance Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <style>
-        .map-wrapper { display:flex; flex-direction:column; height:100vh; padding:20px; gap:14px; background: var(--bg); color: var(--text); }
-        .map-header { display:flex; justify-content:space-between; align-items:center; flex-shrink:0; }
-        .stats-row { display:flex; gap:12px; flex-shrink:0; }
-        .stat-pill { background:var(--card); border-radius:10px; padding:10px 18px; display:flex; align-items:center; gap:10px; box-shadow:var(--shadow-sm); font-size:13px; color: var(--text); }
-        .dot { width:10px; height:10px; border-radius:50%; }
-        .dot-libre { background:var(--accent); }
-        .dot-ocupado { background:var(--warning); }
-        #mapa { width:100%; height:calc(100vh - 220px); border-radius:14px; box-shadow:var(--shadow); }
-        .status-bar { background:var(--card); border-radius:10px; padding:8px 16px; font-size:12px; color:var(--text-muted); display:flex; align-items:center; gap:16px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; display: flex; height: 100vh; }
+        .sidebar {
+            width: 230px;
+            background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%);
+            color: white;
+            padding: 20px 0;
+            overflow-y: auto;
+            position: fixed;
+            height: 100vh;
+            left: 0;
+            top: 0;
+        }
+        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
+        .sidebar-brand i { margin-right: 10px; color: #7c3aed; }
+        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
+        .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
+        .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
+        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; }
+        .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
+        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .user-info { display: flex; align-items: center; gap: 15px; }
+        .btn-logout { background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; }
+        .btn-logout:hover { background: rgba(255, 255, 255, 0.3); }
+        .content-area { flex: 1; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; }
+        #map { width: 100%; flex: 1; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+        .page-header { margin-bottom: 20px; }
+        .page-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #1f2937; }
+        .filter-section { display: flex; gap: 15px; margin-bottom: 20px; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+        .filter-section select { padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
     </style>
 </head>
 <body>
-<div class="container-fluid p-0">
-    <div class="row g-0">
-        <?php 
-        // Sidebar personalizado para secretaria (puedes incluir el mismo si maneja el rol)
-        include '_sidebar.php'; 
-        ?>
-        <div class="col-md-10">
-            <div class="map-wrapper">
-                <div class="map-header">
-                    <div>
-                        <h4 class="fw-bold mb-0">Mapa de Flota: <?= htmlspecialchars($coopName) ?></h4>
-                        <small class="text-muted">Ubicación en vivo de tus conductores</small>
-                    </div>
-                    <button class="btn btn-sm btn-outline-primary" onclick="cargarConductores()">
-                        <i class="fas fa-sync-alt me-1"></i>Refrescar
-                    </button>
-                </div>
 
-                <div class="stats-row">
-                    <div class="stat-pill">
-                        <div class="dot dot-libre"></div>
-                        <div><strong id="cntLibre">0</strong><br><span>Libres</span></div>
-                    </div>
-                    <div class="stat-pill">
-                        <div class="dot dot-ocupado"></div>
-                        <div><strong id="cntOcupado">0</strong><br><span>Ocupados</span></div>
-                    </div>
-                </div>
-
-                <div id="mapa"></div>
-
-                <div class="status-bar">
-                    <span><i class="fas fa-satellite-dish me-2"></i> Actualizando cada 10 seg.</span>
-                </div>
-            </div>
-        </div>
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <div class="sidebar-brand">
+        <i class="fas fa-chart-pie"></i> COAC Finance
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Principal</div>
+        <a href="index.php" class="sidebar-link">
+            <i class="fas fa-home"></i> Dashboard
+        </a>
+        <a href="mapa_vivo.php" class="sidebar-link">
+            <i class="fas fa-map"></i> Mapa en Vivo
+        </a>
+        <a href="mapa_coop.php" class="sidebar-link active">
+            <i class="fas fa-sitemap"></i> Mapa Cooperativas
+        </a>
+        <a href="mapa_calor.php" class="sidebar-link">
+            <i class="fas fa-fire"></i> Mapa de Calor
+        </a>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Gestión</div>
+        <a href="usuarios.php" class="sidebar-link">
+            <i class="fas fa-users"></i> Usuarios
+        </a>
+        <a href="clientes.php" class="sidebar-link">
+            <i class="fas fa-briefcase"></i> Clientes
+        </a>
+        <a href="operaciones.php" class="sidebar-link">
+            <i class="fas fa-handshake"></i> Operaciones
+        </a>
+        <a href="alertas.php" class="sidebar-link">
+            <i class="fas fa-bell"></i> Alertas
+        </a>
+    </div>
+    
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Configuración</div>
+        <a href="#" class="sidebar-link">
+            <i class="fas fa-cog"></i> Configuración
+        </a>
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- MAIN CONTENT -->
+<div class="main-content">
+    <!-- NAVBAR -->
+    <div class="navbar-custom">
+        <h2>🎯 COAC Finance Admin</h2>
+        <div class="user-info">
+            <div>
+                <strong><?php echo htmlspecialchars($_SESSION['admin_nombre']); ?></strong><br>
+                <small><?php echo htmlspecialchars($_SESSION['admin_rol']); ?></small>
+            </div>
+            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
+        </div>
+    </div>
+    
+    <!-- CONTENT -->
+    <div class="content-area">
+        <div class="page-header">
+            <h1><i class="fas fa-sitemap me-2"></i>Mapa de Cooperativas</h1>
+            <p class="text-muted mt-2">Visualización geográfica de todas las cooperativas</p>
+        </div>
+
+        <!-- FILTROS -->
+        <div class="filter-section">
+            <select id="filterCoop" class="form-control" style="width: auto;">
+                <option value="">-- Todas las Cooperativas --</option>
+                <?php foreach ($cooperativas as $coop): ?>
+                    <option value="<?php echo $coop['id']; ?>"><?php echo htmlspecialchars($coop['nombre']); ?></option>
+                <?php endforeach; ?>
+            </select>
+            <button class="btn btn-primary btn-sm" onclick="location.reload()">
+                <i class="fas fa-sync-alt me-2"></i>Refrescar
+            </button>
+        </div>
+
+        <div id="map"></div>
+    </div>
+</div>
+
 <script>
-    const mapa = L.map('mapa').setView([-2.9001285, -79.0058965], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa);
-    let marcadores = {};
+    // Inicializar mapa
+    const map = L.map('map').setView([-16.3895, -63.1666], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19
+    }).addTo(map);
 
-    function cargarConductores() {
-        fetch('api_coop_mapa.php')
-            .then(r => r.json())
-            .then(data => {
-                if (data.status !== 'ok') return;
-                
-                // Limpiar viejos
-                const ids = data.conductores.map(c => String(c.id));
-                Object.keys(marcadores).forEach(id => {
-                    if (!ids.includes(id)) { mapa.removeLayer(marcadores[id]); delete marcadores[id]; }
-                });
+    // Agregar marcadores de cooperativas
+    const cooperativas = [
+        { lat: -16.3895, lng: -63.1666, nombre: 'COAC Central', id: 1 },
+        { lat: -16.3900, lng: -63.1670, nombre: 'Cooperativa Norte', id: 2 },
+        { lat: -16.3890, lng: -63.1660, nombre: 'Cooperativa Sur', id: 3 }
+    ];
 
-                data.conductores.forEach(c => {
-                    const lat = parseFloat(c.latitud), lng = parseFloat(c.longitud);
-                    if (marcadores[c.id]) {
-                        marcadores[c.id].setLatLng([lat, lng]);
-                    } else {
-                        marcadores[c.id] = L.marker([lat, lng]).addTo(mapa)
-                            .bindPopup(`<b>${c.nombre}</b><br>${c.estado}`);
-                    }
-                });
-
-                document.getElementById('cntLibre').innerText = data.totales.libre;
-                document.getElementById('cntOcupado').innerText = data.totales.ocupado;
-            });
-    }
-
-    cargarConductores();
-    setInterval(cargarConductores, 10000);
+    cooperativas.forEach(coop => {
+        L.marker([coop.lat, coop.lng])
+            .bindPopup(`<strong>${coop.nombre}</strong><br>ID: ${coop.id}`)
+            .addTo(map);
+    });
 </script>
+
 </body>
 </html>

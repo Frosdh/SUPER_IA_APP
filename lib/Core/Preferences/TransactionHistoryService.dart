@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:fu_uber/Core/Models/TransactionModel.dart';
+import 'package:super_ia/Core/Models/TransactionModel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Servicio que guarda y recupera el historial de transacciones

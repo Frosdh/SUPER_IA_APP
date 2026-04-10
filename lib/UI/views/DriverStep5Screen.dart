@@ -1,9 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Models/DriverRegistrationData.dart';
-import 'package:fu_uber/UI/views/DriverStep6Screen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Models/DriverRegistrationData.dart';
+import 'package:super_ia/UI/views/DriverStep6Screen.dart';
 
 class DriverStep5Screen extends StatefulWidget {
   final DriverRegistrationData data;

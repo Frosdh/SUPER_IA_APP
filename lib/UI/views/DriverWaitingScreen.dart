@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Networking/ApiProvider.dart';
-import 'package:fu_uber/UI/views/DriverHomeScreen.dart';
-import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Networking/ApiProvider.dart';
+import 'package:super_ia/UI/views/DriverHomeScreen.dart';
+import 'package:super_ia/UI/views/DriverLoginScreen.dart';
 
 class DriverWaitingScreen extends StatefulWidget {
   static const String route = '/driver_waiting';

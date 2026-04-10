@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/UI/views/OsmMapScreen.dart';
-import 'package:fu_uber/UI/views/RegisterScreen.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/ProviderModels/VerificationModel.dart';
+import 'package:super_ia/UI/views/OsmMapScreen.dart';
+import 'package:super_ia/UI/views/RegisterScreen.dart';
 import 'package:provider/provider.dart';
 
 class OtpBottomSheet extends StatefulWidget {
@@ -51,6 +51,19 @@ class _OtpBottomSheetState extends State<OtpBottomSheet> {
         userResponse['exists'] == true;
 
     if (exists) {
+      final activoRaw = userResponse['activo'];
+      final activo = activoRaw == 1 || activoRaw == true;
+      if (!activo) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Tu cuenta está pendiente de aprobación. Inténtalo más tarde.',
+            ),
+          ),
+        );
+        return;
+      }
+
       await AuthPrefs.saveUserSession(
         telefono: userResponse['telefono'] ?? '',
         nombre: userResponse['nombre'] ?? '',

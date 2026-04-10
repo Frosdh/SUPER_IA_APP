@@ -16,7 +16,7 @@ if (empty($email)) {
     exit;
 }
 
-$stmt = $conn->prepare("SELECT id, nombre, email, telefono FROM usuarios WHERE email = ? LIMIT 1");
+$stmt = $conn->prepare("SELECT id, nombre, email, telefono, activo FROM usuarios WHERE email = ? LIMIT 1");
 $stmt->bind_param("s", $email);
 $stmt->execute();
 $result = $stmt->get_result();
@@ -28,7 +28,8 @@ if ($row = $result->fetch_assoc()) {
         "id"       => intval($row["id"]),
         "nombre"   => $row["nombre"] ?? "",
         "email"    => $row["email"] ?? "",
-        "telefono" => $row["telefono"] ?? ""
+        "telefono" => $row["telefono"] ?? "",
+        "activo"   => isset($row["activo"]) ? intval($row["activo"]) : 1
     ]);
 } else {
     echo json_encode([

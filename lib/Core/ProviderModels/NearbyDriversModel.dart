@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
-import 'package:fu_uber/Core/Models/Drivers.dart';
-import 'package:fu_uber/Core/Repository/Repository.dart';
+import 'package:super_ia/Core/Models/Drivers.dart';
+import 'package:super_ia/Core/Repository/Repository.dart';
 
 class NearbyDriversModel extends ChangeNotifier {
   List<Driver>? nearbyDrivers;

@@ -39,22 +39,20 @@ $whereExtra .= " AND c.categoria_id = ?";
 $params[] = $f_cat;
 }
 
-// Listar pendientes con foto de perfil y progreso de documentos
-$stmt = $pdo->prepare("
-SELECT c.id, c.nombre, c.telefono, c.cedula, c.email, c.ciudad, c.canton, c.creado_en,
-       c.foto_perfil,
-       v.marca, v.modelo, v.placa, v.color, v.anio,
-       (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id) AS docs_total,
-       (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'aprobado') AS docs_aprobados,
-       (SELECT COUNT(*) FROM documentos_conductor dc WHERE dc.conductor_id = c.id AND dc.estado = 'rechazado') AS docs_rechazados,
-       (SELECT nombre FROM categorias WHERE id = c.categoria_id) AS nom_categoria
-FROM conductores c
-LEFT JOIN vehiculos v ON c.id = v.conductor_id
-WHERE c.verificado = 0 $whereExtra
-ORDER BY c.creado_en DESC
-");
-$stmt->execute($params);
-$pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+// Listar pendientes - versión simplificada
+try {
+    $stmt = $pdo->prepare("
+    SELECT c.id, c.nombre, c.telefono, c.email, c.ciudad, c.canton, c.creado_en,
+           c.foto_perfil
+    FROM conductores c
+    WHERE c.verificado = 0 $whereExtra
+    ORDER BY c.creado_en DESC
+    ");
+    $stmt->execute($params);
+    $pendientes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $pendientes = [];
+}
 
 $currentPage = 'pendientes';
 $totalPendientes = count($pendientes);

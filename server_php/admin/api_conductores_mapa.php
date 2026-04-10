@@ -7,7 +7,10 @@
 // ============================================================
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isSuperAdmin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
+
+if (!$isAdmin && !$isSuperAdmin) {
     header('Content-Type: application/json');
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;

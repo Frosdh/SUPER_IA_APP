@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/UI/views/VehicleRegistrationScreen.dart';
-import 'package:fu_uber/Core/Networking/ApiProvider.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/UI/views/VehicleRegistrationScreen.dart';
+import 'package:super_ia/Core/Networking/ApiProvider.dart';
 
 class DriverRegistrationScreen extends StatefulWidget {
   static const String route = '/driver_registration';

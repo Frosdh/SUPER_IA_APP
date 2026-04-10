@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/ProviderModels/VerificationModel.dart';
-import 'package:fu_uber/UI/widgets/OtpBottomSheet.dart';
-import 'package:provider/provider.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Networking/ApiProvider.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/UI/views/LocationPermissionScreen.dart';
 
 class SignInPage extends StatefulWidget {
   static const String route = '/signin';
@@ -15,43 +15,63 @@ class SignInPage extends StatefulWidget {
 class _SignInPageState extends State<SignInPage> {
   final GlobalKey<FormState> _emailFormKey = GlobalKey<FormState>();
   final TextEditingController emailTextController = TextEditingController();
+  final TextEditingController passwordTextController = TextEditingController();
+
+  bool _loading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
     emailTextController.dispose();
+    passwordTextController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleVerification(
-    BuildContext context,
-    VerificationModel verificationModel,
-  ) async {
+  Future<void> _handleLogin(BuildContext context) async {
     if (!(_emailFormKey.currentState?.validate() ?? false)) {
       return;
     }
 
-    verificationModel.setEmail(emailTextController.text);
-    final response = await verificationModel.handleEmailVerification();
-
-    if (!mounted) return;
-
-    if (response == 1) {
-      showModalBottomSheet(
-        isScrollControlled: true,
-        context: context,
-        backgroundColor: Colors.transparent,
-        builder: (_) => ChangeNotifierProvider<VerificationModel>.value(
-          value: verificationModel,
-          child: OtpBottomSheet(),
-        ),
+    setState(() => _loading = true);
+    try {
+      final api = ApiProvider();
+      final res = await api.loginAsesor(
+        email: emailTextController.text.trim(),
+        password: passwordTextController.text,
       );
-    } else {
-      final errorMessage = verificationModel.otpErrorMessage?.isNotEmpty == true
-          ? verificationModel.otpErrorMessage
-          : 'No se pudo enviar el codigo al correo';
+
+      if (!mounted) return;
+
+      if ((res['status'] ?? '') != 'success') {
+        final msg = (res['message'] ?? 'No se pudo iniciar sesión').toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+        return;
+      }
+
+      final user = (res['user'] is Map) ? (res['user'] as Map).cast<String, dynamic>() : <String, dynamic>{};
+      await AuthPrefs.saveUserSession(
+        nombre: (user['nombre'] ?? '').toString(),
+        telefono: (user['telefono'] ?? '').toString(),
+        email: (user['email'] ?? emailTextController.text.trim()).toString(),
+        usuarioId: (user['id'] ?? '').toString(),
+      );
+
+      final asesorId = (user['asesor_id'] ?? '').toString();
+      if (asesorId.isNotEmpty) {
+        await AuthPrefs.saveAsesorId(asesorId);
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, LocationPermissionScreen.route);
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
+        SnackBar(content: Text('Error de conexión: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -98,57 +118,55 @@ class _SignInPageState extends State<SignInPage> {
   @override
   Widget build(BuildContext context) {
     final Size mediaQuery = MediaQuery.of(context).size;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    final isRegisterMode = args is Map && args['mode'] == 'register';
 
-    return ChangeNotifierProvider<VerificationModel>(
-      create: (_) => VerificationModel(),
-      child: Scaffold(
-        backgroundColor: ConstantColors.backgroundDark,
-        body: Consumer<VerificationModel>(
-          builder: (_, verificationModel, __) {
-            return Stack(
-              children: <Widget>[
-                Container(color: ConstantColors.backgroundDark),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: mediaQuery.height * 0.42,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: <Color>[
-                          Color(0xFF0F0C29),
-                          Color(0xFF302B63),
-                          Color(0xFF24243E),
-                        ],
-                      ),
-                    ),
-                  ),
+    return Scaffold(
+      backgroundColor: ConstantColors.warning,
+      body: Stack(
+        children: <Widget>[
+          Container(color: ConstantColors.warning),
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: mediaQuery.height * 0.42,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: <Color>[
+                    ConstantColors.warning.withOpacity(0.28),
+                    ConstantColors.primaryBlue.withOpacity(0.22),
+                    ConstantColors.warning,
+                  ],
                 ),
-                _buildHeroOrb(
-                  size: mediaQuery.width * 0.60,
-                  top: -mediaQuery.height * 0.04,
-                  right: -mediaQuery.width * 0.18,
-                  opacity: 0.08,
-                ),
-                _buildHeroOrb(
-                  size: mediaQuery.width * 0.34,
-                  top: mediaQuery.height * 0.16,
-                  left: -mediaQuery.width * 0.10,
-                  opacity: 0.10,
-                ),
-                SafeArea(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
-                    child: Form(
-                      key: _emailFormKey,
-                      child: Builder(
-                        builder: (formContext) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
+              ),
+            ),
+          ),
+          _buildHeroOrb(
+            size: mediaQuery.width * 0.60,
+            top: -mediaQuery.height * 0.04,
+            right: -mediaQuery.width * 0.18,
+            opacity: 0.08,
+          ),
+          _buildHeroOrb(
+            size: mediaQuery.width * 0.34,
+            top: mediaQuery.height * 0.16,
+            left: -mediaQuery.width * 0.10,
+            opacity: 0.10,
+          ),
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
+              child: Form(
+                key: _emailFormKey,
+                child: Builder(
+                  builder: (formContext) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
                               Row(
                                 children: <Widget>[
                                   IconButton(
@@ -196,7 +214,9 @@ class _SignInPageState extends State<SignInPage> {
                                       ),
                                       SizedBox(height: 18),
                                       Text(
-                                        'Hola de nuevo',
+                                        isRegisterMode
+                                            ? 'Crea tu cuenta (Asesor)'
+                                            : 'Hola de nuevo',
                                         style: TextStyle(
                                           color: ConstantColors.textGrey,
                                           fontSize: 14,
@@ -204,7 +224,9 @@ class _SignInPageState extends State<SignInPage> {
                                       ),
                                       SizedBox(height: 6),
                                       Text(
-                                        'Bienvenido a GeoMove',
+                                        isRegisterMode
+                                            ? 'Crear usuario en Super_IA'
+                                            : 'Bienvenido a Super_IA',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: Colors.white,
@@ -215,7 +237,9 @@ class _SignInPageState extends State<SignInPage> {
                                       ),
                                       SizedBox(height: 12),
                                       Text(
-                                        'Ingresa con tu correo y recibe un codigo para entrar de forma rapida y segura.',
+                                        isRegisterMode
+                                            ? 'Verifica tu correo y completa el registro. Tu cuenta quedará pendiente de aprobación.'
+                                            : 'Ingresa con tu correo y tu clave para acceder a tu panel con mapa.',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: Colors.white.withOpacity(0.70),
@@ -239,7 +263,7 @@ class _SignInPageState extends State<SignInPage> {
                                   22,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.24),
+                                  color: ConstantColors.backgroundDark.withOpacity(0.24),
                                   borderRadius: BorderRadius.circular(28),
                                   border: Border.all(
                                     color: ConstantColors.borderColor
@@ -250,7 +274,7 @@ class _SignInPageState extends State<SignInPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
                                     Text(
-                                      'Acceso por correo',
+                                      'Iniciar sesión',
                                       style: TextStyle(
                                         color: Colors.white,
                                         fontSize: 18,
@@ -259,7 +283,7 @@ class _SignInPageState extends State<SignInPage> {
                                     ),
                                     SizedBox(height: 6),
                                     Text(
-                                      'Usaremos un codigo temporal para validar tu ingreso.',
+                                      'Correo + clave. Si ya estás aprobado, entrarás directo al mapa.',
                                       style: TextStyle(
                                         color: ConstantColors.textGrey,
                                         fontSize: 13,
@@ -279,7 +303,7 @@ class _SignInPageState extends State<SignInPage> {
                                             height: 42,
                                             decoration: BoxDecoration(
                                               gradient:
-                                                  ConstantColors.buttonGradient,
+                                                  ConstantColors.yellowBlueGradient,
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
@@ -329,20 +353,84 @@ class _SignInPageState extends State<SignInPage> {
                                     ),
                                     SizedBox(height: 14),
                                     _buildInfoCard(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 14,
+                                        vertical: 12,
+                                      ),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Container(
+                                            width: 42,
+                                            height: 42,
+                                            decoration: BoxDecoration(
+                                              gradient: ConstantColors.yellowBlueGradient,
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: Icon(
+                                              Icons.lock_outline,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                          SizedBox(width: 12),
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller: passwordTextController,
+                                              obscureText: _obscurePassword,
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 15,
+                                              ),
+                                              decoration: InputDecoration(
+                                                hintText: 'Clave',
+                                                hintStyle: TextStyle(
+                                                  color: ConstantColors.textSubtle,
+                                                ),
+                                                border: InputBorder.none,
+                                                isDense: true,
+                                                suffixIcon: IconButton(
+                                                  icon: Icon(
+                                                    _obscurePassword
+                                                        ? Icons.visibility_off
+                                                        : Icons.visibility,
+                                                    color: ConstantColors.textSubtle,
+                                                    size: 20,
+                                                  ),
+                                                  onPressed: () => setState(
+                                                    () => _obscurePassword = !_obscurePassword,
+                                                  ),
+                                                ),
+                                              ),
+                                              validator: (value) {
+                                                final pass = value ?? '';
+                                                if (pass.trim().isEmpty) {
+                                                  return 'Ingresa tu clave';
+                                                }
+                                                if (pass.length < 4) {
+                                                  return 'Clave demasiado corta';
+                                                }
+                                                return null;
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    SizedBox(height: 14),
+                                    _buildInfoCard(
                                       padding: const EdgeInsets.all(14),
                                       child: Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: <Widget>[
                                           Icon(
-                                            Icons.phone_iphone_outlined,
+                                            Icons.map_outlined,
                                             size: 18,
                                             color: ConstantColors.primaryBlue,
                                           ),
                                           SizedBox(width: 10),
                                           Expanded(
                                             child: Text(
-                                              'Tu telefono se registrara despues en tu perfil, pero el acceso principal se validara con correo.',
+                                              'Después de iniciar sesión, te llevaremos al mapa para empezar a gestionar tu trabajo.',
                                               style: TextStyle(
                                                 color: ConstantColors.textGrey,
                                                 fontSize: 12.8,
@@ -359,12 +447,12 @@ class _SignInPageState extends State<SignInPage> {
                                       height: 54,
                                       child: DecoratedBox(
                                         decoration: BoxDecoration(
-                                          gradient: ConstantColors.buttonGradient,
+                                          gradient: ConstantColors.yellowBlueGradient,
                                           borderRadius:
                                               BorderRadius.circular(16),
                                           boxShadow: <BoxShadow>[
                                             BoxShadow(
-                                              color: ConstantColors.primaryViolet
+                                              color: ConstantColors.primaryBlue
                                                   .withOpacity(0.28),
                                               blurRadius: 22,
                                               offset: Offset(0, 10),
@@ -380,15 +468,10 @@ class _SignInPageState extends State<SignInPage> {
                                                   BorderRadius.circular(16),
                                             ),
                                           ),
-                                          onPressed: verificationModel
-                                                  .showCircularLoader
+                                          onPressed: _loading
                                               ? null
-                                              : () => _handleVerification(
-                                                    formContext,
-                                                    verificationModel,
-                                                  ),
-                                          child: verificationModel
-                                                  .showCircularLoader
+                                              : () => _handleLogin(formContext),
+                                          child: _loading
                                               ? SizedBox(
                                                   width: 22,
                                                   height: 22,
@@ -407,13 +490,13 @@ class _SignInPageState extends State<SignInPage> {
                                                       MainAxisAlignment.center,
                                                   children: <Widget>[
                                                     Icon(
-                                                      Icons.mail_outline,
+                                                      Icons.login,
                                                       color: Colors.white,
                                                       size: 18,
                                                     ),
                                                     SizedBox(width: 8),
                                                     Text(
-                                                      'Recibir codigo por correo',
+                                                      'Ingresar',
                                                       style: TextStyle(
                                                         color: Colors.white,
                                                         fontSize: 15,
@@ -468,13 +551,13 @@ class _SignInPageState extends State<SignInPage> {
                                     Row(
                                       children: <Widget>[
                                         Icon(
-                                          Icons.verified_user_outlined,
+                                          Icons.lock_open_outlined,
                                           color: ConstantColors.success,
                                           size: 18,
                                         ),
                                         SizedBox(width: 8),
                                         Text(
-                                          'Ingreso sin contrasena',
+                                          'Acceso por credenciales',
                                           style: TextStyle(
                                             color: Colors.white,
                                             fontWeight: FontWeight.w700,
@@ -484,7 +567,7 @@ class _SignInPageState extends State<SignInPage> {
                                     ),
                                     SizedBox(height: 8),
                                     Text(
-                                      'Solo necesitas tu correo y el codigo temporal. El registro se completa despues con tus datos personales.',
+                                      'Tu cuenta debe estar aprobada por el supervisor para poder entrar. Si está pendiente o rechazada, verás un mensaje.',
                                       style: TextStyle(
                                         color: ConstantColors.textGrey,
                                         fontSize: 12.8,
@@ -505,17 +588,14 @@ class _SignInPageState extends State<SignInPage> {
                                   ),
                                 ),
                               ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
+                      ],
+                    );
+                  },
                 ),
-              ],
-            );
-          },
-        ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

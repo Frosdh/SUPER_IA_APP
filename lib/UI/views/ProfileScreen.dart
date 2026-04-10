@@ -2,17 +2,17 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/ProviderModels/UserDetailsModel.dart';
-import 'package:fu_uber/UI/views/EditProfileScreen.dart';
-import 'package:fu_uber/UI/views/EmergencyContactsScreen.dart';
-import 'package:fu_uber/UI/views/FavoritePlacesScreen.dart';
-import 'package:fu_uber/UI/views/HelpFaqScreen.dart';
-import 'package:fu_uber/UI/views/RideHistoryScreen.dart';
-import 'package:fu_uber/UI/views/PaymentHistoryScreen.dart';
-import 'package:fu_uber/UI/views/WalletScreen.dart';
-import 'package:fu_uber/UI/views/SignIn.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/ProviderModels/UserDetailsModel.dart';
+import 'package:super_ia/UI/views/EditProfileScreen.dart';
+import 'package:super_ia/UI/views/EmergencyContactsScreen.dart';
+import 'package:super_ia/UI/views/FavoritePlacesScreen.dart';
+import 'package:super_ia/UI/views/HelpFaqScreen.dart';
+import 'package:super_ia/UI/views/RideHistoryScreen.dart';
+import 'package:super_ia/UI/views/PaymentHistoryScreen.dart';
+import 'package:super_ia/UI/views/WalletScreen.dart';
+import 'package:super_ia/UI/views/SignIn.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 

@@ -1,8 +1,8 @@
 import 'package:flutter/cupertino.dart';
-import 'package:fu_uber/Core/Models/UserDetails.dart';
-import 'package:fu_uber/Core/Models/UserPlaces.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/Repository/Repository.dart';
+import 'package:super_ia/Core/Models/UserDetails.dart';
+import 'package:super_ia/Core/Models/UserPlaces.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Repository/Repository.dart';
 
 class UserDetailsModel extends ChangeNotifier {
   late String uuid;

@@ -5,8 +5,9 @@ import 'dart:isolate';
 
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:fu_uber/Core/Constants/Constants.dart';
-import 'package:fu_uber/Core/Preferences/DriverPrefs.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Preferences/DriverPrefs.dart';
 import 'package:http/http.dart' as http;
 
 // El manejador de la tarea debe ser una función de nivel superior o un método estático.
@@ -43,26 +44,46 @@ class MyTaskHandler extends TaskHandler {
   Future<void> _sendLocation() async {
     try {
       final isDriver = await DriverPrefs.isDriverLoggedIn();
-      if (!isDriver) return;
+      final asesorIdRaw = await AuthPrefs.getAsesorId();
+      final int asesorId = int.tryParse(asesorIdRaw) ?? 0;
 
-      final int id = await DriverPrefs.getDriverId();
-      if (id <= 0) return;
+      // No enviar si no hay rol rastreable.
+      if (!isDriver && asesorId <= 0) return;
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
 
+      if (isDriver) {
+        final int id = await DriverPrefs.getDriverId();
+        if (id <= 0) return;
+
+        final response = await http.post(
+          Uri.parse('${Constants.apiBaseUrl}/actualizar_ubicacion_conductor.php'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+          body: {
+            'conductor_id': id.toString(),
+            'latitud': position.latitude.toString(),
+            'longitud': position.longitude.toString(),
+          },
+        ).timeout(const Duration(seconds: 8));
+
+        log('>>> [BG_SERVICE] Ubicación CONDUCTOR enviada: ${response.statusCode}');
+        return;
+      }
+
       final response = await http.post(
-        Uri.parse('${Constants.apiBaseUrl}/actualizar_ubicacion_conductor.php'),
+        Uri.parse('${Constants.apiBaseUrl}/actualizar_ubicacion_asesor.php'),
         headers: {'ngrok-skip-browser-warning': 'true'},
         body: {
-          'conductor_id': id.toString(),
+          'asesor_id': asesorId.toString(),
           'latitud': position.latitude.toString(),
           'longitud': position.longitude.toString(),
+          'precision_m': position.accuracy.toString(),
         },
       ).timeout(const Duration(seconds: 8));
 
-      log('>>> [BG_SERVICE] Ubicación enviada: ${response.statusCode}');
+      log('>>> [BG_SERVICE] Ubicación ASESOR enviada: ${response.statusCode}');
     } catch (e) {
       log('>>> [BG_SERVICE] Error enviando ubicación: $e');
     }
@@ -103,8 +124,15 @@ class BackgroundLocationService {
   static Future<void> start() async {
     if (await FlutterForegroundTask.isRunningService) return;
 
+    final isDriver = await DriverPrefs.isDriverLoggedIn();
+    final asesorIdRaw = await AuthPrefs.getAsesorId();
+    final asesorId = int.tryParse(asesorIdRaw) ?? 0;
+    if (!isDriver && asesorId <= 0) {
+      return;
+    }
+
     final serviceRequestResult = await FlutterForegroundTask.startService(
-      notificationTitle: 'GeoMove Conductor',
+      notificationTitle: isDriver ? 'GeoMove Conductor' : 'GeoMove Asesor',
       notificationText: 'Buscando señal GPS...',
       callback: startCallback,
     );

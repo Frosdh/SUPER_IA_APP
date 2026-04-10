@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/FavoritePlacesService.dart';
-import 'package:fu_uber/Core/Services/OsmService.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/FavoritePlacesService.dart';
+import 'package:super_ia/Core/Services/OsmService.dart';
 
 class FavoritePlacesScreen extends StatefulWidget {
   static const String route = '/favorite_places';

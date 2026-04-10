@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Models/TransactionModel.dart';
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
-import 'package:fu_uber/Core/Preferences/PaymentPrefs.dart';
-import 'package:fu_uber/Core/Preferences/TransactionHistoryService.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Models/TransactionModel.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Preferences/PaymentPrefs.dart';
+import 'package:super_ia/Core/Preferences/TransactionHistoryService.dart';
 
 /// Pantalla de billetera virtual / créditos del pasajero.
 /// Muestra el saldo disponible, el historial de créditos usados

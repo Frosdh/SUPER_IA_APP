@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/UI/views/DriverLoginScreen.dart';
-import 'package:fu_uber/UI/views/SignIn.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/UI/views/SignIn.dart';
+import 'package:super_ia/UI/views/AsesorRegistrationScreen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   static const String route = '/welcome';
@@ -74,7 +74,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
-      backgroundColor: ConstantColors.backgroundDark,
+      backgroundColor: const Color(0xFFFFC800),
       body: Stack(
         children: [
           // ── Fondo degradado ─────────────────────────────────
@@ -84,9 +84,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Color(0xFF0F0C29),
-                  Color(0xFF1A1535),
-                  Color(0xFF0D0D1A),
+                  Color(0xFFFFC800),
+                  Color(0xFFFFD700),
+                  Color(0xFFFFC800),
                 ],
               ),
             ),
@@ -101,7 +101,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               height: size.width * 0.55,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: ConstantColors.primaryViolet.withOpacity(0.07),
+                color: const Color(0xFF003D7A).withOpacity(0.08),
               ),
             ),
           ),
@@ -115,7 +115,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               height: size.width * 0.45,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: ConstantColors.primaryBlue.withOpacity(0.07),
+                color: const Color(0xFF003D7A).withOpacity(0.08),
               ),
             ),
           ),
@@ -145,11 +145,18 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           width: 90,
                           height: 90,
                           decoration: BoxDecoration(
-                            gradient: ConstantColors.buttonGradient,
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                Color(0xFF003D7A),
+                                Color(0xFF1E5A96),
+                              ],
+                            ),
                             borderRadius: BorderRadius.circular(26),
                             boxShadow: [
                               BoxShadow(
-                                color: ConstantColors.primaryViolet
+                                color: const Color(0xFF003D7A)
                                     .withOpacity(0.35),
                                 blurRadius: 28,
                                 offset: const Offset(0, 12),
@@ -165,25 +172,20 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           ),
                         ),
                         const SizedBox(height: 20),
-                        ShaderMask(
-                          shaderCallback: (bounds) =>
-                              ConstantColors.primaryGradient
-                                  .createShader(bounds),
-                          child: const Text(
-                            'GeoMove',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
-                            ),
+                        const Text(
+                          'SUPER_IA',
+                          style: TextStyle(
+                            color: Color(0xFF333333),
+                            fontSize: 36,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Movilidad inteligente en tu ciudad',
+                          'Gestión Comercial y Crediticia Inteligente',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
+                            color: Color(0xFF666666),
                             fontSize: 14,
                           ),
                         ),
@@ -203,10 +205,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     child: Column(
                       children: [
                         const Text(
-                          '¿Cómo quieres\nentrar hoy?',
+                          '¿Cómo quieres\ncontinuar?',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Color(0xFF003D7A),
                             fontSize: 26,
                             fontWeight: FontWeight.w800,
                             height: 1.2,
@@ -214,9 +216,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Elige tu rol para continuar',
+                          'Accede o crea tu cuenta de asesor',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.45),
+                            color: const Color(0xFF003D7A).withOpacity(0.7),
                             fontSize: 14,
                           ),
                         ),
@@ -238,14 +240,14 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             child: FadeTransition(
                               opacity: _cardsFade,
                               child: _RoleCard(
-                                icon: Icons.person_rounded,
-                                title: 'Soy\nPasajero',
-                                subtitle: 'Pide tu viaje\nfácil y rápido',
+                                icon: Icons.login_rounded,
+                                title: 'Iniciar\nsesión',
+                                subtitle: 'Accede con tu\ncorreo',
                                 gradientColors: const [
-                                  Color(0xFF7C3AED),
-                                  Color(0xFF4F46E5),
+                                  Color(0xFF003D7A),
+                                  Color(0xFF1E5A96),
                                 ],
-                                glowColor: Color(0xFF7C3AED),
+                                glowColor: Color(0xFF003D7A),
                                 onTap: () => Navigator.pushNamed(
                                   context,
                                   SignInPage.route,
@@ -264,17 +266,17 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                             child: FadeTransition(
                               opacity: _cardsFade,
                               child: _RoleCard(
-                                icon: Icons.drive_eta_rounded,
-                                title: 'Soy\nConductor',
-                                subtitle: 'Maneja y\ngenera ingresos',
+                                icon: Icons.person_add_alt_1_rounded,
+                                title: 'Crear\nusuario',
+                                subtitle: 'Nueva Cuenta\nAsesor',
                                 gradientColors: const [
-                                  Color(0xFF0EA5E9),
-                                  Color(0xFF2563EB),
+                                  Color(0xFF595959),
+                                  Color(0xFF404040),
                                 ],
-                                glowColor: Color(0xFF0EA5E9),
+                                glowColor: Color(0xFF595959),
                                 onTap: () => Navigator.pushNamed(
                                   context,
-                                  DriverLoginScreen.route,
+                                  AsesorRegistrationScreen.route,
                                 ),
                               ),
                             ),
@@ -299,7 +301,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                         'Al continuar aceptas nuestros Términos de Uso\ny Política de Privacidad',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.28),
+                          color: const Color(0xFF003D7A).withOpacity(0.5),
                           fontSize: 11.5,
                           height: 1.5,
                         ),

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/Preferences/EmergencyContactsService.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/EmergencyContactsService.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
   static const String route = '/emergency_contacts';

@@ -1,7 +1,10 @@
 <?php
 require_once 'db_admin.php';
 
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+$isSuperAdmin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
+
+if (!$isAdmin && !$isSuperAdmin) {
     header('Location: login.php'); exit;
 }
 
@@ -14,17 +17,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['con
     }
 }
 
-$stmt = $pdo->query("
-    SELECT c.id, c.nombre, c.telefono, c.cedula, c.estado, c.calificacion_promedio,
-           v.marca, v.modelo, v.placa
-    FROM conductores c
-    LEFT JOIN vehiculos v ON c.id = v.conductor_id
-    WHERE c.verificado = 1
-    ORDER BY c.nombre ASC
-");
-$activos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $stmt = $pdo->query("
+        SELECT c.id, c.nombre, c.telefono, c.estado, c.calificacion_promedio
+        FROM conductores c
+        WHERE c.verificado = 1
+        ORDER BY c.nombre ASC
+    ");
+    $activos = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (Exception $e) {
+    $activos = [];
+}
 
-$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
+try {
+    $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado = 0")->fetchColumn();
+} catch (Exception $e) {
+    $totalPendientes = 0;
+}
 $currentPage = 'conductores';
 ?>
 <!DOCTYPE html>

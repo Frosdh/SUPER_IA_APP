@@ -1,9 +1,9 @@
 import 'dart:async';
 
-import 'package:fu_uber/Core/Models/Drivers.dart';
-import 'package:fu_uber/Core/Models/NearbyDriverMapModel.dart';
-import 'package:fu_uber/Core/Models/UserPlaces.dart';
-import 'package:fu_uber/Core/Networking/ApiProvider.dart';
+import 'package:super_ia/Core/Models/Drivers.dart';
+import 'package:super_ia/Core/Models/NearbyDriverMapModel.dart';
+import 'package:super_ia/Core/Models/UserPlaces.dart';
+import 'package:super_ia/Core/Networking/ApiProvider.dart';
 
 class Repository {
   final ApiProvider apiProvider = ApiProvider();

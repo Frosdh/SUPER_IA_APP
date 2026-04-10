@@ -1,5 +1,5 @@
-name: fu_uber
-description: A Uber clone in flutter with provider
+name: super_ia
+description: SUPER_IA - Plataforma de Gestión Comercial y Crediticia
 
 version: 1.0.0+1
 
@@ -12,7 +12,6 @@ dependencies:
 
   cupertino_icons: ^1.0.6
   provider: ^6.1.2
-  location: ^5.0.3
   geolocator: ^10.1.0
   pinput: ^5.0.0
   shared_preferences: ^2.3.3

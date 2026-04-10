@@ -1,52 +1,52 @@
 import 'package:flutter/cupertino.dart';
-import 'package:location/location.dart';
+import 'package:geolocator/geolocator.dart';
 
 class PermissionHandlerModel extends ChangeNotifier {
-  Location location = Location();
-
   bool isLocationPerGiven = false;
   bool isLocationSerGiven = false;
 
-  PermissionHandlerModel() {
-    location.changeSettings(accuracy: LocationAccuracy.low);
-    location.hasPermission().then((status) {
-      final isGiven = status == PermissionStatus.granted;
-      if (isGiven) {
-        isLocationPerGiven = true;
-        location.serviceEnabled().then((isEnabled) {
-          if (isEnabled) {
-            isLocationSerGiven = true;
-          } else {
-            isLocationSerGiven = false;
-          }
-          notifyListeners();
-        });
+  PermissionHandlerModel();
+
+  Future<void> bootstrap() async {
+    try {
+      final permission = await Geolocator.checkPermission();
+      isLocationPerGiven =
+          permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+      if (isLocationPerGiven) {
+        isLocationSerGiven = await Geolocator.isLocationServiceEnabled();
       } else {
-        isLocationPerGiven = false;
+        isLocationSerGiven = false;
       }
-      notifyListeners();
-    });
+    } catch (_) {
+      isLocationPerGiven = false;
+      isLocationSerGiven = false;
+    }
+    notifyListeners();
   }
 
   Future<bool> checkAppLocationGranted() async {
-    final status = await location.hasPermission();
-    return status == PermissionStatus.granted;
+    final permission = await Geolocator.checkPermission();
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
   }
 
   void requestAppLocationPermission() {
-    location.requestPermission().then((status) {
-      isLocationPerGiven = status == PermissionStatus.granted;
+    Geolocator.requestPermission().then((permission) {
+      isLocationPerGiven =
+          permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
       notifyListeners();
     });
   }
 
   Future<bool> checkLocationServiceEnabled() {
-    return location.serviceEnabled();
+    return Geolocator.isLocationServiceEnabled();
   }
 
   void requestLocationServiceToEnable() {
-    location.requestService().then((isGiven) {
-      isLocationSerGiven = isGiven;
+    Geolocator.openLocationSettings().then((_) async {
+      isLocationSerGiven = await Geolocator.isLocationServiceEnabled();
       notifyListeners();
     });
   }

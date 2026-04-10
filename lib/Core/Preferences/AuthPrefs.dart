@@ -10,6 +10,8 @@ class AuthPrefs {
   static const String KEY_PHOTO_BASE64 = 'user_photo_base64';
   static const String KEY_FCM_TOKEN = 'user_fcm_token';
   static const String KEY_FCM_TOKEN_SYNCED = 'user_fcm_token_synced';
+  static const String KEY_USUARIO_ID = 'usuario_id';
+  static const String KEY_ASESOR_ID = 'asesor_id';
 
   static Future<String> _scopedKey(String baseKey) async {
     final prefs = await SharedPreferences.getInstance();
@@ -24,6 +26,7 @@ class AuthPrefs {
     required String nombre,
     required String telefono,
     required String email,
+    String usuarioId = '',
   }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(KEY_IS_LOGGED_IN, true);
@@ -32,6 +35,29 @@ class AuthPrefs {
     await prefs.setString(KEY_EMAIL, email);
     await prefs.setBool(KEY_BACKEND_OK, true);
     await prefs.setBool(KEY_FIRST_TIME, false);
+    if (usuarioId.isNotEmpty) {
+      await prefs.setString(KEY_USUARIO_ID, usuarioId);
+    }
+  }
+
+  static Future<void> saveUsuarioId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(KEY_USUARIO_ID, id);
+  }
+
+  static Future<void> saveAsesorId(String id) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(KEY_ASESOR_ID, id);
+  }
+
+  static Future<String> getUsuarioId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(KEY_USUARIO_ID) ?? '';
+  }
+
+  static Future<String> getAsesorId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(KEY_ASESOR_ID) ?? '';
   }
 
   static Future<bool> isLoggedIn() async {
@@ -44,7 +70,8 @@ class AuthPrefs {
     final loggedIn = prefs.getBool(KEY_IS_LOGGED_IN) ?? false;
     final backendOk = prefs.getBool(KEY_BACKEND_OK) ?? false;
     final phone = (prefs.getString(KEY_PHONE) ?? '').trim();
-    return loggedIn && backendOk && phone.isNotEmpty;
+    final email = (prefs.getString(KEY_EMAIL) ?? '').trim();
+    return loggedIn && backendOk && (phone.isNotEmpty || email.isNotEmpty);
   }
 
   static Future<bool> isFirstTime() async {
@@ -118,6 +145,8 @@ class AuthPrefs {
     await prefs.remove(KEY_EMAIL);
     await prefs.remove(KEY_BACKEND_OK);
     await prefs.remove(KEY_FCM_TOKEN_SYNCED);
+    await prefs.remove(KEY_USUARIO_ID);
+    await prefs.remove(KEY_ASESOR_ID);
     await prefs.remove(photoKey);
   }
 }

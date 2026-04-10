@@ -35,7 +35,7 @@
 
     <application
         android:icon="@mipmap/ic_launcher"
-        android:label="GeoMove"
+        android:label="Super_IA"
         android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true"
         tools:ignore="GoogleAppIndexingWarning">
@@ -54,16 +54,6 @@
             android:foregroundServiceType="location"
             android:stopWithTask="false"
             android:exported="false" />
-
-        <!-- ── flutter_foreground_task: Boot Receiver (autoRunOnBoot) ── -->
-        <receiver
-            android:name="com.pravera.flutter_foreground_task.receiver.BootReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
 
         <activity
             android:name="com.sahdeepsingh.fu_uber.MainActivity"

@@ -160,7 +160,11 @@ $comision = floatval($cfg['valor'] ?? 20);
 $ingresoEmpresa = $t['ingresos'] * ($comision / 100);
 
 $currentPage = 'reportes';
-$totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado=0")->fetchColumn();
+try {
+    $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificado=0")->fetchColumn();
+} catch (Exception $e) {
+    $totalPendientes = 0;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">

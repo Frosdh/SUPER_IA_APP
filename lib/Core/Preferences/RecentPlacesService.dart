@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:fu_uber/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class LugarReciente {

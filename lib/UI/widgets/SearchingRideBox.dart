@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fu_uber/Core/Constants/colorConstants.dart';
-import 'package:fu_uber/Core/ProviderModels/CurrentRideCreationModel.dart';
-import 'package:fu_uber/Core/ProviderModels/UINotifiersModel.dart';
+import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/ProviderModels/CurrentRideCreationModel.dart';
+import 'package:super_ia/Core/ProviderModels/UINotifiersModel.dart';
 import 'package:provider/provider.dart';
 
 class SearchingRideBox extends StatefulWidget {
