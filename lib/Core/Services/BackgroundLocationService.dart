@@ -45,6 +45,33 @@ class MyTaskHandler extends TaskHandler {
       final asesorId  = await AuthPrefs.getAsesorId();
       final usuarioId = await AuthPrefs.getUsuarioId();
       if (asesorId.isNotEmpty || usuarioId.isNotEmpty) {
+        // Obtener última posición para marcar el punto final de ruta
+        double? lat, lng;
+        try {
+          final pos = await Geolocator.getLastKnownPosition();
+          lat = pos?.latitude;
+          lng = pos?.longitude;
+        } catch (_) {}
+
+        // 1. Cerrar segmento de ruta activo (sin iniciar uno nuevo)
+        try {
+          await http.post(
+            Uri.parse('${Constants.apiBaseUrl}/api_cerrar_segmento.php'),
+            headers: {'ngrok-skip-browser-warning': 'true'},
+            body: {
+              'asesor_id':  asesorId,
+              'usuario_id': usuarioId,
+              'latitud':    lat?.toString() ?? '',
+              'longitud':   lng?.toString() ?? '',
+              'razon':      'logout',
+            },
+          ).timeout(const Duration(seconds: 6));
+          log('>>> [BG_SERVICE] Segmento de ruta cerrado en logout');
+        } catch (e) {
+          log('>>> [BG_SERVICE] No se pudo cerrar segmento de ruta: $e');
+        }
+
+        // 2. Marcar presencia como desconectado
         await http.post(
           Uri.parse('${Constants.apiBaseUrl}/actualizar_estado_asesor.php'),
           headers: {'ngrok-skip-browser-warning': 'true'},

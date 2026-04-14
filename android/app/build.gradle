@@ -14,7 +14,7 @@ if (localPropertiesFile.exists()) {
 }
 
 android {
-    namespace "com.sahdeepsingh.fu_uber"
+    namespace "com.coac.super_ia2"
     compileSdkVersion 36
 
     compileOptions {
@@ -28,7 +28,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.sahdeepsingh.fu_uber"
+        applicationId "com.coac.super_ia2"
         minSdkVersion flutter.minSdkVersion
         targetSdkVersion 36
         versionCode localProperties.getProperty("flutter.versionCode")?.toInteger() ?: 1

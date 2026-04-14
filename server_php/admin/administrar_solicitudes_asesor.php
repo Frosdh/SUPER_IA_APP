@@ -488,22 +488,25 @@ $currentPage = 'solicitudes_asesor';
                                 <td><small><?php echo htmlspecialchars($solicitud['banco']); ?></small></td>
                                 <td>
                                     <?php if (!empty($solicitud['credencial_archivo'])):
-                                        // soportar rutas de la app (uploads/documentos_asesor/...) o la carpeta antigua uploads/asesor_credentials
                                         $cred = $solicitud['credencial_archivo'];
                                         if (str_contains($cred, 'documentos_asesor') || str_contains($cred, 'uploads/')) {
                                             $credPath = '../../' . ltrim($cred, '/');
                                         } else {
                                             $credPath = '../../uploads/asesor_credentials/' . $cred;
                                         }
+                                        $ext = strtolower(pathinfo($cred, PATHINFO_EXTENSION));
+                                        $icon = $ext === 'pdf' ? 'fa-file-pdf' : 'fa-file-image';
+                                        $color = $ext === 'pdf' ? '#ef4444' : '#3182fe';
                                     ?>
-                                    <a href="<?php echo htmlspecialchars($credPath); ?>" 
-                                       target="_blank" 
-                                       style="color: #3182fe; text-decoration: none; font-weight: 600;">
-                                        <i class="fas fa-file-pdf me-1"></i>Ver
+                                    <a href="<?php echo htmlspecialchars($credPath); ?>"
+                                       target="_blank"
+                                       title="Ver documento (<?php echo strtoupper($ext); ?>)"
+                                       style="color:<?php echo $color; ?>; text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border:1px solid <?php echo $color; ?>33; border-radius:6px; font-size:12px;">
+                                        <i class="fas <?php echo $icon; ?>"></i> Ver
                                     </a>
                                     <?php else: ?>
-                                    <span style="color: #9ca3af; font-size: 12px;">
-                                        <i class="fas fa-exclamation-triangle me-1"></i>No
+                                    <span style="color:#9ca3af;font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border:1px solid #e5e7eb;border-radius:5px;">
+                                        <i class="fas fa-minus"></i> Sin doc
                                     </span>
                                     <?php endif; ?>
                                 </td>

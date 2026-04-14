@@ -213,6 +213,28 @@ $totalPendientes = 0;
         }
         #refresh-toast.show { opacity:1; }
 
+        /* ── Leyenda rutas ── */
+        .leyenda-rutas {
+            position:absolute; bottom:36px; left:250px;
+            background:#fff; padding:12px 16px; border-radius:12px;
+            box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:400;
+            min-width:200px; max-width:280px; max-height:260px;
+            overflow-y:auto; pointer-events:auto;
+        }
+        .leyenda-rutas h6 { font-size:13px; font-weight:700; margin-bottom:8px; color:#1f2937; }
+        .leyenda-item { display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px; color:#374151; }
+        .leyenda-color { width:32px; height:4px; border-radius:2px; flex-shrink:0; }
+        .leyenda-dot   { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+        /* Marcador tarea completada */
+        .task-marker-pin {
+            width:28px; height:28px; border-radius:50%;
+            display:flex; align-items:center; justify-content:center;
+            color:#fff; font-size:11px; font-weight:800;
+            border:2.5px solid #fff;
+            box-shadow:0 3px 10px rgba(0,0,0,.3);
+        }
+
         @keyframes pulse {
             0%,100% { opacity:1; transform:scale(1); }
             50%      { opacity:.6; transform:scale(1.25); }
@@ -287,6 +309,14 @@ $totalPendientes = 0;
         </div>
 
         <div id="map"></div>
+
+        <!-- Leyenda de rutas -->
+        <div class="leyenda-rutas" id="leyenda-rutas" style="display:none;">
+            <h6><i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas de Hoy</h6>
+            <div id="leyenda-items">
+                <small style="color:#9CA3AF;">Sin rutas registradas aún</small>
+            </div>
+        </div>
 
         <!-- Panel de asesores -->
         <div class="info-box">
@@ -523,8 +553,189 @@ let refreshTimer = setInterval(updateLocations, REFRESH_INTERVAL);
 document.getElementById('refresh-btn').addEventListener('click', () => {
     clearInterval(refreshTimer);
     updateLocations();
+    cargarRutas();
     refreshTimer = setInterval(updateLocations, REFRESH_INTERVAL);
 });
+
+// ══════════════════════════════════════════════════════════════
+//  SISTEMA DE RUTAS POR SEGMENTO
+// ══════════════════════════════════════════════════════════════
+const rutaLayers    = {};   // segmento_id → { polyline, markers[] }
+const rutaGroup     = L.featureGroup().addTo(map);
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function renderRutas(segmentos) {
+    // Limpiar capas anteriores
+    rutaGroup.clearLayers();
+    Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
+
+    const leyendaEl = document.getElementById('leyenda-items');
+    const leyendaBox = document.getElementById('leyenda-rutas');
+    const leyendaItems = {};
+
+    if (!segmentos || segmentos.length === 0) {
+        leyendaBox.style.display = 'none';
+        return;
+    }
+    leyendaBox.style.display = 'block';
+
+    segmentos.forEach(seg => {
+        const color  = seg.color || '#3B82F6';
+        const puntos = seg.puntos || [];
+        const nombre = seg.asesor_nombre || 'Asesor';
+        const num    = seg.numero;
+
+        // ── Polilínea de la ruta ──
+        if (puntos.length >= 2) {
+            const latlngs = puntos.map(p => [p.lat, p.lng]);
+            const poly = L.polyline(latlngs, {
+                color:     color,
+                weight:    4,
+                opacity:   0.82,
+                dashArray: seg.estado === 'activo' ? '8 5' : null,
+                lineJoin:  'round',
+                lineCap:   'round',
+            }).addTo(rutaGroup);
+
+            const horaInicio = seg.inicio_at ? seg.inicio_at.substring(11,16) : '--:--';
+            const horaFin    = seg.fin_at    ? seg.fin_at.substring(11,16)    : 'activo';
+            poly.bindPopup(`
+                <div style="font-family:'Inter',sans-serif;min-width:180px;">
+                    <div style="font-weight:700;font-size:13px;color:#1f2937;margin-bottom:5px;">
+                        <span style="display:inline-block;width:12px;height:12px;
+                              border-radius:50%;background:${color};margin-right:5px;"></span>
+                        ${nombre} — Segmento ${num}
+                    </div>
+                    <div style="font-size:12px;color:#555;margin-bottom:2px;">
+                        <i class="fas fa-clock"></i> ${horaInicio} → ${horaFin}
+                    </div>
+                    <div style="font-size:12px;color:#555;">
+                        <i class="fas fa-map-pin"></i> ${puntos.length} puntos GPS
+                    </div>
+                    <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">
+                        Estado: <b style="color:${seg.estado==='activo'?'#10B981':'#6B7280'}">${seg.estado}</b>
+                    </div>
+                </div>`
+            );
+            rutaLayers[seg.segmento_id] = { polyline: poly, markers: [] };
+        }
+
+        // ── Marcador de inicio (primer punto del segmento = login o tarea previa) ──
+        if (seg.inicio_lat !== null && seg.inicio_lng !== null && num === 1) {
+            const startIcon = L.divIcon({
+                html: `<div style="width:16px;height:16px;border-radius:50%;
+                             background:${color};border:3px solid #fff;
+                             box-shadow:0 2px 8px rgba(0,0,0,.3);"
+                             title="Inicio sesión ${nombre}"></div>`,
+                iconSize:[16,16], iconAnchor:[8,8], className:'',
+            });
+            const sm = L.marker([seg.inicio_lat, seg.inicio_lng], { icon: startIcon })
+                .addTo(rutaGroup)
+                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;">
+                    <b>${nombre}</b><br>
+                    <i class="fas fa-sign-in-alt"></i> Inicio sesión<br>
+                    <small>${seg.inicio_at ? seg.inicio_at.substring(11,16) : ''}</small>
+                </div>`);
+            if (rutaLayers[seg.segmento_id]) rutaLayers[seg.segmento_id].markers.push(sm);
+        }
+
+        // ── Marcador de tarea completada (fin del segmento) ──
+        if (seg.fin_lat !== null && seg.fin_lng !== null && seg.estado !== 'activo') {
+            const tareaLabel = seg.tarea_tipo
+                ? seg.tarea_tipo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                : 'Tarea';
+            const taskIcon = L.divIcon({
+                html: `<div class="task-marker-pin" style="background:${color};" title="${tareaLabel}">
+                           ${num}
+                       </div>`,
+                iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16], className:'',
+            });
+            const tm = L.marker([seg.fin_lat, seg.fin_lng], { icon: taskIcon })
+                .addTo(rutaGroup)
+                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;min-width:160px;">
+                    <div style="font-weight:700;color:#1f2937;margin-bottom:4px;">
+                        <span style="display:inline-block;width:10px;height:10px;
+                              border-radius:50%;background:${color};margin-right:4px;"></span>
+                        Segmento ${num} completado
+                    </div>
+                    ${seg.tarea_tipo ? `<div><i class="fas fa-tasks"></i> ${tareaLabel}</div>` : ''}
+                    ${seg.cliente_nombre ? `<div><i class="fas fa-user"></i> ${seg.cliente_nombre}</div>` : ''}
+                    <div style="color:#6B7280;font-size:11px;margin-top:3px;">
+                        ${seg.fin_at ? seg.fin_at.substring(11,16) : ''}
+                    </div>
+                </div>`);
+            if (rutaLayers[seg.segmento_id]) rutaLayers[seg.segmento_id].markers.push(tm);
+        }
+
+        // ── Punto final si es logout ──
+        if (seg.fin_lat !== null && seg.fin_lng !== null && seg.estado === 'cerrado_logout') {
+            const logoutIcon = L.divIcon({
+                html: `<div style="width:14px;height:14px;border-radius:50%;
+                             background:#EF4444;border:3px solid #fff;
+                             box-shadow:0 2px 8px rgba(239,68,68,.4);"
+                             title="Cierre sesión"></div>`,
+                iconSize:[14,14], iconAnchor:[7,7], className:'',
+            });
+            L.marker([seg.fin_lat, seg.fin_lng], { icon: logoutIcon })
+                .addTo(rutaGroup)
+                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;">
+                    <b style="color:#EF4444;"><i class="fas fa-sign-out-alt"></i> Fin de sesión</b><br>
+                    <b>${nombre}</b><br>
+                    <small>${seg.fin_at ? seg.fin_at.substring(11,16) : ''}</small>
+                </div>`);
+        }
+
+        // ── Leyenda ──
+        const key = `${seg.asesor_id}`;
+        if (!leyendaItems[key]) {
+            leyendaItems[key] = {
+                nombre, segmentos: [], color,
+            };
+        }
+        leyendaItems[key].segmentos.push({ num, color, estado: seg.estado, cliente: seg.cliente_nombre });
+    });
+
+    // Renderizar leyenda
+    let leyendaHtml = '';
+    Object.values(leyendaItems).forEach(item => {
+        leyendaHtml += `<div style="margin-bottom:10px;">
+            <div style="font-weight:700;font-size:12px;color:#1f2937;margin-bottom:4px;">
+                <i class="fas fa-user-tie"></i> ${item.nombre}
+            </div>`;
+        item.segmentos.forEach(s => {
+            const estadoIcon = s.estado === 'activo' ? '🟢' : (s.estado === 'completado' ? '✓' : '🔴');
+            leyendaHtml += `<div class="leyenda-item">
+                <div class="leyenda-color" style="background:${s.color};"></div>
+                <span>${estadoIcon} Seg. ${s.num}${s.cliente ? ' · ' + s.cliente.split(' ')[0] : ''}</span>
+            </div>`;
+        });
+        leyendaHtml += `</div>`;
+    });
+    leyendaEl.innerHTML = leyendaHtml || '<small style="color:#9CA3AF;">Sin rutas hoy</small>';
+}
+
+function cargarRutas() {
+    fetch('api_rutas_supervisor.php', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                renderRutas(data.segmentos);
+            }
+        })
+        .catch(err => console.warn('[rutas] fetch error:', err));
+}
+
+// Carga inicial de rutas
+cargarRutas();
+
+// Refrescar rutas cada 20 s (los puntos se acumulan en BD)
+setInterval(cargarRutas, 20000);
 </script>
 </body>
 </html>

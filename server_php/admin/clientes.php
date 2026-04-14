@@ -30,7 +30,7 @@ try {
         // SuperAdmin y Admin ven todos los clientes
         $query = "
             SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, 
-                   CONCAT(cp.zona, ' - ', cp.ciudad) as region, 
+                   CONCAT_WS(' - ', cp.zona, cp.ciudad) as region, 
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion, 
                    u.nombre as asesor_nombre
@@ -40,36 +40,63 @@ try {
             ORDER BY cp.created_at DESC
         ";
         $col_asesor = true;
+        $stmt = $pdo->prepare($query);
+        $stmt->execute();
+        $clientes = $stmt->fetchAll();
     } elseif ($user_role === 'supervisor') {
         // Supervisor ve clientes de sus asesores
+        // En login.php, $_SESSION['supervisor_id'] guarda usuario.id (no supervisor.id)
+        $supervisor_usuario_id = $user_id;
+        $stmtSup = $pdo->prepare('SELECT id FROM supervisor WHERE usuario_id = :uid LIMIT 1');
+        $stmtSup->execute([':uid' => $supervisor_usuario_id]);
+        $supervisor_table_id = $stmtSup->fetchColumn();
+        if (!$supervisor_table_id) {
+            $clientes = [];
+            $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
+        } else {
         $query = "
             SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, 
-                   CONCAT(cp.zona, ' - ', cp.ciudad) as region,
+                   CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion, 
                    u.nombre as asesor_nombre
             FROM cliente_prospecto cp
             LEFT JOIN asesor a ON cp.asesor_id = a.id
             LEFT JOIN usuario u ON a.usuario_id = u.id
-            WHERE a.supervisor_id = (SELECT id FROM supervisor WHERE usuario_id = $user_id)
+            WHERE a.supervisor_id = :supervisor_id
             ORDER BY cp.created_at DESC
         ";
         $col_asesor = true;
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([':supervisor_id' => $supervisor_table_id]);
+        $clientes = $stmt->fetchAll();
+        }
     } else {
         // Asesor ve solo sus clientes
+        // En login.php, $_SESSION['asesor_id'] guarda usuario.id (no asesor.id)
+        $asesor_usuario_id = $user_id;
+        $stmtAs = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = :uid LIMIT 1');
+        $stmtAs->execute([':uid' => $asesor_usuario_id]);
+        $asesor_table_id = $stmtAs->fetchColumn();
+        if (!$asesor_table_id) {
+            $clientes = [];
+            $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
+        } else {
         $query = "
             SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, 
-                   CONCAT(cp.zona, ' - ', cp.ciudad) as region,
+                   CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion
             FROM cliente_prospecto cp
-            WHERE cp.asesor_id = (SELECT id FROM asesor WHERE usuario_id = $user_id)
+            WHERE cp.asesor_id = :asesor_id
             ORDER BY cp.created_at DESC
         ";
         $col_asesor = false;
+        $stmt = $pdo->prepare($query);
+        $stmt->execute([':asesor_id' => $asesor_table_id]);
+        $clientes = $stmt->fetchAll();
+        }
     }
-
-    $clientes = $pdo->query($query)->fetchAll();
 
     // Estadísticas según el rol
     if ($user_role === 'super_admin' || $user_role === 'admin') {
@@ -80,7 +107,15 @@ try {
                 SUM(CASE WHEN cp.estado = 'descartado' THEN 1 ELSE 0 END) as clientes_inactivos
             FROM cliente_prospecto cp
         ";
+        $stmt = $pdo->prepare($stats_query);
+        $stmt->execute();
+        $stats = $stmt->fetch();
     } elseif ($user_role === 'supervisor') {
+        // En login.php, $_SESSION['supervisor_id'] guarda usuario.id
+        $supervisor_usuario_id = $user_id;
+        $stmtSup = $pdo->prepare('SELECT id FROM supervisor WHERE usuario_id = :uid LIMIT 1');
+        $stmtSup->execute([':uid' => $supervisor_usuario_id]);
+        $supervisor_table_id = $stmtSup->fetchColumn();
         $stats_query = "
             SELECT 
                 COUNT(*) as total_clientes,
@@ -88,20 +123,30 @@ try {
                 SUM(CASE WHEN cp.estado = 'descartado' THEN 1 ELSE 0 END) as clientes_inactivos
             FROM cliente_prospecto cp
             LEFT JOIN asesor a ON cp.asesor_id = a.id
-            WHERE a.supervisor_id = (SELECT id FROM supervisor WHERE usuario_id = $user_id)
+            WHERE a.supervisor_id = :supervisor_id
         ";
+        $stmt = $pdo->prepare($stats_query);
+        $stmt->execute([':supervisor_id' => $supervisor_table_id ?: '']);
+        $stats = $stmt->fetch();
     } else {
+        // En login.php, $_SESSION['asesor_id'] guarda usuario.id
+        $asesor_usuario_id = $user_id;
+        $stmtAs = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = :uid LIMIT 1');
+        $stmtAs->execute([':uid' => $asesor_usuario_id]);
+        $asesor_table_id = $stmtAs->fetchColumn();
         $stats_query = "
             SELECT 
                 COUNT(*) as total_clientes,
                 SUM(CASE WHEN cp.estado != 'descartado' THEN 1 ELSE 0 END) as clientes_activos,
                 SUM(CASE WHEN cp.estado = 'descartado' THEN 1 ELSE 0 END) as clientes_inactivos
             FROM cliente_prospecto cp
-            WHERE cp.asesor_id = (SELECT id FROM asesor WHERE usuario_id = $user_id)
+            WHERE cp.asesor_id = :asesor_id
         ";
+        $stmt = $pdo->prepare($stats_query);
+        $stmt->execute([':asesor_id' => $asesor_table_id ?: '']);
+        $stats = $stmt->fetch();
     }
-    
-    $stats = $pdo->query($stats_query)->fetch();
+
     
 } catch (PDOException $e) {
     error_log("Clientes Query Error: " . $e->getMessage());

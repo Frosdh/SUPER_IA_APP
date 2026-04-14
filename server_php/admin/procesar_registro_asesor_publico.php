@@ -75,9 +75,8 @@ if ($archivo_upload && $archivo_upload['error'] !== UPLOAD_ERR_NO_FILE) {
             }
         }
     }
-} else {
-    $errores[] = 'El archivo de credencial es requerido';
 }
+// Documento es opcional: si no se adjuntó, $archivo_guardado queda en null.
 
 if (!empty($errores)) {
     header('Location: registro_asesor_publico.php?error=' . urlencode(implode(', ', $errores)));

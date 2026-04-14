@@ -180,12 +180,12 @@ try {
             </div>
 
             <div class="form-group">
-                <label><i class="fas fa-file-pdf me-2"></i>Credencial / Nombramiento (PDF o Imagen)</label>
+                <label><i class="fas fa-file-pdf me-2"></i>Credencial / Nombramiento <span style="color:#9ca3af;font-weight:400;">(opcional – PDF o Imagen)</span></label>
                 <div class="file-upload" id="dropzone">
                     <div style="font-weight:800;color:#1e293b;"><i class="fas fa-cloud-upload-alt me-2" style="color:#6b11ff;"></i>Sube tu archivo</div>
                     <div class="hint">(PDF, JPG, PNG – Máx. 5MB)</div>
                     <div class="file-name" id="file-name"></div>
-                    <input type="file" name="credencial" id="credencial" accept=".pdf,.jpg,.jpeg,.png" required>
+                    <input type="file" name="credencial" id="credencial" accept=".pdf,.jpg,.jpeg,.png">
                 </div>
             </div>
 

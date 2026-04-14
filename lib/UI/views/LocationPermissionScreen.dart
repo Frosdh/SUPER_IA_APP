@@ -2,8 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
+import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
 import 'package:super_ia/Core/Preferences/DriverPrefs.dart';
 import 'package:super_ia/Core/ProviderModels/PermissionHandlerModel.dart';
 import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
@@ -156,6 +159,25 @@ class _LocationPermissionScreenState extends State<LocationPermissionScreen>
         await BackgroundLocationService.start();
       } catch (e) {
         debugPrint('⚠️ BackgroundLocationService.start() falló: $e');
+      }
+
+      // Iniciar primer segmento de ruta al comenzar la sesión
+      try {
+        final asesorId  = await AuthPrefs.getAsesorId();
+        final usuarioId = await AuthPrefs.getUsuarioId();
+        await http.post(
+          Uri.parse('${Constants.apiBaseUrl}/api_iniciar_segmento.php'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+          body: {
+            'asesor_id':  asesorId,
+            'usuario_id': usuarioId,
+            'latitud':    position.latitude.toString(),
+            'longitud':   position.longitude.toString(),
+          },
+        ).timeout(const Duration(seconds: 8));
+        debugPrint('✅ Segmento de ruta iniciado al login');
+      } catch (e) {
+        debugPrint('⚠️ No se pudo iniciar segmento de ruta: $e');
       }
 
       _yaNavego = true;

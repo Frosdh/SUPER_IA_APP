@@ -311,6 +311,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       }
 
       if (data['status'] == 'success') {
+        // ── Cerrar segmento de ruta actual e iniciar el siguiente ──
+        final tareaId = data['tarea_id']?.toString() ?? '';
+        _cerrarYNuevoSegmento(tareaId: tareaId);
+
         _mostrarDialogoFinalizado(fueEncuestado: fueEncuestado);
       } else {
         _mostrarError(data['message']?.toString() ?? 'Error al guardar');
@@ -320,6 +324,43 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _mostrarError('No se pudo guardar en el servidor. ($e)');
     } finally {
       if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  /// Cierra el segmento activo y abre uno nuevo (no bloquea la UI).
+  Future<void> _cerrarYNuevoSegmento({required String tareaId}) async {
+    try {
+      final asesorId  = await AuthPrefs.getAsesorId();
+      final usuarioId = await AuthPrefs.getUsuarioId();
+
+      // Obtener posición actual para el punto de corte
+      double? lat, lng;
+      try {
+        final pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        ).timeout(const Duration(seconds: 6));
+        lat = pos.latitude;
+        lng = pos.longitude;
+      } catch (_) {
+        // Sin GPS en este momento; se guarda sin coordenada de corte
+      }
+
+      await http.post(
+        Uri.parse('${Constants.apiBaseUrl}/api_cerrar_segmento.php'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+        body: {
+          'asesor_id':  asesorId,
+          'usuario_id': usuarioId,
+          'tarea_id':   tareaId,
+          'latitud':    lat?.toString() ?? '',
+          'longitud':   lng?.toString() ?? '',
+          'razon':      'tarea_completada',
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      debugPrint('✅ Segmento cerrado y nuevo iniciado (tarea=$tareaId)');
+    } catch (e) {
+      debugPrint('⚠️ Error al gestionar segmento de ruta: $e');
     }
   }
 
@@ -1561,6 +1602,46 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (d != null) onSelected(d);
   }
 
+  void _confirmarSalida() {
+    if (!mounted) return;
+    if (_guardando) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ConstantColors.grey100,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Salir',
+            style: TextStyle(
+                color: ConstantColors.textDark, fontWeight: FontWeight.w700)),
+        content: Text(
+          '¿Desea salir de la encuesta? Se perderán los cambios no guardados.',
+          style: TextStyle(color: ConstantColors.textDarkGrey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancelar',
+                style: TextStyle(color: ConstantColors.textDarkGrey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ConstantColors.warning,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _botonFinalizar({
     required String label,
     required String sublabel,
@@ -1590,60 +1671,31 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     child: CircularProgressIndicator(
                         strokeWidth: 2, color: Colors.white)))
             : Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(label,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      )),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 4),
-                  Text(sublabel,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.75),
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center),
+                  Text(
+                    sublabel,
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
       ),
     );
   }
-
-  void _confirmarSalida() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: ConstantColors.grey100,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('¿Salir sin guardar?',
-            style: TextStyle(
-                color: ConstantColors.textDark, fontWeight: FontWeight.w700)),
-        content: Text(
-          'Los datos ingresados se perderán.',
-          style: TextStyle(color: ConstantColors.textDarkGrey),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancelar',
-                style: TextStyle(color: ConstantColors.textDarkGrey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: ConstantColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Salir'),
-          ),
-        ],
-      ),
-    );
-  }
 }
+      

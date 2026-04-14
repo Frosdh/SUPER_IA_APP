@@ -36,68 +36,74 @@ try {
     }
     $conexion->set_charset('utf8mb4');
 
-    // Verificar que el email no exista
-    $result = $conexion->query("SELECT id FROM usuario WHERE email = '$email' LIMIT 1");
-    if ($result && $result->num_rows > 0) {
-        throw new Exception("El email ya está registrado");
-    }
+    // Asegurar que solicitud_registro.documento_url admite NULL
+    $conexion->query("ALTER TABLE solicitud_registro MODIFY COLUMN documento_url VARCHAR(500) NULL DEFAULT NULL");
 
-    // Validar que el supervisor existe
-    $result = $conexion->query(
-        "SELECT s.id FROM supervisor s 
+    // Verificar que el email no exista (prepared)
+    $st = $conexion->prepare("SELECT id FROM usuario WHERE email = ? LIMIT 1");
+    $st->bind_param('s', $email);
+    $st->execute();
+    $st->store_result();
+    if ($st->num_rows > 0) throw new Exception("El email ya está registrado");
+    $st->close();
+
+    // Validar que el supervisor existe (prepared)
+    $st = $conexion->prepare(
+        "SELECT s.id FROM supervisor s
          JOIN usuario u ON u.id = s.usuario_id
-         WHERE s.usuario_id = '$supervisor_id' 
-         AND u.rol = 'supervisor' 
-         AND u.activo = 1 
-         AND u.estado_aprobacion = 'aprobado' 
+         WHERE s.usuario_id = ?
+           AND u.rol = 'supervisor'
+           AND u.activo = 1
+           AND u.estado_aprobacion = 'aprobado'
          LIMIT 1"
     );
-    if (!$result || $result->num_rows === 0) {
-        throw new Exception("Supervisor no encontrado o inactivo");
-    }
-    
-    // Obtener el supervisor.id para la FK
-    $sup_row = $result->fetch_assoc();
+    $st->bind_param('s', $supervisor_id);
+    $st->execute();
+    $sup_row = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$sup_row) throw new Exception("Supervisor no encontrado o inactivo");
     $supervisor_table_id = $sup_row['id'];
 
     // Iniciar transacción
     $conexion->begin_transaction();
 
     // 1. Crear usuario
-    $usuario_id = uniqid('usr_', true);
+    $usuario_id      = uniqid('usr_', true);
     $nombre_completo = "$nombres $apellidos";
-    $password_hash = password_hash($contrasena, PASSWORD_DEFAULT);
+    $password_hash   = password_hash($contrasena, PASSWORD_DEFAULT);
 
-    $sql = "INSERT INTO usuario 
-            (id, nombre, email, password_hash, rol, activo, estado_aprobacion, telefono, created_at)
-            VALUES 
-            ('$usuario_id', '$nombre_completo', '$email', '$password_hash', 'asesor', 0, 'pendiente', '$telefono', NOW())";
-
-    if (!$conexion->query($sql)) {
-        throw new Exception("Error creando usuario: " . $conexion->error);
-    }
+    $st = $conexion->prepare(
+        "INSERT INTO usuario
+         (id, nombre, email, password_hash, rol, activo, estado_aprobacion, telefono, created_at)
+         VALUES (?, ?, ?, ?, 'asesor', 0, 'pendiente', ?, NOW())"
+    );
+    $st->bind_param('sssss', $usuario_id, $nombre_completo, $email, $password_hash, $telefono);
+    if (!$st->execute()) throw new Exception("Error creando usuario: " . $st->error);
+    $st->close();
 
     // 2. Crear perfil de asesor
-    $asesor_id = uniqid('asesor_', true);
-    $sql = "INSERT INTO asesor 
-            (id, usuario_id, supervisor_id, documento_path)
-            VALUES 
-            ('$asesor_id', '$usuario_id', '$supervisor_table_id', '$documento_path')";
+    $asesor_id       = uniqid('asesor_', true);
+    $doc_path_val    = $documento_path ?: null;   // guardar NULL si no hay documento
 
-    if (!$conexion->query($sql)) {
-        throw new Exception("Error creando perfil asesor: " . $conexion->error);
-    }
+    $st = $conexion->prepare(
+        "INSERT INTO asesor (id, usuario_id, supervisor_id, documento_path)
+         VALUES (?, ?, ?, ?)"
+    );
+    $st->bind_param('ssss', $asesor_id, $usuario_id, $supervisor_table_id, $doc_path_val);
+    if (!$st->execute()) throw new Exception("Error creando perfil asesor: " . $st->error);
+    $st->close();
 
-    // 3. Crear solicitud de registro
+    // 3. Crear solicitud de registro (documento_url = doc_path o NULL)
     $solicitud_id = uniqid('sol_', true);
-    $sql = "INSERT INTO solicitud_registro 
-            (id, usuario_id, rol_solicitado, estado, created_at)
-            VALUES 
-            ('$solicitud_id', '$usuario_id', 'asesor', 'pendiente', NOW())";
 
-    if (!$conexion->query($sql)) {
-        throw new Exception("Error creando solicitud: " . $conexion->error);
-    }
+    $st = $conexion->prepare(
+        "INSERT INTO solicitud_registro
+         (id, usuario_id, rol_solicitado, documento_url, estado, created_at)
+         VALUES (?, ?, 'asesor', ?, 'pendiente', NOW())"
+    );
+    $st->bind_param('sss', $solicitud_id, $usuario_id, $doc_path_val);
+    if (!$st->execute()) throw new Exception("Error creando solicitud: " . $st->error);
+    $st->close();
 
     // Commit
     $conexion->commit();

@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.sahdeepsingh.fu_uber">
+    package="com.coac.super_ia2">
 
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -35,7 +35,7 @@
 
     <application
         android:icon="@mipmap/ic_launcher"
-        android:label="Super_IA"
+        android:label="Super_IA 2"
         android:enableOnBackInvokedCallback="true"
         android:usesCleartextTraffic="true"
         tools:ignore="GoogleAppIndexingWarning">
@@ -56,7 +56,7 @@
             android:exported="false" />
 
         <activity
-            android:name="com.sahdeepsingh.fu_uber.MainActivity"
+            android:name="com.coac.super_ia2.MainActivity"
             android:exported="true"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
             android:hardwareAccelerated="true"
