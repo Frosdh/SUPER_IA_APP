@@ -1,6 +1,8 @@
 <?php
 require_once 'db_admin.php';
 
+$BUILD = '2026-04-14a';
+
 // Si ya hay una sesión activa, redirigir al panel correspondiente
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
     header('Location: index.php');
@@ -119,6 +121,7 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
     </style>
 </head>
 <body>
+    <!-- build: <?php echo htmlspecialchars($BUILD, ENT_QUOTES, 'UTF-8'); ?> | file: <?php echo htmlspecialchars(__FILE__, ENT_QUOTES, 'UTF-8'); ?> | mtime: <?php echo htmlspecialchars((string)@filemtime(__FILE__), ENT_QUOTES, 'UTF-8'); ?> -->
     <div class="container">
         <div class="header-section">
             <h1>Bienvenido a COAC Finance</h1>

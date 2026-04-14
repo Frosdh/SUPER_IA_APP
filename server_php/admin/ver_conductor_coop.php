@@ -55,15 +55,21 @@ $tiposDoc = [
     'vinculacion_cooperativa' => 'Vínculo a Cooperativa',
 ];
 
-$aprobados = count(array_filter($docs, fn($d) => $d['estado'] === 'aprobado'));
+$aprobados = count(array_filter($docs, function ($d) {
+    return isset($d['estado']) && $d['estado'] === 'aprobado';
+}));
 $total     = count($tiposDoc);
 
 function estadoBadge($estado) {
-    return match($estado ?? 'pendiente') {
-        'aprobado'  => '<span class="badge bg-success">Aprobado</span>',
-        'rechazado' => '<span class="badge bg-danger">Rechazado</span>',
-        default     => '<span class="badge bg-warning text-dark">Pendiente</span>',
-    };
+    $estado = $estado !== null ? $estado : 'pendiente';
+    switch ($estado) {
+        case 'aprobado':
+            return '<span class="badge bg-success">Aprobado</span>';
+        case 'rechazado':
+            return '<span class="badge bg-danger">Rechazado</span>';
+        default:
+            return '<span class="badge bg-warning text-dark">Pendiente</span>';
+    }
 }
 
 $currentPage = 'conductores';

@@ -32,156 +32,156 @@ echo "<!DOCTYPE html>
 ";
 
 // Conectar a MySQL
-\$mysqli = new mysqli('127.0.0.1', 'root', '');
+$mysqli = new mysqli('127.0.0.1', 'root', '');
 
-if (\$mysqli->connect_error) {
-    echo \"<div class='error'>❌ Error: \" . htmlspecialchars(\$mysqli->connect_error) . \"</div>\";
+if ($mysqli->connect_error) {
+    echo "<div class='error'>❌ Error: " . htmlspecialchars($mysqli->connect_error) . "</div>";
     exit;
 }
 
-echo \"<div class='section'>
-    <h2>📊 Bases de Datos Disponibles</h2>\";
+echo "<div class='section'>
+    <h2>📊 Bases de Datos Disponibles</h2>";
 
 // Listar bases de datos
-\$result = \$mysqli->query(\"SHOW DATABASES\");
-\$databases = [];
-while (\$row = \$result->fetch_array()) {
-    \$db = \$row[0];
+$result = $mysqli->query("SHOW DATABASES");
+$databases = [];
+while ($row = $result->fetch_array()) {
+    $db = $row[0];
     // Filtrar solo las relevantes
-    if (strpos(\$db, 'super') !== false || strpos(\$db, 'corporat') !== false || strpos(\$db, 'uber') !== false) {
-        \$databases[] = \$db;
+    if (strpos($db, 'super') !== false || strpos($db, 'corporat') !== false || strpos($db, 'uber') !== false) {
+        $databases[] = $db;
     }
 }
 
-if (empty(\$databases)) {
-    echo \"<div class='warning'>⚠️ No se encontraron bases de datos del proyecto</div>\";
+if (empty($databases)) {
+    echo "<div class='warning'>⚠️ No se encontraron bases de datos del proyecto</div>";
 } else {
-    foreach (\$databases as \$db) {
-        \$mysqli->select_db(\$db);
-        \$tableResult = \$mysqli->query(\"SHOW TABLES\");
-        \$tableCount = \$tableResult->num_rows;
+    foreach ($databases as $db) {
+        $mysqli->select_db($db);
+        $tableResult = $mysqli->query("SHOW TABLES");
+        $tableCount = $tableResult->num_rows;
         
-        echo \"<div class='info'><strong>\$db</strong> - \$tableCount tablas</div>\";
+        echo "<div class='info'><strong>$db</strong> - $tableCount tablas</div>";
         
         // Listar tablas
-        echo \"<table>
+        echo "<table>
             <tr>
                 <th>Tabla</th>
                 <th>Registros</th>
                 <th>Campos</th>
-            </tr>\";
+            </tr>";
         
-        while (\$tableRow = \$tableResult->fetch_array()) {
-            \$table = \$tableRow[0];
-            \$countRes = \$mysqli->query(\"SELECT COUNT(*) as cnt FROM \\\`\$table\\\`\");
-            \$count = \$countRes->fetch_assoc()['cnt'];
+        while ($tableRow = $tableResult->fetch_array()) {
+            $table = $tableRow[0];
+            $countRes = $mysqli->query("SELECT COUNT(*) as cnt FROM `{$table}`");
+            $count = $countRes->fetch_assoc()['cnt'];
             
-            \$fieldsRes = \$mysqli->query(\"DESCRIBE \$table\");
-            \$fieldCount = \$fieldsRes->num_rows;
+            $fieldsRes = $mysqli->query("DESCRIBE `{$table}`");
+            $fieldCount = $fieldsRes->num_rows;
             
-            echo \"<tr>
-                <td><code>\$table</code></td>
-                <td>\$count</td>
-                <td>\$fieldCount</td>
-            </tr>\";
+            echo "<tr>
+                <td><code>{$table}</code></td>
+                <td>$count</td>
+                <td>$fieldCount</td>
+            </tr>";
         }
-        echo \"</table>\";
+        echo "</table>";
     }
 }
 
-echo \"</div>\";
+echo "</div>";
 
 // Analizar tablas de usuarios
-echo \"<div class='section'>
-    <h2>👥 Análisis de Tabla de Usuarios</h2>\";
+echo "<div class='section'>
+    <h2>👥 Análisis de Tabla de Usuarios</h2>";
 
-foreach (\$databases as \$db) {
-    \$mysqli->select_db(\$db);
+foreach ($databases as $db) {
+    $mysqli->select_db($db);
     
     // Buscar tabla de usuarios
-    \$tableResult = \$mysqli->query(\"SHOW TABLES LIKE '%usuario%'\");
-    if (\$tableResult->num_rows > 0) {
-        \$tableRow = \$tableResult->fetch_array();
-        \$userTable = \$tableRow[0];
+    $tableResult = $mysqli->query("SHOW TABLES LIKE '%usuario%'");
+    if ($tableResult->num_rows > 0) {
+        $tableRow = $tableResult->fetch_array();
+        $userTable = $tableRow[0];
         
-        echo \"<div class='info'><strong>Base de datos: \$db</strong> | Tabla: <code>\$userTable</code></div>\";
+        echo "<div class='info'><strong>Base de datos: $db</strong> | Tabla: <code>$userTable</code></div>";
         
         // Mostrar estructura
-        \$fieldsRes = \$mysqli->query(\"DESCRIBE \$userTable\");
-        echo \"<table>
+        $fieldsRes = $mysqli->query("DESCRIBE `{$userTable}`");
+        echo "<table>
             <tr>
                 <th>Campo</th>
                 <th>Tipo</th>
                 <th>Nulo</th>
                 <th>Clave</th>
                 <th>Por defecto</th>
-            </tr>\";
+            </tr>";
         
-        while (\$field = \$fieldsRes->fetch_assoc()) {
-            echo \"<tr>
-                <td><code>\" . htmlspecialchars(\$field['Field']) . \"</code></td>
-                <td>\" . htmlspecialchars(\$field['Type']) . \"</td>
-                <td>\" . htmlspecialchars(\$field['Null']) . \"</td>
-                <td>\" . htmlspecialchars(\$field['Key']) . \"</td>
-                <td>\" . htmlspecialchars(\$field['Default'] ?? '-') . \"</td>
-            </tr>\";
+        while ($field = $fieldsRes->fetch_assoc()) {
+            echo "<tr>
+                <td><code>" . htmlspecialchars($field['Field']) . "</code></td>
+                <td>" . htmlspecialchars($field['Type']) . "</td>
+                <td>" . htmlspecialchars($field['Null']) . "</td>
+                <td>" . htmlspecialchars($field['Key']) . "</td>
+                <td>" . htmlspecialchars($field['Default'] ?? '-') . "</td>
+            </tr>";
         }
-        echo \"</table>\";
+        echo "</table>";
         
         // Mostrar registros
-        \$recordsRes = \$mysqli->query(\"SELECT * FROM \$userTable LIMIT 5\");
-        \$recordCount = \$recordsRes->num_rows;
+        $recordsRes = $mysqli->query("SELECT * FROM `{$userTable}` LIMIT 5");
+        $recordCount = $recordsRes->num_rows;
         
-        echo \"<div class='info'>Total de registros: <strong>\$recordCount</strong></div>\";
+        echo "<div class='info'>Total de registros: <strong>$recordCount</strong></div>";
         
-        if (\$recordCount > 0) {
-            echo \"<table>
-                <tr>\";
+        if ($recordCount > 0) {
+            echo "<table>
+                <tr>";
             
             // Headers
-            \$fields = \$recordsRes->fetch_fields();
-            foreach (\$fields as \$field) {
-                echo \"<th>\" . htmlspecialchars(\$field->name) . \"</th>\";
+            $fields = $recordsRes->fetch_fields();
+            foreach ($fields as $field) {
+                echo "<th>" . htmlspecialchars($field->name) . "</th>";
             }
-            echo \"</tr>\";
+            echo "</tr>";
             
             // Reset y mostrar datos
-            \$recordsRes = \$mysqli->query(\"SELECT * FROM \$userTable LIMIT 5\");
-            while (\$record = \$recordsRes->fetch_assoc()) {
-                echo \"<tr>\";
-                foreach (\$record as \$value) {
-                    echo \"<td>\" . htmlspecialchars(substr((string)\$value, 0, 50)) . \"</td>\";
+            $recordsRes = $mysqli->query("SELECT * FROM `{$userTable}` LIMIT 5");
+            while ($record = $recordsRes->fetch_assoc()) {
+                echo "<tr>";
+                foreach ($record as $value) {
+                    echo "<td>" . htmlspecialchars(substr((string)$value, 0, 50)) . "</td>";
                 }
-                echo \"</tr>\";
+                echo "</tr>";
             }
-            echo \"</table>\";
+            echo "</table>";
         }
     }
 }
 
-echo \"</div>\";
+echo "</div>";
 
 // Resumen y recomendaciones
-echo \"<div class='section'>
+echo "<div class='section'>
     <h2>✅ Recomendaciones</h2>
     <ol>
         <li>Verifica cuál es la base de datos actual que quieres usar</li>
-        <li>El archivo <code>db_config.php</code> está configurado para: <code>super_ia_logan</code></li>
+        <li>Revisa la configuración de <code>server_php/db_config.php</code> (host, usuario, base de datos)</li>
         <li>Si necesitas cambiar, edita <code>server_php/db_config.php</code></li>
         <li>Los scripts de login y registro han sido adaptados a la estructura nueva</li>
     </ol>
-</div>\";
+</div>";
 
 // Link a tester
-echo \"<div class='section'>
+echo "<div class='section'>
     <h2>🧪 Probar Sistemas</h2>
     <a href='test_login_registro.php' style='color: #7C3AED; text-decoration: none; font-weight: bold;'>→ Ver Estado de Login/Registro</a>
-</div>\";
+</div>";
 
-\$mysqli->close();
+$mysqli->close();
 
-echo \"
+echo "
     </div>
 </body>
-</html>\";
+</html>";
 ?>

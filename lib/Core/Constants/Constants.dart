@@ -24,4 +24,10 @@ class Constants {
 
   /// URL base de la API de PayPhone Button
   static const payPhoneApiUrl = 'https://pay.payphonetodoesposible.com/api';
+
+  /// URL a donde PayPhone redirige tras pago exitoso
+  static const payPhoneResponseUrl = 'https://tu-dominio.com/payphone/success';
+
+  /// URL a donde PayPhone redirige cuando usuario cancela
+  static const payPhoneCancelUrl = 'https://tu-dominio.com/payphone/cancel';
 }

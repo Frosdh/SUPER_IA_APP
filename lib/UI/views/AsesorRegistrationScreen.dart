@@ -3,9 +3,11 @@ import 'package:super_ia/UI/views/SignIn.dart';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:super_ia/Core/Models/CooperativaModel.dart';
 import 'package:super_ia/Core/Models/SupervisorModel.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 
 class AsesorRegistrationScreen extends StatefulWidget {
@@ -1047,6 +1049,14 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                   );
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf, color: Colors.white),
+                title: const Text('Seleccionar PDF', style: TextStyle(color: Colors.white)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _seleccionarYSubirPdf();
+                },
+              ),
             ],
           ),
         ),
@@ -1073,55 +1083,7 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
         throw Exception('El archivo está vacío');
       }
 
-      // Subir el archivo al servidor
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseURL/api_subir_documento.php'),
-      );
-
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          bytes,
-          filename: imagenPickeada.name,
-        ),
-      );
-
-      print('📤 Subiendo archivo (${bytes.length} bytes)...');
-      final response = await request.send().timeout(
-            const Duration(seconds: 30),
-          );
-
-      print('📡 Status: ${response.statusCode}');
-
-      if (response.statusCode == 200) {
-        final responseData =
-            jsonDecode(await response.stream.bytesToString());
-
-        if (responseData['status'] == 'success') {
-          if (mounted) {
-            setState(() {
-              _documentoSeleccionado = imagenPickeada.name;
-              _documentoNombre =
-                  imagenPickeada.name.length > 30
-                      ? '${imagenPickeada.name.substring(0, 27)}...'
-                      : imagenPickeada.name;
-              _documentoPath = responseData['filepath'];
-              _cargandoDocumento = false;
-            });
-
-            _mostrarSnackbar(
-              '✅ ${imagenPickeada.name} - Subido exitosamente',
-              const Color(0xFF003D7A),
-            );
-          }
-        } else {
-          throw Exception(responseData['message'] ?? 'Error desconocido');
-        }
-      } else {
-        throw Exception(
-            'Error del servidor: ${response.statusCode}');
-      }
+      await _subirDocumentoBytes(filename: imagenPickeada.name, bytes: bytes);
     } catch (e) {
       if (mounted) {
         setState(() => _cargandoDocumento = false);
@@ -1129,5 +1091,115 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
       }
       print('❌ Error: $e');
     }
+  }
+
+  Future<void> _seleccionarYSubirPdf() async {
+    try {
+      setState(() => _cargandoDocumento = true);
+
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        if (mounted) setState(() => _cargandoDocumento = false);
+        return;
+      }
+
+      final file = result.files.first;
+      final Uint8List? bytes = file.bytes;
+      final name = file.name;
+
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('No se pudo leer el PDF');
+      }
+
+      await _subirDocumentoBytes(filename: name, bytes: bytes);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _cargandoDocumento = false);
+        _mostrarError('Error al subir PDF: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _subirDocumentoBytes({
+    required String filename,
+    required List<int> bytes,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$baseURL/api_subir_documento.php'),
+    );
+
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: filename,
+      ),
+    );
+
+    print('📤 Subiendo archivo $filename (${bytes.length} bytes)...');
+    final response = await request.send().timeout(const Duration(seconds: 30));
+
+    final bodyText = await response.stream.bytesToString();
+    print('📡 Status: ${response.statusCode}');
+    if (bodyText.trim().isNotEmpty) {
+      print('📄 Body: $bodyText');
+    }
+
+    Map<String, dynamic>? responseData;
+    try {
+      final decoded = jsonDecode(bodyText);
+      if (decoded is Map<String, dynamic>) {
+        responseData = decoded;
+      } else if (decoded is Map) {
+        responseData = Map<String, dynamic>.from(decoded);
+      }
+    } catch (_) {
+      responseData = null;
+    }
+
+    if (response.statusCode == 200 && responseData != null) {
+      if (responseData['status'] == 'success') {
+        if (mounted) {
+          setState(() {
+            _documentoSeleccionado = filename;
+            _documentoNombre = filename.length > 30
+                ? '${filename.substring(0, 27)}...'
+                : filename;
+            _documentoPath = responseData!['filepath'];
+            _cargandoDocumento = false;
+          });
+
+          _mostrarSnackbar(
+            '✅ $filename - Subido exitosamente',
+            const Color(0xFF003D7A),
+          );
+        }
+        return;
+      }
+
+      throw Exception(responseData['message'] ?? 'Error desconocido');
+    }
+
+    final serverMessage = responseData?['message']?.toString();
+    if (serverMessage != null && serverMessage.isNotEmpty) {
+      throw Exception(serverMessage);
+    }
+
+    if (bodyText.trim().isEmpty) {
+      throw Exception(
+        'El servidor respondió HTTP ${response.statusCode} sin body.\n'
+        'Esto suele pasar cuando el hosting está ejecutando un PHP viejo o hay un fatal antes de imprimir JSON.\n'
+        'Revise/actualice: server_php/api_subir_documento.php en el hosting.\n'
+        'Endpoint: $baseURL/api_subir_documento.php',
+      );
+    }
+
+    throw Exception('Error del servidor: HTTP ${response.statusCode}');
   }
 }

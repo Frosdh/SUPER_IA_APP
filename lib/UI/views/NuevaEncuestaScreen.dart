@@ -8,7 +8,7 @@ import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
 
 // ─────────────────────────────────────────────────────────────
-//  Paso de la encuesta
+//  Paso de la encuesta 
 // ─────────────────────────────────────────────────────────────
 enum _Paso {
   inicial,
@@ -149,6 +149,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Guardado en servidor ─────────────────────────────────────
 
+  Map<String, dynamic>? _tryDecodeJsonMap(String body) {
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _guardarEncuesta({bool fueEncuestado = true}) async {
     if (_guardando) return;
     setState(() => _guardando = true);
@@ -157,6 +168,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     // Obtener usuario_id; si está vacío mostrar error claro al usuario
     final usuarioId = await AuthPrefs.getUsuarioId();
+    final asesorId = await AuthPrefs.getAsesorId();
     if (usuarioId.isEmpty) {
       setState(() => _guardando = false);
       if (mounted) {
@@ -175,6 +187,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     final body = <String, String>{
       'usuario_id': usuarioId,
+      if (asesorId.isNotEmpty) 'asesor_id': asesorId,
       'tipo_tarea': widget.tipoTarea,
       'fue_encuestado': fueEncuestado ? '1' : '0',
       // Cliente
@@ -254,15 +267,48 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
 
     try {
+      final url = Uri.parse('${Constants.apiBaseUrl}/guardar_cliente_encuesta.php');
+      debugPrint(
+        '>>> [ENC] POST $url usuario_id=$usuarioId asesor_id=${asesorId.isNotEmpty ? asesorId : '-'} fue_encuestado=${fueEncuestado ? 1 : 0}',
+      );
+
       final resp = await http
           .post(
-            Uri.parse('${Constants.apiBaseUrl}/guardar_cliente_encuesta.php'),
+            url,
             body: body,
           )
           .timeout(const Duration(seconds: 20));
 
       if (!mounted) return;
-      final data = json.decode(resp.body) as Map<String, dynamic>;
+
+      final rawBody = resp.body;
+      debugPrint('>>> [ENC] HTTP ${resp.statusCode} len=${rawBody.length} headers=${resp.headers}');
+      if (rawBody.isNotEmpty) {
+        final preview = rawBody.length > 500 ? rawBody.substring(0, 500) : rawBody;
+        debugPrint('>>> [ENC] body(0..${preview.length}): $preview');
+      }
+      if (rawBody.trim().isEmpty) {
+        _mostrarError(
+          'El servidor respondió HTTP ${resp.statusCode} sin body.\n'
+          'Esto suele ser un fatal en PHP o el hosting no tiene los archivos actualizados.\n'
+          'Revise/actualice: server_php/guardar_cliente_encuesta.php y server_php/db_config.php en el hosting.\n'
+          'Endpoint: ${Constants.apiBaseUrl}/guardar_cliente_encuesta.php',
+        );
+        return;
+      }
+
+      final data = _tryDecodeJsonMap(rawBody);
+      if (data == null) {
+        _mostrarError(
+          'Respuesta inválida del servidor (HTTP ${resp.statusCode}).',
+        );
+        return;
+      }
+
+      if (resp.statusCode != 200) {
+        _mostrarError(data['message']?.toString() ?? 'Error HTTP ${resp.statusCode}');
+        return;
+      }
 
       if (data['status'] == 'success') {
         _mostrarDialogoFinalizado(fueEncuestado: fueEncuestado);
@@ -271,8 +317,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      // Guardar localmente si no hay conexión
-      _mostrarError('Sin conexión. Datos guardados localmente. ($e)');
+      _mostrarError('No se pudo guardar en el servidor. ($e)');
     } finally {
       if (mounted) setState(() => _guardando = false);
     }

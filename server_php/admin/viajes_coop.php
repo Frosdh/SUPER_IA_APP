@@ -57,14 +57,20 @@ if (isset($_GET['ajax'])) {
 }
 
 function estadoBadge($e) {
-    return match($e) {
-        'terminado' => '<span class="badge bg-success">Completado</span>',
-        'cancelado' => '<span class="badge bg-danger">Cancelado</span>',
-        'en_camino' => '<span class="badge bg-info text-dark">En camino</span>',
-        'iniciado'  => '<span class="badge bg-primary">En curso</span>',
-        'aceptado'  => '<span class="badge bg-warning text-dark">Aceptado</span>',
-        default     => '<span class="badge bg-secondary">Pedido</span>',
-    };
+    switch ($e) {
+        case 'terminado':
+            return '<span class="badge bg-success">Completado</span>';
+        case 'cancelado':
+            return '<span class="badge bg-danger">Cancelado</span>';
+        case 'en_camino':
+            return '<span class="badge bg-info text-dark">En camino</span>';
+        case 'iniciado':
+            return '<span class="badge bg-primary">En curso</span>';
+        case 'aceptado':
+            return '<span class="badge bg-warning text-dark">Aceptado</span>';
+        default:
+            return '<span class="badge bg-secondary">Pedido</span>';
+    }
 }
 
 $currentPage = 'viajes';

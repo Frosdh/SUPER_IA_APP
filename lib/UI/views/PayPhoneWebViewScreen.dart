@@ -189,8 +189,11 @@ class _PayPhoneWebViewScreenState extends State<PayPhoneWebViewScreen> {
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     final amount = (args?['amount'] as num?)?.toDouble() ?? 0.0;
 
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    return PopScope(
+      canPop: true,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (!didPop) await _onWillPop();
+      },
       child: Scaffold(
         backgroundColor: ConstantColors.backgroundDark,
         appBar: AppBar(
@@ -270,7 +273,7 @@ class _PayPhoneWebViewScreenState extends State<PayPhoneWebViewScreen> {
             // Loading overlay
             if (_loading || _procesando)
               Container(
-                color: ConstantColors.backgroundDark.withOpacity(0.92),
+                color: ConstantColors.backgroundDark.withValues(alpha: 0.92),
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -279,7 +282,7 @@ class _PayPhoneWebViewScreenState extends State<PayPhoneWebViewScreen> {
                         width: 70,
                         height: 70,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00A6B4).withOpacity(0.15),
+                          color: const Color(0xFF00A6B4).withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: Center(
