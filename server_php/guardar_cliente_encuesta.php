@@ -21,6 +21,7 @@ if (!function_exists('http_response_code')) {
 }
 
 $API_BUILD = '2026-04-14a';
+$GLOBALS['API_BUILD'] = $API_BUILD;
 
 function respond_json($code, $payload) {
     if (!headers_sent()) {
@@ -63,11 +64,14 @@ register_shutdown_function(function () {
     $errType = isset($err['type']) ? (int)$err['type'] : 0;
     if (!in_array($errType, $fatalTypes, true)) return;
 
+    $ref = newErrorRef();
+    $phaseSafe = isset($GLOBALS['phase']) ? $GLOBALS['phase'] : 'UNKNOWN';
+
     // Log para diagnóstico en el hosting
     $errMsg = isset($err['message']) ? $err['message'] : '';
     $errFile = isset($err['file']) ? $err['file'] : '';
     $errLine = isset($err['line']) ? $err['line'] : '';
-    @error_log('[guardar_cliente_encuesta][FATAL] ' . $errMsg . ' in ' . $errFile . ':' . $errLine);
+    @error_log('[guardar_cliente_encuesta][FATAL][phase=' . $phaseSafe . '][ref=' . $ref . '] ' . $errMsg . ' in ' . $errFile . ':' . $errLine);
 
     // Intentar devolver JSON en caso de fatal
     if (!headers_sent()) {
@@ -75,16 +79,29 @@ register_shutdown_function(function () {
         header('Content-Type: application/json; charset=utf-8');
     }
 
-    echo json_encode([
+    $msg = (string)$errMsg;
+    if (strlen($msg) > 180) {
+        $msg = substr($msg, 0, 180) . '...';
+    }
+
+    echo json_encode(array(
         'status' => 'error',
-        'message' => 'Error interno del servidor',
+        'message' => 'Error interno del servidor (ref: ' . $ref . ')',
+        'phase' => $phaseSafe,
+        'last_error' => $msg,
         'build' => isset($GLOBALS['API_BUILD']) ? $GLOBALS['API_BUILD'] : null,
-    ], JSON_UNESCAPED_UNICODE);
+    ), JSON_UNESCAPED_UNICODE);
 });
 
 set_exception_handler(function ($e) {
-    @error_log('[guardar_cliente_encuesta][EXCEPTION] ' . $e);
-    respond_json(200, ['status' => 'error', 'message' => 'Error interno del servidor']);
+    $ref = newErrorRef();
+    $phaseSafe = isset($GLOBALS['phase']) ? $GLOBALS['phase'] : 'UNKNOWN';
+    @error_log('[guardar_cliente_encuesta][UNCAUGHT][phase=' . $phaseSafe . '][ref=' . $ref . '] ' . $e);
+    respond_json(200, array(
+        'status' => 'error',
+        'message' => 'Error interno del servidor (ref: ' . $ref . ')',
+        'phase' => $phaseSafe,
+    ));
     exit;
 });
 
@@ -225,9 +242,11 @@ if ($nombre_completo === '' && $fue_encuestado) {
 
 try {
     $phase = 'INIT';
+    $GLOBALS['phase'] = $phase;
 
     // 1. Resolver asesor_id (preferir asesor_id explícito; fallback a usuario_id)
     $phase = 'ASESOR_RESOLVE';
+    $GLOBALS['phase'] = $phase;
     $asesor_id = null;
 
     if ($asesor_id_in !== '') {
@@ -270,6 +289,7 @@ try {
 
     if ($cedula !== null) {
         $phase = 'CLIENTE_SELECT';
+        $GLOBALS['phase'] = $phase;
         $stmt = $conn->prepare("SELECT id FROM cliente_prospecto WHERE cedula = ? LIMIT 1");
         $stmt->bind_param('s', $cedula);
         $stmt->execute();
@@ -282,6 +302,7 @@ try {
 
     if ($cliente_id === null) {
         $phase = 'CLIENTE_INSERT';
+        $GLOBALS['phase'] = $phase;
         $cliente_id = genUUID();
         $stmt = $conn->prepare(
             "INSERT INTO cliente_prospecto
@@ -311,6 +332,7 @@ try {
     } else {
         // Actualizar datos existentes
         $phase = 'CLIENTE_UPDATE';
+        $GLOBALS['phase'] = $phase;
         $stmt = $conn->prepare(
             "UPDATE cliente_prospecto
              SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?,
@@ -328,6 +350,7 @@ try {
 
     // 3. Crear tarea
     $phase = 'TAREA_INSERT';
+    $GLOBALS['phase'] = $phase;
     $tarea_id    = genUUID();
     $fecha_hoy   = date('Y-m-d');
     $hora_hoy    = date('H:i:s');
@@ -365,6 +388,7 @@ try {
     // 4. Crear encuesta_comercial si fue encuestado
     if ($fue_encuestado) {
         $phase = 'ENCUESTA_INSERT';
+        $GLOBALS['phase'] = $phase;
         $enc_id = genUUID();
 
         // Consolidar institución (mantiene_producto_financiero y cuenta)
@@ -423,8 +447,10 @@ try {
         $fecha_nuevo_c     = $fecha_acuerdo;
 
         // 28 params
+        // Tipos (28): ss + iii + ssss + i + s + i + s + i + s + iiiiiiii + sssss
+        // Nota: el 4to campo tras los ids es institucion_inversiones (string), no int.
         $stmt->bind_param(
-            'ssiiiissssisisisiiiiiiiisssss',
+            'ssiiissssisisisiiiiiiiisssss',
     $enc_id,
     $tarea_id,
     $mantiene_ahorro,
@@ -460,6 +486,7 @@ try {
         // 5. Crear acuerdo_visita si hay acuerdo != ninguno
         if ($acuerdo !== 'ninguno' && $fecha_acuerdo !== null) {
             $phase = 'ACUERDO_INSERT';
+            $GLOBALS['phase'] = $phase;
             $av_id = genUUID();
             $stmt = $conn->prepare(
                 "INSERT INTO acuerdo_visita (id, tarea_id, tipo_acuerdo, fecha, hora)
@@ -487,14 +514,26 @@ try {
     $phaseSafe = isset($phase) ? $phase : 'UNKNOWN';
     @error_log('[guardar_cliente_encuesta][' . $phaseSafe . '][ref=' . $ref . '] ' . $e);
 
+    $errno = null;
+    $sqlstate = null;
+    if (class_exists('mysqli_sql_exception') && ($e instanceof mysqli_sql_exception)) {
+        $errno = (int)$e->getCode();
+        if (method_exists($e, 'getSqlState')) {
+            $sqlstate = $e->getSqlState();
+        }
+    }
+
     if (isset($conn)) {
         @mysqli_rollback($conn);
     }
 
-    respond_json(200, [
+    respond_json(200, array(
         'status' => 'error',
-        'message' => 'Error interno del servidor (ref: ' . $ref . ')'
-    ]);
+        'message' => 'Error interno del servidor (ref: ' . $ref . ')',
+        'phase' => $phaseSafe,
+        'errno' => $errno,
+        'sqlstate' => $sqlstate,
+    ));
 } finally {
     if (isset($conn)) $conn->close();
 }
