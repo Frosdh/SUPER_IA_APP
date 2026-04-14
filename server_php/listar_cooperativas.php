@@ -1,7 +1,7 @@
 <?php
 require_once 'db_config.php';
 
-$conexion = new mysqli($db_host, $db_user, $db_password, 'base_super_ia');
+$conexion = new mysqli($db_host, $db_user, $db_password, $db_name);
 $conexion->set_charset('utf8mb4');
 
 $result = $conexion->query('SELECT COUNT(*) as total FROM unidad_bancaria WHERE activo = 1');

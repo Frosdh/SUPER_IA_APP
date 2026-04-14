@@ -1,6 +1,6 @@
 <?php
 require_once 'db_config.php';
-$conn = new mysqli($db_host, $db_user, $db_password, 'base_super_ia');
+$conn = new mysqli($db_host, $db_user, $db_password, $db_name);
 $conn->set_charset('utf8mb4');
 
 echo "=== AGREGANDO COLUMNA 'telefono' A TABLA 'usuario' ===\n\n";

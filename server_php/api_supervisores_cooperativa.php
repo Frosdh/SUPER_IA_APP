@@ -23,7 +23,7 @@ try {
         throw new Exception("unidad_bancaria_id es requerido");
     }
 
-    $conexion = new mysqli($db_host, $db_user, $db_password, 'base_super_ia');
+    $conexion = new mysqli($db_host, $db_user, $db_password, $db_name);
     if ($conexion->connect_error) {
         throw new Exception("Conexión fallida: " . $conexion->connect_error);
     }

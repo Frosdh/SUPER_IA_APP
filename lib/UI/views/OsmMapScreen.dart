@@ -149,6 +149,31 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     );
   }
 
+  Future<void> _notificarAsesorDesconectado() async {
+    try {
+      final asesorId = await AuthPrefs.getAsesorId();
+      final usuarioId = await AuthPrefs.getUsuarioId();
+
+      if (asesorId.isEmpty && usuarioId.isEmpty) {
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('${Constants.apiBaseUrl}/actualizar_estado_asesor.php'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+        body: {
+          'estado': 'desconectado',
+          'asesor_id': asesorId,
+          'usuario_id': usuarioId,
+        },
+      ).timeout(const Duration(seconds: 8));
+
+      debugPrint('>>> [ASESOR_STATUS] desconectado HTTP ${response.statusCode}');
+    } catch (_) {
+      // No bloqueamos el logout si falla la notificación.
+    }
+  }
+
   // ── Cerrar sesión ────────────────────────────────────────────
   Future<void> _cerrarSesion() async {
     // Mostrar diálogo de confirmación
@@ -200,6 +225,9 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
     // Detener servicio de ubicación en segundo plano
     await BackgroundLocationService.stop();
+
+    // Marcar asesor como desconectado para ocultarlo de inmediato en el mapa web.
+    await _notificarAsesorDesconectado();
 
     // Limpiar sesión guardada
     await AuthPrefs.clearSession();

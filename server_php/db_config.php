@@ -6,9 +6,10 @@
 // ============================================================
 
 $db_host     = "localhost";
-$db_name     = "base_super_ia";
-$db_user     = "root";
-$db_password = '';
+$db_name     = "corporat_base_super_ia";
+$db_user     = "corporat_coac_user";
+$db_password = 'zCD;^[1YN[AE8P6f';
+
 
 $conn = new mysqli($db_host, $db_user, $db_password, $db_name);
 

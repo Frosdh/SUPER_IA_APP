@@ -10,7 +10,7 @@ require 'db_config.php';
 
 try {
     // Usar MySQLi para esta operación
-    $conexion = new mysqli($db_host, $db_user, $db_password, 'base_super_ia');
+    $conexion = new mysqli($db_host, $db_user, $db_password, $db_name);
     if ($conexion->connect_error) {
         die("Conexión fallida: " . $conexion->connect_error);
     }

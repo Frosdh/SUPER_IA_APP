@@ -90,6 +90,17 @@ try {
         case 'get_ubicaciones_asesores':
             // Obtener ubicaciones en tiempo real de todos los asesores del supervisor
             require_once '../db_config.php';
+            $conn->query(
+                "CREATE TABLE IF NOT EXISTS asesor_presencia (
+                    asesor_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,
+                    estado ENUM('conectado','desconectado') NOT NULL DEFAULT 'desconectado',
+                    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+            $conn->query(
+                "ALTER TABLE asesor_presencia
+                 MODIFY asesor_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL"
+            );
             
             $query = "
                 SELECT DISTINCT
@@ -100,10 +111,12 @@ try {
                 INNER JOIN asesor a ON a.id = ua.asesor_id
                 INNER JOIN supervisor s ON s.id = a.supervisor_id
                 INNER JOIN usuario u ON u.id = a.usuario_id
+                LEFT JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
                 WHERE s.usuario_id = ?
-                AND ua.timestamp >= DATE_SUB(NOW(), INTERVAL 30 MINUTE)
+                AND ua.timestamp >= DATE_SUB(NOW(), INTERVAL 10 MINUTE)
                 AND ua.latitud IS NOT NULL 
                 AND ua.longitud IS NOT NULL
+                AND COALESCE(ap.estado, 'conectado') = 'conectado'
                 ORDER BY ua.asesor_id DESC, ua.timestamp DESC
             ";
             

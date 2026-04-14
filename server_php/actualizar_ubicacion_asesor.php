@@ -1,4 +1,9 @@
 <?php
+// ============================================================
+// actualizar_ubicacion_asesor.php
+// Recibe latitud/longitud del asesor desde la app Flutter y
+// guarda en ubicacion_asesor. También marca presencia='conectado'.
+// ============================================================
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
@@ -16,15 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
+// ── Leer parámetros ─────────────────────────────────────────
 // asesor_id y usuario_id son UUID (char 36), NO enteros
-$asesor_id  = isset($_POST['asesor_id'])  ? trim((string)$_POST['asesor_id'])  : '';
-$usuario_id = isset($_POST['usuario_id']) ? trim((string)$_POST['usuario_id']) : '';
+$asesor_id   = isset($_POST['asesor_id'])   ? trim((string)$_POST['asesor_id'])   : '';
+$usuario_id  = isset($_POST['usuario_id'])  ? trim((string)$_POST['usuario_id'])  : '';
+$lat_raw     = isset($_POST['latitud'])     ? trim((string)$_POST['latitud'])     : '';
+$lng_raw     = isset($_POST['longitud'])    ? trim((string)$_POST['longitud'])    : '';
+$prec_raw    = isset($_POST['precision_m']) ? trim((string)$_POST['precision_m']) : '';
 
-$lat_raw = isset($_POST['latitud']) ? trim((string)$_POST['latitud']) : '';
-$lng_raw = isset($_POST['longitud']) ? trim((string)$_POST['longitud']) : '';
-$precision_raw = isset($_POST['precision_m']) ? trim((string)$_POST['precision_m']) : '';
-
-// Si no llegó asesor_id pero sí usuario_id, buscar el asesor_id por usuario_id
+// Si no llegó asesor_id pero sí usuario_id, buscarlo por usuario_id
 if ($asesor_id === '' && $usuario_id !== '') {
     $stmt_map = $conn->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
     if ($stmt_map) {
@@ -51,43 +56,72 @@ if ($lat_raw === '' || $lng_raw === '') {
     exit;
 }
 
-$latitud = (float)$lat_raw;
-$longitud = (float)$lng_raw;
-$precision_m = $precision_raw === '' ? 0.0 : (float)$precision_raw;
+$latitud    = (float)$lat_raw;
+$longitud   = (float)$lng_raw;
+$precision  = $prec_raw === '' ? 0.0 : (float)$prec_raw;
 
 if ($latitud < -90 || $latitud > 90 || $longitud < -180 || $longitud > 180) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Coordenadas inválidas']);
+    echo json_encode(['status' => 'error', 'message' => 'Coordenadas invalidas']);
     exit;
 }
 
 try {
-    $stmt = $conn->prepare(
-        'INSERT INTO ubicacion_asesor (asesor_id, latitud, longitud, precision_m, timestamp) VALUES (?, ?, ?, ?, NOW())'
+    // ── Asegurar tablas ──────────────────────────────────────
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS asesor_presencia (
+            asesor_id  VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,
+            estado     ENUM('conectado','desconectado') NOT NULL DEFAULT 'conectado',
+            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+    $conn->query(
+        "ALTER TABLE asesor_presencia
+         MODIFY asesor_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL"
     );
 
+    // ── Guardar ubicación ────────────────────────────────────
+    $stmt = $conn->prepare(
+        'INSERT INTO ubicacion_asesor (asesor_id, latitud, longitud, precision_m, timestamp)
+         VALUES (?, ?, ?, ?, NOW())'
+    );
     if (!$stmt) {
-        throw new Exception('Error en preparación: ' . $conn->error);
+        throw new Exception('Error preparando insert ubicacion: ' . $conn->error);
     }
-
     // asesor_id es string UUID → tipo 's'
-    $stmt->bind_param('sddd', $asesor_id, $latitud, $longitud, $precision_m);
-    $ok = $stmt->execute();
+    $stmt->bind_param('sddd', $asesor_id, $latitud, $longitud, $precision);
+    if (!$stmt->execute()) {
+        throw new Exception('Error ejecutando insert ubicacion: ' . $stmt->error);
+    }
     $stmt->close();
 
-    if (!$ok) {
-        throw new Exception('Error al guardar ubicación');
+    // ── Marcar presencia como CONECTADO ─────────────────────
+    // Cada heartbeat GPS confirma que el asesor está activo.
+    // Si estaba marcado como 'desconectado' (logout previo sin borrar sesión),
+    // este INSERT ON DUPLICATE KEY lo vuelve a activar automáticamente.
+    $pres = $conn->prepare(
+        "INSERT INTO asesor_presencia (asesor_id, estado, updated_at)
+         VALUES (?, 'conectado', NOW())
+         ON DUPLICATE KEY UPDATE estado = 'conectado', updated_at = NOW()"
+    );
+    if ($pres) {
+        $pres->bind_param('s', $asesor_id);
+        $pres->execute();
+        $pres->close();
     }
 
     echo json_encode([
-        'status' => 'success',
-        'message' => 'Ubicación actualizada',
+        'status'    => 'success',
+        'message'   => 'Ubicacion actualizada',
         'asesor_id' => $asesor_id,
+        'latitud'   => $latitud,
+        'longitud'  => $longitud,
     ]);
+
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode([
-        'status' => 'error',
+        'status'  => 'error',
         'message' => 'Error del servidor: ' . $e->getMessage(),
     ]);
 } finally {

@@ -39,6 +39,26 @@ class MyTaskHandler extends TaskHandler {
   @override
   void onDestroy(DateTime timestamp, SendPort? sendPort) async {
     _timer?.cancel();
+    // Notificar al servidor que el asesor se desconectó para que desaparezca
+    // del mapa web de inmediato (sin esperar el intervalo de 3 min).
+    try {
+      final asesorId  = await AuthPrefs.getAsesorId();
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      if (asesorId.isNotEmpty || usuarioId.isNotEmpty) {
+        await http.post(
+          Uri.parse('${Constants.apiBaseUrl}/actualizar_estado_asesor.php'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+          body: {
+            'estado':     'desconectado',
+            'asesor_id':  asesorId,
+            'usuario_id': usuarioId,
+          },
+        ).timeout(const Duration(seconds: 6));
+        log('>>> [BG_SERVICE] Asesor marcado como desconectado en onDestroy');
+      }
+    } catch (e) {
+      log('>>> [BG_SERVICE] onDestroy: no se pudo notificar desconexión: $e');
+    }
   }
 
   Future<void> _sendLocation() async {

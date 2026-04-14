@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
 import 'package:super_ia/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:super_ia/UI/views/EditProfileScreen.dart';
 import 'package:super_ia/UI/views/EmergencyContactsScreen.dart';
@@ -155,8 +158,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _cerrarSesion() async {
+  Future<void> _cerrarSesion() async {
+    // Detener servicio de rastreo en segundo plano
+    await BackgroundLocationService.stop();
+
+    // Notificar al servidor que el asesor se desconectó (lo elimina del mapa web)
+    try {
+      final asesorId  = await AuthPrefs.getAsesorId();
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      if (asesorId.isNotEmpty || usuarioId.isNotEmpty) {
+        await http.post(
+          Uri.parse('${Constants.apiBaseUrl}/actualizar_estado_asesor.php'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+          body: {
+            'estado':     'desconectado',
+            'asesor_id':  asesorId,
+            'usuario_id': usuarioId,
+          },
+        ).timeout(const Duration(seconds: 6));
+      }
+    } catch (_) {
+      // No bloquear el logout si el servidor no responde
+    }
+
     await AuthPrefs.clearSession();
+
+    if (!mounted) return;
     Navigator.of(context).pushNamedAndRemoveUntil(
       SignInPage.route,
       (route) => false,

@@ -69,6 +69,18 @@ if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
 
 // Insertar en ubicacion_asesor
 // El trigger trg_georef_ubicacion calculará automáticamente el campo `punto`
+$conn->query(
+    "CREATE TABLE IF NOT EXISTS asesor_presencia (
+        asesor_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,
+        estado ENUM('conectado','desconectado') NOT NULL DEFAULT 'desconectado',
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+);
+$conn->query(
+    "ALTER TABLE asesor_presencia
+     MODIFY asesor_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL"
+);
+
 $stmt = $conn->prepare(
     'INSERT INTO ubicacion_asesor (asesor_id, latitud, longitud, precision_m, timestamp)
      VALUES (?, ?, ?, ?, NOW())'
@@ -87,6 +99,17 @@ if (!$ok) {
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => 'Error al guardar ubicación']);
     exit;
+}
+
+$presenceStmt = $conn->prepare(
+    "INSERT INTO asesor_presencia (asesor_id, estado, updated_at)
+     VALUES (?, 'conectado', NOW())
+     ON DUPLICATE KEY UPDATE estado = 'conectado', updated_at = NOW()"
+);
+if ($presenceStmt) {
+    $presenceStmt->bind_param('s', $asesor_id);
+    $presenceStmt->execute();
+    $presenceStmt->close();
 }
 
 echo json_encode([

@@ -9,7 +9,7 @@ header('Content-Type: text/html; charset=utf-8');
 require 'db_config.php';
 
 // Crear conexión MySQLi
-$conexion = new mysqli($db_host, $db_user, $db_password, 'base_super_ia');
+$conexion = new mysqli($db_host, $db_user, $db_password, $db_name);
 if ($conexion->connect_error) {
     die("Conexión fallida: " . $conexion->connect_error);
 }

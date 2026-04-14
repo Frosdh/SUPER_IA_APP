@@ -89,16 +89,42 @@ try {
         exit;
     }
 
+    // ── Marcar asesor como CONECTADO en la tabla de presencia ──
+    // Esto permite que el mapa del supervisor lo muestre inmediatamente
+    // y que, al cerrar sesión, la bandera 'desconectado' lo oculte de inmediato.
+    try {
+        $conn->query(
+            "CREATE TABLE IF NOT EXISTS asesor_presencia (
+                asesor_id  VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,
+                estado     ENUM('conectado','desconectado') NOT NULL DEFAULT 'conectado',
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+        $aid = (string)$user['asesor_id'];
+        $presStmt = $conn->prepare(
+            "INSERT INTO asesor_presencia (asesor_id, estado, updated_at)
+             VALUES (?, 'conectado', NOW())
+             ON DUPLICATE KEY UPDATE estado = 'conectado', updated_at = NOW()"
+        );
+        if ($presStmt) {
+            $presStmt->bind_param('s', $aid);
+            $presStmt->execute();
+            $presStmt->close();
+        }
+    } catch (Exception $ex) {
+        error_log('[login_asesor] No se pudo actualizar presencia: ' . $ex->getMessage());
+    }
+
     echo json_encode([
         'status' => 'success',
         'message' => 'Login exitoso',
         'user' => [
-            'id' => $user['id'],
+            'id'        => $user['id'],
             'asesor_id' => $user['asesor_id'],
-            'nombre' => $user['nombre'] ?? '',
-            'email' => $user['email'] ?? $email,
-            'telefono' => $user['telefono'] ?? '',
-            'rol' => $user['rol'] ?? 'asesor',
+            'nombre'    => $user['nombre'] ?? '',
+            'email'     => $user['email'] ?? $email,
+            'telefono'  => $user['telefono'] ?? '',
+            'rol'       => $user['rol'] ?? 'asesor',
         ],
     ]);
 

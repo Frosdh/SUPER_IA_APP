@@ -6,6 +6,17 @@ import 'package:super_ia/Core/Models/NearbyDriverMapModel.dart';
 import 'package:http/http.dart' as http;
 
 class ApiProvider {
+  Map<String, dynamic>? _tryDecodeJsonMap(String body) {
+    try {
+      final decoded = json.decode(body);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<Map<String, dynamic>> loginAsesor({
     required String email,
     required String password,
@@ -30,9 +41,11 @@ class ApiProvider {
       }
 
       if (response.statusCode != 200) {
+        final decoded = _tryDecodeJsonMap(response.body);
+        if (decoded != null) return decoded;
         return <String, dynamic>{
           'status': 'error',
-          'message': 'No se pudo conectar con el servidor',
+          'message': 'Error HTTP ${response.statusCode}',
         };
       }
 
@@ -69,9 +82,11 @@ class ApiProvider {
     }
 
     if (response.statusCode != 200) {
+      final decoded = _tryDecodeJsonMap(response.body);
+      if (decoded != null) return decoded;
       return <String, dynamic>{
         'status': 'error',
-        'message': 'No se pudo conectar con el servidor',
+        'message': 'Error HTTP ${response.statusCode}',
       };
     }
 
