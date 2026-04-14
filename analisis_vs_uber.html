@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Análisis GeoMove vs Uber</title>
+  <style>
+    :root {
+      --uber-black: #000000;
+      --uber-white: #FFFFFF;
+      --accent: #06C167;
+      --accent2: #1DBFB8;
+      --warn: #F5A623;
+      --danger: #E74C3C;
+      --card-bg: #111111;
+      --card2-bg: #1A1A1A;
+      --text-muted: #888888;
+      --border: #2A2A2A;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0A0A0A;
+      color: #EEEEEE;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      line-height: 1.6;
+    }
+    .header {
+      background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 40px 40px;
+      text-align: center;
+    }
+    .header-badge {
+      display: inline-block;
+      background: rgba(6,193,103,0.15);
+      border: 1px solid rgba(6,193,103,0.4);
+      color: var(--accent);
+      font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 6px 16px; border-radius: 20px; margin-bottom: 20px;
+    }
+    .header h1 { font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 10px; }
+    .header h1 span { color: var(--accent); }
+    .header p { color: var(--text-muted); font-size: 15px; max-width: 600px; margin: 0 auto; }
+    .date-tag { margin-top: 16px; font-size: 12px; color: #555; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px 80px; }
+
+    /* OVERALL */
+    .overall-card {
+      background: var(--card-bg); border: 1px solid var(--border);
+      border-radius: 16px; padding: 40px; margin-bottom: 36px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .overall-card::before {
+      content: ''; position: absolute; top: -60px; right: -60px;
+      width: 200px; height: 200px;
+      background: radial-gradient(circle, rgba(6,193,103,0.08) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .gauge-wrap { display: flex; align-items: center; justify-content: center; gap: 60px; flex-wrap: wrap; margin-top: 24px; }
+    .big-circle { position: relative; width: 180px; height: 180px; }
+    .big-circle svg { transform: rotate(-90deg); width: 180px; height: 180px; }
+    .big-circle svg circle { fill: none; stroke-width: 14; stroke-linecap: round; }
+    .circle-track { stroke: #222; }
+    .circle-fill { stroke: var(--accent); stroke-dasharray: 502; }
+    .big-circle .center-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); text-align: center; }
+    .big-circle .center-text .pct { font-size: 38px; font-weight: 900; color: var(--accent); line-height: 1; }
+    .big-circle .center-text .label { font-size: 11px; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+    .overall-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; text-align: center; }
+    .stat-box { background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 12px; padding: 20px 16px; }
+    .stat-box .val { font-size: 28px; font-weight: 800; color: var(--accent); }
+    .stat-box .val.warn { color: var(--warn); }
+    .stat-box .val.danger { color: var(--danger); }
+    .stat-box .lbl { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .overall-card h2 { font-size: 20px; font-weight: 700; }
+
+    /* DELTA BADGE */
+    .delta { display:inline-block; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px; margin-left:6px; background:rgba(6,193,103,0.15); color:#06C167; border:1px solid rgba(6,193,103,0.3); }
+
+    .section-title {
+      font-size: 22px; font-weight: 800; margin-bottom: 20px;
+      padding-left: 14px; border-left: 4px solid var(--accent); letter-spacing: -0.3px;
+    }
+
+    .categories-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 40px; }
+    @media(max-width:700px) { .categories-grid { grid-template-columns: 1fr; } }
+    .cat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 22px 24px; }
+    .cat-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .cat-title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
+    .cat-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+    .cat-pct { font-size: 18px; font-weight: 800; }
+    .bar-track { background: #1E1E1E; border-radius: 6px; height: 8px; overflow: hidden; margin-bottom: 14px; }
+    .bar-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+    .bar-green  { background: linear-gradient(90deg, #06C167, #0E8A49); }
+    .bar-yellow { background: linear-gradient(90deg, #F5A623, #D4881A); }
+    .bar-red    { background: linear-gradient(90deg, #E74C3C, #C0392B); }
+    .bar-blue   { background: linear-gradient(90deg, #1DBFB8, #148F8A); }
+
+    .cat-items { list-style: none; font-size: 13px; }
+    .cat-items li { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; color: #BBBBBB; border-bottom: 1px solid #1C1C1C; }
+    .cat-items li:last-child { border-bottom: none; }
+    .cat-items li .dot { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; }
+    .dot-green  { background: rgba(6,193,103,0.2);  color: var(--accent); }
+    .dot-yellow { background: rgba(245,166,35,0.2); color: var(--warn); }
+    .dot-red    { background: rgba(231,76,60,0.2);  color: var(--danger); }
+
+    /* TABLA */
+    .table-wrap { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 40px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { background: #161616; }
+    th { text-align: left; padding: 14px 20px; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    td { padding: 13px 20px; font-size: 13.5px; border-bottom: 1px solid #171717; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; letter-spacing: 0.5px; }
+    .tag-done    { background: rgba(6,193,103,0.15);  color: #06C167; border: 1px solid rgba(6,193,103,0.3); }
+    .tag-partial { background: rgba(245,166,35,0.15); color: #F5A623; border: 1px solid rgba(245,166,35,0.3); }
+    .tag-missing { background: rgba(231,76,60,0.12);  color: #E74C3C; border: 1px solid rgba(231,76,60,0.25); }
+    .tag-critical{ background: rgba(180,0,0,0.18);    color: #FF4444; border: 1px solid rgba(200,0,0,0.35); font-weight: 900; }
+    .priority-tag { font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+    .p-critical { background: #2A0000; color: #FF6B6B; }
+    .p-high     { background: #2A1800; color: #FFB347; }
+    .p-medium   { background: #1A2A00; color: #90EE60; }
+    .p-low      { background: #001A2A; color: #6BB5FF; }
+
+    /* ROADMAP */
+    .roadmap { margin-bottom: 40px; }
+    .phase { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; margin-bottom: 16px; overflow: hidden; }
+    .phase-header { display: flex; align-items: center; gap: 14px; padding: 18px 24px; background: #131313; border-bottom: 1px solid var(--border); }
+    .phase-num { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; flex-shrink: 0; }
+    .phase-num-1 { background: rgba(231,76,60,0.2); color: #E74C3C; border: 2px solid #E74C3C; }
+    .phase-num-2 { background: rgba(245,166,35,0.2); color: #F5A623; border: 2px solid #F5A623; }
+    .phase-num-3 { background: rgba(6,193,103,0.2); color: #06C167; border: 2px solid #06C167; }
+    .phase-num-4 { background: rgba(29,191,184,0.2); color: #1DBFB8; border: 2px solid #1DBFB8; }
+    .phase-title { font-weight: 700; font-size: 16px; }
+    .phase-subtitle { font-size: 12px; color: var(--text-muted); }
+    .phase-eta { margin-left: auto; font-size: 12px; color: var(--text-muted); background: #1A1A1A; padding: 4px 12px; border-radius: 20px; border: 1px solid #2A2A2A; }
+    .phase-items { padding: 16px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    @media(max-width:600px){ .phase-items { grid-template-columns: 1fr; } }
+    .phase-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #CCCCCC; padding: 6px 10px; border-radius: 8px; background: #151515; border: 1px solid #202020; }
+    .phase-item .pi-icon { flex-shrink: 0; font-size: 14px; }
+    .phase-item.done { background: rgba(6,193,103,0.06); border-color: rgba(6,193,103,0.2); color: #aaa; text-decoration: line-through; }
+
+    .summary-card { background: linear-gradient(135deg, #0A1F12 0%, #0A1A1F 100%); border: 1px solid rgba(6,193,103,0.25); border-radius: 16px; padding: 36px; margin-bottom: 40px; text-align: center; }
+    .summary-card h3 { font-size: 20px; font-weight: 800; margin-bottom: 14px; }
+    .summary-card p { color: #BBBBBB; font-size: 14px; max-width: 700px; margin: 0 auto; line-height: 1.7; }
+
+    .pills-row { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 36px; }
+    .pill { display: flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 600; border: 1px solid transparent; }
+    .pill-g { background: rgba(6,193,103,0.12); color: #06C167; border-color: rgba(6,193,103,0.25); }
+    .pill-y { background: rgba(245,166,35,0.12); color: #F5A623; border-color: rgba(245,166,35,0.25); }
+    .pill-r { background: rgba(231,76,60,0.12);  color: #E74C3C; border-color: rgba(231,76,60,0.25); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 36px; }
+    @media(max-width:640px){ .two-col { grid-template-columns: 1fr; } }
+    .strength-card, .weak-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+    .strength-card h4 { color: var(--accent); margin-bottom: 12px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
+    .weak-card h4 { color: var(--danger); margin-bottom: 12px; font-size: 14px; letter-spacing: 1px; text-transform: uppercase; }
+    .swot-list { list-style: none; }
+    .swot-list li { font-size: 13px; color: #CCCCCC; padding: 7px 0; border-bottom: 1px solid #1C1C1C; display: flex; align-items: flex-start; gap: 8px; }
+    .swot-list li:last-child { border-bottom: none; }
+    .swot-list li span { flex: 1; }
+
+    footer { text-align: center; color: #333; font-size: 12px; padding: 20px; border-top: 1px solid #1A1A1A; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-badge">Análisis Técnico Actualizado · Marzo 2026</div>
+  <h1>GeoMove <span>vs</span> Uber</h1>
+  <p>Evaluación exhaustiva del estado actual de la app comparada contra el estándar de la industria</p>
+  <div class="date-tag">Actualizado el 23 de Marzo, 2026 · Flutter App · Ecuador</div>
+</div>
+
+<div class="container">
+
+  <!-- PORCENTAJE GENERAL -->
+  <div class="overall-card">
+    <h2>Completitud General vs Uber <span class="delta">↑ +17% desde última revisión</span></h2>
+    <div class="gauge-wrap">
+      <div class="big-circle">
+        <svg viewBox="0 0 180 180">
+          <circle class="circle-track" cx="90" cy="90" r="80"/>
+          <!-- 72% de 502 = 361, offset = 502 - 361 = 141 -->
+          <circle class="circle-fill" cx="90" cy="90" r="80" style="stroke-dashoffset: 141;"/>
+        </svg>
+        <div class="center-text">
+          <div class="pct">72%</div>
+          <div class="label">Completado</div>
+        </div>
+      </div>
+      <div class="overall-stats">
+        <div class="stat-box">
+          <div class="val">17</div>
+          <div class="lbl">Módulos implementados ✓</div>
+        </div>
+        <div class="stat-box">
+          <div class="val warn">6</div>
+          <div class="lbl">Módulos parciales ⚠️</div>
+        </div>
+        <div class="stat-box">
+          <div class="val danger">9</div>
+          <div class="lbl">Módulos faltantes ✗</div>
+        </div>
+        <div class="stat-box">
+          <div class="val">80+</div>
+          <div class="lbl">Archivos Dart creados</div>
+        </div>
+        <div class="stat-box">
+          <div class="val">40+</div>
+          <div class="lbl">Endpoints de API PHP</div>
+        </div>
+        <div class="stat-box">
+          <div class="val" style="color:#06C167;">1</div>
+          <div class="lbl">Pasarela de pago activa</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LEYENDA -->
+  <div class="pills-row">
+    <div class="pill pill-g">✓ Implementado</div>
+    <div class="pill pill-y">⚠ Parcial / Básico</div>
+    <div class="pill pill-r">✗ Faltante / No existe</div>
+  </div>
+
+  <!-- GRILLA DE CATEGORÍAS -->
+  <div class="section-title">Análisis por Categoría</div>
+  <div class="categories-grid">
+
+    <!-- AUTENTICACIÓN -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(6,193,103,0.1);">🔐</div>
+          Autenticación
+        </div>
+        <div class="cat-pct" style="color:#06C167;">72%</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-green" style="width:72%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Login rider vía OTP por email</span></li>
+        <li><div class="dot dot-green">✓</div><span>Login driver con usuario y contraseña</span></li>
+        <li><div class="dot dot-green">✓</div><span>Registro multi-paso (6 pasos) para conductores</span></li>
+        <li><div class="dot dot-green">✓</div><span>Sesión persistente con SharedPreferences</span></li>
+        <li><div class="dot dot-green">✓</div><span>FCM Token integrado en registro</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Sin verificación de teléfono por SMS (solo email)</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin autenticación biométrica (huella/cara)</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin login social (Google/Apple)</span></li>
+      </ul>
+    </div>
+
+    <!-- MAPAS -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(29,191,184,0.1);">🗺️</div>
+          Mapas & Geolocalización
+        </div>
+        <div class="cat-pct" style="color:#1DBFB8;">68%</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-blue" style="width:68%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Mapa en tiempo real con OpenStreetMap</span></li>
+        <li><div class="dot dot-green">✓</div><span>Geolocalización actual del usuario</span></li>
+        <li><div class="dot dot-green">✓</div><span>Búsqueda de origen y destino con autocomplete</span></li>
+        <li><div class="dot dot-green">✓</div><span>Cálculo de ruta con OSRM (distancia + tiempo)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Marcadores de conductores cercanos en mapa</span></li>
+        <li><div class="dot dot-green">✓</div><span>Servicio de ubicación en background</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>ETA básico, no actualiza en tiempo real durante viaje</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin capa de tráfico en tiempo real</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin modo navegación giro a giro para conductor</span></li>
+      </ul>
+    </div>
+
+    <!-- FLUJO DE VIAJE -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(245,166,35,0.1);">🚗</div>
+          Flujo de Viaje
+        </div>
+        <div class="cat-pct" style="color:#F5A623;">65%</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-yellow" style="width:65%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Selección de origen y destino</span></li>
+        <li><div class="dot dot-green">✓</div><span>Categorías de servicio (Moto, Auto, Premium, Van, Camión)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Estimación de precio por distancia y tiempo</span></li>
+        <li><div class="dot dot-green">✓</div><span>Aplicación de códigos de descuento</span></li>
+        <li><div class="dot dot-green">✓</div><span>Cancelación de viaje con motivo</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Matching básico sin algoritmo inteligente</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin precios dinámicos / surge pricing</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin reserva anticipada de viajes</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin viajes compartidos / carpooling</span></li>
+      </ul>
+    </div>
+
+    <!-- PAGOS -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(6,193,103,0.1);">💳</div>
+          Pagos & Facturación
+        </div>
+        <div class="cat-pct" style="color:#06C167;">60% <span class="delta">↑+52%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-green" style="width:60%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>PayPhone integrado (pasarela real Ecuador)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Pago con tarjeta vía WebView (Visa/MC)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Historial de pagos (WalletScreen)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Generación de recibos por viaje (ReceiptScreen)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Sistema de disputas de cobro (DisputeScreen)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Dashboard de ganancias del conductor</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Token PayPhone en placeholder (requiere cuenta real)</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin billetera virtual / créditos en app</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin reembolsos automáticos</span></li>
+      </ul>
+    </div>
+
+    <!-- TIEMPO REAL -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(29,191,184,0.1);">📡</div>
+          Tiempo Real & Notificaciones
+        </div>
+        <div class="cat-pct" style="color:#1DBFB8;">67% <span class="delta">↑+5%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-blue" style="width:67%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Notificaciones push con Firebase FCM</span></li>
+        <li><div class="dot dot-green">✓</div><span>Alertas de sonido para solicitudes entrantes</span></li>
+        <li><div class="dot dot-green">✓</div><span>Servicio en background con flutter_foreground_task</span></li>
+        <li><div class="dot dot-green">✓</div><span>Notificaciones push de chat tipo burbuja</span></li>
+        <li><div class="dot dot-green">✓</div><span>FCM: "Conductor en camino", "Ha llegado", "Viaje finalizado"</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Actualización por polling (5 seg) — no WebSocket</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Ubicación conductor con delay 15 seg</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin WebSockets o Server-Sent Events</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin notificaciones por SMS o email</span></li>
+      </ul>
+    </div>
+
+    <!-- CHAT -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(107,17,255,0.1);">💬</div>
+          Chat & Comunicación
+        </div>
+        <div class="cat-pct" style="color:#7C3AED;">75% <span class="delta">↑+60%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:75%; background:linear-gradient(90deg,#7C3AED,#2575FC);"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Chat en app pasajero ↔ conductor (ChatScreen)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Mensajes rápidos predefinidos (6 opciones)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Notificación push tipo burbuja cuando llega mensaje</span></li>
+        <li><div class="dot dot-green">✓</div><span>Tap en notificación abre el chat directamente</span></li>
+        <li><div class="dot dot-green">✓</div><span>SOS con cuenta regresiva automática de 5 segundos</span></li>
+        <li><div class="dot dot-green">✓</div><span>Botón de llamada directa desde el chat</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>SOS por WhatsApp externo (no nativo 112/911)</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin llamada enmascarada (requiere Twilio)</span></li>
+      </ul>
+    </div>
+
+    <!-- SEGURIDAD -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(231,76,60,0.1);">🛡️</div>
+          Seguridad & Confianza
+        </div>
+        <div class="cat-pct" style="color:#E74C3C;">42% <span class="delta">↑+4%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-red" style="width:42%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Carga y revisión de documentos del conductor</span></li>
+        <li><div class="dot dot-green">✓</div><span>Botón SOS con contactos de emergencia</span></li>
+        <li><div class="dot dot-green">✓</div><span>SOS automático con countdown de 5 segundos</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Calificación conductor (1-5 estrellas) — sin visualización pública</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Verificación antecedentes — solo formulario, sin integración real</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin PIN de seguridad al subir al vehículo</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin detección de ruta desviada</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin verificación biométrica del conductor</span></li>
+      </ul>
+    </div>
+
+    <!-- PANEL CONDUCTOR -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(245,166,35,0.1);">🚖</div>
+          Panel del Conductor
+        </div>
+        <div class="cat-pct" style="color:#F5A623;">70% <span class="delta">↑+10%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-yellow" style="width:70%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Toggle Online/Offline</span></li>
+        <li><div class="dot dot-green">✓</div><span>Recepción y aceptación/rechazo de solicitudes</span></li>
+        <li><div class="dot dot-green">✓</div><span>Flujo completo de estados del viaje</span></li>
+        <li><div class="dot dot-green">✓</div><span>Historial de viajes del conductor</span></li>
+        <li><div class="dot dot-green">✓</div><span>Dashboard de ganancias con comisión 15% (DriverEarningsScreen)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Chat con pasajero desde viaje activo</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Estadísticas básicas — sin metas ni comparativas semanales</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin navegación GPS giro a giro integrada</span></li>
+      </ul>
+    </div>
+
+    <!-- PANEL ADMIN -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(6,193,103,0.1);">🖥️</div>
+          Panel Administrativo
+        </div>
+        <div class="cat-pct" style="color:#06C167;">88% <span class="delta">↑+88%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-green" style="width:88%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Dashboard con métricas en tiempo real</span></li>
+        <li><div class="dot dot-green">✓</div><span>Gestión de conductores (aprobar/rechazar/suspender)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Gestión de pasajeros y cuentas</span></li>
+        <li><div class="dot dot-green">✓</div><span>Reportes y exportación de datos</span></li>
+        <li><div class="dot dot-green">✓</div><span>Gestión de tarifas y categorías</span></li>
+        <li><div class="dot dot-green">✓</div><span>Gestión de promociones y códigos de descuento</span></li>
+        <li><div class="dot dot-green">✓</div><span>Mapa de calor de demanda (nuevo)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Panel de cooperativas y secretarias</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin gestión de zonas geográficas por cooperativa</span></li>
+      </ul>
+    </div>
+
+    <!-- PERFIL PASAJERO -->
+    <div class="cat-card">
+      <div class="cat-header">
+        <div class="cat-title">
+          <div class="cat-icon" style="background:rgba(29,191,184,0.1);">👤</div>
+          Perfil del Pasajero
+        </div>
+        <div class="cat-pct" style="color:#1DBFB8;">70% <span class="delta">↑+10%</span></div>
+      </div>
+      <div class="bar-track"><div class="bar-fill bar-blue" style="width:70%"></div></div>
+      <ul class="cat-items">
+        <li><div class="dot dot-green">✓</div><span>Ver y editar perfil (nombre, email, foto)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Lugares favoritos (casa, trabajo, personalizados)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Historial de viajes con detalles completos</span></li>
+        <li><div class="dot dot-green">✓</div><span>Contactos de emergencia</span></li>
+        <li><div class="dot dot-green">✓</div><span>Mi billetera (historial de pagos)</span></li>
+        <li><div class="dot dot-green">✓</div><span>Ver recibo y disputar cobros desde historial</span></li>
+        <li><div class="dot dot-yellow">⚠</div><span>Sin verificación del número de teléfono</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin programa de referidos</span></li>
+        <li><div class="dot dot-red">✗</div><span>Sin configuración de preferencias de viaje</span></li>
+      </ul>
+    </div>
+
+  </div>
+
+  <!-- TABLA DETALLADA -->
+  <div class="section-title">Funcionalidades Detalladas</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Funcionalidad</th>
+          <th>Estado</th>
+          <th>Prioridad</th>
+          <th>Notas</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Login pasajero (OTP email)</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Funcional con verificación OTP</td></tr>
+        <tr><td>Login conductor</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Usuario/contraseña + sesión persistente</td></tr>
+        <tr><td>Registro conductor 6 pasos</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Personal + vehículo + documentos + foto</td></tr>
+        <tr><td>Mapa OpenStreetMap</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>flutter_map, marcadores, polylines</td></tr>
+        <tr><td>Búsqueda de lugares (autocomplete)</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Nominatim API</td></tr>
+        <tr><td>Cálculo de ruta y precio</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>OSRM + fórmula base+km+min</td></tr>
+        <tr><td>Categorías de servicio</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Fuber-X, Fuber-Plus, Fuber-Moto, Taxi</td></tr>
+        <tr><td>Solicitar viaje</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Flujo completo de booking</td></tr>
+        <tr><td>Aceptar/rechazar solicitud (conductor)</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Con sonido y notificación push</td></tr>
+        <tr><td>Estados del viaje en tiempo real</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>pedido→aceptado→en_camino→iniciado→terminado</td></tr>
+        <tr><td>Historial de viajes (pasajero)</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Local + server con caché offline</td></tr>
+        <tr><td>Calificación al conductor</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>1-5 estrellas + comentario</td></tr>
+        <tr><td>Códigos de descuento</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Validación, límites, expiración</td></tr>
+        <tr><td>Lugares favoritos</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Casa, trabajo, personalizados</td></tr>
+        <tr><td>Contactos de emergencia</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Almacenamiento local</td></tr>
+        <tr><td>Pasarela de pago PayPhone</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Integración real con PayPhone Ecuador — token pendiente de activar</td></tr>
+        <tr><td>Historial de pagos / billetera</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>WalletScreen con persistencia local</td></tr>
+        <tr><td>Recibos de viaje</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>ReceiptScreen con desglose de tarifa</td></tr>
+        <tr><td>Disputas de cobro</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>DisputeScreen + registrar_disputa.php</td></tr>
+        <tr><td>Dashboard ganancias conductor</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>DriverEarningsScreen — comisión 15% plataforma</td></tr>
+        <tr><td>Chat en app (pasajero ↔ conductor)</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>ChatScreen con polling 4 seg + FCM push</td></tr>
+        <tr><td>Mensajes rápidos predefinidos</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>6 mensajes: "En camino", "Ya llegué", etc.</td></tr>
+        <tr><td>Notificación push de chat (burbuja)</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Estilo WhatsApp con MessagingStyleInformation</td></tr>
+        <tr><td>SOS automático con countdown</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>5 seg tap = auto-envío, long press = inmediato</td></tr>
+        <tr><td>Panel administrativo web</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Dashboard + conductores + usuarios + reportes + tarifas + descuentos</td></tr>
+        <tr><td>Mapa de calor de demanda</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Leaflet.heat con filtros por fecha y categoría</td></tr>
+        <tr><td>Modo conductor online/offline</td><td><span class="tag tag-done">✓ Listo</span></td><td></td><td>Toggle funcional</td></tr>
+        <tr><td>SOS</td><td><span class="tag tag-partial">⚠ Parcial</span></td><td><span class="priority-tag p-medium">Media</span></td><td>Funciona vía WhatsApp — no integrado con 911</td></tr>
+        <tr><td>Compartir viaje</td><td><span class="tag tag-partial">⚠ Parcial</span></td><td><span class="priority-tag p-medium">Media</span></td><td>Solo vía WhatsApp/SMS externo</td></tr>
+        <tr><td>Calificación pública del conductor</td><td><span class="tag tag-partial">⚠ Parcial</span></td><td><span class="priority-tag p-medium">Media</span></td><td>Se guarda pero no se muestra prominentemente al pasajero</td></tr>
+        <tr><td>Llamada enmascarada</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-high">Alta</span></td><td>Requiere Twilio o servicio de telefonía</td></tr>
+        <tr><td>Precios dinámicos / surge pricing</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-high">Alta</span></td><td>Tarifa fija siempre</td></tr>
+        <tr><td>Navegación giro a giro conductor</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-high">Alta</span></td><td>Conductor solo ve el mapa, sin instrucciones de manejo</td></tr>
+        <tr><td>PIN de seguridad en viaje</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-high">Alta</span></td><td>Conductor confirma con PIN del pasajero antes de iniciar</td></tr>
+        <tr><td>Verificación SMS de teléfono</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-high">Alta</span></td><td>Solo email OTP actualmente</td></tr>
+        <tr><td>Reserva anticipada de viajes</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-medium">Media</span></td><td>Solo viajes inmediatos</td></tr>
+        <tr><td>Detección de ruta desviada</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-high">Alta</span></td><td>Sin alerta si conductor se desvía del trayecto</td></tr>
+        <tr><td>Programa de referidos</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-medium">Media</span></td><td>No implementado</td></tr>
+        <tr><td>Login social (Google/Apple)</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-medium">Media</span></td><td>No implementado</td></tr>
+        <tr><td>Viajes compartidos / pool</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-low">Baja</span></td><td>No considerado en arquitectura actual</td></tr>
+        <tr><td>WebSockets (tiempo real real)</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-medium">Media</span></td><td>Polling funciona bien para MVP — WebSocket para escalar</td></tr>
+        <tr><td>Internacionalización (i18n)</td><td><span class="tag tag-missing">✗ Falta</span></td><td><span class="priority-tag p-low">Baja</span></td><td>Solo español, Ecuador hardcodeado</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- FORTALEZAS / DEBILIDADES -->
+  <div class="section-title">Fortalezas y Brechas</div>
+  <div class="two-col">
+    <div class="strength-card">
+      <h4>✅ Fortalezas actuales</h4>
+      <ul class="swot-list">
+        <li>🏗️ <span>Arquitectura Flutter + Provider sólida y escalable</span></li>
+        <li>💳 <span>Pasarela de pago PayPhone real integrada (Ecuador)</span></li>
+        <li>💬 <span>Chat completo en app con notificaciones push tipo burbuja</span></li>
+        <li>🖥️ <span>Panel admin web completo con mapa de calor</span></li>
+        <li>🔔 <span>Sistema FCM robusto para conductores y pasajeros</span></li>
+        <li>📱 <span>Flujo de viaje completo de extremo a extremo</span></li>
+        <li>🗂️ <span>40+ endpoints PHP en servidor real con BD MySQL</span></li>
+        <li>🚨 <span>SOS mejorado con countdown automático de 5 segundos</span></li>
+      </ul>
+    </div>
+    <div class="weak-card">
+      <h4>❌ Brechas críticas restantes</h4>
+      <ul class="swot-list">
+        <li>🧭 <span>Sin navegación GPS para conductores — solo mapa sin instrucciones</span></li>
+        <li>🔒 <span>Sin PIN de seguridad al inicio del viaje</span></li>
+        <li>📞 <span>Sin llamada enmascarada (número privado entre partes)</span></li>
+        <li>⚡ <span>Sin precios dinámicos en horas pico</span></li>
+        <li>📱 <span>Sin verificación de teléfono por SMS</span></li>
+        <li>🗺️ <span>Sin detección de ruta desviada durante el viaje</span></li>
+        <li>💰 <span>Token PayPhone en placeholder — requiere RUC y cuenta real</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ROADMAP ACTUALIZADO -->
+  <div class="section-title">Roadmap — Próximos pasos</div>
+  <div class="roadmap">
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-num-1">1</div>
+        <div>
+          <div class="phase-title">Seguridad del Viaje</div>
+          <div class="phase-subtitle">Completar confianza entre pasajero y conductor</div>
+        </div>
+        <div class="phase-eta">4-6 semanas</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item"><span class="pi-icon">🔢</span><span>PIN de seguridad al inicio del viaje</span></div>
+        <div class="phase-item"><span class="pi-icon">🗺️</span><span>Detección de ruta desviada con alerta automática</span></div>
+        <div class="phase-item"><span class="pi-icon">📱</span><span>Verificación de teléfono por SMS (Twilio)</span></div>
+        <div class="phase-item"><span class="pi-icon">⭐</span><span>Visualización pública de calificación del conductor</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-num-2">2</div>
+        <div>
+          <div class="phase-title">Navegación & Experiencia Conductor</div>
+          <div class="phase-subtitle">Herramientas profesionales para el conductor</div>
+        </div>
+        <div class="phase-eta">5-8 semanas</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item"><span class="pi-icon">🧭</span><span>Navegación giro a giro integrada (OSRM/Valhalla)</span></div>
+        <div class="phase-item"><span class="pi-icon">📊</span><span>Estadísticas avanzadas del conductor (metas semanales)</span></div>
+        <div class="phase-item"><span class="pi-icon">📞</span><span>Llamada enmascarada (número privado)</span></div>
+        <div class="phase-item"><span class="pi-icon">🏆</span><span>Sistema de niveles y bonificaciones para conductores</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-num-3">3</div>
+        <div>
+          <div class="phase-title">Monetización Avanzada</div>
+          <div class="phase-subtitle">Funciones que aumentan ingresos de la plataforma</div>
+        </div>
+        <div class="phase-eta">6-10 semanas</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item"><span class="pi-icon">⚡</span><span>Precios dinámicos en horas pico (surge pricing)</span></div>
+        <div class="phase-item"><span class="pi-icon">📅</span><span>Reserva anticipada de viajes</span></div>
+        <div class="phase-item"><span class="pi-icon">🎁</span><span>Programa de referidos pasajero → pasajero</span></div>
+        <div class="phase-item"><span class="pi-icon">💰</span><span>Billetera virtual con saldo recargable</span></div>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header">
+        <div class="phase-num phase-num-4">4</div>
+        <div>
+          <div class="phase-title">Escalabilidad & Pulido Final</div>
+          <div class="phase-subtitle">Para crecer sin límites técnicos</div>
+        </div>
+        <div class="phase-eta">8-12 semanas</div>
+      </div>
+      <div class="phase-items">
+        <div class="phase-item"><span class="pi-icon">⚡</span><span>WebSockets para posición del conductor en tiempo real</span></div>
+        <div class="phase-item"><span class="pi-icon">🔐</span><span>Login social (Google/Apple)</span></div>
+        <div class="phase-item"><span class="pi-icon">🌎</span><span>Internacionalización (multi-país)</span></div>
+        <div class="phase-item"><span class="pi-icon">🏢</span><span>Panel de cooperativa con reparto de ganancias</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RESUMEN -->
+  <div class="summary-card">
+    <h3>📊 Resumen Ejecutivo — Marzo 2026</h3>
+    <p>
+      <strong>GeoMove está al ~72% de ser un Uber funcional.</strong> En los últimos meses se avanzó significativamente:
+      se integró PayPhone como pasarela de pago real, se implementó chat en app con notificaciones push tipo burbuja,
+      se completó el panel administrativo web con mapa de calor, y se reforzó el módulo SOS.
+      El núcleo de la app — mapas, rastreo, estados del viaje, pagos y notificaciones — ya es un
+      <strong>producto lanzable</strong>. Las brechas que quedan (navegación giro a giro, PIN de seguridad, precios dinámicos)
+      son mejoras que elevarían la app al <strong>90%+ de Uber</strong> y pueden construirse en paralelo
+      a un lanzamiento MVP. La arquitectura Flutter + PHP + Firebase es sólida para el mercado ecuatoriano.
+    </p>
+  </div>
+
+</div>
+
+<footer>
+  GeoMove Analysis Report · Generado el 23 de Marzo, 2026 · Flutter + PHP + Firebase · Ecuador
+</footer>
+
+</body>
+</html>

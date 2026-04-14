@@ -1,0 +1,9 @@
+# Proteger acceso directo a esta carpeta
+<FilesMatch "\.pdf$">
+    Deny from all
+</FilesMatch>
+
+# Alternativa si FilesMatch no funciona (para servidores que no lo soportan)
+Order allow,deny
+Allow from none
+Deny from all

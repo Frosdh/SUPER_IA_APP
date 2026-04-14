@@ -1,0 +1,12 @@
+# Proteger subdirectorio de credenciales de supervisores
+<FilesMatch "\.(php|php3|php4|php5|php7|php8|phtml|phar|shtml|pht|phps|pgif|pjpeg|pjpg|plzh)$">
+    Deny from all
+</FilesMatch>
+
+# Permitir descarga de credenciales (PDF e imágenes)
+<FilesMatch "\.(pdf|jpg|jpeg|png)$">
+    Allow from all
+</FilesMatch>
+
+# Deshabilitar listado de directorios
+Options -Indexes
