@@ -77,34 +77,43 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
 
-    // Encontrar la fecha más reciente con segmentos de ruta para este asesor
-    $stDate = $conn->prepare("
-        SELECT DATE(inicio_at) AS fecha
-        FROM ruta_segmento
-        WHERE asesor_id = ?
-        ORDER BY inicio_at DESC
-        LIMIT 1
-    ");
-    if (!$stDate) throw new Exception('Prepare date: ' . $conn->error);
-    $stDate->bind_param('s', $asesor_id);
-    $stDate->execute();
-    $dateRow = $stDate->get_result()->fetch_assoc();
-    $stDate->close();
+    // Fecha opcional: si viene, devuelve los segmentos de esa fecha.
+    // Si no viene, usa el día más reciente con datos.
+    $fecha = null;
+    $fecha_in = trim($_GET['fecha'] ?? '');
 
-    if (!$dateRow) {
-        // Sin rutas registradas
-        echo json_encode([
-            'status'    => 'ok',
-            'asesor_id' => $asesor_id,
-            'nombre'    => $asesorNombre,
-            'fecha'     => null,
-            'segmentos' => [],
-            'total'     => 0,
-        ]);
-        exit;
+    if ($fecha_in !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_in)) {
+        $fecha = $fecha_in;
+    } else {
+        // Encontrar la fecha más reciente con segmentos de ruta para este asesor
+        $stDate = $conn->prepare("
+            SELECT DATE(inicio_at) AS fecha
+            FROM ruta_segmento
+            WHERE asesor_id = ?
+            ORDER BY inicio_at DESC
+            LIMIT 1
+        ");
+        if (!$stDate) throw new Exception('Prepare date: ' . $conn->error);
+        $stDate->bind_param('s', $asesor_id);
+        $stDate->execute();
+        $dateRow = $stDate->get_result()->fetch_assoc();
+        $stDate->close();
+
+        if (!$dateRow) {
+            // Sin rutas registradas
+            echo json_encode([
+                'status'    => 'ok',
+                'asesor_id' => $asesor_id,
+                'nombre'    => $asesorNombre,
+                'fecha'     => null,
+                'segmentos' => [],
+                'total'     => 0,
+            ]);
+            exit;
+        }
+
+        $fecha = $dateRow['fecha'];
     }
-
-    $fecha = $dateRow['fecha'];
 
     // Obtener todos los segmentos de ese día
     $stSeg = $conn->prepare("
@@ -169,6 +178,7 @@ try {
             'inicio_lng'    => $seg['inicio_lng'] !== null ? (float)$seg['inicio_lng'] : null,
             'fin_lat'       => $seg['fin_lat']    !== null ? (float)$seg['fin_lat']    : null,
             'fin_lng'       => $seg['fin_lng']    !== null ? (float)$seg['fin_lng']    : null,
+            'tarea_id'      => $seg['tarea_destino_id'],
             'tarea_tipo'    => $seg['tipo_tarea'],
             'cliente_nombre'=> $seg['cliente_nombre'],
             'puntos'        => $puntos,

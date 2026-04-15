@@ -58,18 +58,26 @@ try {
     ");
 
     // ── Obtener asesores del supervisor ─────────────────────
-    $whereAsesor = $asesor_id !== '' ? "AND a.id = '$asesor_id'" : '';
-
     $sqlAsesores = "
         SELECT a.id AS asesor_id, u.nombre AS asesor_nombre
         FROM asesor     a
         JOIN supervisor s ON s.id      = a.supervisor_id
         JOIN usuario    u ON u.id      = a.usuario_id
         WHERE s.usuario_id = ?
-        $whereAsesor
     ";
+    if ($asesor_id !== '') {
+        $sqlAsesores .= " AND a.id = ?";
+    }
+
     $stA = $conn->prepare($sqlAsesores);
-    $stA->bind_param('s', $supervisor_id);
+    if (!$stA) throw new Exception('Prepare asesores: ' . $conn->error);
+
+    if ($asesor_id !== '') {
+        $stA->bind_param('ss', $supervisor_id, $asesor_id);
+    } else {
+        $stA->bind_param('s', $supervisor_id);
+    }
+
     $stA->execute();
     $resA = $stA->get_result();
     $asesores = [];
@@ -162,6 +170,7 @@ try {
                 'inicio_lng'      => $seg['inicio_lng'] !== null ? (float)$seg['inicio_lng'] : null,
                 'fin_lat'         => $seg['fin_lat']    !== null ? (float)$seg['fin_lat']    : null,
                 'fin_lng'         => $seg['fin_lng']    !== null ? (float)$seg['fin_lng']    : null,
+                'tarea_id'        => $seg['tarea_destino_id'],
                 'tarea_tipo'      => $seg['tipo_tarea'],
                 'cliente_nombre'  => $seg['cliente_nombre'],
                 'puntos'          => $puntos,

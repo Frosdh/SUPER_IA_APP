@@ -360,6 +360,19 @@ $totalPendientes    = 0;
         .leyenda-color { width:32px; height:4px; border-radius:2px; flex-shrink:0; }
         .leyenda-dot   { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
 
+        /* ── Lista de clientes encuestados ── */
+        .cliente-item {
+            padding:8px 10px; border-radius:10px;
+            border:1px solid #e5e7eb; background:#f9fafb;
+            cursor:pointer; transition:all .15s;
+            margin-bottom:6px;
+        }
+        .cliente-item:hover { background:#f3f4f6; border-color:#d1d5db; }
+        .cliente-item.disabled { cursor:not-allowed; opacity:.65; }
+        .cliente-item.disabled:hover { background:#f9fafb; border-color:#e5e7eb; }
+        .cliente-name { font-weight:800; color:#111827; font-size:12.5px; margin-bottom:3px; }
+        .cliente-meta { color:#6b7280; font-size:11px; }
+
         /* Marcador tarea completada */
         .task-marker-pin {
             width:28px; height:28px; border-radius:50%;
@@ -408,12 +421,30 @@ $totalPendientes    = 0;
                 </h1>
                 <div style="color:var(--brand-gray);margin-top:6px;">Monitoreo en tiempo real de asesores</div>
             </div>
-            <button id="refresh-btn" class="btn"
-                style="background:rgba(255,221,0,.18);color:var(--brand-navy-deep);
-                       border:1px solid rgba(255,221,0,.35);font-weight:700;
-                       border-radius:12px;padding:10px 14px;">
-                <i class="fas fa-sync-alt"></i> Actualizar
-            </button>
+            <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2"
+                     style="background:rgba(255,221,0,.14);border:1px solid rgba(255,221,0,.28);
+                            border-radius:12px;padding:8px 10px;">
+                    <i class="fas fa-calendar-day" style="color:var(--brand-navy-deep);"></i>
+                    <input type="date" id="fecha-ruta" value="<?= date('Y-m-d') ?>"
+                           class="form-control form-control-sm"
+                           style="width:160px;border-radius:10px;border:1px solid rgba(18,58,109,.18);" />
+                </div>
+
+                <button id="buscar-fecha-btn" class="btn"
+                        style="background:rgba(14,165,233,.14);color:var(--brand-navy-deep);
+                               border:1px solid rgba(14,165,233,.28);font-weight:800;
+                               border-radius:12px;padding:10px 14px;">
+                    <i class="fas fa-magnifying-glass"></i> Buscar
+                </button>
+
+                <button id="refresh-btn" class="btn"
+                    style="background:rgba(255,221,0,.18);color:var(--brand-navy-deep);
+                           border:1px solid rgba(255,221,0,.35);font-weight:700;
+                           border-radius:12px;padding:10px 14px;">
+                    <i class="fas fa-sync-alt"></i> Actualizar
+                </button>
+            </div>
         </div>
 
         <!-- Fila: mapa + panel de asesores -->
@@ -428,6 +459,15 @@ $totalPendientes    = 0;
                 <h6><i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas de Hoy</h6>
                 <div id="leyenda-items">
                     <small style="color:#9CA3AF;">Sin rutas registradas aún</small>
+                </div>
+            </div>
+
+            <!-- Clientes encuestados (por asesor + fecha) -->
+            <div class="leyenda-rutas" id="box-clientes"
+                 style="display:none; top:20px; right:16px; left:auto; bottom:auto; min-width:240px; max-width:320px;">
+                <h6><i class="fas fa-clipboard-check me-1" style="color:#10B981;"></i>Clientes encuestados</h6>
+                <div id="clientes-items">
+                    <small style="color:#9CA3AF;">Seleccione un asesor</small>
                 </div>
             </div>
         </div>
@@ -560,6 +600,28 @@ function showToast() {
     const t = document.getElementById('refresh-toast');
     t.classList.add('show');
     setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[c]));
+}
+
+function getSelectedFecha() {
+    const el = document.getElementById('fecha-ruta');
+    const v = el ? String(el.value || '').trim() : '';
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+function formatFechaES(fecha) {
+    if (!fecha) return '';
+    const d = new Date(fecha + 'T00:00:00');
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' });
 }
 
 // ── Renderizar marcadores en el mapa ──────────────────────────
@@ -714,11 +776,160 @@ function renderPanel(asesores) {
     }
 }
 
-// ── Marcador "última ubicación" para asesores offline ────────
-let lastSeenMarker   = null;
+// ── Marcadores auxiliares ──────────────────────────────────
+let lastSeenMarker   = null; // última ubicación para asesores offline
 let selectedAsesorId = null;
+let clienteMarker    = null; // marcador al hacer click en un cliente encuestado
 
-// ── Ver asesor: centra mapa + muestra su última ruta ─────────
+function renderClientes(clientes, fecha) {
+    const box  = document.getElementById('box-clientes');
+    const list = document.getElementById('clientes-items');
+    if (!box || !list) return;
+
+    box.style.display = 'block';
+
+    const h6 = box.querySelector('h6');
+    if (h6) {
+        const fechaStr = formatFechaES(fecha);
+        h6.innerHTML = `<i class="fas fa-clipboard-check me-1" style="color:#10B981;"></i>Clientes encuestados${fechaStr ? ' · ' + fechaStr : ''}`;
+    }
+
+    if (!Array.isArray(clientes) || clientes.length === 0) {
+        list.innerHTML = '<small style="color:#9CA3AF;">Sin encuestas en esta fecha</small>';
+        return;
+    }
+
+    list.innerHTML = clientes.map((c) => {
+        const nombre  = escapeHtml(c.cliente_nombre || 'Cliente');
+        const hora    = escapeHtml(c.hora || '');
+        const tipo    = escapeHtml((c.tipo_tarea || '').replace('_', ' '));
+        const tareaId = escapeHtml(c.tarea_id || '');
+        const hasLoc  = c.latitud !== null && c.longitud !== null && isFinite(c.latitud) && isFinite(c.longitud);
+
+        return `<div class="cliente-item ${hasLoc ? '' : 'disabled'}"
+                    data-lat="${hasLoc ? c.latitud : ''}"
+                    data-lng="${hasLoc ? c.longitud : ''}"
+                    data-tarea="${tareaId}"
+                    data-nombre="${nombre}">
+            <div class="cliente-name">${nombre}</div>
+            <div class="cliente-meta"><i class="fas fa-clock"></i> ${hora || '--:--'} ${tipo ? '· ' + tipo : ''}</div>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.cliente-item').forEach(el => {
+        if (el.classList.contains('disabled')) return;
+        el.addEventListener('click', () => {
+            const lat = parseFloat(el.getAttribute('data-lat'));
+            const lng = parseFloat(el.getAttribute('data-lng'));
+            const nombre = el.getAttribute('data-nombre') || 'Cliente';
+            const tareaId = el.getAttribute('data-tarea') || '';
+            if (!isFinite(lat) || !isFinite(lng)) return;
+
+            // Quitar marcador previo
+            if (clienteMarker) { map.removeLayer(clienteMarker); clienteMarker = null; }
+
+            const icon = L.divIcon({
+                html: `<div style="width:36px;height:36px;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             background:linear-gradient(135deg,#0EA5E9,#3B82F6);
+                             border:3px solid #fff;color:#fff;font-size:16px;
+                             box-shadow:0 4px 14px rgba(59,130,246,.35);">
+                           <i class="fas fa-flag"></i>
+                       </div>`,
+                iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-18],
+                className:'advisor-marker'
+            });
+
+            clienteMarker = L.marker([lat, lng], { icon })
+                .addTo(map)
+                .bindPopup(`<div class="advisor-popup">
+                    <div class="popup-name"><i class="fas fa-user me-1"></i>${escapeHtml(nombre)}</div>
+                    <div class="popup-row"><i class="fas fa-location-dot me-1" style="color:#10B981;"></i>${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+                </div>`);
+
+            map.flyTo([lat, lng], 16, { duration: 1.1 });
+            setTimeout(() => clienteMarker?.openPopup(), 1200);
+
+            const segId = tareaId ? segmentoPorTareaId[String(tareaId)] : null;
+            const poly  = segId && rutaLayers[segId] ? rutaLayers[segId].polyline : null;
+            if (poly) {
+                try {
+                    map.fitBounds(poly.getBounds(), { padding: [60, 60], maxZoom: 16 });
+                    poly.openPopup();
+                } catch (e) {}
+            }
+        });
+    });
+}
+
+function cargarClientes(asesorId, fecha) {
+    const box  = document.getElementById('box-clientes');
+    const list = document.getElementById('clientes-items');
+    if (box) box.style.display = 'block';
+    if (list) list.innerHTML = '<small style="color:#9CA3AF;">Cargando clientes…</small>';
+
+    const qs = new URLSearchParams({ asesor_id: asesorId });
+    if (fecha) qs.set('fecha', fecha);
+
+    fetch(`api_clientes_encuestados.php?${qs.toString()}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                renderClientes(data.clientes || [], data.fecha || fecha);
+            } else {
+                throw new Error(data.message || 'Error');
+            }
+        })
+        .catch(err => {
+            console.warn('[clientes_encuestados]', err);
+            if (list) list.innerHTML = '<small style="color:#EF4444;">No se pudo cargar clientes</small>';
+        });
+}
+
+function cargarRutaYClientes(asesorId) {
+    const fecha = getSelectedFecha();
+
+    // Limpiar rutas anteriores
+    rutaGroup.clearLayers();
+    Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
+    Object.keys(segmentoPorTareaId).forEach(k => delete segmentoPorTareaId[k]);
+    const leyendaBox = document.getElementById('leyenda-rutas');
+    if (leyendaBox) leyendaBox.style.display = 'none';
+
+    // Placeholder de clientes mientras carga la ruta
+    const box  = document.getElementById('box-clientes');
+    const list = document.getElementById('clientes-items');
+    if (box) box.style.display = 'block';
+    if (list) list.innerHTML = '<small style="color:#9CA3AF;">Cargando clientes…</small>';
+
+    // Cargar ruta del asesor (por fecha si aplica)
+    const qs = new URLSearchParams({ asesor_id: asesorId });
+    if (fecha) qs.set('fecha', fecha);
+
+    fetch(`api_ultima_ruta.php?${qs.toString()}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok' && Array.isArray(data.segmentos) && data.segmentos.length > 0) {
+                renderRutas(data.segmentos);
+
+                // Actualizar título de la leyenda con fecha
+                const h6 = leyendaBox?.querySelector('h6');
+                if (h6) {
+                    const fechaStr = formatFechaES(data.fecha || fecha);
+                    h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas · ${fechaStr || 'sin fecha'}`;
+                }
+            } else {
+                // Sin rutas ese día: mantener la leyenda oculta
+                if (leyendaBox) leyendaBox.style.display = 'none';
+            }
+        })
+        .catch(err => console.warn('[ultima_ruta]', err))
+        .then(() => {
+            cargarClientes(asesorId, fecha);
+        });
+}
+
+// ── Ver asesor: centra mapa + muestra su ruta del día ─────────
 function verAsesor(asesorId, lat, lng, hasLoc) {
     // Marcar seleccionado en el panel
     document.querySelectorAll('.asesor-item').forEach(el => el.classList.remove('selected'));
@@ -763,29 +974,7 @@ function verAsesor(asesorId, lat, lng, hasLoc) {
         }
     }
 
-    // Limpiar rutas anteriores
-    rutaGroup.clearLayers();
-    Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
-    document.getElementById('leyenda-rutas').style.display = 'none';
-
-    // Cargar la última ruta de este asesor
-    fetch(`api_ultima_ruta.php?asesor_id=${encodeURIComponent(asesorId)}`, { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'ok' && data.segmentos?.length > 0) {
-                renderRutas(data.segmentos);
-                // Actualizar título de la leyenda con fecha
-                const leyendaBox = document.getElementById('leyenda-rutas');
-                const h6 = leyendaBox?.querySelector('h6');
-                if (h6) {
-                    const fechaStr = data.fecha
-                        ? new Date(data.fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' })
-                        : '';
-                    h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Última ruta · ${fechaStr}`;
-                }
-            }
-        })
-        .catch(err => console.warn('[ultima_ruta]', err));
+    cargarRutaYClientes(asesorId);
 }
 
 // ── Actualización AJAX de marcadores en el mapa ──────────────
@@ -834,46 +1023,49 @@ let refreshTimer = setInterval(() => {
     cargarPanel();           // actualiza lista de asesores
 }, REFRESH_INTERVAL);
 
-// ── Botón manual ──────────────────────────────────────────────
-document.getElementById('refresh-btn').addEventListener('click', () => {
-    clearInterval(refreshTimer);
-    updateLocations(true);   // centra mapa
-    cargarPanel();
-    // Si hay un asesor seleccionado, recargar su última ruta también
-    if (selectedAsesorId) {
-        const selEl = document.getElementById(`item-${selectedAsesorId}`);
-        const lat = selEl ? null : null; // se recargará vía verAsesor
-        // Recargar la ruta del asesor seleccionado
-        rutaGroup.clearLayers();
-        Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
-        fetch(`api_ultima_ruta.php?asesor_id=${encodeURIComponent(selectedAsesorId)}`, { cache: 'no-store' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.status === 'ok' && data.segmentos?.length > 0) {
-                    renderRutas(data.segmentos);
-                    const leyendaBox = document.getElementById('leyenda-rutas');
-                    const h6 = leyendaBox?.querySelector('h6');
-                    if (h6) {
-                        const fechaStr = data.fecha
-                            ? new Date(data.fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' })
-                            : '';
-                        h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Última ruta · ${fechaStr}`;
-                    }
-                }
-            })
-            .catch(err => console.warn('[refresh_ruta]', err));
-    }
-    refreshTimer = setInterval(() => {
-        updateLocations(false);
+// ── Controles: refresh + búsqueda por fecha ───────────────────
+const refreshBtn = document.getElementById('refresh-btn');
+if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+        clearInterval(refreshTimer);
+        updateLocations(true);   // centra mapa
         cargarPanel();
-    }, REFRESH_INTERVAL);
-});
+
+        if (selectedAsesorId) {
+            cargarRutaYClientes(selectedAsesorId);
+        }
+
+        refreshTimer = setInterval(() => {
+            updateLocations(false);
+            cargarPanel();
+        }, REFRESH_INTERVAL);
+    });
+}
+
+const buscarBtn = document.getElementById('buscar-fecha-btn');
+if (buscarBtn) {
+    buscarBtn.addEventListener('click', () => {
+        if (selectedAsesorId) {
+            cargarRutaYClientes(selectedAsesorId);
+        }
+    });
+}
+
+const fechaEl = document.getElementById('fecha-ruta');
+if (fechaEl) {
+    fechaEl.addEventListener('change', () => {
+        if (selectedAsesorId) {
+            cargarRutaYClientes(selectedAsesorId);
+        }
+    });
+}
 
 // ══════════════════════════════════════════════════════════════
 //  SISTEMA DE RUTAS POR SEGMENTO
 // ══════════════════════════════════════════════════════════════
-const rutaLayers    = {};   // segmento_id → { polyline, markers[] }
-const rutaGroup     = L.featureGroup().addTo(map);
+const rutaLayers        = {};   // segmento_id → { polyline, markers[] }
+const segmentoPorTareaId = {}; // tarea_id → segmento_id
+const rutaGroup         = L.featureGroup().addTo(map);
 
 function hexToRgba(hex, alpha) {
     const r = parseInt(hex.slice(1,3),16);
@@ -886,6 +1078,7 @@ function renderRutas(segmentos) {
     // Limpiar capas anteriores
     rutaGroup.clearLayers();
     Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
+    Object.keys(segmentoPorTareaId).forEach(k => delete segmentoPorTareaId[k]);
 
     const leyendaEl = document.getElementById('leyenda-items');
     const leyendaBox = document.getElementById('leyenda-rutas');
@@ -902,6 +1095,10 @@ function renderRutas(segmentos) {
         const puntos = seg.puntos || [];
         const nombre = seg.asesor_nombre || 'Asesor';
         const num    = seg.numero;
+
+        if (seg.tarea_id) {
+            segmentoPorTareaId[String(seg.tarea_id)] = seg.segmento_id;
+        }
 
         // ── Polilínea de la ruta ──
         if (puntos.length >= 2) {
