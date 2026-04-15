@@ -108,6 +108,61 @@ try {
     error_log($error_msg);
 }
 
+// ── Cargar TODOS los asesores (online + offline) para el panel ──
+$todos_asesores = [];
+try {
+    $sqlTodos = "
+        SELECT
+            a.id            AS asesor_id,
+            u.nombre        AS asesor_nombre,
+            COALESCE(ap.estado, 'desconectado') AS estado,
+            ua.latitud,
+            ua.longitud,
+            ua.timestamp    AS ultima_vez
+        FROM asesor a
+        JOIN supervisor s  ON s.id  = a.supervisor_id
+        JOIN usuario    u  ON u.id  = a.usuario_id
+        LEFT JOIN asesor_presencia ap ON ap.asesor_id = a.id
+        LEFT JOIN (
+            SELECT ua1.asesor_id, ua1.latitud, ua1.longitud, ua1.timestamp
+            FROM ubicacion_asesor ua1
+            INNER JOIN (
+                SELECT asesor_id, MAX(timestamp) AS max_ts
+                FROM ubicacion_asesor
+                GROUP BY asesor_id
+            ) latest ON latest.asesor_id = ua1.asesor_id
+                    AND latest.max_ts    = ua1.timestamp
+        ) ua ON ua.asesor_id = a.id
+        WHERE s.usuario_id = ?
+        ORDER BY
+            CASE WHEN COALESCE(ap.estado, 'desconectado') = 'conectado' THEN 0 ELSE 1 END,
+            u.nombre ASC
+    ";
+    $stTodos = $conn->prepare($sqlTodos);
+    if ($stTodos) {
+        $stTodos->bind_param('s', $supervisor_id);
+        $stTodos->execute();
+        $resTodos = $stTodos->get_result();
+        $now = time();
+        while ($row = $resTodos->fetch_assoc()) {
+            $online = ($row['estado'] === 'conectado');
+            if (!$online && $row['ultima_vez']) {
+                $diff = $now - strtotime($row['ultima_vez']);
+                if ($diff <= 120) $online = true;
+            }
+            $todos_asesores[] = [
+                'asesor_id'  => $row['asesor_id'],
+                'nombre'     => $row['asesor_nombre'],
+                'online'     => $online,
+                'latitud'    => $row['latitud']  !== null ? (float)$row['latitud']  : null,
+                'longitud'   => $row['longitud'] !== null ? (float)$row['longitud'] : null,
+                'ultima_vez' => $row['ultima_vez'],
+            ];
+        }
+        $stTodos->close();
+    }
+} catch (\Throwable $eTodos) { /* no bloquear la página */ }
+
 $currentPage        = 'mapa';
 $alertas_pendientes = $totalAlertasPendientes; // alias para el sidebar compartido
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
@@ -188,34 +243,82 @@ $totalPendientes    = 0;
             border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600;
         }
         .btn-logout:hover { background:rgba(255,221,0,.24); color:#fff; }
-        .content-area { flex:1; overflow-y:auto; padding:20px; position:relative; }
+        .content-area { flex:1; display:flex; flex-direction:column; padding:20px; overflow:hidden; }
+        .map-row      { flex:1; display:flex; gap:16px; overflow:hidden; min-height:0; }
+        .map-container { flex:1; position:relative; min-width:0; height:100%; }
 
         /* ── Mapa ── */
         #map {
-            height: calc(100vh - 170px);
-            width:100%; border-radius:18px;
+            height: 100%; width:100%; border-radius:18px;
             box-shadow:var(--brand-shadow); border:1px solid var(--brand-border);
         }
 
-        /* ── Panel lateral ── */
-        .info-box {
-            position:absolute; top:84px; right:36px;
-            background:#fff; padding:15px 20px; border-radius:12px;
-            box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:400; max-width:280px;
-            pointer-events:auto;
+        /* ── Panel de asesores (derecha) ── */
+        .panel-asesores {
+            width:270px; flex-shrink:0; background:#fff; border-radius:16px;
+            box-shadow:0 4px 20px rgba(0,0,0,.10); display:flex; flex-direction:column;
+            overflow:hidden; border:1px solid var(--brand-border);
+        }
+        .panel-header {
+            background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));
+            color:#fff; padding:14px 16px; display:flex;
+            justify-content:space-between; align-items:center; flex-shrink:0;
+        }
+        .panel-header span:first-child { font-weight:700; font-size:14px; }
+        .panel-online-badge {
+            background:#10B981; color:#fff; font-size:11px;
+            padding:3px 9px; border-radius:20px; font-weight:700;
+        }
+        .panel-body { flex:1; overflow-y:auto; padding:8px; }
+        .panel-section-title {
+            font-size:10px; font-weight:700; letter-spacing:.6px;
+            text-transform:uppercase; padding:8px 8px 4px;
+            display:flex; align-items:center; gap:6px;
+        }
+        .panel-section-title.online-title  { color:#059669; }
+        .panel-section-title.offline-title { color:#9CA3AF; margin-top:6px; }
+        .panel-section-dot {
+            width:7px; height:7px; border-radius:50%; flex-shrink:0;
         }
         .asesor-item {
-            padding:10px; margin-bottom:8px;
-            background:#f9f9f9; border-left:3px solid #FBBF24;
-            border-radius:6px; font-size:13px; cursor:pointer;
+            padding:9px 10px; margin-bottom:5px; border-radius:10px;
+            cursor:pointer; transition:all .18s; font-size:13px;
+            border:1px solid transparent;
         }
-        .asesor-item:hover { background:#fff3cd; }
-        .asesor-item .name { font-weight:600; color:#1f2937; }
-        .asesor-item .status { color:#999; margin-top:3px; }
+        .asesor-item.item-online {
+            background:#f0fdf4; border-color:#bbf7d0;
+        }
+        .asesor-item.item-online:hover  { background:#dcfce7; border-color:#86efac; }
+        .asesor-item.item-offline {
+            background:#f9fafb; border-color:#e5e7eb;
+        }
+        .asesor-item.item-offline:hover { background:#f3f4f6; border-color:#d1d5db; }
+        .asesor-item.selected {
+            box-shadow:0 0 0 2px var(--brand-yellow-deep);
+            border-color:var(--brand-yellow-deep) !important;
+        }
+        .asesor-item .item-name {
+            font-weight:700; color:#1f2937; display:flex;
+            align-items:center; gap:6px; margin-bottom:3px;
+        }
+        .asesor-item .item-meta { color:#6b7280; font-size:11px; }
         .online-dot {
             display:inline-block; width:8px; height:8px;
-            background:#10B981; border-radius:50%; margin-right:5px;
+            background:#10B981; border-radius:50%; flex-shrink:0;
             animation:pulse 2s infinite;
+        }
+        .offline-dot {
+            display:inline-block; width:8px; height:8px;
+            background:#9CA3AF; border-radius:50%; flex-shrink:0;
+        }
+        .panel-empty {
+            text-align:center; color:#9CA3AF; font-size:12px;
+            padding:10px 8px;
+        }
+        .panel-footer {
+            background:#f8f9fa; border-top:1px solid #e5e7eb;
+            padding:8px 12px; font-size:11px; color:#9CA3AF;
+            flex-shrink:0; text-align:center;
         }
 
         /* ── Marcador ── */
@@ -244,12 +347,12 @@ $totalPendientes    = 0;
         }
         #refresh-toast.show { opacity:1; }
 
-        /* ── Leyenda rutas ── */
+        /* ── Leyenda rutas (dentro del .map-container) ── */
         .leyenda-rutas {
-            position:absolute; bottom:36px; left:250px;
+            position:absolute; bottom:20px; left:16px;
             background:#fff; padding:12px 16px; border-radius:12px;
             box-shadow:0 4px 16px rgba(0,0,0,.12); z-index:400;
-            min-width:200px; max-width:280px; max-height:260px;
+            min-width:200px; max-width:260px; max-height:220px;
             overflow-y:auto; pointer-events:auto;
         }
         .leyenda-rutas h6 { font-size:13px; font-weight:700; margin-bottom:8px; color:#1f2937; }
@@ -285,7 +388,7 @@ $totalPendientes    = 0;
                 Super_IA – Supervisor
             </h2>
             <small style="opacity:.85;">
-                <span id="count-label"><?= count($ubicaciones) ?></span> asesores localizados
+                <span id="count-label"><?= count($ubicaciones) ?></span> asesores en línea
             </small>
         </div>
         <div class="user-info">
@@ -313,62 +416,106 @@ $totalPendientes    = 0;
             </button>
         </div>
 
-        <div id="map"></div>
+        <!-- Fila: mapa + panel de asesores -->
+        <div class="map-row">
 
-        <!-- Leyenda de rutas -->
-        <div class="leyenda-rutas" id="leyenda-rutas" style="display:none;">
-            <h6><i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas de Hoy</h6>
-            <div id="leyenda-items">
-                <small style="color:#9CA3AF;">Sin rutas registradas aún</small>
+        <!-- Contenedor del mapa + leyenda -->
+        <div class="map-container">
+            <div id="map"></div>
+
+            <!-- Leyenda de rutas (dentro del contenedor del mapa) -->
+            <div class="leyenda-rutas" id="leyenda-rutas" style="display:none;">
+                <h6><i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas de Hoy</h6>
+                <div id="leyenda-items">
+                    <small style="color:#9CA3AF;">Sin rutas registradas aún</small>
+                </div>
             </div>
         </div>
 
-        <!-- Panel de asesores -->
-        <div class="info-box">
-            <div style="margin-bottom:12px;">
-                <h6 style="margin:0 0 8px;color:#1f2937;font-size:14px;font-weight:700;">
-                    <i class="fas fa-users-check"></i> Asesores Activos
-                </h6>
-                <span id="badge-count"
-                      class="badge"
-                      style="background:<?= count($ubicaciones) > 0 ? '#FBBF24' : '#9CA3AF' ?>;
-                             color:#1a0f3d;font-size:12px;">
-                    <?= count($ubicaciones) ?> en línea
+        <!-- Panel de todos los asesores (derecha) -->
+        <div class="panel-asesores">
+            <div class="panel-header">
+                <span><i class="fas fa-users me-2"></i>Asesores</span>
+                <span class="panel-online-badge" id="panel-badge">
+                    <?= count(array_filter($todos_asesores, fn($a) => $a['online'])) ?> en línea
                 </span>
             </div>
 
-            <div id="asesores-list" style="max-height:380px;overflow-y:auto;">
-                <?php if (count($ubicaciones) > 0): ?>
-                    <?php foreach ($ubicaciones as $loc): ?>
-                    <div class="asesor-item"
-                         data-lat="<?= htmlspecialchars($loc['latitud']) ?>"
-                         data-lng="<?= htmlspecialchars($loc['longitud']) ?>"
-                         data-id="<?= htmlspecialchars($loc['asesor_id']) ?>">
-                        <div class="name">
+            <div class="panel-body" id="panel-body">
+                <!-- Sección: En línea -->
+                <div class="panel-section-title online-title">
+                    <span class="panel-section-dot" style="background:#10B981;"></span>
+                    EN LÍNEA (<span id="count-online">0</span>)
+                </div>
+                <div id="panel-online">
+                    <?php
+                    $activos = array_filter($todos_asesores, fn($a) => $a['online']);
+                    if (empty($activos)): ?>
+                    <div class="panel-empty">Sin asesores en línea</div>
+                    <?php else: foreach ($activos as $a): ?>
+                    <div class="asesor-item item-online"
+                         onclick="verAsesor('<?= htmlspecialchars($a['asesor_id']) ?>',
+                                  <?= $a['latitud'] ?? 'null' ?>,
+                                  <?= $a['longitud'] ?? 'null' ?>, true)">
+                        <div class="item-name">
                             <span class="online-dot"></span>
-                            <?= htmlspecialchars($loc['asesor_nombre']) ?>
+                            <?= htmlspecialchars($a['nombre']) ?>
                         </div>
-                        <div class="status"><i class="fas fa-location-dot"></i> En ruta</div>
-                        <div class="status" style="font-size:11px;">
-                            <i class="fas fa-clock"></i> <?= date('H:i', strtotime($loc['timestamp'])) ?>
+                        <div class="item-meta">
+                            <i class="fas fa-location-dot"></i> En línea &nbsp;
+                            <i class="fas fa-clock"></i> <?= $a['ultima_vez'] ? date('H:i', strtotime($a['ultima_vez'])) : '--:--' ?>
                         </div>
                     </div>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <div style="text-align:center;color:#999;padding:20px 10px;">
-                        <i class="fas fa-map" style="font-size:30px;opacity:.3;display:block;margin-bottom:10px;"></i>
-                        <small>Sin asesores en línea</small>
+                    <?php endforeach; endif; ?>
+                </div>
+
+                <!-- Sección: Desconectados -->
+                <div class="panel-section-title offline-title">
+                    <span class="panel-section-dot" style="background:#9CA3AF;"></span>
+                    DESCONECTADOS (<span id="count-offline">0</span>)
+                </div>
+                <div id="panel-offline">
+                    <?php
+                    $inactivos = array_filter($todos_asesores, fn($a) => !$a['online']);
+                    if (empty($inactivos)): ?>
+                    <div class="panel-empty">Sin asesores desconectados</div>
+                    <?php else: foreach ($inactivos as $a): ?>
+                    <div class="asesor-item item-offline"
+                         onclick="verAsesor('<?= htmlspecialchars($a['asesor_id']) ?>',
+                                  <?= $a['latitud'] ?? 'null' ?>,
+                                  <?= $a['longitud'] ?? 'null' ?>, <?= ($a['latitud'] !== null) ? 'true' : 'false' ?>)">
+                        <div class="item-name">
+                            <span class="offline-dot"></span>
+                            <?= htmlspecialchars($a['nombre']) ?>
+                        </div>
+                        <div class="item-meta">
+                            <?php if ($a['ultima_vez']): ?>
+                            <i class="fas fa-clock"></i>
+                            <?php
+                            $diff = time() - strtotime($a['ultima_vez']);
+                            if ($diff < 60) echo 'Hace un momento';
+                            elseif ($diff < 3600) echo 'Hace ' . floor($diff/60) . ' min';
+                            elseif ($diff < 86400) echo 'Hace ' . floor($diff/3600) . 'h';
+                            else echo 'Hace ' . floor($diff/86400) . 'd';
+                            ?>
+                            <?php else: ?>
+                            <i class="fas fa-question-circle"></i> Sin datos
+                            <?php endif; ?>
+                        </div>
                     </div>
-                <?php endif; ?>
+                    <?php endforeach; endif; ?>
+                </div>
             </div>
 
-            <div style="border-top:1px solid #ddd;margin-top:12px;padding-top:10px;font-size:11px;color:#999;">
-                <i class="fas fa-sync-alt"></i> Actualiza cada 10 segundos &nbsp;|&nbsp;
+            <div class="panel-footer">
+                <i class="fas fa-sync-alt"></i> Actualiza cada 10s &nbsp;|&nbsp;
                 <span id="last-update">--:--:--</span>
             </div>
-        </div>
-    </div>
-</div>
+        </div><!-- /.panel-asesores -->
+
+        </div><!-- /.map-row -->
+    </div><!-- /.content-area -->
+</div><!-- /.main-content -->
 
 <!-- Toast -->
 <div id="refresh-toast">✓ Mapa actualizado</div>
@@ -498,94 +645,228 @@ function renderMap(locs, fitView = true) {
     }
 }
 
-// ── Renderizar lista del panel lateral ───────────────────────
-function renderList(locs) {
-    const listEl = document.getElementById('asesores-list');
-    const badge  = document.getElementById('badge-count');
-    const countL = document.getElementById('count-label');
-    if (!listEl) return;
+// ── Helpers de tiempo ────────────────────────────────────────
+function formatTimeSince(ts) {
+    if (!ts) return '';
+    const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 60000);
+    if (diff < 1)  return 'hace un momento';
+    if (diff < 60) return `hace ${diff} min`;
+    const hrs = Math.floor(diff / 60);
+    if (hrs < 24)  return `hace ${hrs}h`;
+    return `hace ${Math.floor(hrs / 24)}d`;
+}
 
-    const n = Array.isArray(locs) ? locs.length : 0;
+// ── Renderizar panel de asesores ─────────────────────────────
+function renderPanel(asesores) {
+    const onlineEl   = document.getElementById('panel-online');
+    const offlineEl  = document.getElementById('panel-offline');
+    const cntOnline  = document.getElementById('count-online');
+    const cntOffline = document.getElementById('count-offline');
+    const badge      = document.getElementById('panel-badge');
+    const countL     = document.getElementById('count-label');
+    if (!onlineEl || !offlineEl) return;
+
+    const online  = asesores.filter(a => a.online);
+    const offline = asesores.filter(a => !a.online);
+
+    if (cntOnline)  cntOnline.textContent  = online.length;
+    if (cntOffline) cntOffline.textContent = offline.length;
     if (badge) {
-        badge.textContent = n + ' en línea';
-        badge.style.background = n > 0 ? '#FBBF24' : '#9CA3AF';
+        badge.textContent  = online.length + ' en línea';
+        badge.style.background = online.length > 0 ? '#10B981' : '#9CA3AF';
     }
-    if (countL) countL.textContent = n;
+    if (countL) countL.textContent = online.length;
 
-    if (n === 0) {
-        listEl.innerHTML = `
-            <div style="text-align:center;color:#999;padding:20px 10px;">
-                <i class="fas fa-map" style="font-size:30px;opacity:.3;display:block;margin-bottom:10px;"></i>
-                <small>Sin asesores en línea</small>
-            </div>`;
-        return;
-    }
+    const makeItem = (a) => {
+        const lat    = a.latitud  !== null ? parseCoord(a.latitud)  : null;
+        const lng    = a.longitud !== null ? parseCoord(a.longitud) : null;
+        const hasLoc = lat !== null && lng !== null;
+        const latJS  = hasLoc ? lat : 'null';
+        const lngJS  = hasLoc ? lng : 'null';
+        const tiempoStr = a.online
+            ? `<i class="fas fa-location-dot"></i> En línea &nbsp;<i class="fas fa-clock"></i> ${a.ultima_vez ? fmtHour(a.ultima_vez) : '--:--'}`
+            : (a.ultima_vez
+                ? `<i class="fas fa-clock"></i> ${formatTimeSince(a.ultima_vez)}`
+                : '<i class="fas fa-question-circle"></i> Sin datos');
 
-    listEl.innerHTML = locs.map(loc => {
-        const lat = parseCoord(loc.latitud);
-        const lng = parseCoord(loc.longitud);
-        return `
-        <div class="asesor-item"
-             onclick="flyToAsesor('${loc.asesor_id}', ${lat}, ${lng})"
-             title="Click para centrar en el mapa">
-            <div class="name">
-                <span class="online-dot"></span>
-                ${loc.asesor_nombre || 'Asesor'}
+        return `<div class="asesor-item ${a.online ? 'item-online' : 'item-offline'}" id="item-${a.asesor_id}"
+                     onclick="verAsesor('${a.asesor_id}',${latJS},${lngJS},${hasLoc})"
+                     title="Ver última ruta">
+            <div class="item-name">
+                <span class="${a.online ? 'online-dot' : 'offline-dot'}"></span>
+                ${a.nombre || 'Asesor'}
             </div>
-            <div class="status"><i class="fas fa-location-dot"></i> En ruta</div>
-            <div class="status" style="font-size:11px;">
-                <i class="fas fa-clock"></i> ${fmtHour(loc.timestamp)}
-            </div>
+            <div class="item-meta">${tiempoStr}</div>
         </div>`;
-    }).join('');
+    };
+
+    onlineEl.innerHTML  = online.length  > 0
+        ? online.map(makeItem).join('')
+        : '<div class="panel-empty">Sin asesores en línea</div>';
+    offlineEl.innerHTML = offline.length > 0
+        ? offline.map(makeItem).join('')
+        : '<div class="panel-empty">Sin asesores desconectados</div>';
+
+    // Re-marcar el asesor seleccionado
+    if (selectedAsesorId) {
+        const el = document.getElementById(`item-${selectedAsesorId}`);
+        if (el) el.classList.add('selected');
+    }
 }
 
-// ── Centrar mapa al hacer click en un asesor ─────────────────
-function flyToAsesor(id, lat, lng) {
-    if (!isFinite(lat) || !isFinite(lng)) return;
-    map.flyTo([lat, lng], 15, { duration: 1.2 });
-    const m = markerById[id];
-    if (m) setTimeout(() => m.openPopup(), 1300);
+// ── Marcador "última ubicación" para asesores offline ────────
+let lastSeenMarker   = null;
+let selectedAsesorId = null;
+
+// ── Ver asesor: centra mapa + muestra su última ruta ─────────
+function verAsesor(asesorId, lat, lng, hasLoc) {
+    // Marcar seleccionado en el panel
+    document.querySelectorAll('.asesor-item').forEach(el => el.classList.remove('selected'));
+    const selEl = document.getElementById(`item-${asesorId}`);
+    if (selEl) selEl.classList.add('selected');
+    selectedAsesorId = asesorId;
+
+    // Quitar marcador anterior de "última ubicación"
+    if (lastSeenMarker) { map.removeLayer(lastSeenMarker); lastSeenMarker = null; }
+
+    // Centrar mapa
+    if (hasLoc && lat !== null && lng !== null && isFinite(lat) && isFinite(lng)) {
+        if (markerById[asesorId]) {
+            // Asesor online: ir a su marcador en vivo
+            map.flyTo([lat, lng], 15, { duration: 1.2 });
+            setTimeout(() => { if (markerById[asesorId]) markerById[asesorId].openPopup(); }, 1300);
+        } else {
+            // Asesor offline: colocar pin gris en su última posición conocida
+            const grayIcon = L.divIcon({
+                html: `<div style="width:40px;height:40px;border-radius:50%;
+                             display:flex;align-items:center;justify-content:center;
+                             background:linear-gradient(135deg,#9CA3AF,#6B7280);
+                             border:3px solid #fff;color:#fff;font-size:17px;
+                             box-shadow:0 4px 12px rgba(0,0,0,.3);">
+                           <i class="fas fa-user"></i>
+                       </div>`,
+                iconSize:[40,40], iconAnchor:[20,20], popupAnchor:[0,-22],
+                className:'advisor-marker'
+            });
+            lastSeenMarker = L.marker([lat, lng], { icon: grayIcon })
+                .addTo(map)
+                .bindPopup(`<div class="advisor-popup">
+                    <div class="popup-name" style="color:#6B7280;">
+                        <i class="fas fa-user-tie me-1"></i>Última ubicación conocida
+                    </div>
+                    <div class="popup-row" style="color:#EF4444;">
+                        <i class="fas fa-wifi me-1"></i>Desconectado
+                    </div>
+                </div>`);
+            map.flyTo([lat, lng], 15, { duration: 1.2 });
+            setTimeout(() => lastSeenMarker?.openPopup(), 1300);
+        }
+    }
+
+    // Limpiar rutas anteriores
+    rutaGroup.clearLayers();
+    Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
+    document.getElementById('leyenda-rutas').style.display = 'none';
+
+    // Cargar la última ruta de este asesor
+    fetch(`api_ultima_ruta.php?asesor_id=${encodeURIComponent(asesorId)}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok' && data.segmentos?.length > 0) {
+                renderRutas(data.segmentos);
+                // Actualizar título de la leyenda con fecha
+                const leyendaBox = document.getElementById('leyenda-rutas');
+                const h6 = leyendaBox?.querySelector('h6');
+                if (h6) {
+                    const fechaStr = data.fecha
+                        ? new Date(data.fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' })
+                        : '';
+                    h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Última ruta · ${fechaStr}`;
+                }
+            }
+        })
+        .catch(err => console.warn('[ultima_ruta]', err));
 }
 
-// ── Actualización AJAX (auto-refresh cada 10 s) ──────────────
-// fitView = false → los marcadores se mueven, la vista del mapa NO cambia
+// ── Actualización AJAX de marcadores en el mapa ──────────────
+// fitView = false → marcadores se actualizan, la vista NO cambia
 function updateLocations(fitView = false) {
     fetch('api_ubicaciones_mapa.php', { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
             if (data.status === 'ok') {
-                renderMap(data.ubicaciones, fitView);   // ← pasa fitView
-                renderList(data.ubicaciones);
-                const upd = document.getElementById('last-update');
-                if (upd) upd.textContent = data.ts || '--:--:--';
+                renderMap(data.ubicaciones, fitView);
                 showToast();
             }
         })
         .catch(err => console.warn('[mapa] fetch error:', err));
 }
 
-// ── Render inicial con datos del servidor ─────────────────────
+// ── Actualizar el panel de asesores (online + offline) ────────
+function cargarPanel() {
+    fetch('api_asesores_panel.php', { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                renderPanel(data.asesores);
+                const upd = document.getElementById('last-update');
+                if (upd) upd.textContent = data.ts || '--:--:--';
+            }
+        })
+        .catch(err => console.warn('[panel] fetch error:', err));
+}
+
+// ── Render inicial ─────────────────────────────────────────────
 const ubicacionesIniciales = <?= json_encode($ubicaciones) ?>;
-renderMap(ubicacionesIniciales, true);   // true → centrar al cargar por primera vez
-renderList(ubicacionesIniciales);
+const todosAsesoresIniciales = <?= json_encode($todos_asesores) ?>;
+
+renderMap(ubicacionesIniciales, true);   // centra al cargar
+renderPanel(todosAsesoresIniciales);     // panel inicial completo
 
 // Timestamp inicial
 const upd = document.getElementById('last-update');
 if (upd) upd.textContent = new Date().toLocaleTimeString('es-ES');
 
 // ── Auto-refresh cada 10 segundos ─────────────────────────────
-// Los refrescos automáticos NO mueven la vista (fitView=false)
-const REFRESH_INTERVAL = 10000; // ms
-let refreshTimer = setInterval(() => updateLocations(false), REFRESH_INTERVAL);
+const REFRESH_INTERVAL = 10000;
+let refreshTimer = setInterval(() => {
+    updateLocations(false);  // actualiza marcadores sin mover vista
+    cargarPanel();           // actualiza lista de asesores
+}, REFRESH_INTERVAL);
 
 // ── Botón manual ──────────────────────────────────────────────
-// Al presionar el botón sí se centra el mapa (el usuario lo pidió explícitamente)
 document.getElementById('refresh-btn').addEventListener('click', () => {
     clearInterval(refreshTimer);
-    updateLocations(true);   // true → recentrar al botón manual
-    cargarRutas();
-    refreshTimer = setInterval(() => updateLocations(false), REFRESH_INTERVAL);
+    updateLocations(true);   // centra mapa
+    cargarPanel();
+    // Si hay un asesor seleccionado, recargar su última ruta también
+    if (selectedAsesorId) {
+        const selEl = document.getElementById(`item-${selectedAsesorId}`);
+        const lat = selEl ? null : null; // se recargará vía verAsesor
+        // Recargar la ruta del asesor seleccionado
+        rutaGroup.clearLayers();
+        Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
+        fetch(`api_ultima_ruta.php?asesor_id=${encodeURIComponent(selectedAsesorId)}`, { cache: 'no-store' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'ok' && data.segmentos?.length > 0) {
+                    renderRutas(data.segmentos);
+                    const leyendaBox = document.getElementById('leyenda-rutas');
+                    const h6 = leyendaBox?.querySelector('h6');
+                    if (h6) {
+                        const fechaStr = data.fecha
+                            ? new Date(data.fecha + 'T00:00:00').toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' })
+                            : '';
+                        h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Última ruta · ${fechaStr}`;
+                    }
+                }
+            })
+            .catch(err => console.warn('[refresh_ruta]', err));
+    }
+    refreshTimer = setInterval(() => {
+        updateLocations(false);
+        cargarPanel();
+    }, REFRESH_INTERVAL);
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -751,6 +1032,9 @@ function renderRutas(segmentos) {
     leyendaEl.innerHTML = leyendaHtml || '<small style="color:#9CA3AF;">Sin rutas hoy</small>';
 }
 
+// cargarRutas() ya no se llama automáticamente.
+// Las rutas se cargan individualmente al hacer click en un asesor via verAsesor().
+// Se mantiene la función por si se necesita en el futuro.
 function cargarRutas() {
     fetch('api_rutas_supervisor.php', { cache: 'no-store' })
         .then(r => r.json())
@@ -761,12 +1045,6 @@ function cargarRutas() {
         })
         .catch(err => console.warn('[rutas] fetch error:', err));
 }
-
-// Carga inicial de rutas
-cargarRutas();
-
-// Refrescar rutas cada 20 s (los puntos se acumulan en BD)
-setInterval(cargarRutas, 20000);
 </script>
 </body>
 </html>
