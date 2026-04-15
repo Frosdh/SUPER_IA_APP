@@ -26,8 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
         // Mapeo de roles a tabla usuario SUPER_IA LOGAN
         $roleMap = [
             'administrador' => 'jefe_agencia',   // Equivalente a admin
-            'supervisor' => 'supervisor',
-            'asesor' => 'asesor'
+            'supervisor' => 'supervisor'
         ];
         
         $roleBD = $roleMap[$role] ?? null;
@@ -546,16 +545,6 @@ $roleSeleccionado = isset($_POST['role_select']) ? $_POST['role_select'] : '';
                 </form>
             </div>
 
-            <!-- Card Asesor -->
-            <div class="card">
-                <div class="icon-container">💼</div>
-                <h2 class="card-title">Asesor</h2>
-                <p class="card-description">Gestión de clientes asignados y seguimiento de operaciones comerciales.</p>
-                <form method="POST" style="display: inline;">
-                    <input type="hidden" name="role_select" value="asesor">
-                    <button type="submit" class="btn-ingresar">Ingresar</button>
-                </form>
-            </div>
         </div>
 
         <!-- Footer -->
@@ -572,8 +561,7 @@ $roleSeleccionado = isset($_POST['role_select']) ? $_POST['role_select'] : '';
                 <?php
                 $roleLabels = [
                     'administrador' => 'Administrador',
-                    'supervisor' => 'Supervisor',
-                    'asesor' => 'Asesor'
+                    'supervisor' => 'Supervisor'
                 ];
                 echo isset($roleLabels[$roleSeleccionado]) ? $roleLabels[$roleSeleccionado] : '';
                 ?>

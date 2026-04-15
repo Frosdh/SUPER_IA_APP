@@ -12,10 +12,6 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
     header('Location: mapa_familiar.php');
     exit;
 }
-if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
-    header('Location: panel_cooperativa.php');
-    exit;
-}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -59,7 +55,7 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
         }
         .role-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
         }
         .role-card {
@@ -159,15 +155,6 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
                 <div class="btn-enter">Ingresar</div>
             </a>
 
-            <!-- ASESOR ROLE -->
-            <a href="login.php?role=asesor" class="role-card">
-                <div class="icon-box">
-                    <i class="fas fa-handshake"></i>
-                </div>
-                <h2>Asesor</h2>
-                <p>Gestión de clientes, análisis de operaciones y seguimiento de créditos.</p>
-                <div class="btn-enter">Ingresar</div>
-            </a>
         </div>
     </div>
 </body>

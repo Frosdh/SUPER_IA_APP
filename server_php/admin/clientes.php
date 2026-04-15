@@ -429,7 +429,6 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th>ID</th>
                         <th>Nombre</th>
                         <th>Email</th>
                         <th>Teléfono</th>
@@ -445,14 +444,13 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                 <tbody>
                     <?php if (empty($clientes)): ?>
                     <tr>
-                        <td colspan="<?php echo $col_asesor ? 9 : 8; ?>" class="text-center py-4">
+                        <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
                             <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay clientes para mostrar
                         </td>
                     </tr>
                     <?php else: ?>
                     <?php foreach ($clientes as $cliente): ?>
                     <tr>
-                        <td><strong><?php echo htmlspecialchars($cliente['id'] ?? $cliente['cedula'] ?? 'N/A'); ?></strong></td>
                         <td><?php echo htmlspecialchars($cliente['nombre']); ?></td>
                         <td><?php echo htmlspecialchars($cliente['email'] ?? ''); ?></td>
                         <td><?php echo htmlspecialchars($cliente['telefono'] ?? ''); ?></td>

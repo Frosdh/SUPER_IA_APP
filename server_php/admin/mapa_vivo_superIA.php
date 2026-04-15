@@ -1063,8 +1063,155 @@ function cargarClientes(asesorId, fecha) {
         });
 }
 
+// ── Mapa de segmento_id → { polyline, markers[] } ─────────
+const rutaLayers        = {};
+const rutaGroup         = L.featureGroup().addTo(map);
+const segmentoPorTareaId = {}; // tarea_id → segmento_id
+
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1,3),16);
+    const g = parseInt(hex.slice(3,5),16);
+    const b = parseInt(hex.slice(5,7),16);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  renderRutas — dibuja segmentos en el mapa + leyenda
+// ══════════════════════════════════════════════════════════
+function renderRutas(segmentos) {
+    rutaGroup.clearLayers();
+    Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
+    Object.keys(segmentoPorTareaId).forEach(k => delete segmentoPorTareaId[k]);
+
+    const leyendaEl  = document.getElementById('leyenda-items');
+    const leyendaBox = document.getElementById('leyenda-rutas');
+    const leyendaItems = {};
+
+    if (!segmentos || segmentos.length === 0) {
+        if (leyendaBox) leyendaBox.style.display = 'none';
+        return;
+    }
+    if (leyendaBox) leyendaBox.style.display = 'block';
+
+    segmentos.forEach(seg => {
+        const color  = seg.color || '#3B82F6';
+        const puntos = seg.puntos || [];
+        const nombre = seg.asesor_nombre || 'Asesor';
+        const num    = seg.numero;
+
+        // ── Registrar mapeo tarea→segmento para click en cliente ──
+        if (seg.tarea_id) segmentoPorTareaId[String(seg.tarea_id)] = seg.segmento_id;
+
+        // ── Polilínea de la ruta ──
+        if (puntos.length >= 2) {
+            const latlngs = puntos.map(p => [p.lat, p.lng]);
+            const poly = L.polyline(latlngs, {
+                color, weight: 4, opacity: 0.85,
+                dashArray: seg.estado === 'activo' ? '8 5' : null,
+                lineJoin: 'round', lineCap: 'round',
+            }).addTo(rutaGroup);
+
+            const horaInicio = seg.inicio_at ? seg.inicio_at.substring(11,16) : '--:--';
+            const horaFin    = seg.fin_at    ? seg.fin_at.substring(11,16)    : 'activo';
+            poly.bindPopup(`
+                <div style="font-family:'Inter',sans-serif;min-width:180px;">
+                    <div style="font-weight:700;font-size:13px;color:#1f2937;margin-bottom:5px;">
+                        <span style="display:inline-block;width:12px;height:12px;
+                              border-radius:50%;background:${color};margin-right:5px;"></span>
+                        ${escapeHtml(nombre)} — Seg. ${num}
+                    </div>
+                    <div style="font-size:12px;color:#555;margin-bottom:2px;">
+                        <i class="fas fa-clock"></i> ${horaInicio} → ${horaFin}
+                    </div>
+                    <div style="font-size:12px;color:#555;">
+                        <i class="fas fa-map-pin"></i> ${puntos.length} pts GPS
+                    </div>
+                    <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">
+                        Estado: <b style="color:${seg.estado==='activo'?'#10B981':'#6B7280'}">${seg.estado}</b>
+                    </div>
+                </div>`);
+            rutaLayers[seg.segmento_id] = { polyline: poly, markers: [] };
+        }
+
+        // ── Marcador de inicio de sesión (primer segmento) ──
+        if (seg.inicio_lat !== null && seg.inicio_lng !== null && num === 1) {
+            const startIcon = L.divIcon({
+                html: `<div style="width:14px;height:14px;border-radius:50%;
+                             background:${color};border:3px solid #fff;
+                             box-shadow:0 2px 8px rgba(0,0,0,.3);"></div>`,
+                iconSize:[14,14], iconAnchor:[7,7], className:'',
+            });
+            const sm = L.marker([seg.inicio_lat, seg.inicio_lng], { icon: startIcon })
+                .addTo(rutaGroup)
+                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;">
+                    <b>${escapeHtml(nombre)}</b><br>
+                    <i class="fas fa-sign-in-alt"></i> Inicio sesión<br>
+                    <small>${seg.inicio_at ? seg.inicio_at.substring(11,16) : ''}</small>
+                </div>`);
+            if (rutaLayers[seg.segmento_id]) rutaLayers[seg.segmento_id].markers.push(sm);
+        }
+
+        // ── Marcador de tarea completada (fin del segmento) ──
+        if (seg.fin_lat !== null && seg.fin_lng !== null && seg.estado !== 'activo') {
+            const tareaLabel = seg.tarea_tipo
+                ? seg.tarea_tipo.replace('_',' ').replace(/\b\w/g, l => l.toUpperCase())
+                : 'Tarea';
+            const taskIcon = L.divIcon({
+                html: `<div class="task-marker-pin" style="background:${color};" title="${tareaLabel}">
+                           ${num}
+                       </div>`,
+                iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16], className:'',
+            });
+            const tm = L.marker([seg.fin_lat, seg.fin_lng], { icon: taskIcon })
+                .addTo(rutaGroup)
+                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;min-width:160px;">
+                    <div style="font-weight:700;color:#1f2937;margin-bottom:4px;">
+                        <span style="display:inline-block;width:10px;height:10px;
+                              border-radius:50%;background:${color};margin-right:4px;"></span>
+                        Seg. ${num} completado
+                    </div>
+                    ${seg.tarea_tipo ? `<div><i class="fas fa-tasks"></i> ${tareaLabel}</div>` : ''}
+                    ${seg.cliente_nombre ? `<div><i class="fas fa-user"></i> ${escapeHtml(seg.cliente_nombre)}</div>` : ''}
+                    <div style="color:#6B7280;font-size:11px;margin-top:3px;">
+                        ${seg.fin_at ? seg.fin_at.substring(11,16) : ''}
+                    </div>
+                </div>`);
+            if (rutaLayers[seg.segmento_id]) rutaLayers[seg.segmento_id].markers.push(tm);
+        }
+
+        // ── Leyenda ──
+        const key = String(seg.asesor_id);
+        if (!leyendaItems[key]) leyendaItems[key] = { nombre, segmentos: [], color };
+        leyendaItems[key].segmentos.push({ num, color, estado: seg.estado, cliente: seg.cliente_nombre });
+    });
+
+    // Renderizar leyenda
+    let leyendaHtml = '';
+    Object.values(leyendaItems).forEach(item => {
+        leyendaHtml += `<div style="margin-bottom:10px;">
+            <div style="font-weight:700;font-size:12px;color:#1f2937;margin-bottom:4px;">
+                <i class="fas fa-user-tie"></i> ${escapeHtml(item.nombre)}
+            </div>`;
+        item.segmentos.forEach(s => {
+            const estadoIcon = s.estado === 'activo' ? '🟢' : (s.estado === 'completado' ? '✓' : '🔴');
+            leyendaHtml += `<div class="leyenda-item">
+                <div class="leyenda-color" style="background:${s.color};"></div>
+                <span>${estadoIcon} Seg. ${s.num}${s.cliente ? ' · ' + s.cliente.split(' ')[0] : ''}</span>
+            </div>`;
+        });
+        leyendaHtml += '</div>';
+    });
+    if (leyendaEl) leyendaEl.innerHTML = leyendaHtml || '<small style="color:#9CA3AF;">Sin rutas</small>';
+}
+
+// ════════════════════════════════════════════════════════════
+//  cargarRutaYClientes
+//  Sin fecha seleccionada → muestra SÓLO el último segmento
+//  Con fecha seleccionada → muestra TODOS los segmentos del día
+// ════════════════════════════════════════════════════════════
 function cargarRutaYClientes(asesorId) {
     const fechaSel = getSelectedFecha();
+    const esBusqueda = !!fechaSel; // ¿viene de buscar por fecha?
 
     // Limpiar rutas anteriores
     rutaGroup.clearLayers();
@@ -1073,74 +1220,67 @@ function cargarRutaYClientes(asesorId) {
     const leyendaBox = document.getElementById('leyenda-rutas');
     if (leyendaBox) leyendaBox.style.display = 'none';
 
-    // Placeholder de clientes mientras carga la ruta
+    // Mostrar loader en el box de clientes
     const box  = document.getElementById('box-clientes');
     const list = document.getElementById('clientes-items');
-    if (box) box.style.display = 'block';
+    if (box)  box.style.display = 'block';
     if (list) list.innerHTML = '<small style="color:#9CA3AF;">Cargando clientes…</small>';
 
+    // Parámetros: sin fecha → solo_ultimo=1; con fecha → solo_ultimo=0 (todos los segmentos)
     const qs = new URLSearchParams({ asesor_id: asesorId });
-    if (fechaSel) qs.set('fecha', fechaSel);
+    if (fechaSel) {
+        qs.set('fecha', fechaSel);
+        qs.set('solo_ultimo', '0'); // búsqueda por fecha → todos los segmentos
+    } else {
+        qs.set('solo_ultimo', '1'); // sin fecha → solo el último segmento
+    }
 
     fetch(`api_ultima_ruta.php?${qs.toString()}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
-            // Caso normal: hay rutas para la fecha seleccionada
-            if (data.status === 'ok' && Array.isArray(data.segmentos) && data.segmentos.length > 0) {
+            if (data.status === 'ok' && data.segmentos?.length > 0) {
                 renderRutas(data.segmentos);
 
-                const fechaRuta = data.fecha || fechaSel;
+                // Actualizar título de la leyenda
                 const h6 = leyendaBox?.querySelector('h6');
                 if (h6) {
-                    const fechaStr = formatFechaES(fechaRuta);
-                    h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas · ${fechaStr || 'sin fecha'}`;
+                    const fechaStr = formatFechaES(data.fecha);
+                    const modoStr  = esBusqueda ? 'Rutas del día' : 'Última ruta';
+                    h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>${modoStr}${fechaStr ? ' · ' + fechaStr : ''}`;
                 }
 
-                cargarClientes(asesorId, fechaRuta);
-                return;
+                // Ajustar la vista del mapa para ver la ruta
+                const puntos = data.segmentos.flatMap(s => (s.puntos || []).map(p => [p.lat, p.lng]));
+                if (puntos.length > 1) {
+                    try { map.fitBounds(puntos, { padding:[60,60], maxZoom:16 }); } catch(e){}
+                } else if (puntos.length === 1) {
+                    map.setView(puntos[0], 15);
+                }
+            } else {
+                // Sin rutas para esta fecha/asesor
+                const h6 = leyendaBox?.querySelector('h6');
+                if (h6) h6.innerHTML = `<i class="fas fa-route me-1" style="color:#9CA3AF;"></i>Sin rutas registradas`;
+                if (list) list.innerHTML = '<small style="color:#9CA3AF;">Sin encuestas en esta fecha</small>';
             }
 
-            // Si no hay rutas en esa fecha, caer a "última ruta disponible" (comportamiento anterior)
-            if (fechaSel) {
-                const qs2 = new URLSearchParams({ asesor_id: asesorId });
-                return fetch(`api_ultima_ruta.php?${qs2.toString()}`, { cache: 'no-store' })
-                    .then(r2 => r2.json())
-                    .then(data2 => {
-                        if (data2.status === 'ok' && Array.isArray(data2.segmentos) && data2.segmentos.length > 0) {
-                            renderRutas(data2.segmentos);
-
-                            const fechaRuta2 = data2.fecha || null;
-                            const h6 = leyendaBox?.querySelector('h6');
-                            if (h6) {
-                                const fechaStr2 = formatFechaES(fechaRuta2);
-                                h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas · ${fechaStr2 || 'sin fecha'} <span style="color:#9CA3AF;font-weight:600;">(última)</span>`;
-                            }
-
-                            cargarClientes(asesorId, fechaRuta2 || fechaSel);
-                        } else {
-                            if (leyendaBox) leyendaBox.style.display = 'none';
-                            cargarClientes(asesorId, fechaSel);
-                        }
-                    })
-                    .catch(err2 => {
-                        console.warn('[ultima_ruta][fallback]', err2);
-                        if (leyendaBox) leyendaBox.style.display = 'none';
-                        cargarClientes(asesorId, fechaSel);
-                    });
+            // Cargar también los clientes encuestados del día
+            const fechaParaClientes = fechaSel || data.fecha || null;
+            if (fechaParaClientes) {
+                cargarClientes(asesorId, fechaParaClientes);
+            } else {
+                if (list) list.innerHTML = '<small style="color:#9CA3AF;">Sin encuestas registradas</small>';
             }
-
-            // Sin rutas y sin fecha seleccionada
-            if (leyendaBox) leyendaBox.style.display = 'none';
-            cargarClientes(asesorId, fechaSel);
         })
         .catch(err => {
-            console.warn('[ultima_ruta]', err);
-            if (leyendaBox) leyendaBox.style.display = 'none';
-            cargarClientes(asesorId, fechaSel);
+            console.warn('[cargarRutaYClientes]', err);
+            if (list) list.innerHTML = '<small style="color:#EF4444;">Error al cargar datos</small>';
         });
 }
 
-// ── Ver asesor: centra mapa + muestra su ruta del día ─────────
+// ── Marcador "última ubicación" para asesores offline ────────
+let lastSeenMarker2  = null; // alias para no colisionar con la variable de arriba
+
+// ── Ver asesor: centra mapa + muestra ruta + clientes ────────
 function verAsesor(asesorId, lat, lng, hasLoc) {
     // Marcar seleccionado en el panel
     document.querySelectorAll('.asesor-item').forEach(el => el.classList.remove('selected'));
@@ -1148,27 +1288,27 @@ function verAsesor(asesorId, lat, lng, hasLoc) {
     if (selEl) selEl.classList.add('selected');
     selectedAsesorId = asesorId;
 
-    // Quitar marcador anterior de "última ubicación"
-    if (lastSeenMarker) { map.removeLayer(lastSeenMarker); lastSeenMarker = null; }
+    // Quitar pin de "última ubicación" si había uno
+    if (lastSeenMarker)  { map.removeLayer(lastSeenMarker);  lastSeenMarker  = null; }
+    if (lastSeenMarker2) { map.removeLayer(lastSeenMarker2); lastSeenMarker2 = null; }
+    if (clienteMarker)   { map.removeLayer(clienteMarker);   clienteMarker   = null; }
 
     // Centrar mapa
     if (hasLoc && lat !== null && lng !== null && isFinite(lat) && isFinite(lng)) {
         if (markerById[asesorId]) {
-            // Asesor online: ir a su marcador en vivo
+            // Online: ir al marcador en vivo
             map.flyTo([lat, lng], 15, { duration: 1.2 });
             setTimeout(() => { if (markerById[asesorId]) markerById[asesorId].openPopup(); }, 1300);
         } else {
-            // Asesor offline: colocar pin gris en su última posición conocida
+            // Offline: pin gris en última posición conocida
             const grayIcon = L.divIcon({
                 html: `<div style="width:40px;height:40px;border-radius:50%;
                              display:flex;align-items:center;justify-content:center;
                              background:linear-gradient(135deg,#9CA3AF,#6B7280);
                              border:3px solid #fff;color:#fff;font-size:17px;
                              box-shadow:0 4px 12px rgba(0,0,0,.3);">
-                           <i class="fas fa-user"></i>
-                       </div>`,
-                iconSize:[40,40], iconAnchor:[20,20], popupAnchor:[0,-22],
-                className:'advisor-marker'
+                           <i class="fas fa-user"></i></div>`,
+                iconSize:[40,40], iconAnchor:[20,20], popupAnchor:[0,-22], className:'advisor-marker'
             });
             lastSeenMarker = L.marker([lat, lng], { icon: grayIcon })
                 .addTo(map)
@@ -1185,11 +1325,11 @@ function verAsesor(asesorId, lat, lng, hasLoc) {
         }
     }
 
+    // Cargar ruta + clientes
     cargarRutaYClientes(asesorId);
 }
 
-// ── Actualización AJAX de marcadores en el mapa ──────────────
-// fitView = false → marcadores se actualizan, la vista NO cambia
+// ── Actualización AJAX de marcadores ─────────────────────────
 function updateLocations(fitView = false) {
     fetch('api_ubicaciones_mapa.php', { cache: 'no-store' })
         .then(r => r.json())
@@ -1199,7 +1339,7 @@ function updateLocations(fitView = false) {
                 showToast();
             }
         })
-        .catch(err => console.warn('[mapa] fetch error:', err));
+        .catch(err => console.warn('[mapa]', err));
 }
 
 // ── Actualizar el panel de asesores (online + offline) ────────
@@ -1209,256 +1349,72 @@ function cargarPanel() {
         .then(data => {
             if (data.status === 'ok') {
                 renderPanel(data.asesores);
-                cargarResumenEncuestas();
                 const upd = document.getElementById('last-update');
                 if (upd) upd.textContent = data.ts || '--:--:--';
             }
         })
-        .catch(err => console.warn('[panel] fetch error:', err));
+        .catch(err => console.warn('[panel]', err));
 }
 
 // ── Render inicial ─────────────────────────────────────────────
-const ubicacionesIniciales = <?= json_encode($ubicaciones) ?>;
-const todosAsesoresIniciales = <?= json_encode($todos_asesores) ?>;
+const ubicacionesIniciales    = <?= json_encode($ubicaciones) ?>;
+const todosAsesoresIniciales  = <?= json_encode($todos_asesores) ?>;
 
-renderMap(ubicacionesIniciales, true);   // centra al cargar
-renderPanel(todosAsesoresIniciales);     // panel inicial completo
+renderMap(ubicacionesIniciales, true);
+renderPanel(todosAsesoresIniciales);
 cargarResumenEncuestas();
 
-// Timestamp inicial
 const upd = document.getElementById('last-update');
 if (upd) upd.textContent = new Date().toLocaleTimeString('es-ES');
 
 // ── Auto-refresh cada 10 segundos ─────────────────────────────
 const REFRESH_INTERVAL = 10000;
 let refreshTimer = setInterval(() => {
-    updateLocations(false);  // actualiza marcadores sin mover vista
-    cargarPanel();           // actualiza lista de asesores
+    updateLocations(false);
+    cargarPanel();
+    cargarResumenEncuestas();
+    // Si hay asesor seleccionado → recargar su última ubicación offline si aplica
+    if (selectedAsesorId && !markerById[selectedAsesorId]) {
+        // Asesor desconectado y aún seleccionado: no relanzar toda la carga,
+        // solo actualizar el panel (ya hecho arriba)
+    }
 }, REFRESH_INTERVAL);
 
-// ── Controles: refresh + búsqueda por fecha ───────────────────
-const refreshBtn = document.getElementById('refresh-btn');
-if (refreshBtn) {
-    refreshBtn.addEventListener('click', () => {
-        clearInterval(refreshTimer);
-        updateLocations(true);   // centra mapa
+// ── Botón Actualizar ──────────────────────────────────────────
+document.getElementById('refresh-btn')?.addEventListener('click', () => {
+    clearInterval(refreshTimer);
+    updateLocations(true);
+    cargarPanel();
+    cargarResumenEncuestas();
+    if (selectedAsesorId) cargarRutaYClientes(selectedAsesorId);
+    refreshTimer = setInterval(() => {
+        updateLocations(false);
         cargarPanel();
-
-        if (selectedAsesorId) {
-            cargarRutaYClientes(selectedAsesorId);
-        }
-
-        refreshTimer = setInterval(() => {
-            updateLocations(false);
-            cargarPanel();
-        }, REFRESH_INTERVAL);
-    });
-}
-
-const buscarBtn = document.getElementById('buscar-fecha-btn');
-if (buscarBtn) {
-    buscarBtn.addEventListener('click', () => {
         cargarResumenEncuestas();
-        refreshClientesAsesorExpandidos();
-        if (selectedAsesorId) {
-            cargarRutaYClientes(selectedAsesorId);
-        }
+    }, REFRESH_INTERVAL);
+});
+
+// ── Botón Buscar por fecha ────────────────────────────────────
+document.getElementById('buscar-fecha-btn')?.addEventListener('click', () => {
+    const fecha = getSelectedFecha();
+    if (!fecha) return;
+
+    // Invalidar cache de clientes inline para la nueva fecha
+    Object.keys(clientesAsesorCache).forEach(k => {
+        if (!k.includes(fecha)) delete clientesAsesorCache[k];
     });
-}
 
-const fechaEl = document.getElementById('fecha-ruta');
-if (fechaEl) {
-    fechaEl.addEventListener('change', () => {
-        cargarResumenEncuestas();
-        refreshClientesAsesorExpandidos();
-        if (selectedAsesorId) {
-            cargarRutaYClientes(selectedAsesorId);
-        }
-    });
-}
+    cargarResumenEncuestas(); // actualiza contadores del panel
 
-// ══════════════════════════════════════════════════════════════
-//  SISTEMA DE RUTAS POR SEGMENTO
-// ══════════════════════════════════════════════════════════════
-const rutaLayers        = {};   // segmento_id → { polyline, markers[] }
-const segmentoPorTareaId = {}; // tarea_id → segmento_id
-const rutaGroup         = L.featureGroup().addTo(map);
-
-function hexToRgba(hex, alpha) {
-    const r = parseInt(hex.slice(1,3),16);
-    const g = parseInt(hex.slice(3,5),16);
-    const b = parseInt(hex.slice(5,7),16);
-    return `rgba(${r},${g},${b},${alpha})`;
-}
-
-function renderRutas(segmentos) {
-    // Limpiar capas anteriores
-    rutaGroup.clearLayers();
-    Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
-    Object.keys(segmentoPorTareaId).forEach(k => delete segmentoPorTareaId[k]);
-
-    const leyendaEl = document.getElementById('leyenda-items');
-    const leyendaBox = document.getElementById('leyenda-rutas');
-    const leyendaItems = {};
-
-    if (!segmentos || segmentos.length === 0) {
-        leyendaBox.style.display = 'none';
-        return;
+    if (selectedAsesorId) {
+        cargarRutaYClientes(selectedAsesorId); // recarga ruta + clientes para la fecha
     }
-    leyendaBox.style.display = 'block';
+});
 
-    segmentos.forEach(seg => {
-        const color  = seg.color || '#3B82F6';
-        const puntos = seg.puntos || [];
-        const nombre = seg.asesor_nombre || 'Asesor';
-        const num    = seg.numero;
-
-        if (seg.tarea_id) {
-            segmentoPorTareaId[String(seg.tarea_id)] = seg.segmento_id;
-        }
-
-        // ── Polilínea de la ruta ──
-        if (puntos.length >= 2) {
-            const latlngs = puntos.map(p => [p.lat, p.lng]);
-            const poly = L.polyline(latlngs, {
-                color:     color,
-                weight:    4,
-                opacity:   0.82,
-                dashArray: seg.estado === 'activo' ? '8 5' : null,
-                lineJoin:  'round',
-                lineCap:   'round',
-            }).addTo(rutaGroup);
-
-            const horaInicio = seg.inicio_at ? seg.inicio_at.substring(11,16) : '--:--';
-            const horaFin    = seg.fin_at    ? seg.fin_at.substring(11,16)    : 'activo';
-            poly.bindPopup(`
-                <div style="font-family:'Inter',sans-serif;min-width:180px;">
-                    <div style="font-weight:700;font-size:13px;color:#1f2937;margin-bottom:5px;">
-                        <span style="display:inline-block;width:12px;height:12px;
-                              border-radius:50%;background:${color};margin-right:5px;"></span>
-                        ${nombre} — Segmento ${num}
-                    </div>
-                    <div style="font-size:12px;color:#555;margin-bottom:2px;">
-                        <i class="fas fa-clock"></i> ${horaInicio} → ${horaFin}
-                    </div>
-                    <div style="font-size:12px;color:#555;">
-                        <i class="fas fa-map-pin"></i> ${puntos.length} puntos GPS
-                    </div>
-                    <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">
-                        Estado: <b style="color:${seg.estado==='activo'?'#10B981':'#6B7280'}">${seg.estado}</b>
-                    </div>
-                </div>`
-            );
-            rutaLayers[seg.segmento_id] = { polyline: poly, markers: [] };
-        }
-
-        // ── Marcador de inicio (primer punto del segmento = login o tarea previa) ──
-        if (seg.inicio_lat !== null && seg.inicio_lng !== null && num === 1) {
-            const startIcon = L.divIcon({
-                html: `<div style="width:16px;height:16px;border-radius:50%;
-                             background:${color};border:3px solid #fff;
-                             box-shadow:0 2px 8px rgba(0,0,0,.3);"
-                             title="Inicio sesión ${nombre}"></div>`,
-                iconSize:[16,16], iconAnchor:[8,8], className:'',
-            });
-            const sm = L.marker([seg.inicio_lat, seg.inicio_lng], { icon: startIcon })
-                .addTo(rutaGroup)
-                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;">
-                    <b>${nombre}</b><br>
-                    <i class="fas fa-sign-in-alt"></i> Inicio sesión<br>
-                    <small>${seg.inicio_at ? seg.inicio_at.substring(11,16) : ''}</small>
-                </div>`);
-            if (rutaLayers[seg.segmento_id]) rutaLayers[seg.segmento_id].markers.push(sm);
-        }
-
-        // ── Marcador de tarea completada (fin del segmento) ──
-        if (seg.fin_lat !== null && seg.fin_lng !== null && seg.estado !== 'activo') {
-            const tareaLabel = seg.tarea_tipo
-                ? seg.tarea_tipo.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
-                : 'Tarea';
-            const taskIcon = L.divIcon({
-                html: `<div class="task-marker-pin" style="background:${color};" title="${tareaLabel}">
-                           ${num}
-                       </div>`,
-                iconSize:[28,28], iconAnchor:[14,14], popupAnchor:[0,-16], className:'',
-            });
-            const tm = L.marker([seg.fin_lat, seg.fin_lng], { icon: taskIcon })
-                .addTo(rutaGroup)
-                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;min-width:160px;">
-                    <div style="font-weight:700;color:#1f2937;margin-bottom:4px;">
-                        <span style="display:inline-block;width:10px;height:10px;
-                              border-radius:50%;background:${color};margin-right:4px;"></span>
-                        Segmento ${num} completado
-                    </div>
-                    ${seg.tarea_tipo ? `<div><i class="fas fa-tasks"></i> ${tareaLabel}</div>` : ''}
-                    ${seg.cliente_nombre ? `<div><i class="fas fa-user"></i> ${seg.cliente_nombre}</div>` : ''}
-                    <div style="color:#6B7280;font-size:11px;margin-top:3px;">
-                        ${seg.fin_at ? seg.fin_at.substring(11,16) : ''}
-                    </div>
-                </div>`);
-            if (rutaLayers[seg.segmento_id]) rutaLayers[seg.segmento_id].markers.push(tm);
-        }
-
-        // ── Punto final si es logout ──
-        if (seg.fin_lat !== null && seg.fin_lng !== null && seg.estado === 'cerrado_logout') {
-            const logoutIcon = L.divIcon({
-                html: `<div style="width:14px;height:14px;border-radius:50%;
-                             background:#EF4444;border:3px solid #fff;
-                             box-shadow:0 2px 8px rgba(239,68,68,.4);"
-                             title="Cierre sesión"></div>`,
-                iconSize:[14,14], iconAnchor:[7,7], className:'',
-            });
-            L.marker([seg.fin_lat, seg.fin_lng], { icon: logoutIcon })
-                .addTo(rutaGroup)
-                .bindPopup(`<div style="font-family:'Inter',sans-serif;font-size:12px;">
-                    <b style="color:#EF4444;"><i class="fas fa-sign-out-alt"></i> Fin de sesión</b><br>
-                    <b>${nombre}</b><br>
-                    <small>${seg.fin_at ? seg.fin_at.substring(11,16) : ''}</small>
-                </div>`);
-        }
-
-        // ── Leyenda ──
-        const key = `${seg.asesor_id}`;
-        if (!leyendaItems[key]) {
-            leyendaItems[key] = {
-                nombre, segmentos: [], color,
-            };
-        }
-        leyendaItems[key].segmentos.push({ num, color, estado: seg.estado, cliente: seg.cliente_nombre });
-    });
-
-    // Renderizar leyenda
-    let leyendaHtml = '';
-    Object.values(leyendaItems).forEach(item => {
-        leyendaHtml += `<div style="margin-bottom:10px;">
-            <div style="font-weight:700;font-size:12px;color:#1f2937;margin-bottom:4px;">
-                <i class="fas fa-user-tie"></i> ${item.nombre}
-            </div>`;
-        item.segmentos.forEach(s => {
-            const estadoIcon = s.estado === 'activo' ? '🟢' : (s.estado === 'completado' ? '✓' : '🔴');
-            leyendaHtml += `<div class="leyenda-item">
-                <div class="leyenda-color" style="background:${s.color};"></div>
-                <span>${estadoIcon} Seg. ${s.num}${s.cliente ? ' · ' + s.cliente.split(' ')[0] : ''}</span>
-            </div>`;
-        });
-        leyendaHtml += `</div>`;
-    });
-    leyendaEl.innerHTML = leyendaHtml || '<small style="color:#9CA3AF;">Sin rutas hoy</small>';
-}
-
-// cargarRutas() ya no se llama automáticamente.
-// Las rutas se cargan individualmente al hacer click en un asesor via verAsesor().
-// Se mantiene la función por si se necesita en el futuro.
-function cargarRutas() {
-    fetch('api_rutas_supervisor.php', { cache: 'no-store' })
-        .then(r => r.json())
-        .then(data => {
-            if (data.status === 'ok') {
-                renderRutas(data.segmentos);
-            }
-        })
-        .catch(err => console.warn('[rutas] fetch error:', err));
-}
+// ── Búsqueda al presionar Enter en el date picker ────────────
+document.getElementById('fecha-ruta')?.addEventListener('change', () => {
+    document.getElementById('buscar-fecha-btn')?.click();
+});
 </script>
 </body>
 </html>

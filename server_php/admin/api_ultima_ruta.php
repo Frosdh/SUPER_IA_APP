@@ -115,7 +115,13 @@ try {
         $fecha = $dateRow['fecha'];
     }
 
-    // Obtener todos los segmentos de ese día
+    // solo_ultimo=1  → devuelve ÚNICAMENTE el último segmento (el de mayor numero_segmento)
+    // solo_ultimo=0  → devuelve todos los segmentos del día (para búsqueda por fecha)
+    $soloUltimo = (trim($_GET['solo_ultimo'] ?? '1') === '1');
+
+    // Obtener segmentos del día (uno o todos según solo_ultimo)
+    $limitClause = $soloUltimo ? 'ORDER BY rs.numero_segmento DESC LIMIT 1' : 'ORDER BY rs.numero_segmento ASC';
+
     $stSeg = $conn->prepare("
         SELECT rs.id, rs.asesor_id, rs.numero_segmento, rs.estado,
                rs.inicio_lat, rs.inicio_lng, rs.fin_lat, rs.fin_lng,
@@ -128,7 +134,7 @@ try {
         LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
         WHERE rs.asesor_id = ?
           AND DATE(rs.inicio_at) = ?
-        ORDER BY rs.numero_segmento ASC
+        $limitClause
     ");
     if (!$stSeg) throw new Exception('Prepare seg: ' . $conn->error);
     $stSeg->bind_param('ss', $asesor_id, $fecha);
@@ -188,14 +194,15 @@ try {
     $stSeg->close();
 
     echo json_encode([
-        'status'    => 'ok',
-        'asesor_id' => $asesor_id,
-        'nombre'    => $asesorNombre,
-        'fecha'     => $fecha,
-        'segmentos' => $resultado,
-        'total'     => count($resultado),
-        'ts'        => date('H:i:s'),
-    ]);
+        'status'      => 'ok',
+        'asesor_id'   => $asesor_id,
+        'nombre'      => $asesorNombre,
+        'fecha'       => $fecha,
+        'solo_ultimo' => $soloUltimo,
+        'segmentos'   => $resultado,
+        'total'       => count($resultado),
+        'ts'          => date('H:i:s'),
+    ], JSON_UNESCAPED_UNICODE);
 
 } catch (\Throwable $e) {
     error_log('[api_ultima_ruta] ' . $e->getMessage());

@@ -13,19 +13,15 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
     header('Location: supervisor_index.php');
     exit;
 }
-if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
-    header('Location: asesor_index.php');
-    exit;
-}
 
-$role = $_GET['role'] ?? 'admin'; // 'super_admin', 'admin', 'supervisor', 'asesor'
+$role = $_GET['role'] ?? 'admin'; // 'super_admin', 'admin', 'supervisor'
 $role_labels = [
     'super_admin' => ['title' => 'Super Administrador', 'subtitle' => 'Ingresa credenciales de super administrador'],
     'admin' => ['title' => 'Admin Panel', 'subtitle' => 'Ingresa credenciales de administrador'],
-    'supervisor' => ['title' => 'Panel Supervisor', 'subtitle' => 'Ingresa credenciales de supervisor'],
-    'asesor' => ['title' => 'Panel Asesor', 'subtitle' => 'Ingresa credenciales de asesor']
+    'supervisor' => ['title' => 'Panel Supervisor', 'subtitle' => 'Ingresa credenciales de supervisor']
 ];
-$current_label = $role_labels[$role] ?? $role_labels['admin'];
+if (!array_key_exists($role, $role_labels)) $role = 'admin';
+$current_label = $role_labels[$role];
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -92,26 +88,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } else {
             $error = 'Credenciales de supervisor incorrectas.';
-        }
-    } elseif ($login_role === 'asesor') {
-        // Asesor
-        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
-                               FROM usuario
-                               WHERE email = ? AND rol = 'asesor' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
-        $stmt->execute([$email]);
-        $asesor = $stmt->fetch();
-        
-        if ($asesor && password_verify($pass, $asesor['password_hash'])) {
-            $_SESSION['asesor_logged_in'] = true;
-            $_SESSION['asesor_id'] = $asesor['id'];
-            $_SESSION['asesor_email'] = $asesor['email'];
-            $_SESSION['asesor_nombre'] = $asesor['nombre'];
-            $_SESSION['asesor_rol'] = 'asesor';
-            session_write_close();
-            header('Location: asesor_index.php');
-            exit;
-        } else {
-            $error = 'Credenciales de asesor incorrectas.';
         }
     }
 }
@@ -187,8 +163,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <a href="registro_admin.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Admin</a>
                 <?php elseif ($role === 'supervisor'): ?>
                 <a href="registro_supervisor.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Supervisor</a>
-                <?php elseif ($role === 'asesor'): ?>
-                <a href="registro_asesor_publico.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Asesor</a>
                 <?php endif; ?>
 
                 <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Cambiar de Rol</a>

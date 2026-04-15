@@ -71,21 +71,23 @@ if (!$session_missing && $session_user_id) {
         $aid_usuario = $asesor['usuario_id'] ?? $asesor['id_usuario'] ?? null;
         if (!$aid_usuario) continue;
 
-        // Query cliente_prospecto with proper schema mapping
+        // Query cliente_prospecto con esquema nuevo (usuario_id puede ser UUID)
         try {
-            $asesor_id_subquery = intval($aid_usuario);
-            $clientes = $pdo->query("
-                SELECT 
-                    cp.id AS id_cliente, 
-                    cp.nombre, 
-                    COALESCE(cp.cedula, '') as apellidos,
-                    cp.email, 
-                    cp.telefono, 
-                    CASE WHEN cp.estado != 'descartado' THEN 1 ELSE 0 END as activo
-                FROM cliente_prospecto cp
-                WHERE cp.asesor_id = (SELECT id FROM asesor WHERE usuario_id = $asesor_id_subquery)
-                ORDER BY cp.nombre
-            ")->fetchAll();
+            $stmt = $pdo->prepare(
+                "SELECT 
+                    cp.id AS id_cliente,
+                    cp.nombre,
+                    COALESCE(cp.cedula, '') AS cedula,
+                    cp.email,
+                    cp.telefono,
+                    cp.telefono2,
+                    CASE WHEN cp.estado != 'descartado' THEN 1 ELSE 0 END AS activo
+                 FROM cliente_prospecto cp
+                 WHERE cp.asesor_id = (SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1)
+                 ORDER BY cp.nombre"
+            );
+            $stmt->execute([$aid_usuario]);
+            $clientes = $stmt->fetchAll();
         } catch (Exception $e) {
             error_log("Error fetching clientes for asesor $aid_usuario: " . $e->getMessage());
             $clientes = [];
@@ -196,8 +198,9 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 
         <!-- ASESORES Y CLIENTES -->
         <?php foreach ($asesores as $asesor): ?>
+        <?php $asesorKey = (string)($asesor['id_usuario'] ?? ''); ?>
         <div class="asesor-card">
-            <div class="asesor-header" onclick="toggleClientes(<?php echo $asesor['id_usuario']; ?>)">
+            <div class="asesor-header" onclick="toggleClientes('<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>')">
                 <div class="asesor-info">
                     <h5><?php echo htmlspecialchars($asesor['nombres'] . ' ' . $asesor['apellidos']); ?></h5>
                     <div class="asesor-meta">
@@ -208,23 +211,23 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
                     <div class="clients-count"><?php echo $asesor['total_clientes']; ?> clientes</div>
-                    <i class="fas fa-chevron-down" id="chevron-<?php echo $asesor['id_usuario']; ?>" style="color: #6b11ff; transition: 0.3s;"></i>
+                    <i class="fas fa-chevron-down" id="chevron-<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>" style="color: #6b11ff; transition: 0.3s;"></i>
                 </div>
             </div>
 
-            <div class="asesor-clients" id="clients-<?php echo $asesor['id_usuario']; ?>">
-                <?php if (empty($clientes_por_asesor[$asesor['id_usuario']])): ?>
+            <div class="asesor-clients" id="clients-<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>">
+                <?php if (empty($clientes_por_asesor[$asesorKey])): ?>
                 <div style="padding: 20px; text-align: center; color: #9ca3af;">
                     <i class="fas fa-inbox me-2"></i>Sin clientes asignados
                 </div>
                 <?php else: ?>
-                    <?php foreach ($clientes_por_asesor[$asesor['id_usuario']] as $cliente): ?>
+                    <?php foreach ($clientes_por_asesor[$asesorKey] as $cliente): ?>
                     <div class="client-item">
                         <div style="flex: 1;">
-                            <div class="client-name">#<?php echo $cliente['id_cliente']; ?> - <?php echo htmlspecialchars($cliente['nombre'] . ' ' . $cliente['apellidos']); ?></div>
+                            <div class="client-name"><?php echo htmlspecialchars($cliente['nombre']); ?><?php if (!empty($cliente['cedula'])): ?> <span style="font-weight:500; color:#64748b;">(CI: <?php echo htmlspecialchars($cliente['cedula']); ?>)</span><?php endif; ?></div>
                             <div class="client-contact">
                                 <i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($cliente['email'] ?? 'N/A'); ?> | 
-                                <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($cliente['telefono'] ?? 'N/A'); ?>
+                                <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($cliente['telefono2'] ?? $cliente['telefono'] ?? 'N/A'); ?>
                             </div>
                         </div>
                         <div>
