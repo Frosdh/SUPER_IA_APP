@@ -345,7 +345,7 @@ $usuariosPorRol = $pdo->query("
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> COAC Finance
+        <i class="fas fa-chart-pie"></i> Super_IA
     </div>
     
     <div class="sidebar-section">
@@ -381,8 +381,17 @@ $usuariosPorRol = $pdo->query("
         <a href="operaciones.php" class="sidebar-link">
             <i class="fas fa-handshake"></i> Operaciones
         </a>
-        <a href="alertas.php" class="sidebar-link">
+        <a href="alertas.php" class="sidebar-link" style="position:relative;">
             <i class="fas fa-bell"></i> Alertas
+            <?php if (!empty($totalAlertas) && $totalAlertas > 0): ?>
+            <span style="
+                position:absolute; right:14px; top:50%; transform:translateY(-50%);
+                background:#EF4444; color:#fff; font-size:10px; font-weight:700;
+                border-radius:10px; padding:2px 6px; min-width:18px; text-align:center;
+                line-height:14px;">
+                <?php echo $totalAlertas > 99 ? '99+' : $totalAlertas; ?>
+            </span>
+            <?php endif; ?>
         </a>
     </div>
     
@@ -411,7 +420,7 @@ $usuariosPorRol = $pdo->query("
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2><?php echo $is_super_admin ? '👑' : '🎯'; ?> COAC Finance <?php echo $is_super_admin ? '- SuperAdministrador' : '- Admin'; ?></h2>
+        <h2><?php echo $is_super_admin ? '👑' : '🎯'; ?> Super_IA <?php echo $is_super_admin ? '- SuperAdministrador' : '- Admin'; ?></h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($user_nombre ?? 'Usuario'); ?></strong><br>
@@ -568,7 +577,7 @@ $usuariosPorRol = $pdo->query("
         </div>
 
         <div style="text-align: center; color: #999; font-size: 12px; margin-top: 30px;">
-            <p>COAC Finance © 2026 | Sistema de Monitoreo Comercial</p>
+            <p>Super_IA © 2026 | Sistema de Monitoreo Comercial</p>
         </div>
     </div>
 </div>

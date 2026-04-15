@@ -299,11 +299,11 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
       }
     }
     // Fallback si no hay conexión
-    print('>>> [CAT] Usando fallback GeoMove-X');
+    print('>>> [CAT] Usando fallback Super_IA Mobile-X');
     if (mounted && _categorias.isEmpty) {
       final fallback = CategoriaModel(
         id: 1,
-        nombre: 'GeoMove-X',
+        nombre: 'Super_IA Mobile-X',
         tarifaBase: 1.50,
         precioKm: 0.40,
         precioMinuto: 0.10,
@@ -926,7 +926,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         'destino_lat': _destino?.latitude ?? 0.0,
         'destino_lng': _destino?.longitude ?? 0.0,
         // ── Para el recibo detallado ──
-        'categoria_nombre': _categoriaSeleccionada?.nombre ?? 'GeoMove-X',
+        'categoria_nombre': _categoriaSeleccionada?.nombre ?? 'Super_IA Mobile-X',
         'tarifa_base': _categoriaSeleccionada?.tarifaBase ?? 1.50,
         'precio_km': _categoriaSeleccionada?.precioKm ?? 0.45,
         'precio_minuto': _categoriaSeleccionada?.precioMinuto ?? 0.10,
@@ -2374,28 +2374,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
           0.72; // Altura para viajes con paradas
     }
 
-    double currentPanelHeight = minH + (maxH - minH) * _panelPosition;
+    double currentPanelHeight = 0;
 
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: ConstantColors.backgroundDark,
-      body: SlidingUpPanel(
-        controller: _panelController,
-        minHeight: minH,
-        maxHeight: maxH,
-        parallaxEnabled: false,
-        parallaxOffset: 0.0,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        color: ConstantColors.backgroundCard,
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.4),
-              blurRadius: 20,
-              offset: const Offset(0, -5))
-        ],
-        onPanelSlide: (pos) => setState(() => _panelPosition = pos),
-        panel: _buildPanelContent(),
-        body: Stack(
+      body: Stack(
           children: [
             // ── MAPA ────────────────────────────────────────────────
             FlutterMap(
@@ -2412,7 +2396,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   tileProvider: NetworkTileProvider(
                     headers: {
-                      'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                      'User-Agent': 'SuperIA/1.0 (com.coac.super_ia)',
                     },
                   ),
                   additionalOptions: {
@@ -2635,9 +2619,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                               valueColor: AlwaysStoppedAnimation<Color>(
                                   ConstantColors.primaryViolet))),
                   ]),
-                  SizedBox(height: 12),
-                  // Barra de búsqueda
-                  Container(
+                  // (búsqueda/destino eliminados)
+                  if (false) Container(
                       decoration: BoxDecoration(
                         color: ConstantColors.backgroundCard,
                         borderRadius: BorderRadius.circular(14),
@@ -2709,7 +2692,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                       ]),
                     ),
                     // ── Botones favoritos rápidos ───────────────────────
-                    if (_favoritos.isNotEmpty &&
+                    if (false && _favoritos.isNotEmpty &&
                         _estadoViaje == EstadoViaje.ninguno &&
                         !_mostrandoSugerencias &&
                         !_buscando &&
@@ -3065,58 +3048,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                 ),
               ),
 
-            // ── BOTÓN AÑADIR PARADA (FAB Independiente) ──────────────
-            if (_mostrandoPanel &&
-                _estadoViaje == EstadoViaje.ninguno &&
-                _paradasIntermedias.length < 3)
-              Positioned(
-                right: 16,
-                bottom: currentPanelHeight + 184,
-                child: GestureDetector(
-                  onTap: _iniciarAgregarParada,
-                  child: AnimatedContainer(
-                    duration: Duration(milliseconds: 180),
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _agregandoParada
-                          ? ConstantColors.primaryViolet
-                          : ConstantColors.backgroundCard,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: _agregandoParada
-                            ? ConstantColors.primaryViolet
-                            : ConstantColors.borderColor,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 8,
-                            offset: Offset(0, 4)),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.add_location_alt_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          _agregandoParada
-                              ? 'Confirmar Parada'
-                              : 'Añadir parada',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            // (Añadir parada eliminado)
 
             // ── BOTÓN SHARE TRIP (Durante viaje activo) ───────────────
             if (_estadoViaje == EstadoViaje.conductorAsignado ||
@@ -3332,7 +3264,6 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               ),
           ],
         ),
-      ),
     );
   }
 

@@ -280,7 +280,7 @@ class PushNotificationService {
           priority: Priority.high,
           styleInformation: mensajeStyle,
           icon: '@mipmap/ic_launcher',
-          color: const Color(0xFF7C3AED), // violeta GeoMove
+          color: const Color(0xFF7C3AED), // violeta Super_IA Mobile
           // Datos para cuando el usuario toca la notificación
           additionalFlags: Int32List.fromList(<int>[4]), // FLAG_AUTO_CANCEL
         ),

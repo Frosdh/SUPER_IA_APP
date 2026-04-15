@@ -68,7 +68,7 @@ if (function_exists('fastcgi_finish_request')) { fastcgi_finish_request(); }
 // Si quien habla es el pasajero → notificar al conductor, y viceversa
 try {
     $token_otro  = null;
-    $nombre_otro = 'GeoMove';
+    $nombre_otro = 'Super_IA';
 
     if ($remitente === 'pasajero') {
         // Buscar token del conductor asignado a este viaje

@@ -281,7 +281,7 @@ $currentPage = 'solicitudes_asesor';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Solicitudes de Asesor</title>
+    <title>Super_IA - Solicitudes de Asesor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -358,7 +358,7 @@ $currentPage = 'solicitudes_asesor';
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> COAC Finance
+        <i class="fas fa-chart-pie"></i> Super_IA
     </div>
     
     <div class="sidebar-section">
@@ -402,7 +402,7 @@ $currentPage = 'solicitudes_asesor';
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2>📊 COAC Finance - Solicitudes de Asesor</h2>
+        <h2>📊 Super_IA - Solicitudes de Asesor</h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($supervisor_nombre); ?></strong><br>

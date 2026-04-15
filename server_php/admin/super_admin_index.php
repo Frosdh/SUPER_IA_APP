@@ -42,7 +42,7 @@ $currentPage = 'super_admin_dashboard';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Super Administrador</title>
+    <title>Super_IA - Super Administrador</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -99,7 +99,7 @@ $currentPage = 'super_admin_dashboard';
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-crown"></i> COAC Finance
+        <i class="fas fa-crown"></i> Super_IA
     </div>
     
     <div class="sidebar-section">
@@ -162,7 +162,7 @@ $currentPage = 'super_admin_dashboard';
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2>👑 COAC Finance - Super Administrador</h2>
+        <h2>👑 Super_IA - Super Administrador</h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($_SESSION['super_admin_nombre']); ?></strong><br>

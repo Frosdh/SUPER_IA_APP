@@ -20,7 +20,7 @@ class ShareTripService {
     final mapsUrl = 'https://maps.google.com/?q=${ubicacionActual.latitude},${ubicacionActual.longitude}';
 
     // Construir mensaje
-    String mensaje = '📍 *Estoy en un viaje GeoMove*\n\n';
+    String mensaje = '📍 *Estoy en un viaje Super_IA Mobile*\n\n';
 
     if (nombrePasajero.isNotEmpty) {
       mensaje += '👤 Pasajero: $nombrePasajero\n';
@@ -58,7 +58,7 @@ class ShareTripService {
     }
 
     mensaje += '\n🗺️ Mi ubicación: $mapsUrl\n\n';
-    mensaje += '_Compartido desde GeoMove_ ✓';
+    mensaje += '_Compartido desde Super_IA Mobile_ ✓';
 
     return mensaje;
   }

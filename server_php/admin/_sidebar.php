@@ -7,6 +7,38 @@ $isSupervisor     = isset($_SESSION['supervisor_logged_in']) && $_SESSION['super
 $isAsesor         = isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true;
 $isAdmin          = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
 
+// ── Contar alertas pendientes para el supervisor actual ──────
+$totalAlertasBadge = 0;
+if ($isSupervisor) {
+    $sup_usuario_id = $_SESSION['supervisor_id'] ?? null;
+    if ($sup_usuario_id) {
+        try {
+            // Resolver supervisor.id real (la sesión guarda usuario.id)
+            $stSid = $conn->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+            if ($stSid) {
+                $stSid->bind_param('s', $sup_usuario_id);
+                $stSid->execute();
+                $rowSid = $stSid->get_result()->fetch_assoc();
+                $sup_real_id = $rowSid ? $rowSid['id'] : null;
+                $stSid->close();
+                if ($sup_real_id) {
+                    $stCnt = $conn->prepare(
+                        'SELECT COUNT(*) AS cnt FROM alerta_modificacion
+                         WHERE supervisor_id = ? AND vista_supervisor = 0'
+                    );
+                    if ($stCnt) {
+                        $stCnt->bind_param('s', $sup_real_id);
+                        $stCnt->execute();
+                        $rowCnt = $stCnt->get_result()->fetch_assoc();
+                        $totalAlertasBadge = (int)($rowCnt['cnt'] ?? 0);
+                        $stCnt->close();
+                    }
+                }
+            }
+        } catch (\Throwable $e) { /* tabla puede no existir aún */ }
+    }
+}
+
 // Navegación para Supervisores
 $nav_supervisor = [
     'PRINCIPAL' => [
@@ -18,7 +50,7 @@ $nav_supervisor = [
     'ANÁLISIS' => [
         ['href' => 'reportes.php', 'icon' => 'fa-chart-bar', 'label' => 'Reportes KPI', 'page' => 'reportes'],
         ['href' => 'mapa_vivo.php', 'icon' => 'fa-map-marked-alt', 'label' => 'Ubicaciones', 'page' => 'mapa'],
-        ['href' => 'alertas.php', 'icon' => 'fa-bell', 'label' => 'Alertas', 'page' => 'alertas'],
+        ['href' => 'alertas.php', 'icon' => 'fa-bell', 'label' => 'Alertas', 'page' => 'alertas', 'badge' => $totalAlertasBadge],
     ],
 ];
 
@@ -37,7 +69,6 @@ $nav_asesor = [
 
 $nav = $isSupervisor ? $nav_supervisor : ($isAsesor ? $nav_asesor : []);
 $user_role = $isSupervisor ? 'Supervisor' : ($isAsesor ? 'Asesor' : 'Usuario');
-?>
 ?>
 <div class="col-md-2 sidebar" style="position:sticky;top:0;height:100vh;overflow-y:auto;">
     <div class="brand">

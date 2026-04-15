@@ -192,6 +192,8 @@ try {
         $st->close();
     }
 
+    $es_cliente_existente = ($cliente_id !== null); // true = UPDATE, false = INSERT
+
     if ($cliente_id === null) {
         // INSERT: 14 parámetros
         // id(s) nombre(s) cedula(s) telefono(s) telefono2(s) email(s)
@@ -253,6 +255,76 @@ try {
     );
     $st->execute();
     $st->close();
+
+    // ── 3b. Alerta de modificación (solo si el cliente ya existía) ──
+    if ($es_cliente_existente && $asesor_id !== null) {
+        try {
+            // Asegurar tabla
+            $conn->query("
+                CREATE TABLE IF NOT EXISTS alerta_modificacion (
+                    id               CHAR(36)     NOT NULL PRIMARY KEY,
+                    tarea_id         CHAR(36)     NOT NULL,
+                    asesor_id        CHAR(36)     NOT NULL,
+                    supervisor_id    CHAR(36)     DEFAULT NULL,
+                    campo_modificado VARCHAR(120) DEFAULT 'visita_cliente',
+                    valor_anterior   TEXT         DEFAULT NULL,
+                    valor_nuevo      TEXT         DEFAULT NULL,
+                    vista_supervisor TINYINT(1)   NOT NULL DEFAULT 0,
+                    vista_at         DATETIME     DEFAULT NULL,
+                    created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    KEY idx_am_asesor (asesor_id),
+                    KEY idx_am_supervisor (supervisor_id),
+                    KEY idx_am_no_vista (vista_supervisor)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            ");
+
+            // Obtener supervisor_id del asesor
+            $sup_id = null;
+            $stSup = $conn->prepare('SELECT supervisor_id FROM asesor WHERE id = ? LIMIT 1');
+            if ($stSup) {
+                $stSup->bind_param('s', $asesor_id);
+                $stSup->execute();
+                $rowSup = $stSup->get_result()->fetch_assoc();
+                if ($rowSup) $sup_id = $rowSup['supervisor_id'] ?: null;
+                $stSup->close();
+            }
+
+            // Obtener nombre del asesor para el resumen
+            $asesor_nombre_alerta = '';
+            $stNm = $conn->prepare(
+                'SELECT u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE a.id = ? LIMIT 1'
+            );
+            if ($stNm) {
+                $stNm->bind_param('s', $asesor_id);
+                $stNm->execute();
+                $rowNm = $stNm->get_result()->fetch_assoc();
+                if ($rowNm) $asesor_nombre_alerta = $rowNm['nombre'];
+                $stNm->close();
+            }
+
+            $campo_mod  = 'Nueva visita a cliente existente';
+            $val_ant    = null;
+            $val_nuevo  = "Asesor: $asesor_nombre_alerta | Cliente: $nombre_completo (cédula: $cedula) | Tipo: $tipo_tarea | Fecha: " . date('d/m/Y H:i');
+            $alerta_id  = genUUID();
+
+            $stAl = $conn->prepare(
+                "INSERT INTO alerta_modificacion
+                 (id, tarea_id, asesor_id, supervisor_id, campo_modificado, valor_anterior, valor_nuevo)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)"
+            );
+            if ($stAl) {
+                $stAl->bind_param('sssssss',
+                    $alerta_id, $tarea_id, $asesor_id, $sup_id,
+                    $campo_mod, $val_ant, $val_nuevo
+                );
+                $stAl->execute();
+                $stAl->close();
+            }
+        } catch (\Throwable $eAl) {
+            // No bloquear el flujo principal por un error de alerta
+            error_log('[guardar_encuesta] Error creando alerta: ' . $eAl->getMessage());
+        }
+    }
 
     // ── 4. Encuesta comercial ────────────────────────────────
     if ($fue_encuestado) {

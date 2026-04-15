@@ -68,6 +68,19 @@ if ($latitud < -90 || $latitud > 90 || $longitud < -180 || $longitud > 180) {
 
 try {
     // ── Asegurar tablas ──────────────────────────────────────
+    // ubicacion_asesor: historial de puntos GPS (base para trazar rutas)
+    $conn->query(
+        "CREATE TABLE IF NOT EXISTS ubicacion_asesor (
+            id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            asesor_id   VARCHAR(64) NOT NULL,
+            latitud     DECIMAL(10,7) NOT NULL,
+            longitud    DECIMAL(10,7) NOT NULL,
+            precision_m FLOAT DEFAULT 0,
+            timestamp   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_ub_asesor_ts (asesor_id, timestamp)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+    );
+
     $conn->query(
         "CREATE TABLE IF NOT EXISTS asesor_presencia (
             asesor_id  VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL PRIMARY KEY,

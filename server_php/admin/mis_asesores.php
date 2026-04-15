@@ -94,14 +94,16 @@ if (!$session_missing && $session_user_id) {
     }
 }
 
-$currentPage = 'asesores';
+$currentPage        = 'asesores';
+$alertas_pendientes = 0;
+$supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Mis Asesores</title>
+    <title>Super_IA - Mis Asesores</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -121,13 +123,14 @@ $currentPage = 'asesores';
         body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
 
         .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
+        .sidebar-brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
+        .sidebar-brand i { color:var(--brand-yellow); }
         .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
         .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
         .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; border: 1px solid transparent; }
         .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
         .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; box-shadow: 0 10px 24px rgba(255,221,0,0.18); }
+        .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
 
         .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
@@ -161,54 +164,13 @@ $currentPage = 'asesores';
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> COAC Finance
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <a href="supervisor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_superIA.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <a href="clientes.php" class="sidebar-link">
-            <i class="fas fa-briefcase"></i> Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link">
-            <i class="fas fa-handshake"></i> Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores.php" class="sidebar-link active">
-            <i class="fas fa-users"></i> Mis Asesores
-        </a>
-        <a href="registro_asesor.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link">
-            <i class="fas fa-file-circle-check"></i> Solicitudes de Asesor
-        </a>
-    </div>
-</div>
+<?php require_once '_sidebar_supervisor.php'; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2>🎯 COAC Finance - Supervisor</h2>
+        <h2>🎯 Super_IA - Supervisor</h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($_SESSION['supervisor_nombre']); ?></strong><br>

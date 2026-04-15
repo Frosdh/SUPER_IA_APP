@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  Paso de la encuesta 
@@ -45,8 +46,19 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   final _emailCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
   String? _actividad;
-  bool _tieneRuc = false;
-  bool _tieneRise = false;
+  // Régimen tributario
+  String? _regimenTributario;          // 'ruc' | 'rise' | 'no_registrado'
+  final _numeroRucCtrl  = TextEditingController(); // número RUC (opcional)
+  bool? _declaraIva;
+  bool? _emiteFacturas;
+  bool? _llevaContabilidad;
+  bool? _pagaCuotaRise;
+  bool? _emiteNotasVenta;
+  bool? _conoceLimiteRise;
+  // compat: derivados de _regimenTributario
+  bool get _tieneRuc  => _regimenTributario == 'ruc';
+  bool get _tieneRise => _regimenTributario == 'rise';
+
   bool _tieneEmpresa = false;
   final _empresaCtrl = TextEditingController();
   final _formKeyCliente = GlobalKey<FormState>();
@@ -70,6 +82,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _interesAhorro = false;
   bool _interesInv = false;
   bool _interesCred = false;
+  // Fichas llenadas por producto
+  bool _fichaCC = false;
+  bool _fichaAhorro = false;
+  bool _fichaInv = false;
+  bool _fichaCred = false;
   // Razones de NO
   bool _razonYaTrabaja = false;
   bool _razonDesconfia = false;
@@ -109,6 +126,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _celularCtrl.dispose();
     _emailCtrl.dispose();
     _direccionCtrl.dispose();
+    _numeroRucCtrl.dispose();
     _empresaCtrl.dispose();
     _instInvCtrl.dispose();
     _valorInvCtrl.dispose();
@@ -199,8 +217,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'email_cliente': _emailCtrl.text.trim(),
       'direccion': _direccionCtrl.text.trim(),
       'actividad': _actividad ?? '',
-      'tiene_ruc': _tieneRuc ? '1' : '0',
+      'tiene_ruc':  _tieneRuc  ? '1' : '0',
       'tiene_rise': _tieneRise ? '1' : '0',
+      'regimen_tributario': _regimenTributario ?? '',
+      'numero_ruc': _numeroRucCtrl.text.trim(),
+      // Sub-preguntas RUC
+      'declara_iva':          _declaraIva       == null ? '' : (_declaraIva!       ? '1' : '0'),
+      'emite_facturas':       _emiteFacturas    == null ? '' : (_emiteFacturas!    ? '1' : '0'),
+      'lleva_contabilidad':   _llevaContabilidad== null ? '' : (_llevaContabilidad!? '1' : '0'),
+      // Sub-preguntas RISE
+      'paga_cuota_rise':      _pagaCuotaRise    == null ? '' : (_pagaCuotaRise!    ? '1' : '0'),
+      'emite_notas_venta':    _emiteNotasVenta  == null ? '' : (_emiteNotasVenta!  ? '1' : '0'),
+      'conoce_limite_rise':   _conoceLimiteRise == null ? '' : (_conoceLimiteRise! ? '1' : '0'),
       'tiene_empresa': _tieneEmpresa ? '1' : '0',
       'nombre_empresa': _empresaCtrl.text.trim(),
       // GPS
@@ -843,17 +871,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(height: 20),
           _seccionTitulo('Actividad Económica'),
           _dropdownActividad(),
+          const SizedBox(height: 16),
+          _seccionTitulo('Régimen Tributario'),
+          _buildRegimenTributario(),
           const SizedBox(height: 12),
-          _switchItem(
-            label: '¿Tiene RUC?',
-            value: _tieneRuc,
-            onChanged: (v) => setState(() => _tieneRuc = v),
-          ),
-          _switchItem(
-            label: '¿Tiene RISE?',
-            value: _tieneRise,
-            onChanged: (v) => setState(() => _tieneRise = v),
-          ),
           _switchItem(
             label: '¿Tiene empresa?',
             value: _tieneEmpresa,
@@ -976,25 +997,41 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         if (_interesConocer == true) ...[
           const SizedBox(height: 16),
           _seccionTitulo('¿Cuáles productos le interesan?'),
-          _checkboxItem(
+          _productoItem(
             label: 'Cuenta Corriente',
+            icono: Icons.account_balance_rounded,
+            color: const Color(0xFF3B82F6),
             value: _interesCC,
+            fichaLlena: _fichaCC,
             onChanged: (v) => setState(() => _interesCC = v ?? false),
+            onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.cuentaCorriente),
           ),
-          _checkboxItem(
+          _productoItem(
             label: 'Cuenta de Ahorros',
+            icono: Icons.savings_rounded,
+            color: const Color(0xFF10B981),
             value: _interesAhorro,
+            fichaLlena: _fichaAhorro,
             onChanged: (v) => setState(() => _interesAhorro = v ?? false),
+            onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.cuentaAhorros),
           ),
-          _checkboxItem(
+          _productoItem(
             label: 'Inversiones',
+            icono: Icons.trending_up_rounded,
+            color: const Color(0xFF8B5CF6),
             value: _interesInv,
+            fichaLlena: _fichaInv,
             onChanged: (v) => setState(() => _interesInv = v ?? false),
+            onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.inversiones),
           ),
-          _checkboxItem(
+          _productoItem(
             label: 'Crédito',
+            icono: Icons.credit_score_rounded,
+            color: const Color(0xFFF59E0B),
             value: _interesCred,
+            fichaLlena: _fichaCred,
             onChanged: (v) => setState(() => _interesCred = v ?? false),
+            onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.credito),
           ),
         ],
         if (_interesConocer == false) ...[
@@ -1194,6 +1231,33 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _irSiguientePaso();
   }
 
+  // ── Navegación a ficha de producto ───────────────────────────
+
+  Future<void> _abrirFichaProducto(ProductoTipo tipo) async {
+    final cedula = _cedulaCtrl.text.trim();
+    final nombre = '${_nombreCtrl.text.trim()} ${_apellidosCtrl.text.trim()}'.trim();
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => EncuestaProductoScreen(
+          tipo: tipo,
+          clienteCedula: cedula,
+          clienteNombre: nombre,
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      setState(() {
+        switch (tipo) {
+          case ProductoTipo.cuentaCorriente: _fichaCC    = true; break;
+          case ProductoTipo.cuentaAhorros:  _fichaAhorro= true; break;
+          case ProductoTipo.inversiones:    _fichaInv   = true; break;
+          case ProductoTipo.credito:        _fichaCred  = true; break;
+        }
+      });
+    }
+  }
+
   // ── Widget helpers ───────────────────────────────────────────
 
   Widget _seccionTitulo(String titulo) {
@@ -1333,6 +1397,198 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
+  // ── RÉGIMEN TRIBUTARIO ───────────────────────────────────────
+  Widget _buildRegimenTributario() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Opciones principales ─────────────────────────────────
+        ...[
+          ('ruc',           '📋 RUC',              'Régimen general'),
+          ('rise',          '🟦 RISE',             'Régimen simplificado'),
+          ('no_registrado', '⬜ No está registrado', ''),
+        ].map((opt) {
+          final val = opt.$1;
+          final title = opt.$2;
+          final sub = opt.$3;
+          final selected = _regimenTributario == val;
+          return GestureDetector(
+            onTap: () => setState(() => _regimenTributario = selected ? null : val),
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: selected
+                    ? ConstantColors.warning.withOpacity(0.12)
+                    : ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: selected
+                      ? ConstantColors.warning
+                      : ConstantColors.borderLight,
+                  width: selected ? 1.5 : 1,
+                ),
+              ),
+              child: Row(children: [
+                Icon(
+                  selected
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                  color: selected
+                      ? ConstantColors.warning
+                      : ConstantColors.textDarkGrey,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: TextStyle(
+                              color: ConstantColors.textDark,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600)),
+                      if (sub.isNotEmpty)
+                        Text(sub,
+                            style: TextStyle(
+                                color: ConstantColors.textDarkGrey,
+                                fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+          );
+        }),
+
+        // ── Sub-preguntas RUC ────────────────────────────────────
+        if (_regimenTributario == 'ruc') ...[
+          const SizedBox(height: 4),
+          _campo(
+            controller: _numeroRucCtrl,
+            label: 'Número de RUC (opcional)',
+            icon: Icons.badge_rounded,
+            keyboardType: TextInputType.number,
+          ),
+          const SizedBox(height: 6),
+          _subPreguntaSiNo(
+            emoji: '📄',
+            label: '¿Declara IVA mensualmente?',
+            value: _declaraIva,
+            onChanged: (v) => setState(() => _declaraIva = v),
+          ),
+          _subPreguntaSiNo(
+            emoji: '🧾',
+            label: '¿Emite facturas electrónicas?',
+            value: _emiteFacturas,
+            onChanged: (v) => setState(() => _emiteFacturas = v),
+          ),
+          _subPreguntaSiNo(
+            emoji: '📊',
+            label: '¿Lleva contabilidad?',
+            value: _llevaContabilidad,
+            onChanged: (v) => setState(() => _llevaContabilidad = v),
+          ),
+        ],
+
+        // ── Sub-preguntas RISE ───────────────────────────────────
+        if (_regimenTributario == 'rise') ...[
+          const SizedBox(height: 6),
+          _subPreguntaSiNo(
+            emoji: '💳',
+            label: '¿Paga su cuota mensual del RISE?',
+            value: _pagaCuotaRise,
+            onChanged: (v) => setState(() => _pagaCuotaRise = v),
+          ),
+          _subPreguntaSiNo(
+            emoji: '📝',
+            label: '¿Emite notas de venta?',
+            value: _emiteNotasVenta,
+            onChanged: (v) => setState(() => _emiteNotasVenta = v),
+          ),
+          _subPreguntaSiNo(
+            emoji: '📈',
+            label: '¿Conoce el límite de ingresos del RISE?',
+            value: _conoceLimiteRise,
+            onChanged: (v) => setState(() => _conoceLimiteRise = v),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Fila Sí/No compacta para sub-preguntas tributarias
+  Widget _subPreguntaSiNo({
+    required String emoji,
+    required String label,
+    required bool? value,
+    required ValueChanged<bool?> onChanged,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: ConstantColors.grey100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ConstantColors.borderLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$emoji $label',
+              style: TextStyle(
+                  color: ConstantColors.textDark,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500)),
+          const SizedBox(height: 8),
+          Row(children: [
+            _chipSiNo(label: 'Sí', selected: value == true,
+                color: Colors.green.shade600,
+                onTap: () => onChanged(value == true ? null : true)),
+            const SizedBox(width: 8),
+            _chipSiNo(label: 'No', selected: value == false,
+                color: Colors.red.shade400,
+                onTap: () => onChanged(value == false ? null : false)),
+            const SizedBox(width: 8),
+            if (value == null)
+              Text('sin respuesta',
+                  style: TextStyle(
+                      color: ConstantColors.textDarkGrey, fontSize: 11)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _chipSiNo({
+    required String label,
+    required bool selected,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? color.withOpacity(0.18) : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? color : ConstantColors.borderLight,
+              width: selected ? 1.5 : 1),
+        ),
+        child: Text(label,
+            style: TextStyle(
+                color: selected ? color : ConstantColors.textDarkGrey,
+                fontSize: 13,
+                fontWeight:
+                    selected ? FontWeight.w700 : FontWeight.w400)),
+      ),
+    );
+  }
+
   Widget _switchItem({
     required String label,
     required bool value,
@@ -1407,6 +1663,103 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Item de producto con checkbox + botón "Llenar ficha" ────
+  Widget _productoItem({
+    required String label,
+    required IconData icono,
+    required Color color,
+    required bool value,
+    required bool fichaLlena,
+    required ValueChanged<bool?> onChanged,
+    required VoidCallback onLlenarFicha,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: value ? color.withOpacity(0.08) : ConstantColors.grey100,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: value ? color.withOpacity(0.4) : ConstantColors.borderLight,
+        ),
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            onTap: () => onChanged(!value),
+            child: Icon(
+              value ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+              color: value ? color : ConstantColors.textDarkGrey,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(7),
+            ),
+            child: Icon(icono, color: color, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: GestureDetector(
+              onTap: () => onChanged(!value),
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: value ? ConstantColors.textDark : ConstantColors.textDarkGrey,
+                  fontSize: 13,
+                  fontWeight: value ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ),
+          if (value) ...[
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: onLlenarFicha,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: fichaLlena
+                      ? ConstantColors.success.withOpacity(0.12)
+                      : color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: fichaLlena ? ConstantColors.success : color,
+                    width: 1.2,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      fichaLlena ? Icons.check_circle_rounded : Icons.edit_note_rounded,
+                      color: fichaLlena ? ConstantColors.success : color,
+                      size: 14,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      fichaLlena ? 'Completa' : 'Llenar ficha',
+                      style: TextStyle(
+                        color: fichaLlena ? ConstantColors.success : color,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1633,7 +1986,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               backgroundColor: ConstantColors.warning,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Salir'),
           ),
@@ -1666,10 +2020,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         child: _guardando
             ? const Center(
                 child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white)))
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                ),
+              )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -1698,4 +2056,4 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 }
-      
+         

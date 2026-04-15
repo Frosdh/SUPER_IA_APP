@@ -22,7 +22,7 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance — Seleccionar Rol</title>
+    <title>Super_IA — Seleccionar Rol</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -124,7 +124,7 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
     <!-- build: <?php echo htmlspecialchars($BUILD, ENT_QUOTES, 'UTF-8'); ?> | file: <?php echo htmlspecialchars(__FILE__, ENT_QUOTES, 'UTF-8'); ?> | mtime: <?php echo htmlspecialchars((string)@filemtime(__FILE__), ENT_QUOTES, 'UTF-8'); ?> -->
     <div class="container">
         <div class="header-section">
-            <h1>Bienvenido a COAC Finance</h1>
+            <h1>Bienvenido a Super_IA</h1>
             <p>Selecciona tu perfil para continuar al inicio de sesión</p>
         </div>
 

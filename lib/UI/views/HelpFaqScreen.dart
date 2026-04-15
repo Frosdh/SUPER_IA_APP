@@ -100,7 +100,7 @@ class HelpFaqScreen extends StatelessWidget {
                 ),
                 SizedBox(height: 12),
                 Text(
-                  'Aqui encuentras respuestas rapidas sobre viajes, cupones, seguridad y funciones principales de GeoMove.',
+                  'Aqui encuentras respuestas rapidas sobre viajes, cupones, seguridad y funciones principales de Super_IA Mobile.',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.88),
                     fontSize: 13,

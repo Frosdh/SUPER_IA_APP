@@ -121,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance — Iniciar Sesión</title>
+    <title>Super_IA — Iniciar Sesión</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -159,8 +159,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="login-wrapper">
         <div class="login-left">
             <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
-            <h1>COAC Finance</h1>
-            <p>Sistema de gestión integral para supervisión de operaciones, clientes y créditos de COAC Finance.</p>
+            <h1>Super_IA</h1>
+            <p>Sistema de gestión integral para supervisión de operaciones, clientes y créditos de Super_IA.</p>
             <div class="feature"><div class="fi"><i class="fas fa-chart-line"></i></div><span>Dashboard con estadísticas en tiempo real</span></div>
             <div class="feature"><div class="fi"><i class="fas fa-users-gear"></i></div><span>Gestión de supervisores y asesores</span></div>
             <div class="feature"><div class="fi"><i class="fas fa-shield-alt"></i></div><span>Seguimiento de operaciones de crédito</span></div>
@@ -193,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Cambiar de Rol</a>
             </form>
-            <div class="login-footer">COAC Finance &copy; 2026</div>
+            <div class="login-footer">Super_IA &copy; 2026</div>
         </div>
     </div>
 </body>

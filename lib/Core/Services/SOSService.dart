@@ -14,7 +14,7 @@ class SOSService {
 
       // Mensaje SOS con ubicación
       final mensaje =
-          '¡EMERGENCIA! Soy $nombrePasajero en la app GeoMove.\n\n'
+          '¡EMERGENCIA! Soy $nombrePasajero en la app Super_IA Mobile.\n\n'
           '📍 Mi ubicación: $mapsUrl\n\n'
           'Por favor, ayuda.';
 

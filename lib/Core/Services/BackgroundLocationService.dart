@@ -27,7 +27,7 @@ class MyTaskHandler extends TaskHandler {
       _eventCount++;
       
       FlutterForegroundTask.updateService(
-        notificationTitle: 'GeoMove Conductor',
+        notificationTitle: 'Super_IA Mobile',
         notificationText: 'Rastreo activo - Actu. #$_eventCount',
       );
     });
@@ -184,7 +184,7 @@ class BackgroundLocationService {
     }
 
     final serviceRequestResult = await FlutterForegroundTask.startService(
-      notificationTitle: isDriver ? 'GeoMove Conductor' : 'GeoMove Asesor',
+      notificationTitle: isDriver ? 'Super_IA Mobile' : 'Super_IA Mobile',
       notificationText: 'Buscando señal GPS...',
       callback: startCallback,
     );

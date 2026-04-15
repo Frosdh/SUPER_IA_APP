@@ -103,7 +103,7 @@ $roleSeleccionado = isset($_POST['role_select']) ? $_POST['role_select'] : '';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Sistema de Monitoreo Comercial</title>
+    <title>Super_IA - Sistema de Monitoreo Comercial</title>
     <style>
         * {
             margin: 0;
@@ -516,7 +516,7 @@ $roleSeleccionado = isset($_POST['role_select']) ? $_POST['role_select'] : '';
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="logo">🎯 COAC Finance</div>
+            <div class="logo">🎯 Super_IA</div>
             <div class="subtitle">Sistema de Monitoreo</div>
             <h1 class="title">Bienvenido al Sistema</h1>
             <p class="description">Selecciona tu perfil para continuar al inicio de sesión</p>
@@ -560,7 +560,7 @@ $roleSeleccionado = isset($_POST['role_select']) ? $_POST['role_select'] : '';
 
         <!-- Footer -->
         <div class="footer">
-            <p>© 2026 COAC Finance. Sistema de Monitoreo Comercial. Todos los derechos reservados.</p>
+            <p>© 2026 Super_IA. Sistema de Monitoreo Comercial. Todos los derechos reservados.</p>
         </div>
     </div>
 

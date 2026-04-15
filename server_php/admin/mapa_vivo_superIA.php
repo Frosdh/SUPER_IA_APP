@@ -18,6 +18,34 @@ if (!$is_supervisor) {
 $supervisor_id    = $_SESSION['supervisor_id'] ?? null;
 $supervisor_nombre = $_SESSION['supervisor_nombre'] ?? 'Supervisor';
 
+// ── Contador de alertas pendientes ───────────────────────────
+$totalAlertasPendientes = 0;
+try {
+    // Resolver el id real de la tabla supervisor (supervisor.id, no usuario.id)
+    $stSup = $conn->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+    if ($stSup) {
+        $stSup->bind_param('s', $supervisor_id);
+        $stSup->execute();
+        $rowSup = $stSup->get_result()->fetch_assoc();
+        $sup_table_id = $rowSup ? $rowSup['id'] : null;
+        $stSup->close();
+
+        if ($sup_table_id) {
+            $stAl = $conn->prepare(
+                'SELECT COUNT(*) AS cnt FROM alerta_modificacion
+                 WHERE supervisor_id = ? AND vista_supervisor = 0'
+            );
+            if ($stAl) {
+                $stAl->bind_param('s', $sup_table_id);
+                $stAl->execute();
+                $rowAl = $stAl->get_result()->fetch_assoc();
+                $totalAlertasPendientes = (int)($rowAl['cnt'] ?? 0);
+                $stAl->close();
+            }
+        }
+    }
+} catch (\Throwable $eAl) { /* Tabla puede no existir aún */ }
+
 // ── Carga inicial de ubicaciones ─────────────────────────────
 $ubicaciones = [];
 $error_msg   = '';
@@ -80,15 +108,17 @@ try {
     error_log($error_msg);
 }
 
-$currentPage     = 'mapa';
-$totalPendientes = 0;
+$currentPage        = 'mapa';
+$alertas_pendientes = $totalAlertasPendientes; // alias para el sidebar compartido
+$supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
+$totalPendientes    = 0;
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance – Mapa en Vivo</title>
+    <title>Super_IA – Mapa en Vivo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -141,6 +171,7 @@ $totalPendientes = 0;
             color:var(--brand-navy-deep); font-weight:700;
             box-shadow:0 10px 24px rgba(255,221,0,.18);
         }
+        .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
         /* ── Layout ── */
         .main-content { flex:1; margin-left:230px; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
         .navbar-custom {
@@ -243,33 +274,7 @@ $totalPendientes = 0;
 </head>
 <body>
 
-<!-- Sidebar -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> COAC Finance
-    </div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <a href="supervisor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_superIA.php" class="sidebar-link active">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-    </div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestion</div>
-        <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> Clientes</a>
-        <a href="operaciones.php" class="sidebar-link"><i class="fas fa-handshake"></i> Operaciones</a>
-        <a href="alertas.php" class="sidebar-link"><i class="fas fa-bell"></i> Alertas</a>
-    </div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores_superIA.php" class="sidebar-link"><i class="fas fa-users"></i> Mis Asesores</a>
-        <a href="registro_asesor.php" class="sidebar-link"><i class="fas fa-user-plus"></i> Crear Asesor</a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link"><i class="fas fa-file-circle-check"></i> Solicitudes de Asesor</a>
-    </div>
-</div>
+<?php require_once '_sidebar_supervisor.php'; ?>
 
 <!-- Main -->
 <div class="main-content">
@@ -277,7 +282,7 @@ $totalPendientes = 0;
         <div>
             <h2>
                 <i class="fas fa-map-location-dot me-2" style="color:var(--brand-yellow);"></i>
-                COAC Finance – Supervisor
+                Super_IA – Supervisor
             </h2>
             <small style="opacity:.85;">
                 <span id="count-label"><?= count($ubicaciones) ?></span> asesores localizados
@@ -411,11 +416,21 @@ function showToast() {
 }
 
 // ── Renderizar marcadores en el mapa ──────────────────────────
-function renderMap(locs) {
-    markerGroup.clearLayers();
-    Object.keys(markerById).forEach(k => delete markerById[k]);
+// fitView=true  → mueve el mapa para mostrar todos (solo carga inicial / refresh manual)
+// fitView=false → solo actualiza posiciones, NO mueve la vista
+function renderMap(locs, fitView = true) {
+    if (!Array.isArray(locs)) return;
 
-    if (!Array.isArray(locs) || locs.length === 0) return;
+    // ── Eliminar marcadores de asesores que ya no están en línea ──
+    const newIds = new Set(locs.map(l => l.asesor_id));
+    Object.keys(markerById).forEach(id => {
+        if (!newIds.has(id)) {
+            markerGroup.removeLayer(markerById[id]);
+            delete markerById[id];
+        }
+    });
+
+    if (locs.length === 0) return;
 
     const bounds = [];
 
@@ -441,7 +456,7 @@ function renderMap(locs) {
             className: 'advisor-marker'
         });
 
-        const popup = `
+        const popupHtml = `
             <div class="advisor-popup">
                 <div class="popup-name"><i class="fas fa-user-tie me-1"></i>${nombre}</div>
                 <div class="popup-row"><i class="fas fa-location-dot me-1" style="color:#10B981;"></i>
@@ -456,17 +471,30 @@ function renderMap(locs) {
                 ${stale ? '<div class="popup-row" style="color:#EF4444;"><i class="fas fa-exclamation-triangle me-1"></i>Sin actualización reciente</div>' : ''}
             </div>`;
 
-        const marker = L.marker([lat, lng], { icon }).bindPopup(popup);
-        markerGroup.addLayer(marker);
-        markerById[loc.asesor_id] = marker;
+        if (markerById[loc.asesor_id]) {
+            // ── ACTUALIZAR marcador existente sin removerlo del mapa ──
+            // Esto mantiene abiertos los popups y no mueve la vista
+            const m = markerById[loc.asesor_id];
+            m.setLatLng([lat, lng]);
+            m.setIcon(icon);
+            m.setPopupContent(popupHtml);
+        } else {
+            // ── NUEVO asesor: agregar marcador ──
+            const marker = L.marker([lat, lng], { icon }).bindPopup(popupHtml);
+            markerGroup.addLayer(marker);
+            markerById[loc.asesor_id] = marker;
+        }
+
         bounds.push([lat, lng]);
     });
 
-    // Hacer zoom para mostrar todos los marcadores
-    if (bounds.length === 1) {
-        map.setView(bounds[0], 14);
-    } else if (bounds.length > 1) {
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+    // ── Solo mover la vista cuando se pide explícitamente (carga inicial / botón manual) ──
+    if (fitView && bounds.length > 0) {
+        if (bounds.length === 1) {
+            map.setView(bounds[0], 14);
+        } else {
+            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+        }
     }
 }
 
@@ -520,13 +548,14 @@ function flyToAsesor(id, lat, lng) {
     if (m) setTimeout(() => m.openPopup(), 1300);
 }
 
-// ── Actualización AJAX (auto-refresh) ────────────────────────
-function updateLocations() {
+// ── Actualización AJAX (auto-refresh cada 10 s) ──────────────
+// fitView = false → los marcadores se mueven, la vista del mapa NO cambia
+function updateLocations(fitView = false) {
     fetch('api_ubicaciones_mapa.php', { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
             if (data.status === 'ok') {
-                renderMap(data.ubicaciones);
+                renderMap(data.ubicaciones, fitView);   // ← pasa fitView
                 renderList(data.ubicaciones);
                 const upd = document.getElementById('last-update');
                 if (upd) upd.textContent = data.ts || '--:--:--';
@@ -538,7 +567,7 @@ function updateLocations() {
 
 // ── Render inicial con datos del servidor ─────────────────────
 const ubicacionesIniciales = <?= json_encode($ubicaciones) ?>;
-renderMap(ubicacionesIniciales);
+renderMap(ubicacionesIniciales, true);   // true → centrar al cargar por primera vez
 renderList(ubicacionesIniciales);
 
 // Timestamp inicial
@@ -546,15 +575,17 @@ const upd = document.getElementById('last-update');
 if (upd) upd.textContent = new Date().toLocaleTimeString('es-ES');
 
 // ── Auto-refresh cada 10 segundos ─────────────────────────────
+// Los refrescos automáticos NO mueven la vista (fitView=false)
 const REFRESH_INTERVAL = 10000; // ms
-let refreshTimer = setInterval(updateLocations, REFRESH_INTERVAL);
+let refreshTimer = setInterval(() => updateLocations(false), REFRESH_INTERVAL);
 
 // ── Botón manual ──────────────────────────────────────────────
+// Al presionar el botón sí se centra el mapa (el usuario lo pidió explícitamente)
 document.getElementById('refresh-btn').addEventListener('click', () => {
     clearInterval(refreshTimer);
-    updateLocations();
+    updateLocations(true);   // true → recentrar al botón manual
     cargarRutas();
-    refreshTimer = setInterval(updateLocations, REFRESH_INTERVAL);
+    refreshTimer = setInterval(() => updateLocations(false), REFRESH_INTERVAL);
 });
 
 // ══════════════════════════════════════════════════════════════

@@ -128,7 +128,9 @@ $stats = [
     'revisadas' => $revisadas
 ];
 
-$currentPage = 'alertas';
+$currentPage        = 'alertas';
+$alertas_pendientes = 0; // ya está en la página activa, no hace falta badge aquí
+$supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 $is_supervisor_ui = ($user_role === 'supervisor');
 ?>
 <!DOCTYPE html>
@@ -136,7 +138,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Alertas</title>
+    <title>Super_IA - Alertas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -155,13 +157,14 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
         .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
+        .sidebar-brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
+        .sidebar-brand i { color:var(--brand-yellow); }
         .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
         .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
         .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; border: 1px solid transparent; }
         .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
         .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; box-shadow: 0 10px 24px rgba(255,221,0,0.18); }
+        .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
         .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -227,9 +230,10 @@ $is_supervisor_ui = ($user_role === 'supervisor');
 <body>
 
 <!-- SIDEBAR -->
+<?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php'; else: ?>
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> COAC Finance
+        <i class="fas fa-chart-pie"></i> Super_IA
     </div>
     <div class="sidebar-section">
         <div class="sidebar-section-title">Principal</div>
@@ -325,13 +329,14 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         </a>
     </div>
 </div>
+<?php endif; ?>
 
 <div class="main-content">
     <div class="navbar-custom">
         <?php if ($user_role === 'supervisor'): ?>
-            <h2><i class="fas fa-shield-halved me-2" style="color: var(--brand-yellow);"></i>COAC Finance - Supervisor</h2>
+            <h2><i class="fas fa-shield-halved me-2" style="color: var(--brand-yellow);"></i>Super_IA - Supervisor</h2>
         <?php else: ?>
-            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> COAC Finance 
+            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA 
                 <?php 
                 if ($user_role === 'super_admin') echo '- SuperAdministrador';
                 elseif ($user_role === 'admin') echo '- Admin';

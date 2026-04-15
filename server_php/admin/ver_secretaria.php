@@ -41,9 +41,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($dest && !empty($dest['email'])) {
             require_once __DIR__ . '/../email_helper.php';
             
-            $subject = 'Cuenta Activada - GeoMove';
-            $htmlBody = 'Hola ' . htmlspecialchars($dest['nombre']) . ',<br><br>Tu cuenta de Secretaria en GeoMove ha sido <b>aprobada y activada</b> exitosamente por el administrador.<br><br>Ya puedes ingresar al panel de cooperativa con tu usuario y contraseña.<br><br>Saludos cordiales,<br>El equipo de GeoMove.';
-            $plainBody = 'Hola ' . $dest['nombre'] . ', tu cuenta de Secretaria en GeoMove ha sido aprobada y activada exitosamente por el administrador. Ya puedes ingresar al panel de cooperativa. Saludos cordiales.';
+            $subject = 'Cuenta Activada - Super_IA';
+            $htmlBody = 'Hola ' . htmlspecialchars($dest['nombre']) . ',<br><br>Tu cuenta de Secretaria en Super_IA ha sido <b>aprobada y activada</b> exitosamente por el administrador.<br><br>Ya puedes ingresar al panel de cooperativa con tu usuario y contraseña.<br><br>Saludos cordiales,<br>El equipo de Super_IA.';
+            $plainBody = 'Hola ' . $dest['nombre'] . ', tu cuenta de Secretaria en Super_IA ha sido aprobada y activada exitosamente por el administrador. Ya puedes ingresar al panel de cooperativa. Saludos cordiales.';
             
             list($success, $error) = sendEmailMessage($dest['email'], $subject, $htmlBody, $plainBody);
             if ($success) {
@@ -74,7 +74,7 @@ $isRechazada = ($sec['verificado'] == 2);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove Admin — Ver Secretaria</title>
+    <title>Super_IA Admin — Ver Secretaria</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="admin.css">

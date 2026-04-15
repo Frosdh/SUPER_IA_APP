@@ -67,7 +67,7 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
     final txn = PayPhoneService.buildCashTransaction(
       clientTransactionId: clientTxnId,
       amountUSD: precio,
-      referencia: 'Viaje GeoMove - ${args['destino'] ?? ''}',
+      referencia: 'Viaje Super_IA Mobile - ${args['destino'] ?? ''}',
       viajeId: viajeId,
     );
 
@@ -102,7 +102,7 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
     final createResult = await PayPhoneService.crearPago(
       amountUSD: precio,
       clientTransactionId: clientTxnId,
-      referencia: 'Viaje GeoMove - $destino',
+      referencia: 'Viaje Super_IA Mobile - $destino',
     );
 
     if (!createResult.success || createResult.redirectUrl == null) {
@@ -144,7 +144,7 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
           amount: precio,
           method: 'payphone',
           status: 'approved',
-          reference: 'Viaje GeoMove - $destino',
+          reference: 'Viaje Super_IA Mobile - $destino',
           fecha: DateTime.now().toIso8601String(),
           viajeId: viajeId,
         );
@@ -163,7 +163,7 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
           amount: precio,
           method: 'payphone',
           status: 'cancelled',
-          reference: 'Viaje GeoMove - $destino',
+          reference: 'Viaje Super_IA Mobile - $destino',
           fecha: DateTime.now().toIso8601String(),
           viajeId: viajeId,
         );
@@ -270,7 +270,7 @@ class _RideCompletedScreenState extends State<RideCompletedScreen>
     final double distancia       = (args['distancia'] as num?)?.toDouble() ?? 0.0;
     final int    duracion        = (args['duracion'] as num?)?.toInt()    ?? 0;
     final double precio          = (args['precio'] as num?)?.toDouble() ?? 0.0;
-    final String categoriaNombre = args['categoria_nombre'] as String? ?? 'GeoMove-X';
+    final String categoriaNombre = args['categoria_nombre'] as String? ?? 'Super_IA Mobile-X';
     final double tarifaBase      = (args['tarifa_base'] as num?)?.toDouble() ?? 0.0;
     final double precioKm        = (args['precio_km'] as num?)?.toDouble() ?? 0.0;
     final double precioMin       = (args['precio_minuto'] as num?)?.toDouble() ?? 0.0;

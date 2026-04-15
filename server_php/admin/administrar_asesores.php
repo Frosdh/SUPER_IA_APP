@@ -191,7 +191,7 @@ $currentPage = 'administrar_asesores';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Administrar Asesores</title>
+    <title>Super_IA - Administrar Asesores</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -266,7 +266,7 @@ $currentPage = 'administrar_asesores';
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-crown"></i> COAC Finance
+        <i class="fas fa-crown"></i> Super_IA
     </div>
     
     <div class="sidebar-section">
@@ -288,7 +288,7 @@ $currentPage = 'administrar_asesores';
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2><?php echo $is_super_admin ? '👑' : '🎯'; ?> COAC Finance - Administrar Asesores</h2>
+        <h2><?php echo $is_super_admin ? '👑' : '🎯'; ?> Super_IA - Administrar Asesores</h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($admin_nombre); ?></strong><br>

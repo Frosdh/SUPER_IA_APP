@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registro de Secretaria — GeoMove</title>
+    <title>Registro de Secretaria — Super_IA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -189,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="icon-box">
         <i class="fas fa-briefcase"></i>
     </div>
-    <span class="brand-logo">GeoMove</span>
+    <span class="brand-logo">Super_IA</span>
     <h2 class="auth-title">Registro de Secretaria</h2>
 
     <?php if ($msg): ?>

@@ -10,20 +10,20 @@ try {
     $stmt = $pdo->query("
         SELECT DISTINCT id_cooperativa, nombre 
         FROM (
-            SELECT 1 as id_cooperativa, 'COAC Finance - Quito' as nombre
-            UNION SELECT 2, 'COAC Finance - Guayaquil'
-            UNION SELECT 3, 'COAC Finance - Cuenca'
-            UNION SELECT 4, 'COAC Finance - Ambato'
+            SELECT 1 as id_cooperativa, 'Super_IA - Quito' as nombre
+            UNION SELECT 2, 'Super_IA - Guayaquil'
+            UNION SELECT 3, 'Super_IA - Cuenca'
+            UNION SELECT 4, 'Super_IA - Ambato'
         ) a
         ORDER BY nombre ASC
     ");
     $cooperativas = $stmt->fetchAll();
 } catch (Exception $e) {
     $cooperativas = [
-        ['id_cooperativa' => 1, 'nombre' => 'COAC Finance - Quito'],
-        ['id_cooperativa' => 2, 'nombre' => 'COAC Finance - Guayaquil'],
-        ['id_cooperativa' => 3, 'nombre' => 'COAC Finance - Cuenca'],
-        ['id_cooperativa' => 4, 'nombre' => 'COAC Finance - Ambato']
+        ['id_cooperativa' => 1, 'nombre' => 'Super_IA - Quito'],
+        ['id_cooperativa' => 2, 'nombre' => 'Super_IA - Guayaquil'],
+        ['id_cooperativa' => 3, 'nombre' => 'Super_IA - Cuenca'],
+        ['id_cooperativa' => 4, 'nombre' => 'Super_IA - Ambato']
     ];
 }
 ?>
@@ -32,7 +32,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Crear Cuenta de Supervisor</title>
+    <title>Super_IA - Crear Cuenta de Supervisor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">

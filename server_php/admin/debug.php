@@ -8,7 +8,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 echo "<style>body{font-family:monospace;padding:20px;background:#111;color:#0f0;} .ok{color:#0f0;} .err{color:#f55;} .warn{color:#fa0;} h2{color:#fff;border-bottom:1px solid #333;padding-bottom:5px;} pre{background:#1a1a1a;padding:10px;border-radius:5px;}</style>";
-echo "<h1 style='color:#0af;'>🔍 Debug COAC Finance — Hostinger</h1>";
+echo "<h1 style='color:#0af;'>🔍 Debug Super_IA — Hostinger</h1>";
 
 // ── 1. PHP Version
 echo "<h2>1. PHP</h2>";

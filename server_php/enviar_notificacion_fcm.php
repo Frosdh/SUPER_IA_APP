@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $jsonInput = json_decode(file_get_contents('php://input'), true);
 
 $telefono = isset($_REQUEST['telefono']) ? trim($_REQUEST['telefono']) : (isset($_REQUEST['telefono_']) ? trim($_REQUEST['telefono_']) : ($jsonInput['telefono'] ?? ($jsonInput['telefono_'] ?? '')));
-$titulo   = isset($_REQUEST['titulo'])   ? trim($_REQUEST['titulo'])   : (isset($_REQUEST['titulo_'])   ? trim($_REQUEST['titulo_'])   : ($jsonInput['titulo']   ?? ($jsonInput['titulo_']   ?? 'GeoMove')));
+$titulo   = isset($_REQUEST['titulo'])   ? trim($_REQUEST['titulo'])   : (isset($_REQUEST['titulo_'])   ? trim($_REQUEST['titulo_'])   : ($jsonInput['titulo']   ?? ($jsonInput['titulo_']   ?? 'Super_IA')));
 $mensaje  = isset($_REQUEST['mensaje'])  ? trim($_REQUEST['mensaje'])  : (isset($_REQUEST['mensaje_'])  ? trim($_REQUEST['mensaje_'])  : ($jsonInput['mensaje']  ?? ($jsonInput['mensaje_']  ?? 'Tienes una nueva notificacion')));
 $dataRaw  = isset($_REQUEST['data_json']) ? trim($_REQUEST['data_json']) : (isset($_REQUEST['data_json_']) ? trim($_REQUEST['data_json_']) : ($jsonInput['data_json'] ?? ($jsonInput['data_json_'] ?? '')));
 

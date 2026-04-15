@@ -30,8 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         if ($dest && !empty($dest['email'])) {
             require_once __DIR__ . '/../email_helper.php';
             
-            $subject = 'Cuenta Aprobada - Bienvenido a GeoMove';
-            $htmlBody = 'Hola ' . htmlspecialchars($dest['nombre']) . ',<br><br>¡Felicidades! Tus documentos han sido <b>verificados y tu cuenta está activa</b>.<br><br>Ya puedes abrir la aplicación de conductores, conectarte y empezar a recibir viajes.<br><br>Saludos cordiales,<br>El equipo de GeoMove.';
+            $subject = 'Cuenta Aprobada - Bienvenido a Super_IA';
+            $htmlBody = 'Hola ' . htmlspecialchars($dest['nombre']) . ',<br><br>¡Felicidades! Tus documentos han sido <b>verificados y tu cuenta está activa</b>.<br><br>Ya puedes abrir la aplicación de conductores, conectarte y empezar a recibir viajes.<br><br>Saludos cordiales,<br>El equipo de Super_IA.';
             $plainBody = 'Hola ' . $dest['nombre'] . ', ¡Felicidades! Tus documentos han sido verificados y tu cuenta está activa. Ya puedes abrir la aplicación de conductores. Saludos cordiales.';
             
             list($success, $error) = sendEmailMessage($dest['email'], $subject, $htmlBody, $plainBody);
@@ -116,7 +116,7 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GeoMove Admin — <?= htmlspecialchars($c['nombre']) ?></title>
+    <title>Super_IA Admin — <?= htmlspecialchars($c['nombre']) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="admin.css">
@@ -160,7 +160,7 @@ $totalPendientes = $pdo->query("SELECT COUNT(*) FROM conductores WHERE verificad
         <?php if ($msg): ?>
         <script>
             window.addEventListener('DOMContentLoaded', () => {
-                GeoMove.showToast('Actualizado', '<?= addslashes($msg) ?>', '<?= $msgType === "success" ? "success" : ($msgType === "danger" ? "error" : "warning") ?>');
+                Super_IA.showToast('Actualizado', '<?= addslashes($msg) ?>', '<?= $msgType === "success" ? "success" : ($msgType === "danger" ? "error" : "warning") ?>');
             });
         </script>
         <?php endif; ?>

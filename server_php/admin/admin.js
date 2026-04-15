@@ -1,9 +1,9 @@
 /**
- * GeoMove Admin — Premium JS Core
+ * Super_IA Admin — Premium JS Core
  * Maneja Modo Oscuro, Notificaciones Toast y Helpers AJAX
  */
 
-class GeoMoveUI {
+class Super_IAUI {
     constructor() {
         this.initDarkMode();
         this.createToastContainer();
@@ -123,4 +123,4 @@ class GeoMoveUI {
 }
 
 // Instancia global
-window.GeoMove = new GeoMoveUI();
+window.Super_IA = new Super_IAUI();

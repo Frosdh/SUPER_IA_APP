@@ -107,7 +107,7 @@ class _DriverStep1ScreenState extends State<DriverStep1Screen> {
                         const Text('Tu zona de operación', textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
                         const SizedBox(height: 10),
-                        Text('GeoMove opera en múltiples regiones. Confirma tu ubicación para ver las cooperativas disponibles.',
+                        Text('Super_IA Mobile opera en múltiples regiones. Confirma tu ubicación para ver las cooperativas disponibles.',
                           textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 14)),
                         
                         const SizedBox(height: 30),

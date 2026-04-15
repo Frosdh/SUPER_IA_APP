@@ -50,7 +50,7 @@ $stmt->close();
 
 list($mailSent, $mailError) = sendEmailMessage(
     $email,
-    'GeoMove - Codigo de verificacion',
+    'Super_IA - Codigo de verificacion',
     buildOtpEmailHtml($codigo),
     buildOtpEmailText($codigo)
 );

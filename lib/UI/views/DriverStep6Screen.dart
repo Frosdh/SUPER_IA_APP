@@ -282,7 +282,7 @@ class _DriverStep6ScreenState extends State<DriverStep6Screen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    'Acepto que GeoMove realice una verificación de mis antecedentes penales, judiciales y documentales para activar mi cuenta.',
+                                    'Acepto que Super_IA Mobile realice una verificación de mis antecedentes penales, judiciales y documentales para activar mi cuenta.',
                                     style: TextStyle(
                                       color: Colors.white.withOpacity(0.85),
                                       fontSize: 13, height: 1.45,

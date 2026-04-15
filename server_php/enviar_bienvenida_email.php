@@ -31,7 +31,7 @@ if ($nombre === '') {
 
 list($sent, $errorMessage) = sendEmailMessage(
     $email,
-    'Bienvenido a GeoMove',
+    'Bienvenido a Super_IA',
     buildWelcomeEmailHtml($nombre),
     buildWelcomeEmailText($nombre)
 );

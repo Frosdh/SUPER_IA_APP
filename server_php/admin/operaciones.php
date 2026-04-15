@@ -21,126 +21,155 @@ if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_i
     exit;
 }
 
-// Construir query según el rol del usuario
-if ($user_role === 'super_admin' || $user_role === 'admin') {
-    // SuperAdmin y Admin ven todas las operaciones de crédito
-    $query = "
-        SELECT 
-            cp.id as id_credito,
-            cl.nombre as cliente_nombre,
-            cl.cedula as cliente_cedula,
-            cp.monto_aprobado as cantidad,
-            cp.estado_credito as estado,
-            cp.created_at as fecha_creacion,
-            u.nombre as asesor_nombre
-        FROM credito_proceso cp
-        JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
-        LEFT JOIN asesor a ON cp.asesor_id = a.id
-        LEFT JOIN usuario u ON a.usuario_id = u.id
-        ORDER BY cp.created_at DESC
-    ";
-    $col_asesor = true;
-} elseif ($user_role === 'supervisor') {
-    // Supervisor ve créditos de los asesores a su cargo
-    $query = "
-        SELECT 
-            cp.id as id_credito,
-            cl.nombre as cliente_nombre,
-            cl.cedula as cliente_cedula,
-            cp.monto_aprobado as cantidad,
-            cp.estado_credito as estado,
-            cp.created_at as fecha_creacion,
-            u.nombre as asesor_nombre
-        FROM credito_proceso cp
-        JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
-        LEFT JOIN asesor a ON cp.asesor_id = a.id
-        LEFT JOIN usuario u ON a.usuario_id = u.id
-        WHERE a.supervisor_id = :supervisor_id
-        ORDER BY cp.created_at DESC
-    ";
-    $col_asesor = true;
-} else {
-    // Asesor ve solo los créditos que él mismo ha gestionado
-    $query = "
-        SELECT 
-            cp.id as id_credito,
-            cl.nombre as cliente_nombre,
-            cl.cedula as cliente_cedula,
-            cp.monto_aprobado as cantidad,
-            cp.estado_credito as estado,
-            cp.created_at as fecha_creacion
-        FROM credito_proceso cp
-        JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
-        WHERE cp.asesor_id = :asesor_id
-        ORDER BY cp.created_at DESC
-    ";
-    $col_asesor = false;
-}
-
-// Ejecutar consulta con parámetros según rol
-$stmt = $pdo->prepare($query);
+// ── Resolver supervisor.id real desde la sesión (usuario_id) ─────
+$supervisor_table_id = null;
 if ($user_role === 'supervisor') {
-    $stmt->execute([':supervisor_id' => $user_id]);
-} elseif ($user_role === 'asesor') {
-    $stmt->execute([':asesor_id' => $user_id]);
-} else {
-    $stmt->execute();
-}
-$operaciones = $stmt->fetchAll();
-
-// Estadísticas según el rol
-if ($user_role === 'super_admin' || $user_role === 'admin') {
-    $statsQuery = "
-        SELECT 
-            COUNT(*) as total_operaciones,
-            COUNT(CASE WHEN estado_credito = 'desembolsado' THEN 1 END) as completadas,
-            SUM(monto_aprobado) as monto_total
-        FROM credito_proceso
-    ";
-    $statsStmt = $pdo->query($statsQuery);
-} elseif ($user_role === 'supervisor') {
-    $statsQuery = "
-        SELECT 
-            COUNT(*) as total_operaciones,
-            COUNT(CASE WHEN cp.estado_credito = 'desembolsado' THEN 1 END) as completadas,
-            SUM(cp.monto_aprobado) as monto_total
-        FROM credito_proceso cp
-        JOIN asesor a ON cp.asesor_id = a.id
-        WHERE a.supervisor_id = :supervisor_id
-    ";
-    $statsStmt = $pdo->prepare($statsQuery);
-    $statsStmt->execute([':supervisor_id' => $user_id]);
-} else {
-    $statsQuery = "
-        SELECT 
-            COUNT(*) as total_operaciones,
-            COUNT(CASE WHEN estado_credito = 'desembolsado' THEN 1 END) as completadas,
-            SUM(monto_aprobado) as monto_total
-        FROM credito_proceso
-        WHERE asesor_id = :asesor_id
-    ";
-    $statsStmt = $pdo->prepare($statsQuery);
-    $statsStmt->execute([':asesor_id' => $user_id]);
-}
-$stats = $statsStmt->fetch();
-
-if (!$stats) {
-    $stats = [
-        'total_operaciones' => 0,
-        'completadas' => 0,
-        'monto_total' => 0
-    ];
+    try {
+        $stSup = $pdo->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+        $stSup->execute([$user_id]);
+        $supervisor_table_id = $stSup->fetchColumn() ?: $user_id;
+    } catch (PDOException $e) { $supervisor_table_id = $user_id; }
 }
 
-$currentPage = 'operaciones';
-$is_supervisor_ui = ($user_role === 'supervisor');
+// ── Resolver asesor.id real para asesor (sesión guarda usuario.id) ─
+$asesor_table_id = null;
+if ($user_role === 'asesor') {
+    try {
+        $stAs = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
+        $stAs->execute([$user_id]);
+        $asesor_table_id = $stAs->fetchColumn() ?: null;
+    } catch (PDOException $e) { $asesor_table_id = null; }
+}
+
+$col_asesor = ($user_role !== 'asesor');
+$operaciones = [];
+
+// ═══════════════════════════════════════════════════════════
+// FUENTE 1 — credito_proceso (procesos formales en sistema)
+// ═══════════════════════════════════════════════════════════
+try {
+    if ($user_role === 'super_admin' || $user_role === 'admin') {
+        $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+                     cp.monto_aprobado as cantidad, cp.estado_credito as estado,
+                     cp.created_at as fecha_creacion, u.nombre as asesor_nombre, 'proceso' as origen
+              FROM credito_proceso cp
+              JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
+              LEFT JOIN asesor a ON cp.asesor_id = a.id
+              LEFT JOIN usuario u ON a.usuario_id = u.id
+              ORDER BY cp.created_at DESC";
+        $st = $pdo->query($q);
+    } elseif ($user_role === 'supervisor') {
+        $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+                     cp.monto_aprobado as cantidad, cp.estado_credito as estado,
+                     cp.created_at as fecha_creacion, u.nombre as asesor_nombre, 'proceso' as origen
+              FROM credito_proceso cp
+              JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
+              LEFT JOIN asesor a ON cp.asesor_id = a.id
+              LEFT JOIN usuario u ON a.usuario_id = u.id
+              WHERE a.supervisor_id = ?
+              ORDER BY cp.created_at DESC";
+        $st = $pdo->prepare($q);
+        $st->execute([$supervisor_table_id]);
+    } else {
+        $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+                     cp.monto_aprobado as cantidad, cp.estado_credito as estado,
+                     cp.created_at as fecha_creacion, NULL as asesor_nombre, 'proceso' as origen
+              FROM credito_proceso cp
+              JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
+              WHERE cp.asesor_id = ?
+              ORDER BY cp.created_at DESC";
+        $st = $pdo->prepare($q);
+        $st->execute([$asesor_table_id]);
+    }
+    $operaciones = array_merge($operaciones, $st->fetchAll());
+} catch (PDOException $e) { /* tabla puede no existir aún */ }
+
+// ═══════════════════════════════════════════════════════════
+// FUENTE 2 — ficha_producto + ficha_credito (encuesta móvil)
+// ═══════════════════════════════════════════════════════════
+try {
+    if ($user_role === 'super_admin' || $user_role === 'admin') {
+        $q = "SELECT fp.id as id_credito,
+                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
+                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
+                     fc.monto_credito as cantidad,
+                     'solicitud_ficha' as estado,
+                     fp.created_at as fecha_creacion,
+                     u.nombre as asesor_nombre,
+                     'ficha' as origen
+              FROM ficha_producto fp
+              JOIN ficha_credito fc ON fc.ficha_id = fp.id
+              LEFT JOIN asesor a ON a.id = fp.asesor_id
+              LEFT JOIN usuario u ON u.id = a.usuario_id
+              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
+              WHERE fp.producto_tipo = 'credito'
+              ORDER BY fp.created_at DESC";
+        $st = $pdo->query($q);
+    } elseif ($user_role === 'supervisor') {
+        $q = "SELECT fp.id as id_credito,
+                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
+                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
+                     fc.monto_credito as cantidad,
+                     'solicitud_ficha' as estado,
+                     fp.created_at as fecha_creacion,
+                     u.nombre as asesor_nombre,
+                     'ficha' as origen
+              FROM ficha_producto fp
+              JOIN ficha_credito fc ON fc.ficha_id = fp.id
+              LEFT JOIN asesor a ON a.id = fp.asesor_id
+              LEFT JOIN usuario u ON u.id = a.usuario_id
+              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
+              WHERE fp.producto_tipo = 'credito'
+                AND a.supervisor_id = ?
+              ORDER BY fp.created_at DESC";
+        $st = $pdo->prepare($q);
+        $st->execute([$supervisor_table_id]);
+    } else {
+        $q = "SELECT fp.id as id_credito,
+                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
+                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
+                     fc.monto_credito as cantidad,
+                     'solicitud_ficha' as estado,
+                     fp.created_at as fecha_creacion,
+                     NULL as asesor_nombre,
+                     'ficha' as origen
+              FROM ficha_producto fp
+              JOIN ficha_credito fc ON fc.ficha_id = fp.id
+              LEFT JOIN asesor a ON a.id = fp.asesor_id
+              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
+              WHERE fp.producto_tipo = 'credito'
+                AND fp.asesor_id = ?
+              ORDER BY fp.created_at DESC";
+        $st = $pdo->prepare($q);
+        $st->execute([$asesor_table_id]);
+    }
+    $operaciones = array_merge($operaciones, $st->fetchAll());
+} catch (PDOException $e) { /* ficha_credito puede no existir aún */ }
+
+// ── Ordenar combinado por fecha desc ──────────────────────
+usort($operaciones, fn($a, $b) => strtotime($b['fecha_creacion']) - strtotime($a['fecha_creacion']));
+
+// ── Estadísticas combinadas ───────────────────────────────
+$total_ops    = count($operaciones);
+$completadas  = count(array_filter($operaciones, fn($o) => in_array($o['estado'] ?? '', ['desembolsado','aprobado'])));
+$monto_total  = array_sum(array_map(fn($o) => is_numeric($o['cantidad'] ?? '') ? floatval($o['cantidad']) : 0, $operaciones));
+$stats = [
+    'total_operaciones' => $total_ops,
+    'completadas'       => $completadas,
+    'monto_total'       => $monto_total,
+];
+
+$currentPage        = 'operaciones';
+$alertas_pendientes = $alertas_pendientes ?? 0;
+$supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
+$is_supervisor_ui   = ($user_role === 'supervisor');
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Operaciones de Crédito</title>
+    <title>Super_IA - Operaciones de Crédito</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -249,10 +278,11 @@ $is_supervisor_ui = ($user_role === 'supervisor');
 </head>
 <body>
 
-<!-- SIDEBAR (igual que antes, no se modifica) -->
+<?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php'; else: ?>
+<!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> COAC Finance
+        <i class="fas fa-chart-pie"></i> Super_IA
     </div>
     
     <div class="sidebar-section">
@@ -349,6 +379,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         </a>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">
@@ -356,13 +387,13 @@ $is_supervisor_ui = ($user_role === 'supervisor');
     <div class="navbar-custom">
         <h2>
             <?php if ($user_role === 'super_admin'): ?>
-                👑 COAC Finance - SuperAdministrador
+                👑 Super_IA - SuperAdministrador
             <?php elseif ($user_role === 'admin'): ?>
-                🎯 COAC Finance - Admin
+                🎯 Super_IA - Admin
             <?php elseif ($user_role === 'supervisor'): ?>
-                👔 COAC Finance - Supervisor
+                👔 Super_IA - Supervisor
             <?php else: ?>
-                👤 COAC Finance - Asesor
+                👤 Super_IA - Asesor
             <?php endif; ?>
         </h2>
         <div class="user-info">
@@ -451,42 +482,63 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                     </tr>
                     <?php else: ?>
                         <?php foreach ($operaciones as $op): ?>
+                        <?php
+                        $estado = strtolower($op['estado'] ?? 'prospectado');
+                        $origen = $op['origen'] ?? 'proceso';
+                        switch ($estado) {
+                            case 'desembolsado':
+                                $badgeStyle = 'background:#10b981;color:#fff;';
+                                $label = '✓ Desembolsado'; break;
+                            case 'aprobado':
+                                $badgeStyle = 'background:#22c55e;color:#fff;';
+                                $label = '✓ Aprobado'; break;
+                            case 'rechazado':
+                                $badgeStyle = 'background:#ef4444;color:#fff;';
+                                $label = '✗ Rechazado'; break;
+                            case 'solicitud_ficha':
+                                $badgeStyle = 'background:#3b82f6;color:#fff;';
+                                $label = '📋 Solicitud (encuesta)'; break;
+                            default:
+                                $badgeStyle = 'background:#f59e0b;color:#fff;';
+                                $label = '⏳ ' . ucfirst(str_replace('_', ' ', $estado));
+                        }
+                        $monto = is_numeric($op['cantidad'] ?? '') ? number_format(floatval($op['cantidad']), 2) : '—';
+                        // Link: usar cedula cuando está disponible (ambos orígenes)
+                        $link = !empty($op['cliente_cedula'])
+                            ? 'ver_cliente.php?cedula=' . urlencode($op['cliente_cedula'])
+                            : 'ver_cliente.php?id=' . urlencode($op['id_credito'] ?? '');
+                        ?>
                         <tr>
-                            <td><strong><?php echo htmlspecialchars(substr($op['id_credito'], 0, 8)); ?>…</strong></td>
-                            <td><?php echo htmlspecialchars($op['cliente_nombre']); ?></td>
+                            <td>
+                                <strong><?php echo htmlspecialchars(substr($op['id_credito'], 0, 8)); ?>…</strong>
+                                <?php if ($origen === 'ficha'): ?>
+                                <br><small style="color:#3b82f6;font-size:10px;font-weight:700;">ENCUESTA MÓVIL</small>
+                                <?php else: ?>
+                                <br><small style="color:#9ca3af;font-size:10px;">PROCESO</small>
+                                <?php endif; ?>
+                            </td>
+                            <td><?php echo htmlspecialchars($op['cliente_nombre'] ?? '—'); ?></td>
                             <td><?php echo htmlspecialchars($op['cliente_cedula'] ?? 'N/A'); ?></td>
                             <?php if ($col_asesor): ?>
                             <td><?php echo htmlspecialchars($op['asesor_nombre'] ?? 'Sin asignar'); ?></td>
                             <?php endif; ?>
-                            <td><strong>$<?php echo number_format($op['cantidad'] ?? 0, 2); ?></strong></td>
+                            <td><strong><?php echo $monto !== '—' ? '$' . $monto : '—'; ?></strong></td>
                             <td>
-                                <?php 
-                                $estado = strtolower($op['estado'] ?? 'prospectado');
-                                $badgeClass = '';
-                                $label = '';
-                                switch ($estado) {
-                                    case 'desembolsado':
-                                        $badgeClass = 'badge-completed';
-                                        $label = '✓ Desembolsado';
-                                        break;
-                                    case 'aprobado':
-                                        $badgeClass = 'badge-completed';
-                                        $label = '✓ Aprobado';
-                                        break;
-                                    case 'rechazado':
-                                        $badgeClass = 'badge-pending';
-                                        $label = '✗ Rechazado';
-                                        break;
-                                    default:
-                                        $badgeClass = 'badge-pending';
-                                        $label = '⏳ ' . ucfirst(str_replace('_', ' ', $estado));
-                                }
-                                ?>
-                                <span class="badge <?php echo $badgeClass; ?>" style="color: white;"><?php echo $label; ?></span>
+                                <span class="badge" style="<?php echo $badgeStyle; ?> padding:4px 10px;border-radius:6px;font-size:12px;">
+                                    <?php echo $label; ?>
+                                </span>
                             </td>
                             <td><?php echo date('d/m/Y H:i', strtotime($op['fecha_creacion'])); ?></td>
                             <td>
-                                <a href="detalle_credito.php?id=<?php echo $op['id_credito']; ?>" class="btn btn-sm btn-outline-primary" title="Ver detalles">
+                                <?php
+                                // Usar cédula para ambos orígenes cuando esté disponible
+                                if (!empty($op['cliente_cedula'])) {
+                                    $eye_href = 'ver_cliente.php?cedula=' . urlencode($op['cliente_cedula']);
+                                } else {
+                                    $eye_href = 'ver_cliente.php?id=' . urlencode($op['id_credito'] ?? '');
+                                }
+                                ?>
+                                <a href="<?= $eye_href ?>" class="btn btn-sm btn-outline-primary" title="Ver detalles del cliente">
                                     <i class="fas fa-eye"></i>
                                 </a>
                             </td>

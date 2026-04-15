@@ -112,7 +112,7 @@ try {
                 'vehiculo'        => $vehiculoDesc ?: '-',
                 'fecha'           => date('d/m/Y H:i', strtotime($rowRecibo['fecha_pedido'])),
             ];
-            $asunto   = "Recibo de tu viaje #" . $rowRecibo['id'] . " – GeoMove";
+            $asunto   = "Recibo de tu viaje #" . $rowRecibo['id'] . " – Super_IA";
             $htmlBody = buildReceiptEmailHtml($receiptData);
             $textBody = buildReceiptEmailText($receiptData);
             // Envío en background — no bloquea la respuesta al conductor
@@ -155,7 +155,7 @@ try {
                     $mensaje = "El conductor está en el punto de recogida. ¡Sube al vehículo!";
                 } elseif ($estado === 'terminado') {
                     $titulo = "Viaje Finalizado ✨";
-                    $mensaje = "Gracias por viajar con GeoMove. ¡Esperamos verte pronto!";
+                    $mensaje = "Gracias por viajar con Super_IA. ¡Esperamos verte pronto!";
                 }
                 
                 list($status, $resp) = _sendFcm($token, $proj, $res_u['token_fcm'], $titulo, $mensaje, [

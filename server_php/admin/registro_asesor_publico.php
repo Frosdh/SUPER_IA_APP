@@ -44,10 +44,10 @@ try {
     } catch (Exception $e2) {
         // Fallback igual a registro_admin.php para no bloquear el formulario
         $cooperativas = [
-            ['id_cooperativa' => 1, 'nombre' => 'COAC Finance - Quito'],
-            ['id_cooperativa' => 2, 'nombre' => 'COAC Finance - Guayaquil'],
-            ['id_cooperativa' => 3, 'nombre' => 'COAC Finance - Cuenca'],
-            ['id_cooperativa' => 4, 'nombre' => 'COAC Finance - Ambato']
+            ['id_cooperativa' => 1, 'nombre' => 'Super_IA - Quito'],
+            ['id_cooperativa' => 2, 'nombre' => 'Super_IA - Guayaquil'],
+            ['id_cooperativa' => 3, 'nombre' => 'Super_IA - Cuenca'],
+            ['id_cooperativa' => 4, 'nombre' => 'Super_IA - Ambato']
         ];
     }
 }
@@ -57,7 +57,7 @@ try {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Crear Cuenta de Asesor</title>
+    <title>Super_IA - Crear Cuenta de Asesor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -100,7 +100,7 @@ try {
 <div class="card">
     <div class="left">
         <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
-        <h1>COAC Finance</h1>
+        <h1>Super_IA</h1>
         <p>Registra tu cuenta de asesor y adjunta tu credencial/nombramiento para validación.</p>
         <div class="feat"><div class="fi"><i class="fas fa-user-check"></i></div><span>Tu supervisor revisa y aprueba</span></div>
         <div class="feat"><div class="fi"><i class="fas fa-id-badge"></i></div><span>Completa tu información de registro</span></div>

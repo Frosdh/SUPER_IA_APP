@@ -26,10 +26,10 @@ try {
     echo "✗ Error: " . $e->getMessage() . "\n";
     echo "✓ Usando valores por defecto...\n";
     $cooperativas = [
-        ['id_cooperativa' => 1, 'nombre' => 'COAC Finance - Quito'],
-        ['id_cooperativa' => 2, 'nombre' => 'COAC Finance - Guayaquil'],
-        ['id_cooperativa' => 3, 'nombre' => 'COAC Finance - Cuenca'],
-        ['id_cooperativa' => 4, 'nombre' => 'COAC Finance - Ambato']
+        ['id_cooperativa' => 1, 'nombre' => 'Super_IA - Quito'],
+        ['id_cooperativa' => 2, 'nombre' => 'Super_IA - Guayaquil'],
+        ['id_cooperativa' => 3, 'nombre' => 'Super_IA - Cuenca'],
+        ['id_cooperativa' => 4, 'nombre' => 'Super_IA - Ambato']
     ];
     echo "Total de cooperativas por defecto: " . count($cooperativas) . "\n";
     foreach ($cooperativas as $i => $coop) {

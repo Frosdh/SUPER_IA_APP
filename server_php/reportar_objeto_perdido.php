@@ -113,7 +113,7 @@ if (!empty($emailUsuario)) {
     <div style='margin:0;padding:32px 16px;background:#07101f;font-family:Arial,sans-serif;color:#eef4ff;'>
         <div style='max-width:580px;margin:0 auto;background:linear-gradient(180deg,#101933,#0a1226);border-radius:28px;overflow:hidden;border:1px solid rgba(127,150,255,.16);box-shadow:0 20px 60px rgba(0,0,0,.4);'>
             <div style='padding:32px 32px 20px;background:linear-gradient(135deg,#182455,#0d1430);'>
-                <div style='display:inline-block;padding:8px 16px;border-radius:999px;background:rgba(255,200,80,.15);color:#ffd580;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;'>GeoMove · Objeto perdido</div>
+                <div style='display:inline-block;padding:8px 16px;border-radius:999px;background:rgba(255,200,80,.15);color:#ffd580;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;'>Super_IA · Objeto perdido</div>
                 <h1 style='margin:18px 0 8px;font-size:26px;color:#fff;'>Recibimos tu reporte</h1>
                 <p style='margin:0;color:#b2c2e7;font-size:15px;line-height:1.6;'>Hola <strong>$nombreUsuario</strong>, hemos registrado tu reporte #$ticketId. Nos pondremos en contacto contigo pronto.</p>
             </div>
@@ -142,9 +142,9 @@ if (!empty($emailUsuario)) {
         . "Número de reporte: #$ticketId\n"
         . "Objeto: $descripcion\n"
         . "Conductor: $conductor · Placa: $placa\n\n"
-        . "Nos pondremos en contacto contigo pronto.\n\nGeoMove";
+        . "Nos pondremos en contacto contigo pronto.\n\nSuper_IA";
 
-    sendEmailMessage($emailUsuario, "Reporte de objeto perdido #$ticketId – GeoMove", $htmlConfirmacion, $textoConfirmacion);
+    sendEmailMessage($emailUsuario, "Reporte de objeto perdido #$ticketId – Super_IA", $htmlConfirmacion, $textoConfirmacion);
 }
 
 echo json_encode([

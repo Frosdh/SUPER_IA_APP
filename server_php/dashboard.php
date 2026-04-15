@@ -22,7 +22,7 @@ $rol_display = $_SESSION['rol_display'] ?? $rol;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - COAC Finance</title>
+    <title>Dashboard - Super_IA</title>
     <style>
         * {
             margin: 0;
@@ -167,7 +167,7 @@ $rol_display = $_SESSION['rol_display'] ?? $rol;
     <!-- Navbar -->
     <div class="navbar">
         <div class="navbar-left">
-            <h1>🎯 COAC Finance - Dashboard</h1>
+            <h1>🎯 Super_IA - Dashboard</h1>
         </div>
         <div class="navbar-right">
             <div class="user-info">
@@ -268,7 +268,7 @@ $rol_display = $_SESSION['rol_display'] ?? $rol;
 
         <!-- Footer -->
         <div class="footer">
-            <p>COAC Finance © 2026 | Sistema de Monitoreo Comercial | Todos los derechos reservados</p>
+            <p>Super_IA © 2026 | Sistema de Monitoreo Comercial | Todos los derechos reservados</p>
         </div>
     </div>
 </body>

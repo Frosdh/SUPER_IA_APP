@@ -27,7 +27,7 @@ $currentPage = 'mapa_vivo';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mapa en Vivo - COAC Finance Admin</title>
+    <title>Mapa en Vivo - Super_IA Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
@@ -75,7 +75,7 @@ $currentPage = 'mapa_vivo';
 <body>
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-crown"></i> COAC Finance
+        <i class="fas fa-crown"></i> Super_IA
     </div>
     <div class="sidebar-section">
         <div class="sidebar-section-title">Principal</div>
@@ -120,7 +120,7 @@ $currentPage = 'mapa_vivo';
 </div>
 <div class="main-content">
     <div class="navbar-custom">
-        <h2><i class="fas fa-map-location-dot me-2" style="color: #ffdd00;"></i>COAC Finance <?php echo $is_super_admin ? '- SuperAdmin' : '- Admin'; ?></h2>
+        <h2><i class="fas fa-map-location-dot me-2" style="color: #ffdd00;"></i>Super_IA <?php echo $is_super_admin ? '- SuperAdmin' : '- Admin'; ?></h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($user_nombre); ?></strong><br>
@@ -144,7 +144,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19
 }).addTo(map);
 [
-    { lat: -16.3895, lng: -63.1666, titulo: 'COAC Finance Central' },
+    { lat: -16.3895, lng: -63.1666, titulo: 'Super_IA Central' },
     { lat: -16.3900, lng: -63.1670, titulo: 'Oficina Norte' },
     { lat: -16.3890, lng: -63.1660, titulo: 'Agencia Sur' }
 ].forEach((m) => {

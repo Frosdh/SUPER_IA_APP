@@ -29,7 +29,7 @@ class ReceiptScreen extends StatelessWidget {
     final String txnId      = args['client_transaction_id'] as String? ?? '-';
 
     return '''
-🚗 *Recibo de Viaje GeoMove*
+🚗 *Recibo de Viaje Super_IA Mobile*
 ────────────────────────
 📍 Origen: ${args['origen'] ?? ''}
 📍 Destino: ${args['destino'] ?? ''}
@@ -44,7 +44,7 @@ class ReceiptScreen extends StatelessWidget {
 ${descuento > 0 ? '🎟 Descuento aplicado: -\$${descuento.toStringAsFixed(2)}\n' : ''}💳 Método de pago: $metodo
 🔑 ID: $txnId
 ────────────────────────
-Gracias por viajar con GeoMove 🙌
+Gracias por viajar con Super_IA Mobile 🙌
     '''.trim();
   }
 
@@ -86,7 +86,7 @@ Gracias por viajar con GeoMove 🙌
     final double tarifaBase    = (args['tarifa_base'] as num?)?.toDouble() ?? 0;
     final double precioKm      = (args['precio_km'] as num?)?.toDouble() ?? 0;
     final double precioMin     = (args['precio_minuto'] as num?)?.toDouble() ?? 0;
-    final String categoria     = args['categoria_nombre'] as String? ?? 'GeoMove-X';
+    final String categoria     = args['categoria_nombre'] as String? ?? 'Super_IA Mobile-X';
     final String metodo        = args['metodo_pago'] as String? ?? 'Efectivo';
     final String txnId         = args['client_transaction_id'] as String? ?? '-';
     final String conductor     = args['conductor_nombre'] as String? ?? '';
@@ -170,7 +170,7 @@ Gracias por viajar con GeoMove 🙌
                     ),
                     child: Column(
                       children: [
-                        // Logo GeoMove
+                        // Logo Super_IA Mobile
                         Row(
                           children: [
                             Container(
@@ -189,7 +189,7 @@ Gracias por viajar con GeoMove 🙌
                               ),
                             ),
                             SizedBox(width: 10),
-                            Text('GeoMove',
+                            Text('Super_IA Mobile',
                                 style: TextStyle(
                                     color: ConstantColors.textWhite,
                                     fontSize: 16,
@@ -445,7 +445,7 @@ Gracias por viajar con GeoMove 🙌
                   Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      'Gracias por viajar con GeoMove · ${DateTime.now().year}',
+                      'Gracias por viajar con Super_IA Mobile · ${DateTime.now().year}',
                       style: TextStyle(
                           color: ConstantColors.textSubtle, fontSize: 12),
                       textAlign: TextAlign.center,

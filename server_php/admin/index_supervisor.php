@@ -20,7 +20,7 @@ if (!$is_supervisor) {
     exit;
 }
 
-// Evitar panel duplicado: el dashboard oficial del supervisor es supervisor_index.php (COAC Finance)
+// Evitar panel duplicado: el dashboard oficial del supervisor es supervisor_index.php (Super_IA)
 header('Location: supervisor_index.php');
 exit;
 

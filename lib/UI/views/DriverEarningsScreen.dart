@@ -323,7 +323,7 @@ class _DriverEarningsScreenState extends State<DriverEarningsScreen>
               _gananciaNetaTotal, ConstantColors.success),
           SizedBox(height: 8),
           _comisionRow(
-              'Plataforma GeoMove (${(_comisionPct * 100).round()}%)',
+              'Plataforma Super_IA Mobile (${(_comisionPct * 100).round()}%)',
               _comisionTotal,
               ConstantColors.error),
           Divider(color: ConstantColors.dividerColor, height: 20),

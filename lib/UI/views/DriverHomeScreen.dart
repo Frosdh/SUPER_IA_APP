@@ -1335,7 +1335,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   tileProvider: NetworkTileProvider(
                     headers: {
-                      'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                      'User-Agent': 'Super_IA MobileApp/1.0 (com.sahdeepsingh.fu_uber)',
                     },
                   ),
                 ),
@@ -1608,7 +1608,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 tileProvider: NetworkTileProvider(
                   headers: {
-                    'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                    'User-Agent': 'Super_IA MobileApp/1.0 (com.sahdeepsingh.fu_uber)',
                   },
                 ),
               ),
@@ -1962,7 +1962,7 @@ class _DriverHomeScreenState extends State<DriverHomeScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   tileProvider: NetworkTileProvider(
                     headers: {
-                      'User-Agent': 'GeoMoveApp/1.0 (com.sahdeepsingh.fu_uber)',
+                      'User-Agent': 'Super_IA MobileApp/1.0 (com.sahdeepsingh.fu_uber)',
                     },
                   ),
                 ),

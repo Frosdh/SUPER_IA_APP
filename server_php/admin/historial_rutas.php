@@ -40,7 +40,7 @@ $currentPage = 'historial_rutas';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>COAC Finance - Historial de Rutas</title>
+    <title>Super_IA - Historial de Rutas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
@@ -87,7 +87,7 @@ $currentPage = 'historial_rutas';
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">
-        <i class="fas fa-crown"></i> COAC Finance
+        <i class="fas fa-crown"></i> Super_IA
     </div>
     
     <div class="sidebar-section">
@@ -134,7 +134,7 @@ $currentPage = 'historial_rutas';
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2>👑 COAC Finance - Historial de Rutas</h2>
+        <h2>👑 Super_IA - Historial de Rutas</h2>
         <div class="user-info">
             <div>
                 <strong><?php echo htmlspecialchars($_SESSION['super_admin_nombre'] ?? $_SESSION['nombre'] ?? 'Usuario'); ?></strong><br>
@@ -257,7 +257,7 @@ $currentPage = 'historial_rutas';
         if (currentData.length === 0) return;
         
         let gpx = '<' + '?xml version="1.0" encoding="UTF-8"?' + '>\n';
-        gpx += '<gpx version="1.1" creator="GeoMoveAdmin" xmlns="http://www.topografix.com/GPX/1/1">\n';
+        gpx += '<gpx version="1.1" creator="Super_IAAdmin" xmlns="http://www.topografix.com/GPX/1/1">\n';
         gpx += '  <trk>\n    <name>Recorrido ' + document.getElementById('fecha').value + '</name>\n    <trkseg>\n';
         
         currentData.forEach(p => {
