@@ -80,6 +80,7 @@ $telefono        = strOrNull($_POST['telefono']       ?? '');
 $celular         = strOrNull($_POST['celular']        ?? '');
 $email_c         = strOrNull($_POST['email_cliente']  ?? '');
 $direccion       = strOrNull($_POST['direccion']      ?? '');
+$ciudad          = strOrNull($_POST['ciudad']         ?? '');
 $actividad       = strOrNull($_POST['actividad']      ?? '');
 $tiene_ruc       = (int)($_POST['tiene_ruc']          ?? 0);
 $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
@@ -147,6 +148,11 @@ if ($nombre_completo === '' && $fue_encuestado) {
     exit;
 }
 
+$tarea_followup_id   = null;
+$tarea_followup_tipo = null;
+$tarea_followup_fecha = null;
+$tarea_followup_hora  = null;
+
 try {
     // ── 1. Resolver asesor_id ────────────────────────────────
     $GLOBALS['phase'] = 'ASESOR_RESOLVE';
@@ -195,35 +201,35 @@ try {
     $es_cliente_existente = ($cliente_id !== null); // true = UPDATE, false = INSERT
 
     if ($cliente_id === null) {
-        // INSERT: 14 parámetros
+        // INSERT: 15 parámetros
         // id(s) nombre(s) cedula(s) telefono(s) telefono2(s) email(s)
-        // direccion(s) actividad(s) nombre_empresa(s)
+        // direccion(s) ciudad(s) actividad(s) nombre_empresa(s)
         // tiene_ruc(i) tiene_rise(i) asesor_id(s) latitud(d) longitud(d)
         $cliente_id = genUUID();
         $st = $conn->prepare(
             "INSERT INTO cliente_prospecto
-             (id, nombre, cedula, telefono, telefono2, email, direccion,
+             (id, nombre, cedula, telefono, telefono2, email, direccion, ciudad,
               actividad, nombre_empresa, tiene_ruc, tiene_rise, asesor_id,
               latitud, longitud, estado)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
         );
-        $st->bind_param('sssssssssiisdd',
+        $st->bind_param('ssssssssssiisdd',
             $cliente_id, $nombre_completo, $cedula, $telefono, $celular,
-            $email_c, $direccion, $actividad, $nombre_empresa,
+            $email_c, $direccion, $ciudad, $actividad, $nombre_empresa,
             $tiene_ruc, $tiene_rise, $asesor_id, $lat_ini, $lng_ini
         );
         $st->execute();
         $st->close();
     } else {
-        // UPDATE cliente — 11 params: s×7 + i×2 + s×2 = 'sssssssiiss'
+        // UPDATE cliente — 12 params: s×8 + i×2 + s×2 = 'ssssssssiiss'
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
-             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?,
+             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=COALESCE(?, ciudad),
                  actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, asesor_id=?
              WHERE id=?"
         );
-        $st->bind_param('sssssssiiss',
-            $nombre_completo, $telefono, $celular, $email_c, $direccion,
+        $st->bind_param('ssssssssiiss',
+            $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
             $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $asesor_id, $cliente_id
         );
         $st->execute();
@@ -414,9 +420,11 @@ try {
         $st->execute();
         $st->close();
 
-        // ── 5. Acuerdo de visita ─────────────────────────────
+        // ── 5. Acuerdo de visita + tarea de seguimiento ─────
         if ($acuerdo !== 'ninguno' && $fecha_acuerdo !== null) {
             $GLOBALS['phase'] = 'ACUERDO';
+
+            // Registrar acuerdo
             $av_id = genUUID();
             $st = $conn->prepare(
                 'INSERT INTO acuerdo_visita (id, tarea_id, tipo_acuerdo, fecha, hora)
@@ -425,6 +433,43 @@ try {
             $st->bind_param('sssss', $av_id, $tarea_id, $acuerdo, $fecha_acuerdo, $hora_acuerdo);
             $st->execute();
             $st->close();
+
+            // Marcar cliente como pendiente (tiene algo por hacer luego)
+            $st = $conn->prepare("UPDATE cliente_prospecto SET estado='pendiente' WHERE id=?");
+            $st->bind_param('s', $cliente_id);
+            $st->execute();
+            $st->close();
+
+            // Crear una NUEVA tarea programada para el seguimiento
+            $tipo_followup = null;
+            if ($acuerdo === 'nueva_cita_campo') $tipo_followup = 'nueva_cita_campo';
+            elseif ($acuerdo === 'nueva_cita_oficina') $tipo_followup = 'nueva_cita_oficina';
+            elseif ($acuerdo === 'recolectar_documentacion') $tipo_followup = 'documentos_pendientes';
+            elseif ($acuerdo === 'levantamiento_campo') $tipo_followup = 'levantamiento';
+
+            if ($tipo_followup !== null) {
+                $GLOBALS['phase'] = 'TAREA_FOLLOWUP';
+                $tarea_followup_id   = genUUID();
+                $tarea_followup_tipo = $tipo_followup;
+                $tarea_followup_fecha = $fecha_acuerdo;
+                $tarea_followup_hora  = $hora_acuerdo;
+
+                $est_follow = 'programada';
+                $obs_follow = trim('Seguimiento: ' . str_replace('_', ' ', $acuerdo));
+
+                $st = $conn->prepare(
+                    "INSERT INTO tarea
+                     (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+                      fecha_programada, hora_programada, observaciones)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                $st->bind_param('ssssssss',
+                    $tarea_followup_id, $asesor_id, $cliente_id, $tarea_followup_tipo,
+                    $est_follow, $tarea_followup_fecha, $tarea_followup_hora, $obs_follow
+                );
+                $st->execute();
+                $st->close();
+            }
         }
     }
 
@@ -436,6 +481,10 @@ try {
         'message'    => $fue_encuestado ? 'Encuesta guardada correctamente' : 'Tarea registrada (sin encuesta)',
         'tarea_id'   => $tarea_id,
         'cliente_id' => $cliente_id,
+        'tarea_followup_id'   => $tarea_followup_id,
+        'tarea_followup_tipo' => $tarea_followup_tipo,
+        'tarea_followup_fecha'=> $tarea_followup_fecha,
+        'tarea_followup_hora' => $tarea_followup_hora,
     ]);
 
 } catch (\Throwable $e) {

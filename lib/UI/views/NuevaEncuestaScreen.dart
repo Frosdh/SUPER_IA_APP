@@ -45,6 +45,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   final _celularCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _direccionCtrl = TextEditingController();
+  final _ciudadCtrl = TextEditingController();
   String? _actividad;
   // Régimen tributario
   String? _regimenTributario;          // 'ruc' | 'rise' | 'no_registrado'
@@ -126,6 +127,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _celularCtrl.dispose();
     _emailCtrl.dispose();
     _direccionCtrl.dispose();
+    _ciudadCtrl.dispose();
     _numeroRucCtrl.dispose();
     _empresaCtrl.dispose();
     _instInvCtrl.dispose();
@@ -216,6 +218,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'celular': _celularCtrl.text.trim(),
       'email_cliente': _emailCtrl.text.trim(),
       'direccion': _direccionCtrl.text.trim(),
+      'ciudad': _ciudadCtrl.text.trim(),
       'actividad': _actividad ?? '',
       'tiene_ruc':  _tieneRuc  ? '1' : '0',
       'tiene_rise': _tieneRise ? '1' : '0',
@@ -343,7 +346,28 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         final tareaId = data['tarea_id']?.toString() ?? '';
         _cerrarYNuevoSegmento(tareaId: tareaId);
 
-        _mostrarDialogoFinalizado(fueEncuestado: fueEncuestado);
+        String? seguimientoTexto;
+        final followId = data['tarea_followup_id']?.toString() ?? '';
+        if (followId.isNotEmpty) {
+          final tipo = data['tarea_followup_tipo']?.toString() ?? '';
+          final fecha = data['tarea_followup_fecha']?.toString() ?? '';
+          final hora = data['tarea_followup_hora']?.toString() ?? '';
+
+          final tipoLabel = <String, String>{
+            'nueva_cita_campo': 'Nueva cita en campo',
+            'nueva_cita_oficina': 'Nueva cita en oficina',
+            'documentos_pendientes': 'Recolectar documentación',
+            'levantamiento': 'Levantamiento',
+          }[tipo] ?? tipo;
+
+          final fechaHora = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
+          seguimientoTexto = 'Se creó una nueva tarea: $tipoLabel${fechaHora.isNotEmpty ? ' ($fechaHora)' : ''}.';
+        }
+
+        _mostrarDialogoFinalizado(
+          fueEncuestado: fueEncuestado,
+          seguimientoTexto: seguimientoTexto,
+        );
       } else {
         _mostrarError(data['message']?.toString() ?? 'Error al guardar');
       }
@@ -392,7 +416,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
   }
 
-  void _mostrarDialogoFinalizado({required bool fueEncuestado}) {
+  void _mostrarDialogoFinalizado({
+    required bool fueEncuestado,
+    String? seguimientoTexto,
+  }) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -436,6 +463,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
                 textAlign: TextAlign.center,
               ),
+              if (seguimientoTexto != null && seguimientoTexto.trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  seguimientoTexto,
+                  style: TextStyle(color: ConstantColors.textDark, fontSize: 13, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -867,6 +902,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Dirección',
             icon: Icons.home_rounded,
             maxLines: 2,
+          ),
+          _campo(
+            controller: _ciudadCtrl,
+            label: 'Ciudad',
+            icon: Icons.location_city_rounded,
           ),
           const SizedBox(height: 20),
           _seccionTitulo('Actividad Económica'),

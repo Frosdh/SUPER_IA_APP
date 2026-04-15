@@ -18,6 +18,7 @@ import 'package:super_ia/Core/Services/SOSService.dart';
 import 'package:super_ia/Core/Services/ShareTripService.dart';
 import 'package:super_ia/UI/views/ChatScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
+import 'package:super_ia/UI/views/PendientesTareasScreen.dart';
 import 'package:super_ia/UI/views/WelcomeScreen.dart';
 import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
 import 'package:super_ia/Core/Services/DiscountCodeService.dart';
@@ -3037,6 +3038,50 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         SizedBox(width: 8),
                         Text(
                           'Agenda de tareas',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+            if (_estadoViaje == EstadoViaje.ninguno)
+              Positioned(
+                right: 16,
+                bottom: currentPanelHeight + 184,
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PendientesTareasScreen(),
+                    ),
+                  ),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: ConstantColors.backgroundCard,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: ConstantColors.borderColor),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.25),
+                          blurRadius: 8,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.event_note_rounded,
+                            color: ConstantColors.primaryBlue, size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Pendientes',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 12,

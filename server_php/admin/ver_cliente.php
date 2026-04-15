@@ -399,7 +399,7 @@ $is_supervisor = ($user_role === 'supervisor');
                     <?= etiq('Nombre completo',  $cliente['nombre']) ?>
                     <?= etiq('Cédula / RUC',     $cliente['cedula']) ?>
                     <?= etiq('Teléfono',          $cliente['telefono'] ?? '') ?>
-                    <?= etiq('Celular',           $cliente['celular']  ?? '') ?>
+                    <?= etiq('Celular',           $cliente['celular'] ?? ($cliente['telefono2'] ?? '')) ?>
                     <?= etiq('Email',             $cliente['email']    ?? '') ?>
                     <?= etiq('Dirección',         $cliente['direccion'] ?? '') ?>
                     <?= etiq('Actividad económica', $cliente['actividad'] ?? '') ?>

@@ -299,8 +299,36 @@ $totalPendientes    = 0;
         }
         .asesor-item .item-name {
             font-weight:700; color:#1f2937; display:flex;
-            align-items:center; gap:6px; margin-bottom:3px;
+            align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px;
         }
+        .item-name-left { display:flex; align-items:center; gap:6px; min-width:0; }
+        .encuesta-pill {
+            font-size:10px; font-weight:800; line-height:1;
+            padding:3px 8px; border-radius:999px;
+            background:rgba(16,185,129,.14); color:#065F46;
+            border:1px solid rgba(16,185,129,.28);
+            flex-shrink:0;
+        }
+        .encuesta-pill.empty {
+            background:rgba(156,163,175,.12); color:#6B7280;
+            border-color:rgba(156,163,175,.25);
+        }
+        .btn-toggle-clientes {
+            border:none; background:transparent; padding:2px 4px;
+            color:#6B7280; cursor:pointer; border-radius:8px;
+        }
+        .btn-toggle-clientes:hover { background:rgba(17,24,39,.06); color:#111827; }
+        .asesor-clientes {
+            margin-top:6px; padding:8px 8px;
+            border-top:1px dashed rgba(17,24,39,.14);
+            color:#6B7280; font-size:11px;
+        }
+        .asesor-cliente {
+            display:flex; justify-content:space-between; gap:8px;
+            padding:4px 0;
+        }
+        .asesor-cliente .nombre { font-weight:700; color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .asesor-cliente .hora { color:#9CA3AF; flex-shrink:0; }
         .asesor-item .item-meta { color:#6b7280; font-size:11px; }
         .online-dot {
             display:inline-block; width:8px; height:8px;
@@ -624,6 +652,140 @@ function formatFechaES(fecha) {
     return isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' });
 }
 
+function cargarResumenEncuestas() {
+    const fecha = getSelectedFecha();
+    const qs = new URLSearchParams();
+    if (fecha) qs.set('fecha', fecha);
+
+    fetch(`api_encuestas_resumen.php?${qs.toString()}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'ok' || typeof data.por_asesor !== 'object') return;
+            const mapCnt = data.por_asesor || {};
+
+            document.querySelectorAll('.encuesta-pill[id^="encuestas-"]').forEach(el => {
+                const id = el.id.replace('encuestas-', '');
+                const cnt = parseInt(mapCnt[id] ?? 0, 10);
+                if (cnt > 0) {
+                    el.textContent = String(cnt);
+                    el.classList.remove('empty');
+                } else {
+                    el.textContent = '0';
+                    el.classList.add('empty');
+                }
+            });
+        })
+        .catch(err => console.warn('[encuestas_resumen]', err));
+}
+
+// ── Clientes encuestados por asesor (desplegable en el panel) ──
+const clientesAsesorCache = {};     // key: "asesorId|fecha" → clientes[]
+const clientesAsesorExpanded = {};  // asesorId → true/false
+
+function setChevron(asesorId, expanded) {
+    const ic = document.getElementById(`chev-${asesorId}`);
+    if (!ic) return;
+    ic.classList.remove('fa-chevron-down', 'fa-chevron-up');
+    ic.classList.add(expanded ? 'fa-chevron-up' : 'fa-chevron-down');
+}
+
+function renderClientesAsesorInline(asesorId, clientes) {
+    const box = document.getElementById(`clientes-asesor-${asesorId}`);
+    if (!box) return;
+
+    if (!Array.isArray(clientes) || clientes.length === 0) {
+        box.innerHTML = '<small style="color:#9CA3AF;">Sin encuestas</small>';
+        return;
+    }
+
+    box.innerHTML = clientes.slice(0, 8).map(c => {
+        const nombre = escapeHtml(c.cliente_nombre || 'Cliente');
+        const hora = escapeHtml(c.hora || '');
+        return `<div class="asesor-cliente">
+            <div class="nombre" title="${nombre}">${nombre}</div>
+            <div class="hora">${hora || '--:--'}</div>
+        </div>`;
+    }).join('') + (clientes.length > 8 ? `<div style="margin-top:6px;color:#9CA3AF;">+${clientes.length - 8} más…</div>` : '');
+}
+
+function fetchClientesAsesor(asesorId, fecha) {
+    const qs = new URLSearchParams({ asesor_id: asesorId });
+    if (fecha) qs.set('fecha', fecha);
+    return fetch(`api_clientes_encuestados.php?${qs.toString()}`, { cache: 'no-store' })
+        .then(r => r.json());
+}
+
+function toggleClientesAsesor(asesorId) {
+    const box = document.getElementById(`clientes-asesor-${asesorId}`);
+    if (!box) return;
+
+    const fecha = getSelectedFecha();
+    const key = `${asesorId}|${fecha || ''}`;
+
+    const isHidden = box.style.display === 'none' || box.style.display === '';
+    if (isHidden) {
+        clientesAsesorExpanded[asesorId] = true;
+        box.style.display = 'block';
+        setChevron(asesorId, true);
+
+        if (clientesAsesorCache[key]) {
+            renderClientesAsesorInline(asesorId, clientesAsesorCache[key]);
+            return;
+        }
+
+        box.innerHTML = '<small style="color:#9CA3AF;">Cargando…</small>';
+        fetchClientesAsesor(asesorId, fecha)
+            .then(data => {
+                if (data.status === 'ok') {
+                    clientesAsesorCache[key] = data.clientes || [];
+                    renderClientesAsesorInline(asesorId, clientesAsesorCache[key]);
+                } else {
+                    box.innerHTML = '<small style="color:#EF4444;">No se pudo cargar</small>';
+                }
+            })
+            .catch(err => {
+                console.warn('[clientes_panel]', err);
+                box.innerHTML = '<small style="color:#EF4444;">No se pudo cargar</small>';
+            });
+    } else {
+        clientesAsesorExpanded[asesorId] = false;
+        box.style.display = 'none';
+        setChevron(asesorId, false);
+    }
+}
+
+function refreshClientesAsesorExpandidos() {
+    Object.keys(clientesAsesorExpanded).forEach(asesorId => {
+        if (!clientesAsesorExpanded[asesorId]) return;
+        const box = document.getElementById(`clientes-asesor-${asesorId}`);
+        if (!box) return;
+        box.style.display = 'block';
+        setChevron(asesorId, true);
+
+        const fecha = getSelectedFecha();
+        const key = `${asesorId}|${fecha || ''}`;
+        if (clientesAsesorCache[key]) {
+            renderClientesAsesorInline(asesorId, clientesAsesorCache[key]);
+            return;
+        }
+
+        box.innerHTML = '<small style="color:#9CA3AF;">Cargando…</small>';
+        fetchClientesAsesor(asesorId, fecha)
+            .then(data => {
+                if (data.status === 'ok') {
+                    clientesAsesorCache[key] = data.clientes || [];
+                    renderClientesAsesorInline(asesorId, clientesAsesorCache[key]);
+                } else {
+                    box.innerHTML = '<small style="color:#EF4444;">No se pudo cargar</small>';
+                }
+            })
+            .catch(err => {
+                console.warn('[clientes_panel][refresh]', err);
+                box.innerHTML = '<small style="color:#EF4444;">No se pudo cargar</small>';
+            });
+    });
+}
+
 // ── Renderizar marcadores en el mapa ──────────────────────────
 // fitView=true  → mueve el mapa para mostrar todos (solo carga inicial / refresh manual)
 // fitView=false → solo actualiza posiciones, NO mueve la vista
@@ -755,10 +917,22 @@ function renderPanel(asesores) {
                      onclick="verAsesor('${a.asesor_id}',${latJS},${lngJS},${hasLoc})"
                      title="Ver última ruta">
             <div class="item-name">
-                <span class="${a.online ? 'online-dot' : 'offline-dot'}"></span>
-                ${a.nombre || 'Asesor'}
+                <div class="item-name-left">
+                    <span class="${a.online ? 'online-dot' : 'offline-dot'}"></span>
+                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${a.nombre || 'Asesor'}</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="encuesta-pill empty" id="encuestas-${a.asesor_id}" title="Clientes encuestados (fecha seleccionada)">0</span>
+                    <button type="button" class="btn-toggle-clientes" title="Ver clientes encuestados"
+                            onclick="event.stopPropagation();toggleClientesAsesor('${a.asesor_id}')">
+                        <i class="fas fa-chevron-down" id="chev-${a.asesor_id}"></i>
+                    </button>
+                </div>
             </div>
             <div class="item-meta">${tiempoStr}</div>
+            <div class="asesor-clientes" id="clientes-asesor-${a.asesor_id}" style="display:none;">
+                <small style="color:#9CA3AF;">Cargando…</small>
+            </div>
         </div>`;
     };
 
@@ -774,6 +948,9 @@ function renderPanel(asesores) {
         const el = document.getElementById(`item-${selectedAsesorId}`);
         if (el) el.classList.add('selected');
     }
+
+    // Mantener desplegados (y recargar si cambia la fecha)
+    refreshClientesAsesorExpandidos();
 }
 
 // ── Marcadores auxiliares ──────────────────────────────────
@@ -887,7 +1064,7 @@ function cargarClientes(asesorId, fecha) {
 }
 
 function cargarRutaYClientes(asesorId) {
-    const fecha = getSelectedFecha();
+    const fechaSel = getSelectedFecha();
 
     // Limpiar rutas anteriores
     rutaGroup.clearLayers();
@@ -902,30 +1079,64 @@ function cargarRutaYClientes(asesorId) {
     if (box) box.style.display = 'block';
     if (list) list.innerHTML = '<small style="color:#9CA3AF;">Cargando clientes…</small>';
 
-    // Cargar ruta del asesor (por fecha si aplica)
     const qs = new URLSearchParams({ asesor_id: asesorId });
-    if (fecha) qs.set('fecha', fecha);
+    if (fechaSel) qs.set('fecha', fechaSel);
 
     fetch(`api_ultima_ruta.php?${qs.toString()}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
+            // Caso normal: hay rutas para la fecha seleccionada
             if (data.status === 'ok' && Array.isArray(data.segmentos) && data.segmentos.length > 0) {
                 renderRutas(data.segmentos);
 
-                // Actualizar título de la leyenda con fecha
+                const fechaRuta = data.fecha || fechaSel;
                 const h6 = leyendaBox?.querySelector('h6');
                 if (h6) {
-                    const fechaStr = formatFechaES(data.fecha || fecha);
+                    const fechaStr = formatFechaES(fechaRuta);
                     h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas · ${fechaStr || 'sin fecha'}`;
                 }
-            } else {
-                // Sin rutas ese día: mantener la leyenda oculta
-                if (leyendaBox) leyendaBox.style.display = 'none';
+
+                cargarClientes(asesorId, fechaRuta);
+                return;
             }
+
+            // Si no hay rutas en esa fecha, caer a "última ruta disponible" (comportamiento anterior)
+            if (fechaSel) {
+                const qs2 = new URLSearchParams({ asesor_id: asesorId });
+                return fetch(`api_ultima_ruta.php?${qs2.toString()}`, { cache: 'no-store' })
+                    .then(r2 => r2.json())
+                    .then(data2 => {
+                        if (data2.status === 'ok' && Array.isArray(data2.segmentos) && data2.segmentos.length > 0) {
+                            renderRutas(data2.segmentos);
+
+                            const fechaRuta2 = data2.fecha || null;
+                            const h6 = leyendaBox?.querySelector('h6');
+                            if (h6) {
+                                const fechaStr2 = formatFechaES(fechaRuta2);
+                                h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas · ${fechaStr2 || 'sin fecha'} <span style="color:#9CA3AF;font-weight:600;">(última)</span>`;
+                            }
+
+                            cargarClientes(asesorId, fechaRuta2 || fechaSel);
+                        } else {
+                            if (leyendaBox) leyendaBox.style.display = 'none';
+                            cargarClientes(asesorId, fechaSel);
+                        }
+                    })
+                    .catch(err2 => {
+                        console.warn('[ultima_ruta][fallback]', err2);
+                        if (leyendaBox) leyendaBox.style.display = 'none';
+                        cargarClientes(asesorId, fechaSel);
+                    });
+            }
+
+            // Sin rutas y sin fecha seleccionada
+            if (leyendaBox) leyendaBox.style.display = 'none';
+            cargarClientes(asesorId, fechaSel);
         })
-        .catch(err => console.warn('[ultima_ruta]', err))
-        .then(() => {
-            cargarClientes(asesorId, fecha);
+        .catch(err => {
+            console.warn('[ultima_ruta]', err);
+            if (leyendaBox) leyendaBox.style.display = 'none';
+            cargarClientes(asesorId, fechaSel);
         });
 }
 
@@ -998,6 +1209,7 @@ function cargarPanel() {
         .then(data => {
             if (data.status === 'ok') {
                 renderPanel(data.asesores);
+                cargarResumenEncuestas();
                 const upd = document.getElementById('last-update');
                 if (upd) upd.textContent = data.ts || '--:--:--';
             }
@@ -1011,6 +1223,7 @@ const todosAsesoresIniciales = <?= json_encode($todos_asesores) ?>;
 
 renderMap(ubicacionesIniciales, true);   // centra al cargar
 renderPanel(todosAsesoresIniciales);     // panel inicial completo
+cargarResumenEncuestas();
 
 // Timestamp inicial
 const upd = document.getElementById('last-update');
@@ -1045,6 +1258,8 @@ if (refreshBtn) {
 const buscarBtn = document.getElementById('buscar-fecha-btn');
 if (buscarBtn) {
     buscarBtn.addEventListener('click', () => {
+        cargarResumenEncuestas();
+        refreshClientesAsesorExpandidos();
         if (selectedAsesorId) {
             cargarRutaYClientes(selectedAsesorId);
         }
@@ -1054,6 +1269,8 @@ if (buscarBtn) {
 const fechaEl = document.getElementById('fecha-ruta');
 if (fechaEl) {
     fechaEl.addEventListener('change', () => {
+        cargarResumenEncuestas();
+        refreshClientesAsesorExpandidos();
         if (selectedAsesorId) {
             cargarRutaYClientes(selectedAsesorId);
         }
