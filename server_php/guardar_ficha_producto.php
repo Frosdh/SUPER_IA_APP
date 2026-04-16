@@ -152,22 +152,44 @@ try {
             id                   CHAR(36) NOT NULL PRIMARY KEY,
             ficha_id             CHAR(36) NOT NULL,
             tipo_cc              VARCHAR(20) DEFAULT NULL,
+            titular_nombre       VARCHAR(200) DEFAULT NULL,
+            titular_cedula       VARCHAR(20)  DEFAULT NULL,
+            titular_celular      VARCHAR(20)  DEFAULT NULL,
+            titular_estado_civil VARCHAR(20)  DEFAULT NULL,
             proposito            TEXT DEFAULT NULL,
             monto_deposito_prom  VARCHAR(30) DEFAULT NULL,
             usa_cheques          TINYINT(1) DEFAULT NULL,
             requiere_td          TINYINT(1) DEFAULT NULL,
             ingreso_mensual      VARCHAR(30) DEFAULT NULL,
             tiene_nomina         TINYINT(1) DEFAULT NULL,
+            tiene_cc_otra        TINYINT(1) DEFAULT NULL,
+            institucion_cc       VARCHAR(200) DEFAULT NULL,
             observaciones        TEXT DEFAULT NULL,
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    // Migración no-destructiva ficha_cuenta_corriente
+    foreach ([
+        'titular_nombre'       => "ADD COLUMN titular_nombre VARCHAR(200) DEFAULT NULL AFTER tipo_cc",
+        'titular_cedula'       => "ADD COLUMN titular_cedula VARCHAR(20) DEFAULT NULL AFTER titular_nombre",
+        'titular_celular'      => "ADD COLUMN titular_celular VARCHAR(20) DEFAULT NULL AFTER titular_cedula",
+        'titular_estado_civil' => "ADD COLUMN titular_estado_civil VARCHAR(20) DEFAULT NULL AFTER titular_celular",
+        'tiene_cc_otra'        => "ADD COLUMN tiene_cc_otra TINYINT(1) DEFAULT NULL AFTER tiene_nomina",
+        'institucion_cc'       => "ADD COLUMN institucion_cc VARCHAR(200) DEFAULT NULL AFTER tiene_cc_otra",
+    ] as $col => $ddl) {
+        $chk = $conn->query("SHOW COLUMNS FROM ficha_cuenta_corriente LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) $conn->query("ALTER TABLE ficha_cuenta_corriente $ddl");
+    }
 
     $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_cuenta_ahorros (
             id                   CHAR(36) NOT NULL PRIMARY KEY,
             ficha_id             CHAR(36) NOT NULL,
             tipo_ahorro          VARCHAR(20) DEFAULT NULL,
+            titular_nombre       VARCHAR(200) DEFAULT NULL,
+            titular_cedula       VARCHAR(20)  DEFAULT NULL,
+            titular_celular      VARCHAR(20)  DEFAULT NULL,
+            titular_estado_civil VARCHAR(20)  DEFAULT NULL,
             monto_inicial        VARCHAR(30) DEFAULT NULL,
             frecuencia_deposito  VARCHAR(20) DEFAULT NULL,
             objetivo_ahorro      TEXT DEFAULT NULL,
@@ -177,21 +199,39 @@ try {
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    // Migración no-destructiva ficha_cuenta_ahorros
+    foreach ([
+        'titular_nombre'       => "ADD COLUMN titular_nombre VARCHAR(200) DEFAULT NULL AFTER tipo_ahorro",
+        'titular_cedula'       => "ADD COLUMN titular_cedula VARCHAR(20) DEFAULT NULL AFTER titular_nombre",
+        'titular_celular'      => "ADD COLUMN titular_celular VARCHAR(20) DEFAULT NULL AFTER titular_cedula",
+        'titular_estado_civil' => "ADD COLUMN titular_estado_civil VARCHAR(20) DEFAULT NULL AFTER titular_celular",
+    ] as $col => $ddl) {
+        $chk = $conn->query("SHOW COLUMNS FROM ficha_cuenta_ahorros LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) $conn->query("ALTER TABLE ficha_cuenta_ahorros $ddl");
+    }
 
     $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_inversiones (
-            id                   CHAR(36) NOT NULL PRIMARY KEY,
-            ficha_id             CHAR(36) NOT NULL,
-            tipo_inversion       VARCHAR(20) DEFAULT NULL,
-            monto_inversion      VARCHAR(30) DEFAULT NULL,
-            plazo_meses          VARCHAR(10) DEFAULT NULL,
-            objetivo_inversion   VARCHAR(30) DEFAULT NULL,
-            tiene_inv_otra       TINYINT(1) DEFAULT NULL,
-            renovacion_auto      TINYINT(1) DEFAULT NULL,
-            observaciones        TEXT DEFAULT NULL,
+            id                       CHAR(36) NOT NULL PRIMARY KEY,
+            ficha_id                 CHAR(36) NOT NULL,
+            tipo_inversion           VARCHAR(20) DEFAULT NULL,
+            monto_inversion          VARCHAR(30) DEFAULT NULL,
+            plazo_meses              VARCHAR(10) DEFAULT NULL,
+            objetivo_inversion       VARCHAR(30) DEFAULT NULL,
+            tiene_inv_otra           TINYINT(1) DEFAULT NULL,
+            institucion_competencia  VARCHAR(200) DEFAULT NULL,
+            renovacion_auto          TINYINT(1) DEFAULT NULL,
+            observaciones            TEXT DEFAULT NULL,
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    // Migración no-destructiva ficha_inversiones
+    foreach ([
+        'institucion_competencia' => "ADD COLUMN institucion_competencia VARCHAR(200) DEFAULT NULL AFTER tiene_inv_otra",
+    ] as $col => $ddl) {
+        $chk = $conn->query("SHOW COLUMNS FROM ficha_inversiones LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) $conn->query("ALTER TABLE ficha_inversiones $ddl");
+    }
 
 } catch (\Throwable $e) {
     respond('error', 'Error creando tablas: ' . $e->getMessage());
@@ -273,7 +313,7 @@ try {
             $des   = s('doc_estados_cuenta'); $ddec = s('doc_declaraciones');  $dmat = s('doc_matricula');
             $dfot  = s('doc_foto_negocio');   $dsc  = s('doc_solicitud_credito'); $dfc = s('doc_foto_cliente');
 
-            // 43 parámetros
+            // 44 parámetros
             $st = $conn->prepare("
                 INSERT INTO ficha_credito (
                     id, ficha_id,
@@ -304,7 +344,7 @@ try {
                 respond('error', '[ficha_credito] prepare: ' . $conn->error);
             }
             $st->bind_param(
-                'sssssssssssssssssssssssssssssssssssssssssss', // 43 s
+                'ssssssssssssssssssssssssssssssssssssssssssss', // 44 s
                 $detalle_id, $ficha_id,
                 $req,
                 $dest, $odet,
@@ -323,46 +363,68 @@ try {
             break;
 
         case 'cuenta_corriente':
-            $usc  = s('usa_cheques')  ?: null;
-            $rtd  = s('requiere_td')  ?: null;
-            $nom  = s('tiene_nomina') ?: null;
-            $tipo = s('tipo_cc') ?: null;
-            $prop = s('proposito') ?: null;
-            $mdep = s('monto_deposito_prom') ?: null;
-            $ing  = s('ingreso_mensual') ?: null;
-            $obs  = s('observaciones') ?: null;
+            $tipo     = s('tipo_cc')              ?: null;
+            $tnom     = s('titular_nombre')        ?: null;
+            $tced     = s('titular_cedula')        ?: null;
+            $tcel     = s('titular_celular')       ?: null;
+            $tec      = s('titular_estado_civil')  ?: null;
+            $prop     = s('proposito')             ?: null;
+            $mdep     = s('monto_deposito_prom')   ?: null;
+            $usc      = s('usa_cheques')           ?: null;
+            $rtd      = s('requiere_td')           ?: null;
+            $ing      = s('ingreso_mensual')       ?: null;
+            $nom      = s('tiene_nomina')          ?: null;
+            $cc_otra  = s('tiene_cc_otra')         ?: null;
+            $inst_cc  = s('institucion_cc')        ?: null;
+            $obs      = s('observaciones')         ?: null;
 
             $st = $conn->prepare("
                 INSERT INTO ficha_cuenta_corriente
-                    (id, ficha_id, tipo_cc, proposito, monto_deposito_prom,
-                     usa_cheques, requiere_td, ingreso_mensual, tiene_nomina, observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
+                    (id, ficha_id, tipo_cc,
+                     titular_nombre, titular_cedula, titular_celular, titular_estado_civil,
+                     proposito, monto_deposito_prom,
+                     usa_cheques, requiere_td, ingreso_mensual, tiene_nomina,
+                     tiene_cc_otra, institucion_cc,
+                     observaciones)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
-            $st->bind_param('ssssssssss', // 10 s
-                $detalle_id, $ficha_id, $tipo, $prop, $mdep,
-                $usc, $rtd, $ing, $nom, $obs
+            $st->bind_param('ssssssssssssssss', // 16 s
+                $detalle_id, $ficha_id, $tipo,
+                $tnom, $tced, $tcel, $tec,
+                $prop, $mdep,
+                $usc, $rtd, $ing, $nom,
+                $cc_otra, $inst_cc,
+                $obs
             );
             $st->execute();
             $st->close();
             break;
 
         case 'cuenta_ahorros':
-            $ota  = s('tiene_ahorro_otra') ?: null;
-            $tipo = s('tipo_ahorro') ?: null;
-            $moin = s('monto_inicial') ?: null;
-            $frec = s('frecuencia_deposito') ?: null;
-            $obj  = s('objetivo_ahorro') ?: null;
-            $inst = s('institucion_ahorro') ?: null;
-            $obs  = s('observaciones') ?: null;
+            $tipo  = s('tipo_ahorro')          ?: null;
+            $tnom  = s('titular_nombre')        ?: null;
+            $tced  = s('titular_cedula')        ?: null;
+            $tcel  = s('titular_celular')       ?: null;
+            $tec   = s('titular_estado_civil')  ?: null;
+            $moin  = s('monto_inicial')         ?: null;
+            $frec  = s('frecuencia_deposito')   ?: null;
+            $obj   = s('objetivo_ahorro')       ?: null;
+            $ota   = s('tiene_ahorro_otra')     ?: null;
+            $inst  = s('institucion_ahorro')    ?: null;
+            $obs   = s('observaciones')         ?: null;
 
             $st = $conn->prepare("
                 INSERT INTO ficha_cuenta_ahorros
-                    (id, ficha_id, tipo_ahorro, monto_inicial, frecuencia_deposito,
+                    (id, ficha_id, tipo_ahorro,
+                     titular_nombre, titular_cedula, titular_celular, titular_estado_civil,
+                     monto_inicial, frecuencia_deposito,
                      objetivo_ahorro, tiene_ahorro_otra, institucion_ahorro, observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
-            $st->bind_param('sssssssss',
-                $detalle_id, $ficha_id, $tipo, $moin, $frec,
+            $st->bind_param('sssssssssssss', // 13 s
+                $detalle_id, $ficha_id, $tipo,
+                $tnom, $tced, $tcel, $tec,
+                $moin, $frec,
                 $obj, $ota, $inst, $obs
             );
             $st->execute();
@@ -370,23 +432,25 @@ try {
             break;
 
         case 'inversiones':
-            $inv_otra = s('tiene_inv_otra')  ?: null;
-            $renov    = s('renovacion_auto')  ?: null;
-            $tipo     = s('tipo_inversion') ?: null;
-            $monto    = s('monto_inversion') ?: null;
-            $plazo    = s('plazo_meses') ?: null;
-            $obj      = s('objetivo_inversion') ?: null;
-            $obs      = s('observaciones') ?: null;
+            $tipo     = s('tipo_inversion')          ?: null;
+            $monto    = s('monto_inversion')         ?: null;
+            $plazo    = s('plazo_meses')             ?: null;
+            $obj      = s('objetivo_inversion')      ?: null;
+            $inv_otra = s('tiene_inv_otra')          ?: null;
+            $inst_comp= s('institucion_competencia') ?: null;
+            $renov    = s('renovacion_auto')         ?: null;
+            $obs      = s('observaciones')           ?: null;
 
             $st = $conn->prepare("
                 INSERT INTO ficha_inversiones
                     (id, ficha_id, tipo_inversion, monto_inversion, plazo_meses,
-                     objetivo_inversion, tiene_inv_otra, renovacion_auto, observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?)
+                     objetivo_inversion, tiene_inv_otra, institucion_competencia,
+                     renovacion_auto, observaciones)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
             ");
-            $st->bind_param('sssssssss',
+            $st->bind_param('ssssssssss', // 10 s
                 $detalle_id, $ficha_id, $tipo, $monto, $plazo,
-                $obj, $inv_otra, $renov, $obs
+                $obj, $inv_otra, $inst_comp, $renov, $obs
             );
             $st->execute();
             $st->close();

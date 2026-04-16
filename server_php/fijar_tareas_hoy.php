@@ -1,7 +1,8 @@
 <?php
 // ============================================================
-// obtener_tareas_pendientes_asesor.php
-// Lista tareas pendientes/programadas de un asesor (mobile)
+// fijar_tareas_hoy.php
+// Fija (confirma) la selección diaria del asesor.
+// Una vez fijada, NO se permite deseleccionar desde mobile.
 // ============================================================
 
 require_once __DIR__ . '/db_config.php';
@@ -22,18 +23,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $usuario_id   = trim($_POST['usuario_id'] ?? '');
 $asesor_id_in = trim($_POST['asesor_id'] ?? '');
-$desde        = trim($_POST['desde'] ?? '');
 
 if ($usuario_id === '') {
     echo json_encode(['status' => 'error', 'message' => 'usuario_id requerido'], JSON_UNESCAPED_UNICODE);
-    exit;
-}
-
-if ($desde === '') {
-    $desde = date('Y-m-d');
-}
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) {
-    echo json_encode(['status' => 'error', 'message' => 'desde invalido (YYYY-MM-DD)'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
@@ -71,7 +63,6 @@ try {
     }
 
     // Regla 8 horas: lo que quedó 'en_proceso' pasa a 'pendiente' para el día siguiente
-    // (limpia selección y desbloquea)
     $stExp = $conn->prepare(
         "UPDATE tarea
          SET estado='pendiente',
@@ -92,73 +83,28 @@ try {
         $stExp->close();
     }
 
-    $sql = "
-        SELECT
-            t.id,
-            t.tipo_tarea,
-            t.estado,
-            t.fecha_programada,
-            t.hora_programada,
-            t.observaciones,
-            t.seleccionada_dia,
-            t.seleccionada_at,
-            t.seleccion_fijada,
-            t.seleccion_fijada_at,
-            t.created_at,
-            cp.id        AS cliente_id,
-            cp.nombre    AS cliente_nombre,
-            cp.ciudad    AS cliente_ciudad,
-            cp.direccion AS cliente_direccion,
-            cp.latitud   AS cliente_latitud,
-            cp.longitud  AS cliente_longitud
-        FROM tarea t
-        LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-        WHERE t.asesor_id = ?
-          AND t.estado IN ('programada','pendiente','postergada','en_proceso')
-          AND t.fecha_programada >= ?
-        ORDER BY t.fecha_programada ASC,
-                 t.hora_programada ASC,
-                 t.created_at DESC
-        LIMIT 200
-    ";
-
-    $st = $conn->prepare($sql);
-    $st->bind_param('ss', $asesor_id, $desde);
-    $st->execute();
-    $res = $st->get_result();
-
-    $tareas = [];
-    while ($r = $res->fetch_assoc()) {
-        $tareas[] = [
-            'id' => (string)($r['id'] ?? ''),
-            'tipo_tarea' => (string)($r['tipo_tarea'] ?? ''),
-            'estado' => (string)($r['estado'] ?? ''),
-            'fecha_programada' => (string)($r['fecha_programada'] ?? ''),
-            'hora_programada' => (string)($r['hora_programada'] ?? ''),
-            'observaciones' => (string)($r['observaciones'] ?? ''),
-            'seleccionada_dia' => (string)($r['seleccionada_dia'] ?? ''),
-            'seleccionada_at'  => (string)($r['seleccionada_at'] ?? ''),
-            'seleccion_fijada' => (string)($r['seleccion_fijada'] ?? '0'),
-            'seleccion_fijada_at' => (string)($r['seleccion_fijada_at'] ?? ''),
-            'cliente_id' => (string)($r['cliente_id'] ?? ''),
-            'cliente_nombre' => (string)($r['cliente_nombre'] ?? ''),
-            'cliente_ciudad' => (string)($r['cliente_ciudad'] ?? ''),
-            'cliente_direccion' => (string)($r['cliente_direccion'] ?? ''),
-            'cliente_latitud' => (string)($r['cliente_latitud'] ?? ''),
-            'cliente_longitud' => (string)($r['cliente_longitud'] ?? ''),
-        ];
-    }
-    $st->close();
+    $stFix = $conn->prepare(
+        "UPDATE tarea
+         SET seleccion_fijada = 1,
+             seleccion_fijada_at = NOW()
+         WHERE asesor_id = ?
+           AND estado = 'en_proceso'
+           AND seleccionada_dia = CURDATE()
+           AND seleccion_fijada = 0"
+    );
+    $stFix->bind_param('s', $asesor_id);
+    $ok = $stFix->execute();
+    $affected = $stFix->affected_rows;
+    $stFix->close();
 
     echo json_encode([
-        'status' => 'success',
-        'asesor_id' => $asesor_id,
-        'desde' => $desde,
-        'tareas' => $tareas,
+        'status' => $ok ? 'success' : 'error',
+        'message' => $ok ? 'Selección fijada' : 'No se pudo fijar la selección',
+        'cantidad' => (int)$affected,
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
-    error_log('[obtener_tareas_pendientes_asesor] ' . $e->getMessage());
+    error_log('[fijar_tareas_hoy] ' . $e->getMessage());
     echo json_encode([
         'status' => 'error',
         'message' => 'Error del servidor',

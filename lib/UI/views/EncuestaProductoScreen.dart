@@ -134,23 +134,39 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   bool _docSolicitudCred = false;
   bool _docFotoCliente   = false;
 
+  // ── INSTITUCIONES FINANCIERAS (cargadas desde API) ──────────
+  List<String> _instituciones = [];
+  bool _institucionesCargadas = false;
+
   // ── CUENTA CORRIENTE ────────────────────────────────────────
   String? _tipoCC;  // 'personal' | 'empresarial'
-  final _propositoCCCtrl    = TextEditingController();
+  // Titular
+  final _ccNombreCtrl  = TextEditingController();
+  final _ccCedulaCtrl  = TextEditingController();
+  final _ccCelularCtrl = TextEditingController();
+  String? _ccEstadoCivil;
+  final _propositoCCCtrl     = TextEditingController();
   final _montoDepositoCCCtrl = TextEditingController();
   bool? _usaCheques;
   bool? _requiereTD;
   final _ingresoMensualCCCtrl = TextEditingController();
   bool? _tieneNomina;
+  bool? _tieneCCOtraInst;
+  String? _instCCSeleccionada;
   final _obsCCCtrl = TextEditingController();
 
   // ── CUENTA DE AHORROS ───────────────────────────────────────
   String? _tipoAhorro; // 'normal'|'programado'|'infantil'|'otro'
+  // Titular
+  final _ahNombreCtrl  = TextEditingController();
+  final _ahCedulaCtrl  = TextEditingController();
+  final _ahCelularCtrl = TextEditingController();
+  String? _ahEstadoCivil;
   final _montoInicialAhCtrl = TextEditingController();
   String? _frecuenciaAhorro; // 'diaria'|'semanal'|'quincenal'|'mensual'
-  final _objetivoAhCtrl = TextEditingController();
+  final _objetivoAhCtrl     = TextEditingController();
   bool? _tieneAhorroOtraInst;
-  final _instAhCtrl = TextEditingController();
+  String? _instAhSeleccionada;   // institución seleccionada del picker
   final _obsAhCtrl  = TextEditingController();
 
   // ── INVERSIONES ─────────────────────────────────────────────
@@ -159,6 +175,7 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   final _plazoInvCtrl   = TextEditingController();
   String? _objetivoInv; // 'rendimiento_fijo'|'capitalizacion'|'crecimiento'|'otro'
   bool? _tieneInvOtra;
+  String? _instInvSeleccionada;  // institución seleccionada del picker
   bool? _renovacionAuto;
   final _obsInvCtrl = TextEditingController();
 
@@ -166,6 +183,7 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   void initState() {
     super.initState();
     _obtenerGPS();
+    _cargarInstituciones();
   }
 
   @override
@@ -192,13 +210,18 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     _compraLvCtrl.dispose();
     _compraSabCtrl.dispose();
     _compraDomCtrl.dispose();
+    _ccNombreCtrl.dispose();
+    _ccCedulaCtrl.dispose();
+    _ccCelularCtrl.dispose();
     _propositoCCCtrl.dispose();
     _montoDepositoCCCtrl.dispose();
     _ingresoMensualCCCtrl.dispose();
     _obsCCCtrl.dispose();
+    _ahNombreCtrl.dispose();
+    _ahCedulaCtrl.dispose();
+    _ahCelularCtrl.dispose();
     _montoInicialAhCtrl.dispose();
     _objetivoAhCtrl.dispose();
-    _instAhCtrl.dispose();
     _obsAhCtrl.dispose();
     _montoInvCtrl.dispose();
     _plazoInvCtrl.dispose();
@@ -221,6 +244,63 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _cargarInstituciones() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${Constants.apiBaseUrl}/api_cooperativas.php'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      final decoded = json.decode(resp.body);
+      if (decoded is Map) {
+        final data = Map<String, dynamic>.from(decoded);
+        final status = data['status']?.toString();
+
+        List<String> inst = [];
+
+        // Formato actual: api_cooperativas.php -> { status: 'success', data: [ {nombre: ...}, ... ] }
+        if (status == 'success' && data['data'] is List) {
+          final list = data['data'] as List;
+          inst = list
+              .map((e) => e is Map ? (e['nombre']?.toString() ?? '') : '')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toSet()
+              .toList();
+          inst.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        }
+
+        // Compat: formato anterior -> { status:'ok', instituciones:[...] }
+        if (inst.isEmpty && status == 'ok' && data['instituciones'] is List) {
+          inst = (data['instituciones'] as List)
+              .map((e) => e.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .toSet()
+              .toList();
+          inst.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        }
+
+        setState(() {
+          _instituciones = inst;
+          _institucionesCargadas = true;
+        });
+        return;
+      }
+    } catch (_) {
+      // Ignorar
+    }
+
+    // No dejar el loader infinito.
+    if (mounted) {
+      setState(() {
+        _instituciones = [];
+        _institucionesCargadas = true;
+      });
+    }
   }
 
   Future<void> _guardar() async {
@@ -335,34 +415,45 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   };
 
   Map<String, String> _bodyCC() => {
-    'tipo_cc':             _tipoCC ?? '',
-    'proposito':           _propositoCCCtrl.text.trim(),
-    'monto_deposito_prom': _montoDepositoCCCtrl.text.trim(),
-    'usa_cheques':         _usaCheques == null ? '' : (_usaCheques! ? '1' : '0'),
-    'requiere_td':         _requiereTD == null ? '' : (_requiereTD! ? '1' : '0'),
-    'ingreso_mensual':     _ingresoMensualCCCtrl.text.trim(),
-    'tiene_nomina':        _tieneNomina == null ? '' : (_tieneNomina! ? '1' : '0'),
-    'observaciones':       _obsCCCtrl.text.trim(),
+    'tipo_cc':              _tipoCC ?? '',
+    'titular_nombre':       _ccNombreCtrl.text.trim(),
+    'titular_cedula':       _ccCedulaCtrl.text.trim(),
+    'titular_celular':      _ccCelularCtrl.text.trim(),
+    'titular_estado_civil': _ccEstadoCivil ?? '',
+    'proposito':            _propositoCCCtrl.text.trim(),
+    'monto_deposito_prom':  _montoDepositoCCCtrl.text.trim(),
+    'usa_cheques':          _usaCheques == null ? '' : (_usaCheques! ? '1' : '0'),
+    'requiere_td':          _requiereTD == null ? '' : (_requiereTD! ? '1' : '0'),
+    'ingreso_mensual':      _ingresoMensualCCCtrl.text.trim(),
+    'tiene_nomina':         _tieneNomina == null ? '' : (_tieneNomina! ? '1' : '0'),
+    'tiene_cc_otra':        _tieneCCOtraInst == null ? '' : (_tieneCCOtraInst! ? '1' : '0'),
+    'institucion_cc':       _instCCSeleccionada ?? '',
+    'observaciones':        _obsCCCtrl.text.trim(),
   };
 
   Map<String, String> _bodyAhorros() => {
     'tipo_ahorro':          _tipoAhorro ?? '',
+    'titular_nombre':       _ahNombreCtrl.text.trim(),
+    'titular_cedula':       _ahCedulaCtrl.text.trim(),
+    'titular_celular':      _ahCelularCtrl.text.trim(),
+    'titular_estado_civil': _ahEstadoCivil ?? '',
     'monto_inicial':        _montoInicialAhCtrl.text.trim(),
     'frecuencia_deposito':  _frecuenciaAhorro ?? '',
     'objetivo_ahorro':      _objetivoAhCtrl.text.trim(),
     'tiene_ahorro_otra':    _tieneAhorroOtraInst == null ? '' : (_tieneAhorroOtraInst! ? '1' : '0'),
-    'institucion_ahorro':   _instAhCtrl.text.trim(),
+    'institucion_ahorro':   _instAhSeleccionada ?? '',
     'observaciones':        _obsAhCtrl.text.trim(),
   };
 
   Map<String, String> _bodyInversiones() => {
-    'tipo_inversion':    _tipoInversion ?? '',
-    'monto_inversion':   _montoInvCtrl.text.trim(),
-    'plazo_meses':       _plazoInvCtrl.text.trim(),
-    'objetivo_inversion':_objetivoInv ?? '',
-    'tiene_inv_otra':    _tieneInvOtra == null ? '' : (_tieneInvOtra! ? '1' : '0'),
-    'renovacion_auto':   _renovacionAuto == null ? '' : (_renovacionAuto! ? '1' : '0'),
-    'observaciones':     _obsInvCtrl.text.trim(),
+    'tipo_inversion':          _tipoInversion ?? '',
+    'monto_inversion':         _montoInvCtrl.text.trim(),
+    'plazo_meses':             _plazoInvCtrl.text.trim(),
+    'objetivo_inversion':      _objetivoInv ?? '',
+    'tiene_inv_otra':          _tieneInvOtra == null ? '' : (_tieneInvOtra! ? '1' : '0'),
+    'institucion_competencia': _instInvSeleccionada ?? '',
+    'renovacion_auto':         _renovacionAuto == null ? '' : (_renovacionAuto! ? '1' : '0'),
+    'observaciones':           _obsInvCtrl.text.trim(),
   };
 
   void _mostrarExito() {
@@ -946,6 +1037,41 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Titular ─────────────────────────────────────────────
+        _tarjetaSeccion(
+          icon: Icons.person_rounded,
+          color: const Color(0xFF3B82F6),
+          titulo: 'Datos del Titular',
+          children: [
+            _campo(controller: _ccNombreCtrl, label: 'Nombre completo', icon: Icons.person_rounded),
+            Row(children: [
+              Expanded(child: _campo(
+                controller: _ccCedulaCtrl, label: 'Cédula de identidad',
+                icon: Icons.badge_rounded, keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _campo(
+                controller: _ccCelularCtrl, label: 'Celular',
+                icon: Icons.phone_rounded, keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              )),
+            ]),
+            _titulo('Estado civil'),
+            _chipsOpciones(
+              opciones: const [
+                ('soltero',     'Soltero/a'),
+                ('casado',      'Casado/a'),
+                ('union_libre', 'Unión libre'),
+                ('divorciado',  'Divorciado/a'),
+              ],
+              seleccionado: _ccEstadoCivil,
+              onChanged: (v) => setState(() => _ccEstadoCivil = v),
+              wrap: true,
+            ),
+          ],
+        ),
+        // ── Datos de la cuenta ───────────────────────────────────
         _tarjetaSeccion(
           icon: Icons.account_balance_rounded,
           color: widget.tipo.color,
@@ -999,6 +1125,20 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
               onChanged: (v) => setState(() => _tieneNomina = v),
             ),
             const SizedBox(height: 12),
+            _titulo('¿Tiene cuenta corriente en otra institución?'),
+            _chipsSiNo(
+              value: _tieneCCOtraInst,
+              onChanged: (v) => setState(() => _tieneCCOtraInst = v),
+            ),
+            if (_tieneCCOtraInst == true) ...[
+              const SizedBox(height: 10),
+              _titulo('¿En qué institución?'),
+              _pickerInstitucion(
+                _instCCSeleccionada,
+                (v) => setState(() => _instCCSeleccionada = v),
+              ),
+            ],
+            const SizedBox(height: 12),
             _campo(
               controller: _obsCCCtrl,
               label: 'Observaciones',
@@ -1020,6 +1160,41 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Titular ─────────────────────────────────────────────
+        _tarjetaSeccion(
+          icon: Icons.person_rounded,
+          color: const Color(0xFF10B981),
+          titulo: 'Datos del Titular',
+          children: [
+            _campo(controller: _ahNombreCtrl, label: 'Nombre completo', icon: Icons.person_rounded),
+            Row(children: [
+              Expanded(child: _campo(
+                controller: _ahCedulaCtrl, label: 'Cédula de identidad',
+                icon: Icons.badge_rounded, keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              )),
+              const SizedBox(width: 10),
+              Expanded(child: _campo(
+                controller: _ahCelularCtrl, label: 'Celular',
+                icon: Icons.phone_rounded, keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              )),
+            ]),
+            _titulo('Estado civil'),
+            _chipsOpciones(
+              opciones: const [
+                ('soltero',     'Soltero/a'),
+                ('casado',      'Casado/a'),
+                ('union_libre', 'Unión libre'),
+                ('divorciado',  'Divorciado/a'),
+              ],
+              seleccionado: _ahEstadoCivil,
+              onChanged: (v) => setState(() => _ahEstadoCivil = v),
+              wrap: true,
+            ),
+          ],
+        ),
+        // ── Datos de la cuenta ───────────────────────────────────
         _tarjetaSeccion(
           icon: Icons.savings_rounded,
           color: widget.tipo.color,
@@ -1071,10 +1246,10 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
             ),
             if (_tieneAhorroOtraInst == true) ...[
               const SizedBox(height: 10),
-              _campo(
-                controller: _instAhCtrl,
-                label: '¿En qué institución?',
-                icon: Icons.account_balance_rounded,
+              _titulo('¿En qué institución?'),
+              _pickerInstitucion(
+                _instAhSeleccionada,
+                (v) => setState(() => _instAhSeleccionada = v),
               ),
             ],
             const SizedBox(height: 4),
@@ -1150,6 +1325,14 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
               value: _tieneInvOtra,
               onChanged: (v) => setState(() => _tieneInvOtra = v),
             ),
+            if (_tieneInvOtra == true) ...[
+              const SizedBox(height: 10),
+              _titulo('¿En qué institución?'),
+              _pickerInstitucion(
+                _instInvSeleccionada,
+                (v) => setState(() => _instInvSeleccionada = v),
+              ),
+            ],
             const SizedBox(height: 12),
             _titulo('¿Acepta renovación automática?'),
             _chipsSiNo(
@@ -1272,6 +1455,98 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           labelStyle: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  // ── Picker de instituciones financieras ────────────────────
+  Widget _pickerInstitucion(String? valor, ValueChanged<String?> onChanged) {
+    if (!_institucionesCargadas) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: widget.tipo.color),
+            ),
+            const SizedBox(width: 10),
+            Text('Cargando instituciones…',
+                style: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey)),
+          ],
+        ),
+      );
+    }
+
+    final items = <DropdownMenuItem<String>>[
+      ..._instituciones.map((nombre) => DropdownMenuItem<String>(
+        value: nombre,
+        child: Row(
+          children: [
+            Icon(
+              Icons.account_balance_rounded,
+              size: 15,
+              color: ConstantColors.textDarkGrey,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                nombre,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: ConstantColors.textDark,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      )),
+      DropdownMenuItem<String>(
+        value: 'otra',
+        child: Row(
+          children: [
+            Icon(
+              Icons.more_horiz_rounded,
+              size: 15,
+              color: ConstantColors.textDarkGrey,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'Otra',
+              style: TextStyle(
+                fontSize: 13,
+                color: ConstantColors.textDark,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+      decoration: BoxDecoration(
+        color: ConstantColors.grey100,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ConstantColors.borderLight),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: valor,
+          isExpanded: true,
+          dropdownColor: Colors.white,
+          style: TextStyle(fontSize: 13, color: ConstantColors.textDark),
+          hint: Text(
+            'Seleccionar institución',
+            style: TextStyle(fontSize: 13, color: ConstantColors.textDarkGrey),
+          ),
+          icon: Icon(Icons.expand_more_rounded, color: ConstantColors.textDarkGrey),
+          items: items,
+          onChanged: onChanged,
         ),
       ),
     );

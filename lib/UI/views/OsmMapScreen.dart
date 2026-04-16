@@ -3054,12 +3054,54 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                 right: 16,
                 bottom: currentPanelHeight + 184,
                 child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PendientesTareasScreen(),
-                    ),
-                  ),
+                  onTap: () async {
+                    final res = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PendientesTareasScreen(),
+                      ),
+                    );
+
+                    if (!mounted) return;
+                    if (res is! Map) return;
+
+                    double? parseDouble(dynamic v) {
+                      if (v == null) return null;
+                      if (v is num) return v.toDouble();
+                      return double.tryParse(v.toString());
+                    }
+
+                    final lat = parseDouble(res['destino_lat']);
+                    final lng = parseDouble(res['destino_lng']);
+                    final nombre = (res['destino_nombre']?.toString() ?? '').trim();
+
+                    if (lat == null || lng == null) return;
+                    if (lat == 0.0 && lng == 0.0) return;
+
+                    final destino = LatLng(lat, lng);
+                    FocusScope.of(context).unfocus();
+                    setState(() {
+                      _destino = destino;
+                      _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
+                      _paradasIntermedias = [];
+                      _agregandoParada = false;
+                      _sugerencias = [];
+                      _mostrandoSugerencias = false;
+                      _mostrandoRecientes = false;
+                      _ajustandoRecogida = false;
+                      _actualizandoRecogida = false;
+                      _seleccionandoDestinoMapa = false;
+                      _actualizandoDestinoMapa = false;
+                      _searchController.text = _destinoNombre;
+                      _calculandoRuta = true;
+                      _mostrandoPanel = true;
+                      _rutaInfo = null;
+                      _rutaPuntos = [];
+                    });
+
+                    _mapController.move(destino, 14.0);
+                    _calcularRuta(destino);
+                  },
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(
@@ -3081,7 +3123,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                             color: ConstantColors.primaryBlue, size: 18),
                         SizedBox(width: 8),
                         Text(
-                          'Pendientes',
+                          'Lista tareas',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 12,

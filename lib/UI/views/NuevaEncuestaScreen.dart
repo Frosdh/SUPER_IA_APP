@@ -1019,6 +1019,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         _preguntaSiNo(
           value: _interesConocer,
           onChanged: (v) {
+            // Si ya se completó al menos una ficha, no permitir cambiar a "No".
+            if (v == false && (_fichaCC || _fichaAhorro || _fichaInv || _fichaCred)) {
+              _mostrarError('No puedes desmarcar el interés porque ya completaste una ficha de producto.');
+              setState(() => _interesConocer = true);
+              return;
+            }
+
             setState(() {
               _interesConocer = v;
               if (v == false) {
@@ -1041,36 +1048,48 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Cuenta Corriente',
             icono: Icons.account_balance_rounded,
             color: const Color(0xFF3B82F6),
-            value: _interesCC,
+            value: _fichaCC ? true : _interesCC,
             fichaLlena: _fichaCC,
-            onChanged: (v) => setState(() => _interesCC = v ?? false),
+            onChanged: (v) {
+              if (_fichaCC) return;
+              setState(() => _interesCC = v ?? false);
+            },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.cuentaCorriente),
           ),
           _productoItem(
             label: 'Cuenta de Ahorros',
             icono: Icons.savings_rounded,
             color: const Color(0xFF10B981),
-            value: _interesAhorro,
+            value: _fichaAhorro ? true : _interesAhorro,
             fichaLlena: _fichaAhorro,
-            onChanged: (v) => setState(() => _interesAhorro = v ?? false),
+            onChanged: (v) {
+              if (_fichaAhorro) return;
+              setState(() => _interesAhorro = v ?? false);
+            },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.cuentaAhorros),
           ),
           _productoItem(
             label: 'Inversiones',
             icono: Icons.trending_up_rounded,
             color: const Color(0xFF8B5CF6),
-            value: _interesInv,
+            value: _fichaInv ? true : _interesInv,
             fichaLlena: _fichaInv,
-            onChanged: (v) => setState(() => _interesInv = v ?? false),
+            onChanged: (v) {
+              if (_fichaInv) return;
+              setState(() => _interesInv = v ?? false);
+            },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.inversiones),
           ),
           _productoItem(
             label: 'Crédito',
             icono: Icons.credit_score_rounded,
             color: const Color(0xFFF59E0B),
-            value: _interesCred,
+            value: _fichaCred ? true : _interesCred,
             fichaLlena: _fichaCred,
-            onChanged: (v) => setState(() => _interesCred = v ?? false),
+            onChanged: (v) {
+              if (_fichaCred) return;
+              setState(() => _interesCred = v ?? false);
+            },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.credito),
           ),
         ],
@@ -1289,10 +1308,22 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (result == true && mounted) {
       setState(() {
         switch (tipo) {
-          case ProductoTipo.cuentaCorriente: _fichaCC    = true; break;
-          case ProductoTipo.cuentaAhorros:  _fichaAhorro= true; break;
-          case ProductoTipo.inversiones:    _fichaInv   = true; break;
-          case ProductoTipo.credito:        _fichaCred  = true; break;
+          case ProductoTipo.cuentaCorriente:
+            _fichaCC = true;
+            _interesCC = true;
+            break;
+          case ProductoTipo.cuentaAhorros:
+            _fichaAhorro = true;
+            _interesAhorro = true;
+            break;
+          case ProductoTipo.inversiones:
+            _fichaInv = true;
+            _interesInv = true;
+            break;
+          case ProductoTipo.credito:
+            _fichaCred = true;
+            _interesCred = true;
+            break;
         }
       });
     }
@@ -1730,10 +1761,21 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       child: Row(
         children: [
           GestureDetector(
-            onTap: () => onChanged(!value),
+            // Si la ficha ya fue completada, no se puede desmarcar
+            onTap: fichaLlena && value
+                ? null
+                : () => onChanged(!value),
             child: Icon(
-              value ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-              color: value ? color : ConstantColors.textDarkGrey,
+              fichaLlena && value
+                  ? Icons.lock_rounded
+                  : value
+                      ? Icons.check_box_rounded
+                      : Icons.check_box_outline_blank_rounded,
+              color: fichaLlena && value
+                  ? ConstantColors.success
+                  : value
+                      ? color
+                      : ConstantColors.textDarkGrey,
               size: 22,
             ),
           ),
@@ -1750,7 +1792,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: GestureDetector(
-              onTap: () => onChanged(!value),
+              onTap: fichaLlena && value
+                  ? null
+                  : () => onChanged(!value),
               child: Text(
                 label,
                 style: TextStyle(
