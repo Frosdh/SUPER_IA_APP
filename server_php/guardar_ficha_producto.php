@@ -50,7 +50,7 @@ if (empty($usuario_id)) {
 // ── Asegurar tablas ───────────────────────────────────────────
 try {
     // Tabla principal de fichas
-    $conexion->query("
+    $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_producto (
             id              CHAR(36)     NOT NULL PRIMARY KEY,
             usuario_id      CHAR(36)     NOT NULL,
@@ -66,52 +66,88 @@ try {
     ");
 
     // Tablas por tipo (creadas solo si no existen)
-    $conexion->query("
+    $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_credito (
-            id                   CHAR(36) NOT NULL PRIMARY KEY,
-            ficha_id             CHAR(36) NOT NULL,
-            requiere_credito     TINYINT(1) DEFAULT NULL,
-            dest_capital_trabajo TINYINT(1) DEFAULT 0,
-            dest_activos_fijos   TINYINT(1) DEFAULT 0,
-            dest_pago_deudas     TINYINT(1) DEFAULT 0,
-            dest_consolidacion   TINYINT(1) DEFAULT 0,
-            dest_vehiculo        TINYINT(1) DEFAULT 0,
-            dest_vivienda_compra TINYINT(1) DEFAULT 0,
-            dest_arreglos_vivienda TINYINT(1) DEFAULT 0,
-            dest_educacion       TINYINT(1) DEFAULT 0,
-            dest_viajes          TINYINT(1) DEFAULT 0,
-            dest_otros           TINYINT(1) DEFAULT 0,
-            dest_otros_detalle   VARCHAR(255) DEFAULT NULL,
-            monto_credito        VARCHAR(30) DEFAULT NULL,
-            plazo_credito_meses  VARCHAR(10) DEFAULT NULL,
-            solicitante_nombre   VARCHAR(200) DEFAULT NULL,
-            solicitante_cedula   VARCHAR(20)  DEFAULT NULL,
-            garante_nombre       VARCHAR(200) DEFAULT NULL,
-            garante_cedula       VARCHAR(20)  DEFAULT NULL,
-            venta_lv             VARCHAR(20) DEFAULT NULL,
-            venta_sabado         VARCHAR(20) DEFAULT NULL,
-            venta_domingo        VARCHAR(20) DEFAULT NULL,
-            mes_alta_venta       VARCHAR(5)  DEFAULT NULL,
-            mes_baja_venta       VARCHAR(5)  DEFAULT NULL,
-            compra_lv            VARCHAR(20) DEFAULT NULL,
-            compra_sabado        VARCHAR(20) DEFAULT NULL,
-            compra_domingo       VARCHAR(20) DEFAULT NULL,
-            mes_alta_compra      VARCHAR(5)  DEFAULT NULL,
-            dias_atencion_lv     TINYINT(1) DEFAULT 0,
-            dias_atencion_sab    TINYINT(1) DEFAULT 0,
-            dias_atencion_dom    TINYINT(1) DEFAULT 0,
-            doc_cedula           TINYINT(1) DEFAULT 0,
-            doc_planilla         TINYINT(1) DEFAULT 0,
-            doc_ruc_rise         TINYINT(1) DEFAULT 0,
-            doc_estados_cuenta   TINYINT(1) DEFAULT 0,
-            doc_declaraciones    TINYINT(1) DEFAULT 0,
-            doc_matricula        TINYINT(1) DEFAULT 0,
-            doc_foto_negocio     TINYINT(1) DEFAULT 0,
+            id                        CHAR(36)     NOT NULL PRIMARY KEY,
+            ficha_id                  CHAR(36)     NOT NULL,
+            requiere_credito          TINYINT(1)   DEFAULT NULL,
+            -- Destino único (una sola opción)
+            destino_credito           VARCHAR(50)  DEFAULT NULL,
+            dest_otros_detalle        VARCHAR(255) DEFAULT NULL,
+            monto_credito             VARCHAR(30)  DEFAULT NULL,
+            plazo_credito_meses       VARCHAR(10)  DEFAULT NULL,
+            -- Solicitante
+            solicitante_nombre        VARCHAR(200) DEFAULT NULL,
+            solicitante_cedula        VARCHAR(20)  DEFAULT NULL,
+            solicitante_celular       VARCHAR(20)  DEFAULT NULL,
+            solicitante_estado_civil  VARCHAR(20)  DEFAULT NULL,
+            solicitante_conyuge_nombre  VARCHAR(200) DEFAULT NULL,
+            solicitante_conyuge_cedula  VARCHAR(20)  DEFAULT NULL,
+            solicitante_conyuge_celular VARCHAR(20)  DEFAULT NULL,
+            -- Garante
+            garante_nombre            VARCHAR(200) DEFAULT NULL,
+            garante_cedula            VARCHAR(20)  DEFAULT NULL,
+            garante_celular           VARCHAR(20)  DEFAULT NULL,
+            garante_estado_civil      VARCHAR(20)  DEFAULT NULL,
+            garante_conyuge_nombre    VARCHAR(200) DEFAULT NULL,
+            garante_conyuge_cedula    VARCHAR(20)  DEFAULT NULL,
+            garante_conyuge_celular   VARCHAR(20)  DEFAULT NULL,
+            -- Dirección en sitio
+            direccion_sitio           TEXT         DEFAULT NULL,
+            -- Empresa/negocio
+            tiene_empresa             TINYINT(1)   DEFAULT NULL,
+            -- Levantamiento de campo
+            venta_lv                  VARCHAR(20)  DEFAULT NULL,
+            venta_sabado              VARCHAR(20)  DEFAULT NULL,
+            venta_domingo             VARCHAR(20)  DEFAULT NULL,
+            mes_alta_venta            VARCHAR(5)   DEFAULT NULL,
+            mes_baja_venta            VARCHAR(5)   DEFAULT NULL,
+            compra_lv                 VARCHAR(20)  DEFAULT NULL,
+            compra_sabado             VARCHAR(20)  DEFAULT NULL,
+            compra_domingo            VARCHAR(20)  DEFAULT NULL,
+            mes_alta_compra           VARCHAR(5)   DEFAULT NULL,
+            dias_atencion_lv          TINYINT(1)   DEFAULT 0,
+            dias_atencion_sab         TINYINT(1)   DEFAULT 0,
+            dias_atencion_dom         TINYINT(1)   DEFAULT 0,
+            -- Documentos recibidos
+            doc_cedula                TINYINT(1)   DEFAULT 0,
+            doc_planilla              TINYINT(1)   DEFAULT 0,
+            doc_ruc_rise              TINYINT(1)   DEFAULT 0,
+            doc_estados_cuenta        TINYINT(1)   DEFAULT 0,
+            doc_declaraciones         TINYINT(1)   DEFAULT 0,
+            doc_matricula             TINYINT(1)   DEFAULT 0,
+            doc_foto_negocio          TINYINT(1)   DEFAULT 0,
+            doc_solicitud_credito     TINYINT(1)   DEFAULT 0,
+            doc_foto_cliente          TINYINT(1)   DEFAULT 0,
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
+    // Agregar columnas nuevas si la tabla ya existía (migración no destructiva)
+    $cols_nuevas = [
+        'destino_credito'           => "ADD COLUMN destino_credito VARCHAR(50) DEFAULT NULL AFTER requiere_credito",
+        'solicitante_celular'       => "ADD COLUMN solicitante_celular VARCHAR(20) DEFAULT NULL AFTER solicitante_cedula",
+        'solicitante_estado_civil'  => "ADD COLUMN solicitante_estado_civil VARCHAR(20) DEFAULT NULL AFTER solicitante_celular",
+        'solicitante_conyuge_nombre'=> "ADD COLUMN solicitante_conyuge_nombre VARCHAR(200) DEFAULT NULL AFTER solicitante_estado_civil",
+        'solicitante_conyuge_cedula'=> "ADD COLUMN solicitante_conyuge_cedula VARCHAR(20) DEFAULT NULL AFTER solicitante_conyuge_nombre",
+        'solicitante_conyuge_celular'=>"ADD COLUMN solicitante_conyuge_celular VARCHAR(20) DEFAULT NULL AFTER solicitante_conyuge_cedula",
+        'garante_celular'           => "ADD COLUMN garante_celular VARCHAR(20) DEFAULT NULL AFTER garante_cedula",
+        'garante_estado_civil'      => "ADD COLUMN garante_estado_civil VARCHAR(20) DEFAULT NULL AFTER garante_celular",
+        'garante_conyuge_nombre'    => "ADD COLUMN garante_conyuge_nombre VARCHAR(200) DEFAULT NULL AFTER garante_estado_civil",
+        'garante_conyuge_cedula'    => "ADD COLUMN garante_conyuge_cedula VARCHAR(20) DEFAULT NULL AFTER garante_conyuge_nombre",
+        'garante_conyuge_celular'   => "ADD COLUMN garante_conyuge_celular VARCHAR(20) DEFAULT NULL AFTER garante_conyuge_cedula",
+        'direccion_sitio'           => "ADD COLUMN direccion_sitio TEXT DEFAULT NULL AFTER garante_conyuge_celular",
+        'tiene_empresa'             => "ADD COLUMN tiene_empresa TINYINT(1) DEFAULT NULL AFTER direccion_sitio",
+        'doc_solicitud_credito'     => "ADD COLUMN doc_solicitud_credito TINYINT(1) DEFAULT 0 AFTER doc_foto_negocio",
+        'doc_foto_cliente'          => "ADD COLUMN doc_foto_cliente TINYINT(1) DEFAULT 0 AFTER doc_solicitud_credito",
+    ];
+    foreach ($cols_nuevas as $col => $ddl) {
+        $chk = $conn->query("SHOW COLUMNS FROM ficha_credito LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) {
+            $conn->query("ALTER TABLE ficha_credito $ddl");
+        }
+    }
 
-    $conexion->query("
+    $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_cuenta_corriente (
             id                   CHAR(36) NOT NULL PRIMARY KEY,
             ficha_id             CHAR(36) NOT NULL,
@@ -127,7 +163,7 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    $conexion->query("
+    $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_cuenta_ahorros (
             id                   CHAR(36) NOT NULL PRIMARY KEY,
             ficha_id             CHAR(36) NOT NULL,
@@ -142,7 +178,7 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
-    $conexion->query("
+    $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_inversiones (
             id                   CHAR(36) NOT NULL PRIMARY KEY,
             ficha_id             CHAR(36) NOT NULL,
@@ -176,7 +212,7 @@ $lng_val   = is_numeric($lng) ? (float)$lng : null;
 
 // ── Insertar ficha_producto ───────────────────────────────────
 try {
-    $st = $conexion->prepare("
+    $st = $conn->prepare("
         INSERT INTO ficha_producto
             (id, usuario_id, asesor_id, producto_tipo, cliente_cedula, cliente_nombre,
              latitud, longitud, hora_gps)
@@ -200,61 +236,87 @@ try {
     switch ($producto_tipo) {
 
         case 'credito':
-            // Todos los valores se pasan como string (MySQL hace el cast a TINYINT/INT)
-            $req  = s('requiere_credito') ?: null;
-            $ctl  = s('dest_capital_trabajo');   $adf  = s('dest_activos_fijos');
-            $pdeu = s('dest_pago_deudas');        $cons = s('dest_consolidacion');
-            $veh  = s('dest_vehiculo');           $viv  = s('dest_vivienda_compra');
-            $arr  = s('dest_arreglos_vivienda');  $edu  = s('dest_educacion');
-            $via  = s('dest_viajes');             $otr  = s('dest_otros');
-            $odet = s('dest_otros_detalle') ?: null;
-            $mto  = s('monto_credito') ?: null;   $plz  = s('plazo_credito_meses') ?: null;
-            $snm  = s('solicitante_nombre') ?: null; $scd = s('solicitante_cedula') ?: null;
-            $gnm  = s('garante_nombre') ?: null;     $gcd = s('garante_cedula') ?: null;
-            $vlv  = s('venta_lv') ?: null;        $vsb = s('venta_sabado') ?: null;  $vdm = s('venta_domingo') ?: null;
-            $mav  = s('mes_alta_venta') ?: null;  $mbv = s('mes_baja_venta') ?: null;
-            $clv  = s('compra_lv') ?: null;       $csb = s('compra_sabado') ?: null; $cdm = s('compra_domingo') ?: null;
-            $mac  = s('mes_alta_compra') ?: null;
-            $dlv  = s('dias_atencion_lv');  $dsb = s('dias_atencion_sab'); $ddm = s('dias_atencion_dom');
-            $dc   = s('doc_cedula');        $dpl = s('doc_planilla');      $drr = s('doc_ruc_rise');
-            $des  = s('doc_estados_cuenta'); $ddec = s('doc_declaraciones'); $dmat = s('doc_matricula'); $dfot = s('doc_foto_negocio');
+            // ── Leer todos los campos ────────────────────────────────
+            $req   = s('requiere_credito') ?: null;
+            // Destino único
+            $dest  = s('destino_credito') ?: null;
+            $odet  = s('dest_otros_detalle') ?: null;
+            $mto   = s('monto_credito') ?: null;
+            $plz   = s('plazo_credito_meses') ?: null;
+            // Solicitante
+            $snm   = s('solicitante_nombre')          ?: null;
+            $scd   = s('solicitante_cedula')           ?: null;
+            $scel  = s('solicitante_celular')          ?: null;
+            $sec   = s('solicitante_estado_civil')     ?: null;
+            $scnm  = s('solicitante_conyuge_nombre')   ?: null;
+            $sccd  = s('solicitante_conyuge_cedula')   ?: null;
+            $sccel = s('solicitante_conyuge_celular')  ?: null;
+            // Garante
+            $gnm   = s('garante_nombre')               ?: null;
+            $gcd   = s('garante_cedula')               ?: null;
+            $gcel  = s('garante_celular')              ?: null;
+            $gec   = s('garante_estado_civil')         ?: null;
+            $gcnm  = s('garante_conyuge_nombre')       ?: null;
+            $gccd  = s('garante_conyuge_cedula')       ?: null;
+            $gccel = s('garante_conyuge_celular')      ?: null;
+            // Dirección y empresa
+            $dsite = s('direccion_sitio')              ?: null;
+            $tiemp = s('tiene_empresa')                ?: null;
+            // Levantamiento
+            $vlv   = s('venta_lv')      ?: null;  $vsb  = s('venta_sabado')   ?: null;  $vdm  = s('venta_domingo')  ?: null;
+            $mav   = s('mes_alta_venta') ?: null; $mbv  = s('mes_baja_venta') ?: null;
+            $clv   = s('compra_lv')     ?: null;  $csb  = s('compra_sabado')  ?: null;  $cdm  = s('compra_domingo') ?: null;
+            $mac   = s('mes_alta_compra') ?: null;
+            $dlv   = s('dias_atencion_lv');  $dsb = s('dias_atencion_sab'); $ddm = s('dias_atencion_dom');
+            // Documentos
+            $dc    = s('doc_cedula');         $dpl  = s('doc_planilla');       $drr  = s('doc_ruc_rise');
+            $des   = s('doc_estados_cuenta'); $ddec = s('doc_declaraciones');  $dmat = s('doc_matricula');
+            $dfot  = s('doc_foto_negocio');   $dsc  = s('doc_solicitud_credito'); $dfc = s('doc_foto_cliente');
 
-            // 39 parámetros — 39 's'
-            $st = $conexion->prepare("
+            // 43 parámetros
+            $st = $conn->prepare("
                 INSERT INTO ficha_credito (
                     id, ficha_id,
                     requiere_credito,
-                    dest_capital_trabajo, dest_activos_fijos, dest_pago_deudas,
-                    dest_consolidacion, dest_vehiculo, dest_vivienda_compra,
-                    dest_arreglos_vivienda, dest_educacion, dest_viajes,
-                    dest_otros, dest_otros_detalle,
+                    destino_credito, dest_otros_detalle,
                     monto_credito, plazo_credito_meses,
-                    solicitante_nombre, solicitante_cedula,
-                    garante_nombre, garante_cedula,
+                    solicitante_nombre, solicitante_cedula, solicitante_celular,
+                    solicitante_estado_civil,
+                    solicitante_conyuge_nombre, solicitante_conyuge_cedula, solicitante_conyuge_celular,
+                    garante_nombre, garante_cedula, garante_celular,
+                    garante_estado_civil,
+                    garante_conyuge_nombre, garante_conyuge_cedula, garante_conyuge_celular,
+                    direccion_sitio, tiene_empresa,
                     venta_lv, venta_sabado, venta_domingo,
                     mes_alta_venta, mes_baja_venta,
                     compra_lv, compra_sabado, compra_domingo,
                     mes_alta_compra,
                     dias_atencion_lv, dias_atencion_sab, dias_atencion_dom,
                     doc_cedula, doc_planilla, doc_ruc_rise,
-                    doc_estados_cuenta, doc_declaraciones,
-                    doc_matricula, doc_foto_negocio
+                    doc_estados_cuenta, doc_declaraciones, doc_matricula,
+                    doc_foto_negocio, doc_solicitud_credito, doc_foto_cliente
                 ) VALUES (
-                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
-                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+                    ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
                 )
             ");
+            if (!$st) {
+                respond('error', '[ficha_credito] prepare: ' . $conn->error);
+            }
             $st->bind_param(
-                'sssssssssssssssssssssssssssssssssssssss', // 39 s
+                'sssssssssssssssssssssssssssssssssssssssssss', // 43 s
                 $detalle_id, $ficha_id,
                 $req,
-                $ctl, $adf, $pdeu, $cons, $veh, $viv, $arr, $edu, $via, $otr,
-                $odet, $mto, $plz,
-                $snm, $scd, $gnm, $gcd,
+                $dest, $odet,
+                $mto, $plz,
+                $snm, $scd, $scel, $sec, $scnm, $sccd, $sccel,
+                $gnm, $gcd, $gcel, $gec, $gcnm, $gccd, $gccel,
+                $dsite, $tiemp,
                 $vlv, $vsb, $vdm, $mav, $mbv,
                 $clv, $csb, $cdm, $mac,
                 $dlv, $dsb, $ddm,
-                $dc, $dpl, $drr, $des, $ddec, $dmat, $dfot
+                $dc, $dpl, $drr, $des, $ddec, $dmat,
+                $dfot, $dsc, $dfc
             );
             $st->execute();
             $st->close();
@@ -270,7 +332,7 @@ try {
             $ing  = s('ingreso_mensual') ?: null;
             $obs  = s('observaciones') ?: null;
 
-            $st = $conexion->prepare("
+            $st = $conn->prepare("
                 INSERT INTO ficha_cuenta_corriente
                     (id, ficha_id, tipo_cc, proposito, monto_deposito_prom,
                      usa_cheques, requiere_td, ingreso_mensual, tiene_nomina, observaciones)
@@ -293,7 +355,7 @@ try {
             $inst = s('institucion_ahorro') ?: null;
             $obs  = s('observaciones') ?: null;
 
-            $st = $conexion->prepare("
+            $st = $conn->prepare("
                 INSERT INTO ficha_cuenta_ahorros
                     (id, ficha_id, tipo_ahorro, monto_inicial, frecuencia_deposito,
                      objetivo_ahorro, tiene_ahorro_otra, institucion_ahorro, observaciones)
@@ -316,7 +378,7 @@ try {
             $obj      = s('objetivo_inversion') ?: null;
             $obs      = s('observaciones') ?: null;
 
-            $st = $conexion->prepare("
+            $st = $conn->prepare("
                 INSERT INTO ficha_inversiones
                     (id, ficha_id, tipo_inversion, monto_inversion, plazo_meses,
                      objetivo_inversion, tiene_inv_otra, renovacion_auto, observaciones)
@@ -332,7 +394,7 @@ try {
     }
 } catch (\Throwable $e) {
     // Limpiar ficha huérfana
-    $conexion->query("DELETE FROM ficha_producto WHERE id = '$ficha_id'");
+    $conn->query("DELETE FROM ficha_producto WHERE id = '$ficha_id'");
     respond('error', '[detalle] ' . $e->getMessage());
 }
 

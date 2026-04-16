@@ -97,7 +97,7 @@ try {
               inicio_lat, inicio_lng, inicio_at, color_hex)
              VALUES (?, ?, ?, ?, \'activo\', ?, ?, NOW(), ?)'
         );
-        $stNew->bind_param('ssissdds', $nuevo_id, $asesor_id, $nuevo_num, $tarea_id, $lat, $lng, $color);
+        $stNew->bind_param('ssisdds', $nuevo_id, $asesor_id, $nuevo_num, $tarea_id, $lat, $lng, $color);
         $stNew->execute();
         $stNew->close();
         $nuevo_segmento_id = $nuevo_id;

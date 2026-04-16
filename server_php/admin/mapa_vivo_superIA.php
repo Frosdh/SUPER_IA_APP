@@ -398,7 +398,11 @@ $totalPendientes    = 0;
         .cliente-item:hover { background:#f3f4f6; border-color:#d1d5db; }
         .cliente-item.disabled { cursor:not-allowed; opacity:.65; }
         .cliente-item.disabled:hover { background:#f9fafb; border-color:#e5e7eb; }
-        .cliente-name { font-weight:800; color:#111827; font-size:12.5px; margin-bottom:3px; }
+        .cliente-item.activo {
+            background:#fefce8 !important; border-color:#f4c400 !important;
+            box-shadow:0 0 0 2px rgba(244,196,0,.4);
+        }
+        .cliente-name { font-weight:800; color:#111827; font-size:12.5px; margin-bottom:3px; display:flex; align-items:center; }
         .cliente-meta { color:#6b7280; font-size:11px; }
 
         /* Marcador tarea completada */
@@ -482,12 +486,9 @@ $totalPendientes    = 0;
         <div class="map-container">
             <div id="map"></div>
 
-            <!-- Leyenda de rutas (dentro del contenedor del mapa) -->
-            <div class="leyenda-rutas" id="leyenda-rutas" style="display:none;">
-                <h6><i class="fas fa-route me-1" style="color:#3B82F6;"></i>Rutas de Hoy</h6>
-                <div id="leyenda-items">
-                    <small style="color:#9CA3AF;">Sin rutas registradas aún</small>
-                </div>
+            <!-- Leyenda oculta (solo usada internamente, no se muestra) -->
+            <div id="leyenda-rutas" style="display:none;">
+                <h6></h6><div id="leyenda-items"></div>
             </div>
 
             <!-- Clientes encuestados (por asesor + fecha) -->
@@ -957,8 +958,117 @@ function renderPanel(asesores) {
 let lastSeenMarker   = null; // última ubicación para asesores offline
 let selectedAsesorId = null;
 let clienteMarker    = null; // marcador al hacer click en un cliente encuestado
+let tramoLayer       = null; // polilínea GPS del tramo hacia el cliente seleccionado
 
-function renderClientes(clientes, fecha) {
+// ══════════════════════════════════════════════════════════
+//  aislarSegmento / restaurarTodaRuta
+//  Click en un cliente → resalta solo su tramo de trayectoria
+// ══════════════════════════════════════════════════════════
+let segmentoAislado = null;
+
+function aislarSegmento(segId) {
+    segmentoAislado = segId;
+
+    Object.entries(rutaLayers).forEach(([id, layer]) => {
+        if (!layer.polyline) return;
+        if (id === segId) {
+            // Segmento seleccionado: resaltado
+            layer.polyline.setStyle({ opacity: 1, weight: 6 });
+            layer.markers.forEach(m => { try { m.setOpacity(1); } catch(e){} });
+        } else {
+            // Resto: muy tenue
+            layer.polyline.setStyle({ opacity: 0.1, weight: 2 });
+            layer.markers.forEach(m => { try { m.setOpacity(0.15); } catch(e){} });
+        }
+    });
+
+    // Encuadrar el mapa al segmento seleccionado
+    const poly = rutaLayers[segId]?.polyline;
+    if (poly) {
+        try {
+            const bounds = poly.getBounds();
+            if (bounds.isValid()) map.fitBounds(bounds, { padding:[60,60], maxZoom:17 });
+        } catch(e){}
+    }
+
+    // Mostrar botón "Ver toda la ruta"
+    const btn = document.getElementById('btn-ver-toda-ruta');
+    if (btn) btn.style.display = 'block';
+}
+
+function restaurarTodaRuta() {
+    segmentoAislado = null;
+
+    Object.values(rutaLayers).forEach(layer => {
+        if (!layer.polyline) return;
+        layer.polyline.setStyle({ opacity: 0.85, weight: 4 });
+        layer.markers.forEach(m => { try { m.setOpacity(1); } catch(e){} });
+    });
+
+    // Ocultar botón
+    const btn = document.getElementById('btn-ver-toda-ruta');
+    if (btn) btn.style.display = 'none';
+
+    // Deseleccionar cliente en la lista
+    document.querySelectorAll('.cliente-item.activo').forEach(el => el.classList.remove('activo'));
+
+    // Quitar marcador de cliente y tramo GPS si existen
+    if (clienteMarker) { map.removeLayer(clienteMarker); clienteMarker = null; }
+    if (tramoLayer)    { map.removeLayer(tramoLayer);    tramoLayer    = null; }
+
+    // Re-encuadrar para mostrar toda la ruta
+    const allPts = Object.values(rutaLayers).flatMap(l => {
+        try { return l.polyline.getLatLngs().flat().map(ll => [ll.lat, ll.lng]); } catch(e){ return []; }
+    });
+    if (allPts.length > 1) {
+        try { map.fitBounds(allPts, { padding:[60,60], maxZoom:16 }); } catch(e){}
+    }
+}
+
+// ── Dibuja la trayectoria GPS entre dos datetimes ─────────
+function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
+    // Eliminar tramo anterior
+    if (tramoLayer) { map.removeLayer(tramoLayer); tramoLayer = null; }
+
+    const qs = new URLSearchParams({ asesor_id: asesorId, desde, hasta });
+    fetch(`api_tramo_gps.php?${qs.toString()}`, { cache: 'no-store' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status !== 'ok') return;
+
+            const puntos = data.puntos || [];
+
+            if (puntos.length >= 2) {
+                // Dibujar línea GPS real
+                const latlngs = puntos.map(p => [p.lat, p.lng]);
+                tramoLayer = L.polyline(latlngs, {
+                    color: '#2563EB',
+                    weight: 5,
+                    opacity: 0.92,
+                    lineJoin: 'round',
+                    lineCap: 'round',
+                }).addTo(map);
+
+                // Ajustar vista al tramo + cliente
+                const bounds = L.latLngBounds(latlngs);
+                bounds.extend([lat, lng]);
+                map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+            } else {
+                // Sin puntos GPS suficientes: volar al cliente
+                map.flyTo([lat, lng], 16, { duration: 1.2 });
+            }
+
+            // Mostrar popup del cliente encima
+            setTimeout(() => clienteMarker?.openPopup(), 600);
+        })
+        .catch(err => {
+            console.warn('[tramo_gps]', err);
+            map.flyTo([lat, lng], 16, { duration: 1.2 });
+            setTimeout(() => clienteMarker?.openPopup(), 1300);
+        });
+}
+
+function renderClientes(clientes, fecha, sessionStart, asesorId) {
     const box  = document.getElementById('box-clientes');
     const list = document.getElementById('clientes-items');
     if (!box || !list) return;
@@ -976,44 +1086,86 @@ function renderClientes(clientes, fecha) {
         return;
     }
 
-    list.innerHTML = clientes.map((c) => {
-        const nombre  = escapeHtml(c.cliente_nombre || 'Cliente');
-        const hora    = escapeHtml(c.hora || '');
-        const tipo    = escapeHtml((c.tipo_tarea || '').replace('_', ' '));
-        const tareaId = escapeHtml(c.tarea_id || '');
-        const hasLoc  = c.latitud !== null && c.longitud !== null && isFinite(c.latitud) && isFinite(c.longitud);
+    // Construir array de datetimes en orden cronológico:
+    // [session_start, fechaHora_cliente_1, fechaHora_cliente_2, ...]
+    // Clientes ya llegan en orden ASC de hora
+    const datetimes = [sessionStart || (fecha + ' 00:00:00')];
+    clientes.forEach(c => datetimes.push(c.fecha_hora || (c.fecha + ' ' + (c.hora || '23:59:59'))));
+
+    // Botón para restaurar toda la ruta después de aislar un segmento
+    const btnReset = `<button id="btn-ver-toda-ruta"
+        onclick="restaurarTodaRuta()"
+        style="display:none;width:100%;margin-bottom:8px;padding:7px 10px;
+               background:linear-gradient(135deg,#f4c400,#ffdd00);color:#0a2748;
+               border:none;border-radius:9px;font-size:12px;font-weight:800;
+               cursor:pointer;text-align:center;">
+        <i class="fas fa-expand-arrows-alt me-1"></i> Ver toda la ruta
+    </button>`;
+
+    list.innerHTML = btnReset + clientes.map((c, idx) => {
+        const nombre    = escapeHtml(c.cliente_nombre || 'Cliente');
+        const hora      = escapeHtml(c.hora || '');
+        const tipo      = escapeHtml((c.tipo_tarea || '').replace('_', ' '));
+        const tareaId   = escapeHtml(c.tarea_id || '');
+        const fechaHora = c.fecha_hora || '';
+        const hasLoc    = c.latitud !== null && c.longitud !== null
+                          && isFinite(Number(c.latitud)) && isFinite(Number(c.longitud));
+        const num       = idx + 1;
 
         return `<div class="cliente-item ${hasLoc ? '' : 'disabled'}"
                     data-lat="${hasLoc ? c.latitud : ''}"
                     data-lng="${hasLoc ? c.longitud : ''}"
                     data-tarea="${tareaId}"
-                    data-nombre="${nombre}">
-            <div class="cliente-name">${nombre}</div>
-            <div class="cliente-meta"><i class="fas fa-clock"></i> ${hora || '--:--'} ${tipo ? '· ' + tipo : ''}</div>
+                    data-nombre="${nombre}"
+                    data-idx="${idx}"
+                    data-fecha-hora="${escapeHtml(fechaHora)}">
+            <div class="cliente-name">
+                <span style="display:inline-flex;align-items:center;justify-content:center;
+                      width:18px;height:18px;border-radius:50%;background:#0a2748;
+                      color:#ffdd00;font-size:10px;font-weight:800;margin-right:6px;flex-shrink:0;">
+                    ${num}
+                </span>
+                ${nombre}
+            </div>
+            <div class="cliente-meta">
+                <i class="fas fa-clock"></i> ${hora || '--:--'}
+                ${tipo ? ' · ' + tipo : ''}
+                ${hasLoc ? '' : ' <span style="color:#EF4444;">· Sin GPS</span>'}
+            </div>
         </div>`;
     }).join('');
 
-    list.querySelectorAll('.cliente-item').forEach(el => {
-        if (el.classList.contains('disabled')) return;
+    list.querySelectorAll('.cliente-item:not(.disabled)').forEach(el => {
         el.addEventListener('click', () => {
-            const lat = parseFloat(el.getAttribute('data-lat'));
-            const lng = parseFloat(el.getAttribute('data-lng'));
-            const nombre = el.getAttribute('data-nombre') || 'Cliente';
+            const lat     = parseFloat(el.getAttribute('data-lat'));
+            const lng     = parseFloat(el.getAttribute('data-lng'));
+            const nombre  = el.getAttribute('data-nombre') || 'Cliente';
             const tareaId = el.getAttribute('data-tarea') || '';
+            const idx     = parseInt(el.getAttribute('data-idx'), 10);
             if (!isFinite(lat) || !isFinite(lng)) return;
 
-            // Quitar marcador previo
-            if (clienteMarker) { map.removeLayer(clienteMarker); clienteMarker = null; }
+            // Resaltar item seleccionado
+            list.querySelectorAll('.cliente-item').forEach(e => e.classList.remove('activo'));
+            el.classList.add('activo');
 
+            // Mostrar botón de resetear
+            const btnR = document.getElementById('btn-ver-toda-ruta');
+            if (btnR) btnR.style.display = 'block';
+
+            // Quitar marcador y tramo previo
+            if (clienteMarker) { map.removeLayer(clienteMarker); clienteMarker = null; }
+            if (tramoLayer)    { map.removeLayer(tramoLayer);    tramoLayer    = null; }
+
+            // Pin en la ubicación del cliente encuestado
             const icon = L.divIcon({
-                html: `<div style="width:36px;height:36px;border-radius:50%;
+                html: `<div style="width:38px;height:38px;border-radius:50%;
                              display:flex;align-items:center;justify-content:center;
-                             background:linear-gradient(135deg,#0EA5E9,#3B82F6);
-                             border:3px solid #fff;color:#fff;font-size:16px;
-                             box-shadow:0 4px 14px rgba(59,130,246,.35);">
-                           <i class="fas fa-flag"></i>
+                             background:linear-gradient(135deg,#f4c400,#ffdd00);
+                             border:3px solid #fff;color:#0a2748;font-size:16px;
+                             box-shadow:0 4px 14px rgba(244,196,0,.5);">
+                           <i class="fas fa-flag-checkered"></i>
                        </div>`,
-                iconSize:[36,36], iconAnchor:[18,18], popupAnchor:[0,-18],
+                iconSize:[38,38], iconAnchor:[19,19], popupAnchor:[0,-20],
                 className:'advisor-marker'
             });
 
@@ -1021,19 +1173,35 @@ function renderClientes(clientes, fecha) {
                 .addTo(map)
                 .bindPopup(`<div class="advisor-popup">
                     <div class="popup-name"><i class="fas fa-user me-1"></i>${escapeHtml(nombre)}</div>
-                    <div class="popup-row"><i class="fas fa-location-dot me-1" style="color:#10B981;"></i>${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+                    <div class="popup-row"><i class="fas fa-location-dot me-1" style="color:#10B981;"></i>
+                        ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
                 </div>`);
 
-            map.flyTo([lat, lng], 16, { duration: 1.1 });
-            setTimeout(() => clienteMarker?.openPopup(), 1200);
+            // Determinar rango de tiempo para la trayectoria:
+            // desde = datetime del punto anterior (session_start o cliente anterior)
+            // hasta = datetime de este cliente
+            const curAsesorId = asesorId || selectedAsesorId;
+            const desde = datetimes[idx];       // datetimes[0]=session_start, datetimes[1]=cliente_0, etc.
+            const hasta = datetimes[idx + 1];   // datetime de este cliente (idx+1 porque datetimes[0]=session_start)
 
-            const segId = tareaId ? segmentoPorTareaId[String(tareaId)] : null;
-            const poly  = segId && rutaLayers[segId] ? rutaLayers[segId].polyline : null;
-            if (poly) {
-                try {
-                    map.fitBounds(poly.getBounds(), { padding: [60, 60], maxZoom: 16 });
-                    poly.openPopup();
-                } catch (e) {}
+            if (curAsesorId && desde && hasta) {
+                // Intentar primero con segmento de ruta existente
+                const segId = tareaId ? segmentoPorTareaId[String(tareaId)] : null;
+                if (segId && rutaLayers[segId] && rutaLayers[segId].polyline) {
+                    // Hay segmento en memoria: resaltarlo
+                    aislarSegmento(segId);
+                    setTimeout(() => clienteMarker?.openPopup(), 400);
+                } else {
+                    // Oscurecer rutas existentes y dibujar tramo GPS directo
+                    Object.values(rutaLayers).forEach(layer => {
+                        if (layer.polyline) layer.polyline.setStyle({ opacity: 0.12, weight: 2 });
+                    });
+                    dibujarTramoGps(curAsesorId, desde, hasta, lat, lng, nombre);
+                }
+            } else {
+                // Sin datos suficientes: volar al punto
+                map.flyTo([lat, lng], 16, { duration: 1.1 });
+                setTimeout(() => clienteMarker?.openPopup(), 1200);
             }
         });
     });
@@ -1052,7 +1220,12 @@ function cargarClientes(asesorId, fecha) {
         .then(r => r.json())
         .then(data => {
             if (data.status === 'ok') {
-                renderClientes(data.clientes || [], data.fecha || fecha);
+                renderClientes(
+                    data.clientes     || [],
+                    data.fecha        || fecha,
+                    data.session_start || null,
+                    asesorId
+                );
             } else {
                 throw new Error(data.message || 'Error');
             }
@@ -1079,6 +1252,13 @@ function hexToRgba(hex, alpha) {
 //  renderRutas — dibuja segmentos en el mapa + leyenda
 // ══════════════════════════════════════════════════════════
 function renderRutas(segmentos) {
+    // Reset de aislamiento previo
+    segmentoAislado = null;
+    const btnReset = document.getElementById('btn-ver-toda-ruta');
+    if (btnReset) btnReset.style.display = 'none';
+    if (clienteMarker) { map.removeLayer(clienteMarker); clienteMarker = null; }
+    if (tramoLayer)    { map.removeLayer(tramoLayer);    tramoLayer    = null; }
+
     rutaGroup.clearLayers();
     Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
     Object.keys(segmentoPorTareaId).forEach(k => delete segmentoPorTareaId[k]);
@@ -1087,11 +1267,8 @@ function renderRutas(segmentos) {
     const leyendaBox = document.getElementById('leyenda-rutas');
     const leyendaItems = {};
 
-    if (!segmentos || segmentos.length === 0) {
-        if (leyendaBox) leyendaBox.style.display = 'none';
-        return;
-    }
-    if (leyendaBox) leyendaBox.style.display = 'block';
+    if (!segmentos || segmentos.length === 0) return;
+    // Nota: leyendaBox se mantiene siempre oculto; solo se usa como mapa interno
 
     segmentos.forEach(seg => {
         const color  = seg.color || '#3B82F6';
@@ -1206,19 +1383,18 @@ function renderRutas(segmentos) {
 
 // ════════════════════════════════════════════════════════════
 //  cargarRutaYClientes
-//  Sin fecha seleccionada → muestra SÓLO el último segmento
-//  Con fecha seleccionada → muestra TODOS los segmentos del día
+//  Siempre muestra TODOS los segmentos del día seleccionado
+//  (o del día más reciente si no hay fecha en el picker).
+//  La leyenda flotante NO se muestra; las rutas se dibujan en el mapa.
 // ════════════════════════════════════════════════════════════
 function cargarRutaYClientes(asesorId) {
     const fechaSel = getSelectedFecha();
-    const esBusqueda = !!fechaSel; // ¿viene de buscar por fecha?
 
-    // Limpiar rutas anteriores
+    // Limpiar rutas anteriores y tramo GPS previo
     rutaGroup.clearLayers();
     Object.keys(rutaLayers).forEach(k => delete rutaLayers[k]);
     Object.keys(segmentoPorTareaId).forEach(k => delete segmentoPorTareaId[k]);
-    const leyendaBox = document.getElementById('leyenda-rutas');
-    if (leyendaBox) leyendaBox.style.display = 'none';
+    if (tramoLayer) { map.removeLayer(tramoLayer); tramoLayer = null; }
 
     // Mostrar loader en el box de clientes
     const box  = document.getElementById('box-clientes');
@@ -1226,14 +1402,10 @@ function cargarRutaYClientes(asesorId) {
     if (box)  box.style.display = 'block';
     if (list) list.innerHTML = '<small style="color:#9CA3AF;">Cargando clientes…</small>';
 
-    // Parámetros: sin fecha → solo_ultimo=1; con fecha → solo_ultimo=0 (todos los segmentos)
-    const qs = new URLSearchParams({ asesor_id: asesorId });
-    if (fechaSel) {
-        qs.set('fecha', fechaSel);
-        qs.set('solo_ultimo', '0'); // búsqueda por fecha → todos los segmentos
-    } else {
-        qs.set('solo_ultimo', '1'); // sin fecha → solo el último segmento
-    }
+    // Siempre carga TODOS los segmentos del día (solo_ultimo=0)
+    // Si hay fecha seleccionada en el picker la usa; si no, la API busca el día más reciente
+    const qs = new URLSearchParams({ asesor_id: asesorId, solo_ultimo: '0' });
+    if (fechaSel) qs.set('fecha', fechaSel);
 
     fetch(`api_ultima_ruta.php?${qs.toString()}`, { cache: 'no-store' })
         .then(r => r.json())
@@ -1241,15 +1413,7 @@ function cargarRutaYClientes(asesorId) {
             if (data.status === 'ok' && data.segmentos?.length > 0) {
                 renderRutas(data.segmentos);
 
-                // Actualizar título de la leyenda
-                const h6 = leyendaBox?.querySelector('h6');
-                if (h6) {
-                    const fechaStr = formatFechaES(data.fecha);
-                    const modoStr  = esBusqueda ? 'Rutas del día' : 'Última ruta';
-                    h6.innerHTML = `<i class="fas fa-route me-1" style="color:#3B82F6;"></i>${modoStr}${fechaStr ? ' · ' + fechaStr : ''}`;
-                }
-
-                // Ajustar la vista del mapa para ver la ruta
+                // Ajustar vista del mapa para encuadrar todas las rutas del día
                 const puntos = data.segmentos.flatMap(s => (s.puntos || []).map(p => [p.lat, p.lng]));
                 if (puntos.length > 1) {
                     try { map.fitBounds(puntos, { padding:[60,60], maxZoom:16 }); } catch(e){}
@@ -1257,14 +1421,11 @@ function cargarRutaYClientes(asesorId) {
                     map.setView(puntos[0], 15);
                 }
             } else {
-                // Sin rutas para esta fecha/asesor
-                const h6 = leyendaBox?.querySelector('h6');
-                if (h6) h6.innerHTML = `<i class="fas fa-route me-1" style="color:#9CA3AF;"></i>Sin rutas registradas`;
-                if (list) list.innerHTML = '<small style="color:#9CA3AF;">Sin encuestas en esta fecha</small>';
+                if (list) list.innerHTML = '<small style="color:#9CA3AF;">Sin rutas ni encuestas en esta fecha</small>';
             }
 
-            // Cargar también los clientes encuestados del día
-            const fechaParaClientes = fechaSel || data.fecha || null;
+            // Cargar clientes encuestados del día (usa la fecha que devolvió la API)
+            const fechaParaClientes = data.fecha || fechaSel || null;
             if (fechaParaClientes) {
                 cargarClientes(asesorId, fechaParaClientes);
             } else {
@@ -1292,6 +1453,7 @@ function verAsesor(asesorId, lat, lng, hasLoc) {
     if (lastSeenMarker)  { map.removeLayer(lastSeenMarker);  lastSeenMarker  = null; }
     if (lastSeenMarker2) { map.removeLayer(lastSeenMarker2); lastSeenMarker2 = null; }
     if (clienteMarker)   { map.removeLayer(clienteMarker);   clienteMarker   = null; }
+    if (tramoLayer)      { map.removeLayer(tramoLayer);      tramoLayer      = null; }
 
     // Centrar mapa
     if (hasLoc && lat !== null && lng !== null && isFinite(lat) && isFinite(lng)) {
@@ -1325,7 +1487,7 @@ function verAsesor(asesorId, lat, lng, hasLoc) {
         }
     }
 
-    // Cargar ruta + clientes
+    // Cargar todas las rutas del día + clientes
     cargarRutaYClientes(asesorId);
 }
 
@@ -1407,7 +1569,7 @@ document.getElementById('buscar-fecha-btn')?.addEventListener('click', () => {
     cargarResumenEncuestas(); // actualiza contadores del panel
 
     if (selectedAsesorId) {
-        cargarRutaYClientes(selectedAsesorId); // recarga ruta + clientes para la fecha
+        cargarRutaYClientes(selectedAsesorId);
     }
 });
 

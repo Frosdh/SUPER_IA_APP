@@ -78,25 +78,36 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
 
   // ── CRÉDITO ─────────────────────────────────────────────────
   bool? _requiereCredito;
-  // Destinos crédito
-  bool _destCapTrabajo   = false;
-  bool _destActivosFijos = false;
-  bool _destPagoDeudas   = false;
-  bool _destConsolidacion= false;
-  bool _destVehiculo     = false;
-  bool _destViviendaComp = false;
-  bool _destArreglos     = false;
-  bool _destEducacion    = false;
-  bool _destViajes       = false;
-  bool _destOtros        = false;
+  // Destino crédito (single-select)
+  String? _destinoCredito;
   final _destOtrosCtrl   = TextEditingController();
   final _montoCredCtrl   = TextEditingController();
   final _plazoCredCtrl   = TextEditingController();
-  // Solicitante / garante
-  final _solNombreCtrl   = TextEditingController();
-  final _solCedulaCtrl   = TextEditingController();
-  final _garNombreCtrl   = TextEditingController();
-  final _garCedulaCtrl   = TextEditingController();
+
+  // Solicitante
+  final _solNombreCtrl          = TextEditingController();
+  final _solCedulaCtrl          = TextEditingController();
+  final _solCelularCtrl         = TextEditingController();
+  String? _solEstadoCivil;       // 'soltero'|'casado'|'divorciado'|'viudo'|'union_libre'
+  final _solConyugeNombreCtrl   = TextEditingController();
+  final _solConyugeCedulaCtrl   = TextEditingController();
+  final _solConyugeCelularCtrl  = TextEditingController();
+
+  // Garante
+  final _garNombreCtrl          = TextEditingController();
+  final _garCedulaCtrl          = TextEditingController();
+  final _garCelularCtrl         = TextEditingController();
+  String? _garEstadoCivil;       // 'soltero'|'casado'|'divorciado'|'viudo'|'union_libre'
+  final _garConyugeNombreCtrl   = TextEditingController();
+  final _garConyugeCedulaCtrl   = TextEditingController();
+  final _garConyugeCelularCtrl  = TextEditingController();
+
+  // Dirección levantada en sitio
+  final _direccionSitioCtrl     = TextEditingController();
+
+  // ¿Tiene empresa/negocio? → controla si se muestra Levantamiento
+  bool? _tieneEmpresa;
+
   // Levantamiento campo — ventas
   final _ventaLvCtrl     = TextEditingController();
   final _ventaSabCtrl    = TextEditingController();
@@ -112,14 +123,16 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   bool _diaLv  = false;
   bool _diaSab = false;
   bool _diaDom = false;
-  // Checklist documentos
-  bool _docCedula     = false;
-  bool _docPlanilla   = false;
-  bool _docRucRise    = false;
-  bool _docEstados    = false;
+  // Checklist documentos recibidos
+  bool _docCedula        = false;
+  bool _docPlanilla      = false;
+  bool _docRucRise       = false;
+  bool _docEstados       = false;
   bool _docDeclaraciones = false;
-  bool _docMatricula  = false;
-  bool _docFotoNegocio= false;
+  bool _docMatricula     = false;
+  bool _docFotoNegocio   = false;
+  bool _docSolicitudCred = false;
+  bool _docFotoCliente   = false;
 
   // ── CUENTA CORRIENTE ────────────────────────────────────────
   String? _tipoCC;  // 'personal' | 'empresarial'
@@ -162,8 +175,17 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     _plazoCredCtrl.dispose();
     _solNombreCtrl.dispose();
     _solCedulaCtrl.dispose();
+    _solCelularCtrl.dispose();
+    _solConyugeNombreCtrl.dispose();
+    _solConyugeCedulaCtrl.dispose();
+    _solConyugeCelularCtrl.dispose();
     _garNombreCtrl.dispose();
     _garCedulaCtrl.dispose();
+    _garCelularCtrl.dispose();
+    _garConyugeNombreCtrl.dispose();
+    _garConyugeCedulaCtrl.dispose();
+    _garConyugeCelularCtrl.dispose();
+    _direccionSitioCtrl.dispose();
     _ventaLvCtrl.dispose();
     _ventaSabCtrl.dispose();
     _ventaDomCtrl.dispose();
@@ -264,42 +286,52 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
 
   Map<String, String> _bodyCredito() => {
     'requiere_credito':       _requiereCredito == null ? '' : (_requiereCredito! ? '1' : '0'),
-    'dest_capital_trabajo':   _destCapTrabajo   ? '1' : '0',
-    'dest_activos_fijos':     _destActivosFijos ? '1' : '0',
-    'dest_pago_deudas':       _destPagoDeudas   ? '1' : '0',
-    'dest_consolidacion':     _destConsolidacion? '1' : '0',
-    'dest_vehiculo':          _destVehiculo     ? '1' : '0',
-    'dest_vivienda_compra':   _destViviendaComp ? '1' : '0',
-    'dest_arreglos_vivienda': _destArreglos     ? '1' : '0',
-    'dest_educacion':         _destEducacion    ? '1' : '0',
-    'dest_viajes':            _destViajes       ? '1' : '0',
-    'dest_otros':             _destOtros        ? '1' : '0',
+    'destino_credito':        _destinoCredito ?? '',
     'dest_otros_detalle':     _destOtrosCtrl.text.trim(),
     'monto_credito':          _montoCredCtrl.text.trim(),
     'plazo_credito_meses':    _plazoCredCtrl.text.trim(),
-    'solicitante_nombre':     _solNombreCtrl.text.trim(),
-    'solicitante_cedula':     _solCedulaCtrl.text.trim(),
-    'garante_nombre':         _garNombreCtrl.text.trim(),
-    'garante_cedula':         _garCedulaCtrl.text.trim(),
-    'venta_lv':               _ventaLvCtrl.text.trim(),
-    'venta_sabado':           _ventaSabCtrl.text.trim(),
-    'venta_domingo':          _ventaDomCtrl.text.trim(),
-    'mes_alta_venta':         _mesAltaVenta ?? '',
-    'mes_baja_venta':         _mesBajaVenta ?? '',
-    'compra_lv':              _compraLvCtrl.text.trim(),
-    'compra_sabado':          _compraSabCtrl.text.trim(),
-    'compra_domingo':         _compraDomCtrl.text.trim(),
-    'mes_alta_compra':        _mesAltaCompra ?? '',
-    'dias_atencion_lv':       _diaLv  ? '1' : '0',
-    'dias_atencion_sab':      _diaSab ? '1' : '0',
-    'dias_atencion_dom':      _diaDom ? '1' : '0',
-    'doc_cedula':             _docCedula      ? '1' : '0',
-    'doc_planilla':           _docPlanilla    ? '1' : '0',
-    'doc_ruc_rise':           _docRucRise     ? '1' : '0',
-    'doc_estados_cuenta':     _docEstados     ? '1' : '0',
-    'doc_declaraciones':      _docDeclaraciones ? '1' : '0',
-    'doc_matricula':          _docMatricula   ? '1' : '0',
-    'doc_foto_negocio':       _docFotoNegocio ? '1' : '0',
+    // Solicitante
+    'solicitante_nombre':          _solNombreCtrl.text.trim(),
+    'solicitante_cedula':          _solCedulaCtrl.text.trim(),
+    'solicitante_celular':         _solCelularCtrl.text.trim(),
+    'solicitante_estado_civil':    _solEstadoCivil ?? '',
+    'solicitante_conyuge_nombre':  _solConyugeNombreCtrl.text.trim(),
+    'solicitante_conyuge_cedula':  _solConyugeCedulaCtrl.text.trim(),
+    'solicitante_conyuge_celular': _solConyugeCelularCtrl.text.trim(),
+    // Garante
+    'garante_nombre':              _garNombreCtrl.text.trim(),
+    'garante_cedula':              _garCedulaCtrl.text.trim(),
+    'garante_celular':             _garCelularCtrl.text.trim(),
+    'garante_estado_civil':        _garEstadoCivil ?? '',
+    'garante_conyuge_nombre':      _garConyugeNombreCtrl.text.trim(),
+    'garante_conyuge_cedula':      _garConyugeCedulaCtrl.text.trim(),
+    'garante_conyuge_celular':     _garConyugeCelularCtrl.text.trim(),
+    // Dirección
+    'direccion_sitio':             _direccionSitioCtrl.text.trim(),
+    // Empresa
+    'tiene_empresa':               _tieneEmpresa == null ? '' : (_tieneEmpresa! ? '1' : '0'),
+    'venta_lv':               _tieneEmpresa == true ? _ventaLvCtrl.text.trim()  : '',
+    'venta_sabado':           _tieneEmpresa == true ? _ventaSabCtrl.text.trim() : '',
+    'venta_domingo':          _tieneEmpresa == true ? _ventaDomCtrl.text.trim() : '',
+    'mes_alta_venta':         _tieneEmpresa == true ? (_mesAltaVenta ?? '') : '',
+    'mes_baja_venta':         _tieneEmpresa == true ? (_mesBajaVenta ?? '') : '',
+    'compra_lv':              _tieneEmpresa == true ? _compraLvCtrl.text.trim()  : '',
+    'compra_sabado':          _tieneEmpresa == true ? _compraSabCtrl.text.trim() : '',
+    'compra_domingo':         _tieneEmpresa == true ? _compraDomCtrl.text.trim() : '',
+    'mes_alta_compra':        _tieneEmpresa == true ? (_mesAltaCompra ?? '') : '',
+    'dias_atencion_lv':       _tieneEmpresa == true ? (_diaLv  ? '1' : '0') : '0',
+    'dias_atencion_sab':      _tieneEmpresa == true ? (_diaSab ? '1' : '0') : '0',
+    'dias_atencion_dom':      _tieneEmpresa == true ? (_diaDom ? '1' : '0') : '0',
+    // Documentos recibidos
+    'doc_cedula':             _docCedula          ? '1' : '0',
+    'doc_planilla':           _docPlanilla        ? '1' : '0',
+    'doc_ruc_rise':           _docRucRise         ? '1' : '0',
+    'doc_estados_cuenta':     _docEstados         ? '1' : '0',
+    'doc_declaraciones':      _docDeclaraciones   ? '1' : '0',
+    'doc_matricula':          _docMatricula       ? '1' : '0',
+    'doc_foto_negocio':       _docFotoNegocio     ? '1' : '0',
+    'doc_solicitud_credito':  _docSolicitudCred   ? '1' : '0',
+    'doc_foto_cliente':       _docFotoCliente     ? '1' : '0',
   };
 
   Map<String, String> _bodyCC() => {
@@ -572,41 +604,8 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
             if (_requiereCredito == true) ...[
               const SizedBox(height: 14),
               _titulo('Destino del crédito'),
-              ...[
-                ('_destCapTrabajo',   'Capital de trabajo',    _destCapTrabajo),
-                ('_destActivosFijos', 'Activos fijos',         _destActivosFijos),
-                ('_destPagoDeudas',   'Pago de deudas',        _destPagoDeudas),
-                ('_destConsolidacion','Consolidación de deudas',_destConsolidacion),
-                ('_destVehiculo',     'Compra de vehículo',    _destVehiculo),
-                ('_destViviendaComp', 'Compra de vivienda',    _destViviendaComp),
-                ('_destArreglos',     'Arreglos de vivienda',  _destArreglos),
-                ('_destEducacion',    'Educación',             _destEducacion),
-                ('_destViajes',       'Viajes',                _destViajes),
-                ('_destOtros',        'Otros',                 _destOtros),
-              ].map((d) {
-                final key   = d.$1;
-                final label = d.$2;
-                final val   = d.$3;
-                return _checkRow(
-                  label: label,
-                  value: val,
-                  onChanged: (v) => setState(() {
-                    switch (key) {
-                      case '_destCapTrabajo':   _destCapTrabajo   = v ?? false; break;
-                      case '_destActivosFijos': _destActivosFijos = v ?? false; break;
-                      case '_destPagoDeudas':   _destPagoDeudas   = v ?? false; break;
-                      case '_destConsolidacion':_destConsolidacion= v ?? false; break;
-                      case '_destVehiculo':     _destVehiculo     = v ?? false; break;
-                      case '_destViviendaComp': _destViviendaComp = v ?? false; break;
-                      case '_destArreglos':     _destArreglos     = v ?? false; break;
-                      case '_destEducacion':    _destEducacion    = v ?? false; break;
-                      case '_destViajes':       _destViajes       = v ?? false; break;
-                      case '_destOtros':        _destOtros        = v ?? false; break;
-                    }
-                  }),
-                );
-              }),
-              if (_destOtros)
+              _destinoChipsGrid(),
+              if (_destinoCredito == 'otros')
                 _campo(
                   controller: _destOtrosCtrl,
                   label: 'Especifique otro destino',
@@ -678,71 +677,180 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           color: const Color(0xFF8B5CF6),
           titulo: 'Datos del Solicitante y Garante',
           children: [
-            _titulo('Solicitante'),
+            // ── Dirección levantada ──────────────────────────
+            _titulo('Dirección levantada en sitio'),
+            _campo(
+              controller: _direccionSitioCtrl,
+              label: 'Dirección del negocio / domicilio',
+              icon: Icons.location_on_rounded,
+              maxLines: 2,
+            ),
+            const Divider(height: 20),
+
+            // ── Solicitante ──────────────────────────────────
+            _titulo('Solicitante (Deudor)'),
+            _campo(controller: _solNombreCtrl, label: 'Nombre completo', icon: Icons.person_rounded),
             Row(children: [
-              Expanded(child: _campo(controller: _solNombreCtrl, label: 'Nombre completo', icon: Icons.person_rounded)),
-              const SizedBox(width: 10),
               Expanded(child: _campo(
                 controller: _solCedulaCtrl,
-                label: 'Cédula',
+                label: 'Cédula de identidad',
                 icon: Icons.badge_rounded,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               )),
-            ]),
-            _titulo('Garante (opcional)'),
-            Row(children: [
-              Expanded(child: _campo(controller: _garNombreCtrl, label: 'Nombre completo', icon: Icons.person_outline_rounded)),
               const SizedBox(width: 10),
               Expanded(child: _campo(
+                controller: _solCelularCtrl,
+                label: 'Celular',
+                icon: Icons.phone_rounded,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              )),
+            ]),
+            _titulo('Estado civil del solicitante'),
+            _chipsOpciones(
+              opciones: const [
+                ('soltero',     'Soltero/a'),
+                ('casado',      'Casado/a'),
+                ('union_libre', 'Unión libre'),
+                ('divorciado',  'Divorciado/a'),
+              ],
+              seleccionado: _solEstadoCivil,
+              onChanged: (v) => setState(() => _solEstadoCivil = v),
+              wrap: true,
+            ),
+            if (_solEstadoCivil == 'casado' || _solEstadoCivil == 'union_libre') ...[
+              const SizedBox(height: 10),
+              _titulo('Cónyuge del solicitante'),
+              _campo(controller: _solConyugeNombreCtrl, label: 'Nombre completo del cónyuge', icon: Icons.person_add_rounded),
+              Row(children: [
+                Expanded(child: _campo(
+                  controller: _solConyugeCedulaCtrl,
+                  label: 'Cédula del cónyuge',
+                  icon: Icons.badge_rounded,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                )),
+                const SizedBox(width: 10),
+                Expanded(child: _campo(
+                  controller: _solConyugeCelularCtrl,
+                  label: 'Celular del cónyuge',
+                  icon: Icons.phone_rounded,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                )),
+              ]),
+            ],
+
+            const Divider(height: 20),
+
+            // ── Garante ──────────────────────────────────────
+            _titulo('Garante (opcional)'),
+            _campo(controller: _garNombreCtrl, label: 'Nombre completo del garante', icon: Icons.person_outline_rounded),
+            Row(children: [
+              Expanded(child: _campo(
                 controller: _garCedulaCtrl,
-                label: 'Cédula',
+                label: 'Cédula de identidad',
                 icon: Icons.badge_outlined,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               )),
+              const SizedBox(width: 10),
+              Expanded(child: _campo(
+                controller: _garCelularCtrl,
+                label: 'Celular',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              )),
             ]),
+            if (true) ...[   // siempre visible para registrar estado civil del garante
+              _titulo('Estado civil del garante'),
+              _chipsOpciones(
+                opciones: const [
+                  ('soltero',     'Soltero/a'),
+                  ('casado',      'Casado/a'),
+                  ('union_libre', 'Unión libre'),
+                  ('divorciado',  'Divorciado/a'),
+                ],
+                seleccionado: _garEstadoCivil,
+                onChanged: (v) => setState(() => _garEstadoCivil = v),
+                wrap: true,
+              ),
+              if (_garEstadoCivil == 'casado' || _garEstadoCivil == 'union_libre') ...[
+                const SizedBox(height: 10),
+                _titulo('Cónyuge del garante'),
+                _campo(controller: _garConyugeNombreCtrl, label: 'Nombre completo del cónyuge', icon: Icons.person_add_alt_rounded),
+                Row(children: [
+                  Expanded(child: _campo(
+                    controller: _garConyugeCedulaCtrl,
+                    label: 'Cédula del cónyuge',
+                    icon: Icons.badge_rounded,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  )),
+                  const SizedBox(width: 10),
+                  Expanded(child: _campo(
+                    controller: _garConyugeCelularCtrl,
+                    label: 'Celular del cónyuge',
+                    icon: Icons.phone_rounded,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  )),
+                ]),
+              ],
+            ],
           ],
         ),
 
-        // ── Levantamiento de campo ──────────────────────────────
+        // ── Empresa / Negocio ──────────────────────────────────
         _tarjetaSeccion(
           icon: Icons.storefront_rounded,
           color: const Color(0xFFF59E0B),
-          titulo: 'Levantamiento de Campo',
+          titulo: 'Información de Empresa / Negocio',
           children: [
-            _titulo('Comportamiento de Ventas (monto \$ al día)'),
-            Row(children: [
-              Expanded(child: _campo(controller: _ventaLvCtrl,  label: 'Lun – Vie', icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-              const SizedBox(width: 8),
-              Expanded(child: _campo(controller: _ventaSabCtrl, label: 'Sábado',    icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-              const SizedBox(width: 8),
-              Expanded(child: _campo(controller: _ventaDomCtrl, label: 'Domingo',   icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-            ]),
-            Row(children: [
-              Expanded(child: _dropdownMes('Mes alta venta', _mesAltaVenta, (v) => setState(() => _mesAltaVenta = v))),
-              const SizedBox(width: 10),
-              Expanded(child: _dropdownMes('Mes baja venta', _mesBajaVenta, (v) => setState(() => _mesBajaVenta = v))),
-            ]),
-            const SizedBox(height: 10),
-            _titulo('Comportamiento de Compras (monto \$ al día)'),
-            Row(children: [
-              Expanded(child: _campo(controller: _compraLvCtrl,  label: 'Lun – Vie', icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-              const SizedBox(width: 8),
-              Expanded(child: _campo(controller: _compraSabCtrl, label: 'Sábado',    icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-              const SizedBox(width: 8),
-              Expanded(child: _campo(controller: _compraDomCtrl, label: 'Domingo',   icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-            ]),
-            _dropdownMes('Mes alta compra', _mesAltaCompra, (v) => setState(() => _mesAltaCompra = v)),
-            const SizedBox(height: 10),
-            _titulo('Días de atención del negocio'),
-            Row(children: [
-              _chipDia('Lun–Vie', _diaLv,  (v) => setState(() => _diaLv  = v)),
-              const SizedBox(width: 8),
-              _chipDia('Sábado',  _diaSab, (v) => setState(() => _diaSab = v)),
-              const SizedBox(width: 8),
-              _chipDia('Domingo', _diaDom, (v) => setState(() => _diaDom = v)),
-            ]),
+            _titulo('¿El solicitante tiene empresa o negocio?'),
+            _chipsSiNo(
+              value: _tieneEmpresa,
+              onChanged: (v) => setState(() => _tieneEmpresa = v),
+            ),
+            if (_tieneEmpresa == true) ...[
+              const SizedBox(height: 16),
+              const Divider(height: 4),
+              const SizedBox(height: 12),
+              _titulo('Comportamiento de Ventas (monto \$ al día)'),
+              Row(children: [
+                Expanded(child: _campo(controller: _ventaLvCtrl,  label: 'Lun – Vie', icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
+                const SizedBox(width: 8),
+                Expanded(child: _campo(controller: _ventaSabCtrl, label: 'Sábado',    icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
+                const SizedBox(width: 8),
+                Expanded(child: _campo(controller: _ventaDomCtrl, label: 'Domingo',   icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
+              ]),
+              Row(children: [
+                Expanded(child: _dropdownMes('Mes alta venta', _mesAltaVenta, (v) => setState(() => _mesAltaVenta = v))),
+                const SizedBox(width: 10),
+                Expanded(child: _dropdownMes('Mes baja venta', _mesBajaVenta, (v) => setState(() => _mesBajaVenta = v))),
+              ]),
+              const SizedBox(height: 10),
+              _titulo('Comportamiento de Compras (monto \$ al día)'),
+              Row(children: [
+                Expanded(child: _campo(controller: _compraLvCtrl,  label: 'Lun – Vie', icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
+                const SizedBox(width: 8),
+                Expanded(child: _campo(controller: _compraSabCtrl, label: 'Sábado',    icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
+                const SizedBox(width: 8),
+                Expanded(child: _campo(controller: _compraDomCtrl, label: 'Domingo',   icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
+              ]),
+              _dropdownMes('Mes alta compra', _mesAltaCompra, (v) => setState(() => _mesAltaCompra = v)),
+              const SizedBox(height: 10),
+              _titulo('Días de atención del negocio'),
+              Row(children: [
+                _chipDia('Lun–Vie', _diaLv,  (v) => setState(() => _diaLv  = v)),
+                const SizedBox(width: 8),
+                _chipDia('Sábado',  _diaSab, (v) => setState(() => _diaSab = v)),
+                const SizedBox(width: 8),
+                _chipDia('Domingo', _diaDom, (v) => setState(() => _diaDom = v)),
+              ]),
+            ],
           ],
         ),
 
@@ -752,36 +860,76 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           color: const Color(0xFF3B82F6),
           titulo: 'Documentos para Crédito en Proceso',
           children: [
-            ...[
-              ('_docCedula',       Icons.badge_rounded,          'Cédula de identidad',        _docCedula),
-              ('_docPlanilla',     Icons.receipt_long_rounded,   'Planilla de servicios',       _docPlanilla),
-              ('_docRucRise',      Icons.article_rounded,        'RUC / RISE',                  _docRucRise),
-              ('_docEstados',      Icons.account_balance_rounded,'Estados de cuenta',           _docEstados),
-              ('_docDeclaraciones',Icons.assignment_rounded,     'Declaraciones de IVA/IR',     _docDeclaraciones),
-              ('_docMatricula',    Icons.store_rounded,          'Matrícula del negocio',       _docMatricula),
-              ('_docFotoNegocio',  Icons.photo_camera_rounded,   'Foto del negocio',            _docFotoNegocio),
-            ].map((d) {
-              final key   = d.$1;
-              final ic    = d.$2;
-              final label = d.$3;
-              final val   = d.$4;
-              return _checkRowIcon(
-                label: label,
-                icon: ic,
-                value: val,
-                onChanged: (v) => setState(() {
-                  switch (key) {
-                    case '_docCedula':        _docCedula        = v ?? false; break;
-                    case '_docPlanilla':      _docPlanilla      = v ?? false; break;
-                    case '_docRucRise':       _docRucRise       = v ?? false; break;
-                    case '_docEstados':       _docEstados       = v ?? false; break;
-                    case '_docDeclaraciones': _docDeclaraciones = v ?? false; break;
-                    case '_docMatricula':     _docMatricula     = v ?? false; break;
-                    case '_docFotoNegocio':   _docFotoNegocio   = v ?? false; break;
-                  }
-                }),
-              );
-            }),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Toca cada documento que el cliente entregó al asesor:',
+                style: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey),
+              ),
+            ),
+            _docTarjeta(
+              key: '_docCedula',
+              icon: Icons.badge_rounded,
+              label: 'Cédula de identidad',
+              sublabel: 'Deudor y cónyuge',
+              value: _docCedula,
+            ),
+            _docTarjeta(
+              key: '_docPlanilla',
+              icon: Icons.receipt_long_rounded,
+              label: 'Planilla de servicios',
+              sublabel: 'Agua, luz o teléfono',
+              value: _docPlanilla,
+            ),
+            _docTarjeta(
+              key: '_docRucRise',
+              icon: Icons.article_rounded,
+              label: 'RUC / RISE',
+              sublabel: 'Registro tributario',
+              value: _docRucRise,
+            ),
+            _docTarjeta(
+              key: '_docEstados',
+              icon: Icons.account_balance_rounded,
+              label: 'Estados de cuenta',
+              sublabel: 'Últimos 3 meses',
+              value: _docEstados,
+            ),
+            _docTarjeta(
+              key: '_docDeclaraciones',
+              icon: Icons.assignment_rounded,
+              label: 'Declaraciones de IVA / IR',
+              sublabel: 'Últimas declaraciones',
+              value: _docDeclaraciones,
+            ),
+            _docTarjeta(
+              key: '_docMatricula',
+              icon: Icons.store_rounded,
+              label: 'Matrícula del negocio',
+              sublabel: 'Patente municipal',
+              value: _docMatricula,
+            ),
+            _docTarjeta(
+              key: '_docFotoNegocio',
+              icon: Icons.photo_camera_rounded,
+              label: 'Foto del negocio',
+              sublabel: 'Fachada y local',
+              value: _docFotoNegocio,
+            ),
+            _docTarjeta(
+              key: '_docSolicitudCred',
+              icon: Icons.description_rounded,
+              label: 'Solicitud de crédito',
+              sublabel: 'Formulario firmado',
+              value: _docSolicitudCred,
+            ),
+            _docTarjeta(
+              key: '_docFotoCliente',
+              icon: Icons.face_rounded,
+              label: 'Foto del cliente',
+              sublabel: 'Foto para expediente',
+              value: _docFotoCliente,
+            ),
           ],
         ),
 
@@ -1124,6 +1272,171 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           labelStyle: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  // ── Grid de chips para Destino del crédito ─────────────────
+  Widget _destinoChipsGrid() {
+    const destinos = [
+      ('cap_trabajo',    Icons.work_rounded,             'Capital de trabajo'),
+      ('activos_fijos',  Icons.precision_manufacturing_rounded, 'Activos fijos'),
+      ('pago_deudas',    Icons.money_off_rounded,         'Pago de deudas'),
+      ('consolidacion',  Icons.merge_type_rounded,        'Consolidación de deudas'),
+      ('vehiculo',       Icons.directions_car_rounded,    'Compra de vehículo'),
+      ('vivienda_comp',  Icons.home_rounded,              'Compra de vivienda'),
+      ('arreglos',       Icons.home_repair_service_rounded,'Arreglos de vivienda'),
+      ('educacion',      Icons.school_rounded,            'Educación'),
+      ('viajes',         Icons.flight_rounded,            'Viajes'),
+      ('otros',          Icons.more_horiz_rounded,        'Otros'),
+    ];
+
+    bool valFor(String k) => _destinoCredito == k;
+
+    void toggle(String k) =>
+        setState(() => _destinoCredito = (_destinoCredito == k ? null : k));
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: destinos.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          childAspectRatio: 3.0,
+        ),
+        itemBuilder: (_, i) {
+          final key   = destinos[i].$1;
+          final ic    = destinos[i].$2;
+          final label = destinos[i].$3;
+          final sel   = valFor(key);
+          final color = widget.tipo.color;
+          return GestureDetector(
+            onTap: () => toggle(key),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              decoration: BoxDecoration(
+                color: sel ? color.withOpacity(0.13) : ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: sel ? color : ConstantColors.borderLight,
+                  width: sel ? 1.8 : 1,
+                ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Row(
+                children: [
+                  Icon(ic, size: 16,
+                      color: sel ? color : ConstantColors.textDarkGrey),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: sel ? color : ConstantColors.textDark,
+                        fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (sel)
+                    Icon(Icons.check_circle_rounded, size: 14, color: color),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Tarjeta de documento (toque para marcar recibido) ───────
+  Widget _docTarjeta({
+    required String key,
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required bool value,
+  }) {
+    const color = Color(0xFF3B82F6);
+    return GestureDetector(
+      onTap: () => setState(() {
+        switch (key) {
+          case '_docCedula':        _docCedula        = !_docCedula;        break;
+          case '_docPlanilla':      _docPlanilla      = !_docPlanilla;      break;
+          case '_docRucRise':       _docRucRise       = !_docRucRise;       break;
+          case '_docEstados':       _docEstados       = !_docEstados;       break;
+          case '_docDeclaraciones': _docDeclaraciones = !_docDeclaraciones; break;
+          case '_docMatricula':     _docMatricula     = !_docMatricula;     break;
+          case '_docFotoNegocio':   _docFotoNegocio   = !_docFotoNegocio;   break;
+          case '_docSolicitudCred': _docSolicitudCred = !_docSolicitudCred; break;
+          case '_docFotoCliente':   _docFotoCliente   = !_docFotoCliente;   break;
+        }
+      }),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: value ? color.withOpacity(0.08) : ConstantColors.grey100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value ? color : ConstantColors.borderLight,
+            width: value ? 1.8 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: value ? color.withOpacity(0.15) : Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 18,
+                  color: value ? color : ConstantColors.textDarkGrey),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: value ? color : ConstantColors.textDark,
+                      )),
+                  Text(sublabel,
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: ConstantColors.textDarkGrey)),
+                ],
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: value ? color : Colors.transparent,
+                border: Border.all(
+                    color: value ? color : ConstantColors.borderLight,
+                    width: 1.5),
+              ),
+              child: value
+                  ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
+                  : null,
+            ),
+          ],
         ),
       ),
     );

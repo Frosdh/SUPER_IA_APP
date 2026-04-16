@@ -58,6 +58,26 @@ try {
         exit;
     }
 
+    // Obtener el primer punto GPS del asesor en el día (inicio de sesión)
+    $stFirst = $conn->prepare("
+        SELECT timestamp
+        FROM ubicacion_asesor
+        WHERE asesor_id = ?
+          AND DATE(timestamp) = ?
+        ORDER BY timestamp ASC
+        LIMIT 1
+    ");
+    $session_start = null;
+    if ($stFirst) {
+        $stFirst->bind_param('ss', $asesor_id, $fecha);
+        $stFirst->execute();
+        $rowFirst = $stFirst->get_result()->fetch_assoc();
+        $stFirst->close();
+        if ($rowFirst) {
+            $session_start = $rowFirst['timestamp'];
+        }
+    }
+
     // Clientes encuestados = tareas completadas con registro en encuesta_comercial
     $sql = "
         SELECT
@@ -65,6 +85,7 @@ try {
             t.tipo_tarea    AS tipo_tarea,
             t.fecha_realizada,
             t.hora_realizada,
+            CONCAT(t.fecha_realizada, ' ', t.hora_realizada) AS fecha_hora,
             t.latitud_fin   AS latitud,
             t.longitud_fin  AS longitud,
             cp.id           AS cliente_id,
@@ -79,7 +100,7 @@ try {
           AND t.estado = 'completada'
           AND t.fecha_realizada = ?
           AND ec.id IS NOT NULL
-        ORDER BY t.hora_realizada DESC, t.fecha_realizada DESC
+        ORDER BY t.hora_realizada ASC, t.fecha_realizada ASC
     ";
 
     $st = $conn->prepare($sql);
@@ -95,6 +116,7 @@ try {
             'tipo_tarea'     => $row['tipo_tarea'],
             'fecha'          => $row['fecha_realizada'],
             'hora'           => $row['hora_realizada'],
+            'fecha_hora'     => $row['fecha_hora'],
             'latitud'        => $row['latitud']  !== null ? (float)$row['latitud']  : null,
             'longitud'       => $row['longitud'] !== null ? (float)$row['longitud'] : null,
             'cliente_id'     => $row['cliente_id'],
@@ -104,12 +126,13 @@ try {
     $st->close();
 
     echo json_encode([
-        'status'    => 'ok',
-        'asesor_id' => $asesor_id,
-        'fecha'     => $fecha,
-        'clientes'  => $clientes,
-        'total'     => count($clientes),
-        'ts'        => date('H:i:s'),
+        'status'        => 'ok',
+        'asesor_id'     => $asesor_id,
+        'fecha'         => $fecha,
+        'session_start' => $session_start,
+        'clientes'      => $clientes,
+        'total'         => count($clientes),
+        'ts'            => date('H:i:s'),
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (\Throwable $e) {
