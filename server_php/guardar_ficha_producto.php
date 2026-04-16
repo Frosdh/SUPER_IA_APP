@@ -65,6 +65,20 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     ");
 
+    // Estado de revisión (para aprobación/rechazo en panel)
+    $cols_fp = [
+        'estado_revision'        => "ALTER TABLE ficha_producto ADD COLUMN estado_revision ENUM('pendiente','aprobada','rechazada') NOT NULL DEFAULT 'pendiente' AFTER producto_tipo",
+        'revision_usuario_id'    => "ALTER TABLE ficha_producto ADD COLUMN revision_usuario_id CHAR(36) DEFAULT NULL AFTER estado_revision",
+        'revision_at'            => "ALTER TABLE ficha_producto ADD COLUMN revision_at DATETIME DEFAULT NULL AFTER revision_usuario_id",
+        'revision_observaciones' => "ALTER TABLE ficha_producto ADD COLUMN revision_observaciones TEXT DEFAULT NULL AFTER revision_at",
+    ];
+    foreach ($cols_fp as $col => $ddl) {
+        $chk = $conn->query("SHOW COLUMNS FROM ficha_producto LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) {
+            $conn->query($ddl);
+        }
+    }
+
     // Tablas por tipo (creadas solo si no existen)
     $conn->query("
         CREATE TABLE IF NOT EXISTS ficha_credito (

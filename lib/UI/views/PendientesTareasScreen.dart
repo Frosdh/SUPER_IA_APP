@@ -644,7 +644,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
           return buildEmpty('No hay tareas seleccionadas para hoy.');
         }
       } else {
-        if (otras.isEmpty && completadas.isEmpty) {
+        if (otras.isEmpty) {
           return buildEmpty('No hay tareas para mostrar.');
         }
 
@@ -665,27 +665,6 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         for (final t in otras) {
           widgets.add(card(t));
           widgets.add(const SizedBox(height: 10));
-        }
-
-        if (completadas.isNotEmpty) {
-          widgets.add(const SizedBox(height: 14));
-          widgets.add(
-            const Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Text(
-                'Finalizadas',
-                style: TextStyle(
-                  color: ConstantColors.textWhite,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          );
-          for (final t in completadas) {
-            widgets.add(card(t));
-            widgets.add(const SizedBox(height: 10));
-          }
         }
       }
 
