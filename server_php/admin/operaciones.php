@@ -94,7 +94,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             "SELECT fp.id
                              FROM ficha_producto fp
                              JOIN asesor a
-                               ON (a.id = fp.asesor_id) OR (fp.asesor_id IS NULL AND a.usuario_id = fp.usuario_id)
+                               ON (a.id = fp.asesor_id)
+                               OR (a.usuario_id = fp.usuario_id)
+                               OR (a.id = fp.usuario_id)
                              WHERE fp.id = ? AND fp.producto_tipo = 'credito' AND a.supervisor_id = ?
                              LIMIT 1"
                         );
@@ -197,7 +199,9 @@ try {
                      'ficha' as origen
               FROM ficha_producto fp
               JOIN ficha_credito fc ON fc.ficha_id = fp.id
-              LEFT JOIN asesor a ON (a.id = fp.asesor_id) OR (fp.asesor_id IS NULL AND a.usuario_id = fp.usuario_id)
+              LEFT JOIN asesor a ON (a.id = fp.asesor_id)
+                               OR (a.usuario_id = fp.usuario_id)
+                               OR (a.id = fp.usuario_id)
               LEFT JOIN usuario u ON u.id = a.usuario_id
               LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
               WHERE fp.producto_tipo = 'credito'
@@ -218,7 +222,9 @@ try {
                      'ficha' as origen
               FROM ficha_producto fp
               JOIN ficha_credito fc ON fc.ficha_id = fp.id
-              LEFT JOIN asesor a ON (a.id = fp.asesor_id) OR (fp.asesor_id IS NULL AND a.usuario_id = fp.usuario_id)
+              LEFT JOIN asesor a ON (a.id = fp.asesor_id)
+                               OR (a.usuario_id = fp.usuario_id)
+                               OR (a.id = fp.usuario_id)
               LEFT JOIN usuario u ON u.id = a.usuario_id
               LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
               WHERE fp.producto_tipo = 'credito'
@@ -241,7 +247,9 @@ try {
                      'ficha' as origen
               FROM ficha_producto fp
               JOIN ficha_credito fc ON fc.ficha_id = fp.id
-              LEFT JOIN asesor a ON (a.id = fp.asesor_id) OR (fp.asesor_id IS NULL AND a.usuario_id = fp.usuario_id)
+              LEFT JOIN asesor a ON (a.id = fp.asesor_id)
+                               OR (a.usuario_id = fp.usuario_id)
+                               OR (a.id = fp.usuario_id)
               LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
               WHERE fp.producto_tipo = 'credito'
                 AND (fp.usuario_id = ? OR fp.asesor_id = ?)

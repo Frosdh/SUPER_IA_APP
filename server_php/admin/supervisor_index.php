@@ -69,7 +69,7 @@ if ($supervisor_table_id) {
         $st = $pdo->prepare('SELECT COUNT(*) as cnt, SUM(fc.monto_credito) as monto
                               FROM ficha_producto fp
                               JOIN ficha_credito fc ON fc.ficha_id=fp.id
-                              JOIN asesor a ON (a.id=fp.asesor_id) OR (fp.asesor_id IS NULL AND a.usuario_id = fp.usuario_id)
+                              JOIN asesor a ON (a.id = fp.asesor_id) OR (a.usuario_id = fp.usuario_id) OR (a.id = fp.usuario_id)
                               WHERE fp.producto_tipo="credito" AND a.supervisor_id=?');
         $st->execute([$supervisor_table_id]);
         $rowF = $st->fetch();
