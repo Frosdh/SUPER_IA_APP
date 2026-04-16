@@ -47,8 +47,9 @@ if ($asesor_id === '') {
     exit;
 }
 
-$lat = ($lat_raw !== '') ? (float)$lat_raw : null;
-$lng = ($lng_raw !== '') ? (float)$lng_raw : null;
+// Normalizar strings (para permitir NULL en DB cuando falte GPS)
+$lat_raw = trim((string)$lat_raw);
+$lng_raw = trim((string)$lng_raw);
 
 try {
     // 1. Buscar segmento activo del día
@@ -75,11 +76,14 @@ try {
     // 2. Cerrar segmento
     $estado_cierre = ($razon === 'tarea_completada') ? 'completado' : 'cerrado_logout';
     $stClose = $conn->prepare(
-        'UPDATE ruta_segmento
-         SET estado = ?, fin_at = NOW(), fin_lat = ?, fin_lng = ?, tarea_destino_id = ?
-         WHERE id = ?'
+        "UPDATE ruta_segmento
+         SET estado = ?, fin_at = NOW(),
+             fin_lat = NULLIF(?, ''),
+             fin_lng = NULLIF(?, ''),
+             tarea_destino_id = ?
+         WHERE id = ?"
     );
-    $stClose->bind_param('sddss', $estado_cierre, $lat, $lng, $tarea_id, $seg_id);
+    $stClose->bind_param('sssss', $estado_cierre, $lat_raw, $lng_raw, $tarea_id, $seg_id);
     $stClose->execute();
     $stClose->close();
 
@@ -92,12 +96,13 @@ try {
         $nuevo_id   = genUUID();
 
         $stNew = $conn->prepare(
-            'INSERT INTO ruta_segmento
+            "INSERT INTO ruta_segmento
              (id, asesor_id, numero_segmento, tarea_origen_id, estado,
               inicio_lat, inicio_lng, inicio_at, color_hex)
-             VALUES (?, ?, ?, ?, \'activo\', ?, ?, NOW(), ?)'
+             VALUES (?, ?, ?, ?, 'activo',
+              NULLIF(?, ''), NULLIF(?, ''), NOW(), ?)"
         );
-        $stNew->bind_param('ssisdds', $nuevo_id, $asesor_id, $nuevo_num, $tarea_id, $lat, $lng, $color);
+        $stNew->bind_param('ssissss', $nuevo_id, $asesor_id, $nuevo_num, $tarea_id, $lat_raw, $lng_raw, $color);
         $stNew->execute();
         $stNew->close();
         $nuevo_segmento_id = $nuevo_id;

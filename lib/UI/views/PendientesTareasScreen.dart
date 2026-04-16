@@ -117,16 +117,25 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
       final status = decoded['status']?.toString() ?? '';
       if (status != 'success') {
-        throw Exception(decoded['message']?.toString() ?? 'No se pudo actualizar');
+        final msg = decoded['message']?.toString() ?? 'No se pudo actualizar';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: ConstantColors.warning,
+          ),
+        );
+        return;
       }
 
       await _cargar();
     } catch (e) {
       if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(seleccionar ? 'No se pudo seleccionar la tarea. ($e)' : 'No se pudo deseleccionar la tarea. ($e)'),
-          backgroundColor: Colors.red,
+          content: Text(msg),
+          backgroundColor: ConstantColors.warning,
         ),
       );
     }
@@ -154,16 +163,25 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
       final status = decoded['status']?.toString() ?? '';
       if (status != 'success') {
-        throw Exception(decoded['message']?.toString() ?? 'No se pudo fijar');
+        final msg = decoded['message']?.toString() ?? 'No se pudo fijar';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: ConstantColors.warning,
+          ),
+        );
+        return;
       }
 
       await _cargar();
     } catch (e) {
       if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('No se pudo fijar la selección. ($e)'),
-          backgroundColor: Colors.red,
+          content: Text(msg),
+          backgroundColor: ConstantColors.warning,
         ),
       );
     }
@@ -171,74 +189,120 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget content;
-    bool mostrarFijar = false;
+    final hoy = DateTime.now().toIso8601String().substring(0, 10);
 
-    if (_loading) {
-      content = const Center(child: CircularProgressIndicator());
-    } else if (_error != null) {
-      content = ListView(
+    Widget buildBaseList({required List<Widget> children}) {
+      return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.red.shade50,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.red.shade200),
-            ),
-            child: Text(
-              'No se pudo cargar.\n$_error',
-              style: TextStyle(color: Colors.red.shade800),
-            ),
-          ),
-        ],
+        children: children,
       );
-    } else if (_tareas.isEmpty) {
-      content = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        children: const [
-          SizedBox(height: 30),
-          Center(
-            child: Text(
-              'No hay tareas pendientes.',
-              style: TextStyle(fontWeight: FontWeight.w700, color: ConstantColors.textWhite),
-            ),
-          ),
-        ],
-      );
-    } else {
-      final hoy = DateTime.now().toIso8601String().substring(0, 10);
+    }
 
-      final actividad = _tareas.where((t) {
+    Widget buildLoading() {
+      return buildBaseList(children: const [
+        SizedBox(height: 120),
+        Center(child: CircularProgressIndicator()),
+      ]);
+    }
+
+    Widget buildError() {
+      return buildBaseList(children: [
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.red.shade50,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.red.shade200),
+          ),
+          child: Text(
+            'No se pudo cargar.\n$_error',
+            style: TextStyle(color: Colors.red.shade800),
+          ),
+        ),
+      ]);
+    }
+
+    Widget buildEmpty(String text) {
+      return buildBaseList(children: [
+        const SizedBox(height: 30),
+        Center(
+          child: Text(
+            text,
+            style: const TextStyle(fontWeight: FontWeight.w700, color: ConstantColors.textWhite),
+          ),
+        ),
+      ]);
+    }
+
+    Widget buildLista({required bool soloHoy}) {
+      if (_loading) return buildLoading();
+      if (_error != null) return buildError();
+      if (_tareas.isEmpty) {
+        return buildEmpty('No hay tareas pendientes.');
+      }
+
+      final seleccionadasHoy = _tareas.where((t) {
         final estado = t['estado']?.toString() ?? '';
         final selDia = t['seleccionada_dia']?.toString() ?? '';
         return estado == 'en_proceso' && (selDia.isEmpty || selDia == hoy);
       }).toList();
 
+      final fijadasHoy = seleccionadasHoy.where((t) => (t['seleccion_fijada']?.toString() ?? '0') == '1').toList();
+      final hoySinFijar = seleccionadasHoy.where((t) => (t['seleccion_fijada']?.toString() ?? '0') != '1').toList();
+
+      final completadas = _tareas.where((t) {
+        final estado = t['estado']?.toString() ?? '';
+        return estado == 'completada';
+      }).toList();
+
+      final completadasHoy = completadas.where((t) {
+        final fr = t['fecha_realizada']?.toString() ?? '';
+        return fr == hoy;
+      }).toList();
+
       final otras = _tareas.where((t) {
         final estado = t['estado']?.toString() ?? '';
         final selDia = t['seleccionada_dia']?.toString() ?? '';
+        if (estado == 'completada' || estado == 'cancelada') return false;
         if (estado == 'en_proceso') {
           return selDia.isNotEmpty && selDia != hoy;
         }
         return true;
       }).toList();
 
-      mostrarFijar = actividad.any((t) => (t['seleccion_fijada']?.toString() ?? '0') != '1');
-
       Widget card(Map<String, dynamic> t) {
         final tipo = t['tipo_tarea']?.toString() ?? '';
         final estado = t['estado']?.toString() ?? '';
-        final fecha = t['fecha_programada']?.toString() ?? '';
-        final hora = t['hora_programada']?.toString() ?? '';
+        final fechaProg = t['fecha_programada']?.toString() ?? '';
+        final horaProg = t['hora_programada']?.toString() ?? '';
+        final fechaReal = t['fecha_realizada']?.toString() ?? '';
+        final horaReal = t['hora_realizada']?.toString() ?? '';
         final cliente = t['cliente_nombre']?.toString() ?? 'Cliente';
         final ciudad = t['cliente_ciudad']?.toString() ?? '';
         final direccion = t['cliente_direccion']?.toString() ?? '';
         final tareaId = t['id']?.toString() ?? '';
         final fijada = (t['seleccion_fijada']?.toString() ?? '0') == '1';
+        final selDia = t['seleccionada_dia']?.toString() ?? '';
+        final esHoySeleccionada = estado == 'en_proceso' && (selDia.isEmpty || selDia == hoy);
+
+        final fechaMostrar = estado == 'completada' ? fechaReal : fechaProg;
+        final horaMostrar = estado == 'completada' ? horaReal : horaProg;
+
+        final isProg = estado == 'programada';
+        final isProc = estado == 'en_proceso';
+        final isDone = estado == 'completada';
+        final isCancel = estado == 'cancelada';
+
+        final badgeBg = isDone
+            ? Colors.green.shade50
+            : (isProg ? Colors.blue.shade50 : (isProc ? Colors.purple.shade50 : (isCancel ? Colors.red.shade50 : Colors.orange.shade50)));
+        final badgeBorder = isDone
+            ? Colors.green.shade200
+            : (isProg ? Colors.blue.shade200 : (isProc ? Colors.purple.shade200 : (isCancel ? Colors.red.shade200 : Colors.orange.shade200)));
+        final badgeText = isDone
+            ? Colors.green.shade800
+            : (isProg ? Colors.blue.shade800 : (isProc ? Colors.purple.shade800 : (isCancel ? Colors.red.shade800 : Colors.orange.shade800)));
 
         final lat = _toDouble(t['cliente_latitud']);
         final lng = _toDouble(t['cliente_longitud']);
@@ -269,24 +333,16 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
-                      color: estado == 'programada'
-                          ? Colors.blue.shade50
-                          : (estado == 'en_proceso' ? Colors.purple.shade50 : Colors.orange.shade50),
+                      color: badgeBg,
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: estado == 'programada'
-                            ? Colors.blue.shade200
-                            : (estado == 'en_proceso' ? Colors.purple.shade200 : Colors.orange.shade200),
-                      ),
+                      border: Border.all(color: badgeBorder),
                     ),
                     child: Text(
                       estado.isEmpty ? '—' : estado,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
-                        color: estado == 'programada'
-                            ? Colors.blue.shade800
-                            : (estado == 'en_proceso' ? Colors.purple.shade800 : Colors.orange.shade800),
+                        color: badgeText,
                       ),
                     ),
                   ),
@@ -320,7 +376,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                   const Icon(Icons.calendar_month_rounded, size: 16, color: ConstantColors.textGrey),
                   const SizedBox(width: 6),
                   Text(
-                    [fecha, hora].where((e) => e.trim().isNotEmpty).join(' '),
+                    [fechaMostrar, horaMostrar].where((e) => e.trim().isNotEmpty).join(' '),
                     style: const TextStyle(color: ConstantColors.textGrey, fontSize: 12),
                   ),
                 ],
@@ -329,8 +385,34 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: estado == 'en_proceso'
-                        ? (fijada
+                    child: estado == 'completada'
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: ConstantColors.borderColor),
+                            ),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.check_circle_rounded, size: 16, color: Colors.greenAccent),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Finalizada',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: ConstantColors.textWhite,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : (estado == 'cancelada'
                             ? Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                 decoration: BoxDecoration(
@@ -338,51 +420,102 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(color: ConstantColors.borderColor),
                                 ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.lock_rounded, size: 16, color: ConstantColors.textWhite),
+                                child: Row(
+                                  children: const [
+                                    Icon(Icons.cancel_rounded, size: 16, color: Colors.redAccent),
                                     SizedBox(width: 8),
-                                    Text(
-                                      'Fijada (no se puede deseleccionar)',
-                                      style: TextStyle(
-                                        color: ConstantColors.textWhite,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
+                                    Expanded(
+                                      child: Text(
+                                        'Cancelada',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          color: ConstantColors.textWhite,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               )
-                            : OutlinedButton(
-                                onPressed: tareaId.isEmpty
-                                    ? null
-                                    : () => _setSeleccionHoy(tareaId, seleccionar: false),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: Colors.red.shade200,
-                                  side: BorderSide(color: Colors.red.shade200.withOpacity(0.7)),
-                                  padding: const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                child: const Text(
-                                  'Quitar de hoy',
-                                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                                ),
-                              ))
-                        : ElevatedButton(
-                            onPressed: tareaId.isEmpty
-                                ? null
-                                : () => _setSeleccionHoy(tareaId, seleccionar: true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: ConstantColors.warning,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            child: const Text(
-                              'Seleccionar hoy',
-                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                            ),
-                          ),
+                            : (estado == 'en_proceso'
+                                ? (fijada
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.06),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: ConstantColors.borderColor),
+                                        ),
+                                        child: Row(
+                                          children: const [
+                                            Icon(Icons.lock_rounded, size: 16, color: ConstantColors.textWhite),
+                                            SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                'Fijada (no se puede deseleccionar)',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: ConstantColors.textWhite,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : (esHoySeleccionada
+                                        ? OutlinedButton(
+                                            onPressed: tareaId.isEmpty
+                                                ? null
+                                                : () => _setSeleccionHoy(tareaId, seleccionar: false),
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor: Colors.red.shade200,
+                                              side: BorderSide(color: Colors.red.shade200.withOpacity(0.7)),
+                                              padding: const EdgeInsets.symmetric(vertical: 12),
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                            ),
+                                            child: const Text(
+                                              'Quitar de hoy',
+                                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                            ),
+                                          )
+                                        : Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(0.06),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: ConstantColors.borderColor),
+                                            ),
+                                            child: Text(
+                                              selDia.trim().isEmpty ? 'En proceso' : 'En proceso (seleccionada: $selDia)',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                color: ConstantColors.textWhite,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          )))
+                                : ElevatedButton(
+                                    onPressed: tareaId.isEmpty
+                                        ? null
+                                        : () => _setSeleccionHoy(tareaId, seleccionar: true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: ConstantColors.warning,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
+                                    child: const Text(
+                                      'Seleccionar hoy',
+                                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                    ),
+                                  ))),
                   ),
                   if (hasCoord) ...[
                     const SizedBox(width: 10),
@@ -417,12 +550,109 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
       final widgets = <Widget>[];
 
-      if (actividad.isNotEmpty) {
+      if (soloHoy) {
+        if (fijadasHoy.isNotEmpty) {
+          widgets.add(
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Tareas fijadas de hoy',
+                style: TextStyle(
+                  color: ConstantColors.textWhite,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+          for (final t in fijadasHoy) {
+            widgets.add(card(t));
+            widgets.add(const SizedBox(height: 10));
+          }
+          widgets.add(const SizedBox(height: 6));
+        }
+
+        if (hoySinFijar.isNotEmpty) {
+          widgets.add(
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Tareas de hoy',
+                style: TextStyle(
+                  color: ConstantColors.textWhite,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+          for (final t in hoySinFijar) {
+            widgets.add(card(t));
+            widgets.add(const SizedBox(height: 10));
+          }
+          widgets.add(const SizedBox(height: 10));
+
+          widgets.add(
+            ElevatedButton.icon(
+              onPressed: _fijarTareasHoy,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.lock_rounded, size: 18),
+              label: const Text(
+                'Fijar tareas',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          );
+          widgets.add(const SizedBox(height: 6));
+          widgets.add(
+            Text(
+              'Después de fijar, ya no se puede deseleccionar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: ConstantColors.textGrey.withOpacity(0.9), fontSize: 12),
+            ),
+          );
+        }
+
+        if (completadasHoy.isNotEmpty) {
+          widgets.add(const SizedBox(height: 14));
+          widgets.add(
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Finalizadas hoy',
+                style: TextStyle(
+                  color: ConstantColors.textWhite,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+          for (final t in completadasHoy) {
+            widgets.add(card(t));
+            widgets.add(const SizedBox(height: 10));
+          }
+          widgets.add(const SizedBox(height: 6));
+        }
+
+        if (fijadasHoy.isEmpty && hoySinFijar.isEmpty && completadasHoy.isEmpty) {
+          return buildEmpty('No hay tareas seleccionadas para hoy.');
+        }
+      } else {
+        if (otras.isEmpty && completadas.isEmpty) {
+          return buildEmpty('No hay tareas para mostrar.');
+        }
+
         widgets.add(
           const Padding(
             padding: EdgeInsets.only(bottom: 10),
             child: Text(
-              'Actividad de hoy',
+              'Tareas programadas',
               style: TextStyle(
                 color: ConstantColors.textWhite,
                 fontWeight: FontWeight.w800,
@@ -431,96 +661,82 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
             ),
           ),
         );
-        for (final t in actividad) {
+
+        for (final t in otras) {
           widgets.add(card(t));
           widgets.add(const SizedBox(height: 10));
         }
-        widgets.add(const SizedBox(height: 6));
-      }
 
-      widgets.add(
-        const Padding(
-          padding: EdgeInsets.only(bottom: 10),
-          child: Text(
-            'Tareas programadas',
-            style: TextStyle(
-              color: ConstantColors.textWhite,
-              fontWeight: FontWeight.w800,
-              fontSize: 14,
+        if (completadas.isNotEmpty) {
+          widgets.add(const SizedBox(height: 14));
+          widgets.add(
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Finalizadas',
+                style: TextStyle(
+                  color: ConstantColors.textWhite,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
             ),
-          ),
-        ),
-      );
-
-      for (final t in otras) {
-        widgets.add(card(t));
-        widgets.add(const SizedBox(height: 10));
+          );
+          for (final t in completadas) {
+            widgets.add(card(t));
+            widgets.add(const SizedBox(height: 10));
+          }
+        }
       }
 
       if (widgets.isNotEmpty) {
         if (widgets.last is SizedBox) widgets.removeLast();
       }
 
-      content = ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        children: widgets,
-      );
+      return buildBaseList(children: widgets);
     }
 
-    return Scaffold(
-      backgroundColor: ConstantColors.backgroundDark,
-      appBar: AppBar(
+    return DefaultTabController(
+      length: 2,
+      initialIndex: 1,
+      child: Scaffold(
         backgroundColor: ConstantColors.backgroundDark,
-        foregroundColor: ConstantColors.textWhite,
-        elevation: 0,
-        title: const Text(
-          'Lista tareas',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
-        actions: [
-          IconButton(
-            onPressed: _cargar,
-            icon: const Icon(Icons.refresh_rounded),
+        appBar: AppBar(
+          backgroundColor: ConstantColors.backgroundDark,
+          foregroundColor: ConstantColors.textWhite,
+          elevation: 0,
+          title: const Text(
+            'Lista tareas',
+            style: TextStyle(fontWeight: FontWeight.w800),
           ),
-        ],
-      ),
-      bottomNavigationBar: mostrarFijar
-          ? SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: _fijarTareasHoy,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      ),
-                      icon: const Icon(Icons.lock_rounded, size: 18),
-                      label: const Text(
-                        'Fijar tareas',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Después de fijar, ya no se puede deseleccionar.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: ConstantColors.textGrey.withOpacity(0.9), fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : null,
-      body: RefreshIndicator(
-        onRefresh: _cargar,
-        child: content,
+          actions: [
+            IconButton(
+              onPressed: _cargar,
+              icon: const Icon(Icons.refresh_rounded),
+            ),
+          ],
+          bottom: const TabBar(
+            labelColor: ConstantColors.textWhite,
+            unselectedLabelColor: ConstantColors.textGrey,
+            indicatorColor: ConstantColors.warning,
+            tabs: [
+              Tab(text: 'Hoy'),
+              Tab(text: 'Lista'),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            RefreshIndicator(
+              onRefresh: _cargar,
+              child: buildLista(soloHoy: true),
+            ),
+            RefreshIndicator(
+              onRefresh: _cargar,
+              child: buildLista(soloHoy: false),
+            ),
+          ],
+        ),
       ),
     );
   }

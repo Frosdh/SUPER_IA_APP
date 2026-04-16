@@ -1034,7 +1034,12 @@ function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
     fetch(`api_tramo_gps.php?${qs.toString()}`, { cache: 'no-store' })
         .then(r => r.json())
         .then(data => {
-            if (data.status !== 'ok') return;
+            if (data.status !== 'ok') {
+                // Si falla la API, al menos enfocar el cliente
+                map.flyTo([lat, lng], 16, { duration: 1.2 });
+                setTimeout(() => clienteMarker?.openPopup(), 900);
+                return;
+            }
 
             const puntos = data.puntos || [];
 
@@ -1052,6 +1057,21 @@ function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
                 // Ajustar vista al tramo + cliente
                 const bounds = L.latLngBounds(latlngs);
                 bounds.extend([lat, lng]);
+                map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+            } else if (puntos.length === 1) {
+                // Con 1 punto, trazar línea corta al cliente para que sea visible
+                const p0 = puntos[0];
+                const latlngs = [[p0.lat, p0.lng], [lat, lng]];
+                tramoLayer = L.polyline(latlngs, {
+                    color: '#2563EB',
+                    weight: 4,
+                    opacity: 0.85,
+                    dashArray: '6 6',
+                    lineJoin: 'round',
+                    lineCap: 'round',
+                }).addTo(map);
+
+                const bounds = L.latLngBounds(latlngs);
                 map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
             } else {
                 // Sin puntos GPS suficientes: volar al cliente
@@ -1109,7 +1129,8 @@ function renderClientes(clientes, fecha, sessionStart, asesorId) {
         const tareaId   = escapeHtml(c.tarea_id || '');
         const fechaHora = c.fecha_hora || '';
         const hasLoc    = c.latitud !== null && c.longitud !== null
-                          && isFinite(Number(c.latitud)) && isFinite(Number(c.longitud));
+                          && isFinite(Number(c.latitud)) && isFinite(Number(c.longitud))
+                          && !(Math.abs(Number(c.latitud)) < 1e-8 && Math.abs(Number(c.longitud)) < 1e-8);
         const num       = idx + 1;
 
         return `<div class="cliente-item ${hasLoc ? '' : 'disabled'}"
@@ -1270,6 +1291,13 @@ function renderRutas(segmentos) {
     if (!segmentos || segmentos.length === 0) return;
     // Nota: leyendaBox se mantiene siempre oculto; solo se usa como mapa interno
 
+    const isValidCoord = (lat, lng) => {
+        if (lat === null || lng === null) return false;
+        if (!isFinite(Number(lat)) || !isFinite(Number(lng))) return false;
+        // Evitar el (0,0) típico cuando no hay GPS
+        return !(Math.abs(Number(lat)) < 1e-8 && Math.abs(Number(lng)) < 1e-8);
+    };
+
     segmentos.forEach(seg => {
         const color  = seg.color || '#3B82F6';
         const puntos = seg.puntos || [];
@@ -1280,16 +1308,44 @@ function renderRutas(segmentos) {
         if (seg.tarea_id) segmentoPorTareaId[String(seg.tarea_id)] = seg.segmento_id;
 
         // ── Polilínea de la ruta ──
+        let latlngs = [];
+        let isFallbackLine = false;
+
         if (puntos.length >= 2) {
-            const latlngs = puntos.map(p => [p.lat, p.lng]);
+            latlngs = puntos
+                .map(p => [p.lat, p.lng])
+                .filter(([lat, lng]) => isValidCoord(lat, lng));
+        }
+
+        if (latlngs.length < 2) {
+            // Fallback: si por algún motivo no hay suficientes puntos GPS,
+            // dibujar al menos una línea entre inicio→fin del segmento.
+            const aOk = isValidCoord(seg.inicio_lat, seg.inicio_lng);
+            const bOk = isValidCoord(seg.fin_lat, seg.fin_lng);
+            if (aOk && bOk) {
+                const a = [Number(seg.inicio_lat), Number(seg.inicio_lng)];
+                const b = [Number(seg.fin_lat), Number(seg.fin_lng)];
+                if (!(a[0] === b[0] && a[1] === b[1])) {
+                    latlngs = [a, b];
+                    isFallbackLine = true;
+                }
+            }
+        }
+
+        if (latlngs.length >= 2) {
             const poly = L.polyline(latlngs, {
-                color, weight: 4, opacity: 0.85,
-                dashArray: seg.estado === 'activo' ? '8 5' : null,
-                lineJoin: 'round', lineCap: 'round',
+                color,
+                weight: isFallbackLine ? 3 : 4,
+                opacity: isFallbackLine ? 0.55 : 0.85,
+                dashArray: isFallbackLine ? '2 8' : (seg.estado === 'activo' ? '8 5' : null),
+                lineJoin: 'round',
+                lineCap: 'round',
             }).addTo(rutaGroup);
 
             const horaInicio = seg.inicio_at ? seg.inicio_at.substring(11,16) : '--:--';
             const horaFin    = seg.fin_at    ? seg.fin_at.substring(11,16)    : 'activo';
+            const ptsTxt     = isFallbackLine ? 'sin GPS (línea estimada)' : `${puntos.length} pts GPS`;
+
             poly.bindPopup(`
                 <div style="font-family:'Inter',sans-serif;min-width:180px;">
                     <div style="font-weight:700;font-size:13px;color:#1f2937;margin-bottom:5px;">
@@ -1301,7 +1357,7 @@ function renderRutas(segmentos) {
                         <i class="fas fa-clock"></i> ${horaInicio} → ${horaFin}
                     </div>
                     <div style="font-size:12px;color:#555;">
-                        <i class="fas fa-map-pin"></i> ${puntos.length} pts GPS
+                        <i class="fas fa-map-pin"></i> ${ptsTxt}
                     </div>
                     <div style="font-size:11px;color:#9CA3AF;margin-top:3px;">
                         Estado: <b style="color:${seg.estado==='activo'?'#10B981':'#6B7280'}">${seg.estado}</b>
@@ -1414,7 +1470,22 @@ function cargarRutaYClientes(asesorId) {
                 renderRutas(data.segmentos);
 
                 // Ajustar vista del mapa para encuadrar todas las rutas del día
-                const puntos = data.segmentos.flatMap(s => (s.puntos || []).map(p => [p.lat, p.lng]));
+                const puntos = data.segmentos.flatMap(s => {
+                    const pts = (s.puntos || [])
+                        .map(p => [p.lat, p.lng])
+                        .filter(([lat, lng]) => isFinite(Number(lat)) && isFinite(Number(lng))
+                            && !(Math.abs(Number(lat)) < 1e-8 && Math.abs(Number(lng)) < 1e-8));
+                    if (pts.length > 0) return pts;
+                    // Fallback: usar inicio/fin si no hay GPS
+                    const out = [];
+                    const aOk = s.inicio_lat !== null && s.inicio_lng !== null && isFinite(Number(s.inicio_lat)) && isFinite(Number(s.inicio_lng))
+                                && !(Math.abs(Number(s.inicio_lat)) < 1e-8 && Math.abs(Number(s.inicio_lng)) < 1e-8);
+                    const bOk = s.fin_lat !== null && s.fin_lng !== null && isFinite(Number(s.fin_lat)) && isFinite(Number(s.fin_lng))
+                                && !(Math.abs(Number(s.fin_lat)) < 1e-8 && Math.abs(Number(s.fin_lng)) < 1e-8);
+                    if (aOk) out.push([Number(s.inicio_lat), Number(s.inicio_lng)]);
+                    if (bOk) out.push([Number(s.fin_lat), Number(s.fin_lng)]);
+                    return out;
+                });
                 if (puntos.length > 1) {
                     try { map.fitBounds(puntos, { padding:[60,60], maxZoom:16 }); } catch(e){}
                 } else if (puntos.length === 1) {

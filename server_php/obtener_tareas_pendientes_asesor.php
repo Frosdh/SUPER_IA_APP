@@ -99,6 +99,8 @@ try {
             t.estado,
             t.fecha_programada,
             t.hora_programada,
+            t.fecha_realizada,
+            t.hora_realizada,
             t.observaciones,
             t.seleccionada_dia,
             t.seleccionada_at,
@@ -114,16 +116,20 @@ try {
         FROM tarea t
         LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
         WHERE t.asesor_id = ?
-          AND t.estado IN ('programada','pendiente','postergada','en_proceso')
-          AND t.fecha_programada >= ?
-        ORDER BY t.fecha_programada ASC,
-                 t.hora_programada ASC,
-                 t.created_at DESC
+          AND (
+            (t.estado IN ('programada','pendiente','postergada','en_proceso') AND t.fecha_programada >= ?)
+            OR
+            (t.estado = 'completada' AND t.fecha_realizada >= ?)
+          )
+        ORDER BY
+          CASE WHEN t.estado = 'completada' THEN t.fecha_realizada ELSE t.fecha_programada END ASC,
+          CASE WHEN t.estado = 'completada' THEN t.hora_realizada  ELSE t.hora_programada  END ASC,
+          t.created_at DESC
         LIMIT 200
     ";
 
     $st = $conn->prepare($sql);
-    $st->bind_param('ss', $asesor_id, $desde);
+    $st->bind_param('sss', $asesor_id, $desde, $desde);
     $st->execute();
     $res = $st->get_result();
 
@@ -135,6 +141,8 @@ try {
             'estado' => (string)($r['estado'] ?? ''),
             'fecha_programada' => (string)($r['fecha_programada'] ?? ''),
             'hora_programada' => (string)($r['hora_programada'] ?? ''),
+            'fecha_realizada' => (string)($r['fecha_realizada'] ?? ''),
+            'hora_realizada' => (string)($r['hora_realizada'] ?? ''),
             'observaciones' => (string)($r['observaciones'] ?? ''),
             'seleccionada_dia' => (string)($r['seleccionada_dia'] ?? ''),
             'seleccionada_at'  => (string)($r['seleccionada_at'] ?? ''),

@@ -160,9 +160,12 @@ try {
             $resPts = $stPts->get_result();
             $puntos = [];
             while ($pt = $resPts->fetch_assoc()) {
+                $lat = (float)$pt['latitud'];
+                $lng = (float)$pt['longitud'];
+                if (abs($lat) < 1e-8 && abs($lng) < 1e-8) continue;
                 $puntos[] = [
-                    'lat' => (float)$pt['latitud'],
-                    'lng' => (float)$pt['longitud'],
+                    'lat' => $lat,
+                    'lng' => $lng,
                     'ts'  => $pt['timestamp'],
                 ];
             }
@@ -216,6 +219,9 @@ try {
             $stAllPts->execute();
             $resAllPts = $stAllPts->get_result();
             while ($pt = $resAllPts->fetch_assoc()) {
+                $lat = (float)$pt['latitud'];
+                $lng = (float)$pt['longitud'];
+                if (abs($lat) < 1e-8 && abs($lng) < 1e-8) continue;
                 $todosGPS[] = $pt;
             }
             $stAllPts->close();

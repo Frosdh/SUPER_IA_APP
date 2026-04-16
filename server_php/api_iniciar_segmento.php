@@ -71,19 +71,25 @@ if ($asesor_id === '') {
     exit;
 }
 
-$lat = ($lat_raw !== '') ? (float)$lat_raw : null;
-$lng = ($lng_raw !== '') ? (float)$lng_raw : null;
+// Normalizar strings (para permitir NULL en DB cuando falte GPS)
+$lat_raw = trim((string)$lat_raw);
+$lng_raw = trim((string)$lng_raw);
 
 try {
     // 1. Cerrar cualquier segmento activo previo del mismo día
     //    (por si el asesor forzó el cierre sin logout limpio)
-    $conn->query("
-        UPDATE ruta_segmento
-        SET estado = 'cerrado_logout', fin_at = NOW()
-        WHERE asesor_id = '$asesor_id'
-          AND estado    = 'activo'
-          AND DATE(inicio_at) = CURDATE()
-    ");
+    $stClosePrev = $conn->prepare(
+        "UPDATE ruta_segmento
+         SET estado = 'cerrado_logout', fin_at = NOW()
+         WHERE asesor_id = ?
+           AND estado = 'activo'
+           AND DATE(inicio_at) = CURDATE()"
+    );
+    if ($stClosePrev) {
+        $stClosePrev->bind_param('s', $asesor_id);
+        $stClosePrev->execute();
+        $stClosePrev->close();
+    }
 
     // 2. Calcular número de segmento del día
     $stNum = $conn->prepare(
@@ -101,12 +107,13 @@ try {
     // 3. Insertar nuevo segmento
     $id = genUUID();
     $st = $conn->prepare(
-        'INSERT INTO ruta_segmento
+        "INSERT INTO ruta_segmento
          (id, asesor_id, numero_segmento, tarea_origen_id, estado,
           inicio_lat, inicio_lng, inicio_at, color_hex)
-         VALUES (?, ?, ?, ?, \'activo\', ?, ?, NOW(), ?)'
+         VALUES (?, ?, ?, ?, 'activo',
+          NULLIF(?, ''), NULLIF(?, ''), NOW(), ?)"
     );
-    $st->bind_param('ssisdds', $id, $asesor_id, $siguiente, $tarea_origen_id, $lat, $lng, $color);
+    $st->bind_param('ssissss', $id, $asesor_id, $siguiente, $tarea_origen_id, $lat_raw, $lng_raw, $color);
     $st->execute();
     $st->close();
 

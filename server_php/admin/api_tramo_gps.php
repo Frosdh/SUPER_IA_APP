@@ -42,7 +42,17 @@ if ($desde === '' || $hasta === '') {
     exit;
 }
 
-// Validar formato básico de datetime
+// Normalizar datetimes (acepta "YYYY-MM-DDTHH:MM:SS" y "YYYY-MM-DD HH:MM")
+$desde = str_replace('T', ' ', $desde);
+$hasta = str_replace('T', ' ', $hasta);
+$desde = preg_replace('/Z$/', '', $desde);
+$hasta = preg_replace('/Z$/', '', $hasta);
+
+if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) $desde .= ' 00:00:00';
+if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $hasta)) $hasta .= ' 23:59:59';
+if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $desde)) $desde .= ':00';
+if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $hasta)) $hasta .= ':00';
+
 $desdeDt = DateTime::createFromFormat('Y-m-d H:i:s', $desde);
 $hastaDt = DateTime::createFromFormat('Y-m-d H:i:s', $hasta);
 if (!$desdeDt || !$hastaDt) {
@@ -50,6 +60,19 @@ if (!$desdeDt || !$hastaDt) {
     echo json_encode(['status' => 'error', 'message' => 'Formato de fecha inválido. Use YYYY-MM-DD HH:MM:SS']);
     exit;
 }
+
+// Asegurar rango válido
+if ($desdeDt > $hastaDt) {
+    $tmp = $desdeDt;
+    $desdeDt = $hastaDt;
+    $hastaDt = $tmp;
+}
+if ($desdeDt == $hastaDt) {
+    $hastaDt = (clone $hastaDt)->modify('+10 minutes');
+}
+
+$desde = $desdeDt->format('Y-m-d H:i:s');
+$hasta = $hastaDt->format('Y-m-d H:i:s');
 
 try {
     // Verificar que el asesor pertenece a este supervisor
@@ -79,6 +102,7 @@ try {
         WHERE asesor_id = ?
           AND timestamp BETWEEN ? AND ?
         ORDER BY timestamp ASC
+        LIMIT 5000
     ");
     if (!$stPts) throw new Exception('Prepare puntos: ' . $conn->error);
     $stPts->bind_param('sss', $asesor_id, $desde, $hasta);
@@ -87,13 +111,56 @@ try {
 
     $puntos = [];
     while ($pt = $resPts->fetch_assoc()) {
+        $lat = (float)$pt['latitud'];
+        $lng = (float)$pt['longitud'];
+        // Filtrar coordenadas inválidas (0,0)
+        if (abs($lat) < 1e-8 && abs($lng) < 1e-8) continue;
         $puntos[] = [
-            'lat' => (float)$pt['latitud'],
-            'lng' => (float)$pt['longitud'],
+            'lat' => $lat,
+            'lng' => $lng,
             'ts'  => $pt['timestamp'],
         ];
     }
     $stPts->close();
+
+    // Fallback: si hay pocos puntos, ampliar ventana para no "perder" trayectos cortos
+    if (count($puntos) < 2) {
+        $desde2 = date('Y-m-d H:i:s', strtotime($desde) - 300);
+        $hasta2 = date('Y-m-d H:i:s', strtotime($hasta) + 300);
+
+        $stPts2 = $conn->prepare("
+            SELECT latitud, longitud, timestamp
+            FROM ubicacion_asesor
+            WHERE asesor_id = ?
+              AND timestamp BETWEEN ? AND ?
+            ORDER BY timestamp ASC
+            LIMIT 5000
+        ");
+        if ($stPts2) {
+            $stPts2->bind_param('sss', $asesor_id, $desde2, $hasta2);
+            $stPts2->execute();
+            $resPts2 = $stPts2->get_result();
+
+            $puntos2 = [];
+            while ($pt = $resPts2->fetch_assoc()) {
+                $lat = (float)$pt['latitud'];
+                $lng = (float)$pt['longitud'];
+                if (abs($lat) < 1e-8 && abs($lng) < 1e-8) continue;
+                $puntos2[] = [
+                    'lat' => $lat,
+                    'lng' => $lng,
+                    'ts'  => $pt['timestamp'],
+                ];
+            }
+            $stPts2->close();
+
+            if (count($puntos2) > count($puntos)) {
+                $puntos = $puntos2;
+                $desde = $desde2;
+                $hasta = $hasta2;
+            }
+        }
+    }
 
     echo json_encode([
         'status'    => 'ok',
