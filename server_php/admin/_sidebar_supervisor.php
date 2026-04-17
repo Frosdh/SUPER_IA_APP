@@ -50,6 +50,10 @@ $alertas_pendientes = $alertas_pendientes ?? 0;
            class="sidebar-link <?= ($currentPage === 'reportes') ? 'active' : '' ?>">
             <i class="fas fa-chart-bar"></i> Reportes KPI
         </a>
+        <a href="metas.php"
+           class="sidebar-link <?= ($currentPage === 'metas') ? 'active' : '' ?>">
+            <i class="fas fa-bullseye"></i> Metas / Tareas
+        </a>
     </div>
 
     <!-- MI EQUIPO -->

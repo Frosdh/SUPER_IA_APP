@@ -1,9 +1,0 @@
-CREATE TABLE IF NOT EXISTS email_otp_codes (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(120) NOT NULL,
-  codigo VARCHAR(6) NOT NULL,
-  expira_en DATETIME NOT NULL,
-  usado TINYINT(1) NOT NULL DEFAULT 0,
-  creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  INDEX idx_email_expira (email, expira_en)
-);
