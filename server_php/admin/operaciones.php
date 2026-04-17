@@ -93,14 +93,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stOwn = $pdo->prepare(
                             "SELECT fp.id
                              FROM ficha_producto fp
-                             JOIN asesor a
-                               ON (a.id = fp.asesor_id)
-                               OR (a.usuario_id = fp.usuario_id)
-                               OR (a.id = fp.usuario_id)
-                             WHERE fp.id = ? AND fp.producto_tipo = 'credito' AND a.supervisor_id = ?
+                             WHERE fp.id = ? AND fp.producto_tipo = 'credito'
+                               AND (
+                                 fp.asesor_id  COLLATE utf8mb4_unicode_ci IN (SELECT id         FROM asesor WHERE supervisor_id IN (?,?))
+                                 OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN (SELECT usuario_id FROM asesor WHERE supervisor_id IN (?,?))
+                               )
                              LIMIT 1"
                         );
-                        $stOwn->execute([$idCredito, $supervisor_table_id]);
+                        $stOwn->execute([$idCredito,
+                                         $supervisor_table_id, $user_id,
+                                         $supervisor_table_id, $user_id]);
                         if (!$stOwn->fetchColumn()) {
                             throw new Exception('No tienes permiso para procesar esta solicitud.');
                         }
@@ -183,82 +185,105 @@ try {
 // ═══════════════════════════════════════════════════════════
 // FUENTE 2 — ficha_producto + ficha_credito (encuesta móvil)
 // ═══════════════════════════════════════════════════════════
+// Columna estado_revision: intentar crearla si no existe (silencioso)
 try {
-    if ($user_role === 'super_admin' || $user_role === 'admin') {
-        $q = "SELECT fp.id as id_credito,
-                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
-                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
-                     fc.monto_credito as cantidad,
-                     CASE
-                         WHEN fp.estado_revision = 'aprobada'  THEN 'aprobado'
-                         WHEN fp.estado_revision = 'rechazada' THEN 'rechazado'
-                         ELSE 'solicitud_ficha'
-                     END as estado,
-                     fp.created_at as fecha_creacion,
-                     u.nombre as asesor_nombre,
-                     'ficha' as origen
-              FROM ficha_producto fp
-              JOIN ficha_credito fc ON fc.ficha_id = fp.id
-              LEFT JOIN asesor a ON (a.id = fp.asesor_id)
-                               OR (a.usuario_id = fp.usuario_id)
-                               OR (a.id = fp.usuario_id)
-              LEFT JOIN usuario u ON u.id = a.usuario_id
-              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
-              WHERE fp.producto_tipo = 'credito'
-              ORDER BY fp.created_at DESC";
-        $st = $pdo->query($q);
-    } elseif ($user_role === 'supervisor') {
-        $q = "SELECT fp.id as id_credito,
-                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
-                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
-                     fc.monto_credito as cantidad,
-                     CASE
-                         WHEN fp.estado_revision = 'aprobada'  THEN 'aprobado'
-                         WHEN fp.estado_revision = 'rechazada' THEN 'rechazado'
-                         ELSE 'solicitud_ficha'
-                     END as estado,
-                     fp.created_at as fecha_creacion,
-                     u.nombre as asesor_nombre,
-                     'ficha' as origen
-              FROM ficha_producto fp
-              JOIN ficha_credito fc ON fc.ficha_id = fp.id
-              LEFT JOIN asesor a ON (a.id = fp.asesor_id)
-                               OR (a.usuario_id = fp.usuario_id)
-                               OR (a.id = fp.usuario_id)
-              LEFT JOIN usuario u ON u.id = a.usuario_id
-              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
-              WHERE fp.producto_tipo = 'credito'
-                AND a.supervisor_id = ?
-              ORDER BY fp.created_at DESC";
-        $st = $pdo->prepare($q);
-        $st->execute([$supervisor_table_id]);
-    } else {
-        $q = "SELECT fp.id as id_credito,
-                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
-                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
-                     fc.monto_credito as cantidad,
-                     CASE
-                         WHEN fp.estado_revision = 'aprobada'  THEN 'aprobado'
-                         WHEN fp.estado_revision = 'rechazada' THEN 'rechazado'
-                         ELSE 'solicitud_ficha'
-                     END as estado,
-                     fp.created_at as fecha_creacion,
-                     NULL as asesor_nombre,
-                     'ficha' as origen
-              FROM ficha_producto fp
-              JOIN ficha_credito fc ON fc.ficha_id = fp.id
-              LEFT JOIN asesor a ON (a.id = fp.asesor_id)
-                               OR (a.usuario_id = fp.usuario_id)
-                               OR (a.id = fp.usuario_id)
-              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula
-              WHERE fp.producto_tipo = 'credito'
-                AND (fp.usuario_id = ? OR fp.asesor_id = ?)
-              ORDER BY fp.created_at DESC";
-        $st = $pdo->prepare($q);
-        $st->execute([$user_id, ($asesor_table_id ?: $user_id)]);
+    if ($pdo->query("SHOW TABLES LIKE 'ficha_producto'")->fetchColumn()) {
+        $chk = $pdo->query("SHOW COLUMNS FROM ficha_producto LIKE 'estado_revision'")->fetchColumn();
+        if (!$chk) {
+            $pdo->exec("ALTER TABLE ficha_producto ADD COLUMN estado_revision VARCHAR(20) NOT NULL DEFAULT 'pendiente'");
+        }
     }
-    $operaciones = array_merge($operaciones, $st->fetchAll());
-} catch (PDOException $e) { /* ficha_credito puede no existir aún */ }
+} catch (Throwable $ignored) {}
+
+$fuente2_error = '';
+try {
+    // Selector de estado (compatible con y sin columna estado_revision)
+    $estado_case = "CASE
+                         WHEN fp.estado_revision = 'aprobada'  THEN 'aprobado'
+                         WHEN fp.estado_revision = 'rechazada' THEN 'rechazado'
+                         ELSE 'solicitud_ficha'
+                     END";
+
+    $select_base = "SELECT fp.id as id_credito,
+                     COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
+                     COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
+                     fc.monto_credito as cantidad,
+                     $estado_case as estado,
+                     fp.created_at as fecha_creacion,
+                     u.nombre as asesor_nombre,
+                     'ficha' as origen
+              FROM ficha_producto fp
+              JOIN ficha_credito fc ON fc.ficha_id COLLATE utf8mb4_unicode_ci = fp.id COLLATE utf8mb4_unicode_ci
+              LEFT JOIN asesor    a  ON (
+                    a.id        = fp.asesor_id  COLLATE utf8mb4_unicode_ci
+                 OR a.usuario_id = fp.usuario_id COLLATE utf8mb4_unicode_ci
+                 OR a.id        = fp.usuario_id COLLATE utf8mb4_unicode_ci
+              )
+              LEFT JOIN usuario   u  ON u.id = a.usuario_id
+              LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula COLLATE utf8mb4_unicode_ci";
+
+    if ($user_role === 'super_admin' || $user_role === 'admin') {
+        $q  = "$select_base WHERE fp.producto_tipo = 'credito' ORDER BY fp.created_at DESC";
+        $st = $pdo->query($q);
+
+    } elseif ($user_role === 'supervisor') {
+        $sid = $supervisor_table_id;
+        $uid = $user_id;
+
+        // ── Paso 1: todos los asesores bajo este supervisor ──
+        $stA = $pdo->prepare(
+            "SELECT id, usuario_id FROM asesor WHERE supervisor_id IN (?, ?)"
+        );
+        $stA->execute([$sid, $uid]);
+        $asesores_rows = $stA->fetchAll();
+
+        $asesor_ids  = array_column($asesores_rows, 'id');
+        $usuario_ids = array_column($asesores_rows, 'usuario_id');
+
+        if (empty($asesor_ids) && empty($usuario_ids)) {
+            $st = null;
+        } else {
+            $all_ids      = array_unique(array_merge($asesor_ids, $usuario_ids));
+            $placeholders = implode(',', array_fill(0, count($all_ids), '?'));
+            // COLLATE utf8mb4_unicode_ci resuelve el mismatch de colaciones
+            // entre ficha_producto (general_ci) y asesor (unicode_ci)
+            $q  = "$select_base
+                   WHERE fp.producto_tipo = 'credito'
+                     AND (
+                       fp.asesor_id  COLLATE utf8mb4_unicode_ci IN ($placeholders)
+                       OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN ($placeholders)
+                     )
+                   ORDER BY fp.created_at DESC";
+            $st = $pdo->prepare($q);
+            $st->execute(array_merge($all_ids, $all_ids));
+        }
+
+    } else {
+        // Asesor: ve sus propias fichas
+        $allIds = array_unique(array_filter([$user_id, $asesor_table_id]));
+        if (empty($allIds)) {
+            $st = null;
+        } else {
+            $ph = implode(',', array_fill(0, count($allIds), '?'));
+            $q  = "$select_base
+                   WHERE fp.producto_tipo = 'credito'
+                     AND (
+                       fp.asesor_id  COLLATE utf8mb4_unicode_ci IN ($ph)
+                       OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN ($ph)
+                     )
+                   ORDER BY fp.created_at DESC";
+            $st = $pdo->prepare($q);
+            $st->execute(array_merge($allIds, $allIds));
+        }
+    }
+
+    if ($st !== null) {
+        $operaciones = array_merge($operaciones, $st->fetchAll());
+    }
+
+} catch (PDOException $e) {
+    $fuente2_error = $e->getMessage(); // guardamos para mostrarlo en pantalla
+}
 
 // ── Ordenar combinado por fecha desc ──────────────────────
 usort($operaciones, fn($a, $b) => strtotime($b['fecha_creacion']) - strtotime($a['fecha_creacion']));
@@ -560,147 +585,122 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                 <i class="fas fa-triangle-exclamation me-2"></i><?= htmlspecialchars($mensaje_error) ?>
             </div>
         <?php endif; ?>
+        <?php if (!empty($fuente2_error)): ?>
+            <div class="alert alert-warning" role="alert" style="border-radius:12px;">
+                No se pudieron cargar algunas solicitudes desde la app. Actualiza la página o contacta al administrador.
+            </div>
+        <?php endif; ?>
 
         <!-- ESTADÍSTICAS -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="number"><?php echo $stats['total_operaciones']; ?></div>
-                <div class="label">Total de Operaciones</div>
+                <div class="number"><?= $stats['total_operaciones'] ?></div>
+                <div class="label">Total Solicitudes</div>
             </div>
             <div class="stat-card">
-                <div class="number" style="color: #10b981;"><?php echo $stats['completadas']; ?></div>
-                <div class="label">Desembolsadas</div>
+                <div class="number"><?= $stats['completadas'] ?></div>
+                <div class="label">Aprobadas / Desembolsadas</div>
             </div>
             <div class="stat-card">
-                <div class="number" style="color: #3182fe;">$<?php echo number_format($stats['monto_total'] ?? 0, 2); ?></div>
-                <div class="label">Monto Total Aprobado</div>
+                <div class="number">$<?= number_format($stats['monto_total'], 2) ?></div>
+                <div class="label">Monto Total</div>
             </div>
         </div>
 
         <!-- TABLA DE OPERACIONES -->
         <div class="table-card">
-            <div class="card-header-custom">
-                <h6>📊 Listado de Procesos de Crédito</h6>
+            <div class="card-header-custom d-flex justify-content-between align-items-center">
+                <h6><i class="fas fa-list me-2"></i>Solicitudes de Crédito</h6>
+                <span class="badge bg-secondary"><?= $total_ops ?> registros</span>
             </div>
-            
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Cliente</th>
-                        <th>Cédula</th>
-                        <?php if ($col_asesor): ?>
-                        <th>Asesor Asignado</th>
-                        <?php endif; ?>
-                        <th>Monto Aprobado</th>
-                        <th>Estado</th>
-                        <th>Fecha Creación</th>
-                        <th>Acciones</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($operaciones)): ?>
-                    <tr>
-                        <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
-                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay operaciones de crédito registradas
-                        </td>
-                    </tr>
-                    <?php else: ?>
-                        <?php foreach ($operaciones as $op): ?>
+            <?php if (empty($operaciones)): ?>
+            <div class="text-center py-5 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3 d-block" style="opacity:.3"></i>
+                <p class="mb-0">No hay solicitudes de crédito registradas aún.</p>
+                <?php if ($user_role === 'supervisor'): ?>
+                <small>Las fichas que llenen sus asesores desde la app aparecerán aquí.</small>
+                <?php endif; ?>
+            </div>
+            <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Cliente</th>
+                            <th>Cédula</th>
+                            <?php if ($col_asesor): ?><th>Asesor</th><?php endif; ?>
+                            <th>Monto</th>
+                            <th>Estado</th>
+                            <th>Fecha</th>
+                            <th>Origen</th>
+                            <?php if (in_array($user_role, ['super_admin','admin','supervisor'])): ?><th>Acción</th><?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php foreach ($operaciones as $i => $op): ?>
                         <?php
-                        $estado = strtolower($op['estado'] ?? 'prospectado');
-                        $origen = $op['origen'] ?? 'proceso';
-                        switch ($estado) {
-                            case 'desembolsado':
-                                $badgeStyle = 'background:#10b981;color:#fff;';
-                                $label = '✓ Desembolsado'; break;
-                            case 'aprobado':
-                                $badgeStyle = 'background:#22c55e;color:#fff;';
-                                $label = '✓ Aprobado'; break;
-                            case 'rechazado':
-                                $badgeStyle = 'background:#ef4444;color:#fff;';
-                                $label = '✗ Rechazado'; break;
-                            case 'solicitud_ficha':
-                                $badgeStyle = 'background:#3b82f6;color:#fff;';
-                                $label = '📋 Solicitud (encuesta)'; break;
-                            default:
-                                $badgeStyle = 'background:#f59e0b;color:#fff;';
-                                $label = '⏳ ' . ucfirst(str_replace('_', ' ', $estado));
-                        }
-                        $monto = is_numeric($op['cantidad'] ?? '') ? number_format(floatval($op['cantidad']), 2) : '—';
-                        // Link: usar cedula cuando está disponible (ambos orígenes)
-                        $link = !empty($op['cliente_cedula'])
-                            ? 'ver_cliente.php?cedula=' . urlencode($op['cliente_cedula'])
-                            : 'ver_cliente.php?id=' . urlencode($op['id_credito'] ?? '');
+                            $estado  = $op['estado'] ?? 'desconocido';
+                            $origen  = $op['origen'] ?? '';
+                            switch ($estado) {
+                                case 'aprobado':
+                                case 'desembolsado':   $badgeCls = 'bg-success';   $label = 'Aprobado';        break;
+                                case 'rechazado':      $badgeCls = 'bg-danger';    $label = 'Rechazado';       break;
+                                case 'solicitud_ficha':$badgeCls = 'bg-warning text-dark'; $label = 'Pendiente'; break;
+                                default:               $badgeCls = 'bg-secondary'; $label = ucfirst($estado);
+                            }
                         ?>
                         <tr>
+                            <td><?= $i + 1 ?></td>
+                            <td><?= htmlspecialchars($op['cliente_nombre'] ?? '—') ?></td>
+                            <td><?= htmlspecialchars($op['cliente_cedula'] ?? '—') ?></td>
+                            <?php if ($col_asesor): ?><td><?= htmlspecialchars($op['asesor_nombre'] ?? '—') ?></td><?php endif; ?>
+                            <td>$<?= is_numeric($op['cantidad'] ?? '') ? number_format(floatval($op['cantidad']), 2) : '—' ?></td>
+                            <td><span class="badge <?= $badgeCls ?>"><?= $label ?></span></td>
+                            <td><?= isset($op['fecha_creacion']) ? date('d/m/Y H:i', strtotime($op['fecha_creacion'])) : '—' ?></td>
                             <td>
-                                <strong><?php echo htmlspecialchars(substr($op['id_credito'], 0, 8)); ?>…</strong>
                                 <?php if ($origen === 'ficha'): ?>
-                                <br><small style="color:#3b82f6;font-size:10px;font-weight:700;">ENCUESTA MÓVIL</small>
+                                    <span class="badge bg-info text-dark"><i class="fas fa-mobile-alt me-1"></i>App</span>
                                 <?php else: ?>
-                                <br><small style="color:#9ca3af;font-size:10px;">PROCESO</small>
+                                    <span class="badge bg-secondary"><i class="fas fa-desktop me-1"></i>Sistema</span>
                                 <?php endif; ?>
                             </td>
-                            <td><?php echo htmlspecialchars($op['cliente_nombre'] ?? '—'); ?></td>
-                            <td><?php echo htmlspecialchars($op['cliente_cedula'] ?? 'N/A'); ?></td>
-                            <?php if ($col_asesor): ?>
-                            <td><?php echo htmlspecialchars($op['asesor_nombre'] ?? 'Sin asignar'); ?></td>
+                            <?php if (in_array($user_role, ['super_admin','admin','supervisor'])): ?>
+                            <td>
+                                <?php if ($origen === 'ficha' && $estado === 'solicitud_ficha'): ?>
+                                <form method="POST" class="d-flex gap-1" style="flex-wrap:nowrap">
+                                    <input type="hidden" name="csrf_token"  value="<?= htmlspecialchars($csrf_token) ?>">
+                                    <input type="hidden" name="id_credito"  value="<?= htmlspecialchars($op['id_credito'] ?? '') ?>">
+                                    <input type="hidden" name="origen"      value="ficha">
+                                    <button type="submit" name="accion" value="aprobar"
+                                        class="btn btn-sm btn-success"
+                                        onclick="return confirm('¿Aprobar esta solicitud?')"
+                                        title="Aprobar">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                    <button type="submit" name="accion" value="rechazar"
+                                        class="btn btn-sm btn-danger"
+                                        onclick="return confirm('¿Rechazar esta solicitud?')"
+                                        title="Rechazar">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </form>
+                                <?php else: ?>
+                                    <span class="text-muted small">—</span>
+                                <?php endif; ?>
+                            </td>
                             <?php endif; ?>
-                            <td><strong><?php echo $monto !== '—' ? '$' . $monto : '—'; ?></strong></td>
-                            <td>
-                                <span class="badge" style="<?php echo $badgeStyle; ?> padding:4px 10px;border-radius:6px;font-size:12px;">
-                                    <?php echo $label; ?>
-                                </span>
-                            </td>
-                            <td><?php echo date('d/m/Y H:i', strtotime($op['fecha_creacion'])); ?></td>
-                            <td>
-                                <?php
-                                // Usar cédula para ambos orígenes cuando esté disponible
-                                if (!empty($op['cliente_cedula'])) {
-                                    $eye_href = 'ver_cliente.php?cedula=' . urlencode($op['cliente_cedula']);
-                                } else {
-                                    $eye_href = 'ver_cliente.php?id=' . urlencode($op['id_credito'] ?? '');
-                                }
-
-                                $canProcesar = ($origen === 'ficha' && $estado === 'solicitud_ficha' && in_array($user_role, ['super_admin', 'admin', 'supervisor'], true));
-                                ?>
-
-                                <a href="<?= $eye_href ?>" class="btn btn-sm btn-outline-primary" title="Ver detalles del cliente">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-
-                                <?php if ($canProcesar): ?>
-                                    <form method="POST" style="display:inline;">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                        <input type="hidden" name="origen" value="ficha">
-                                        <input type="hidden" name="id_credito" value="<?= htmlspecialchars((string)($op['id_credito'] ?? '')) ?>">
-                                        <input type="hidden" name="accion" value="aprobar">
-                                        <button type="submit" class="btn btn-sm btn-success" title="Aprobar" onclick="return confirm('¿Aprobar esta solicitud de crédito?');">
-                                            <i class="fas fa-check"></i>
-                                        </button>
-                                    </form>
-
-                                    <form method="POST" style="display:inline;">
-                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                        <input type="hidden" name="origen" value="ficha">
-                                        <input type="hidden" name="id_credito" value="<?= htmlspecialchars((string)($op['id_credito'] ?? '')) ?>">
-                                        <input type="hidden" name="accion" value="rechazar">
-                                        <input type="hidden" name="observaciones" value="">
-                                        <button type="submit" class="btn btn-sm btn-danger" title="Rechazar" onclick="var obs = prompt('Motivo de rechazo (opcional):'); if (obs === null) return false; this.form.observaciones.value = obs; return confirm('¿Rechazar esta solicitud de crédito?');">
-                                            <i class="fas fa-times"></i>
-                                        </button>
-                                    </form>
-                                <?php endif; ?>
-                            </td>
                         </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+            <?php endif; ?>
         </div>
-    </div>
-</div>
 
+    </div><!-- /content-area -->
+</div><!-- /main-content -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
