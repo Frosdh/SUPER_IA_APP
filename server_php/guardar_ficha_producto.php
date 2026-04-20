@@ -29,6 +29,87 @@ function respond(string $status, string $message, array $extra = []): void {
     exit;
 }
 
+function table_exists(mysqli $conn, string $table): bool {
+    $table_esc = $conn->real_escape_string($table);
+    $rs = $conn->query("SHOW TABLES LIKE '$table_esc'");
+    return $rs && $rs->num_rows > 0;
+}
+
+function column_exists(mysqli $conn, string $table, string $col): bool {
+    $t = $conn->real_escape_string($table);
+    $c = $conn->real_escape_string($col);
+    $rs = $conn->query("SHOW COLUMNS FROM `$t` LIKE '$c'");
+    return $rs && $rs->num_rows > 0;
+}
+
+/**
+ * Asegura que el registro del cliente esté como PROSPECTO antes de aprobar.
+ * - Si ya está como 'cliente', no lo baja.
+ * - Si no existe, intenta crearlo con los campos mínimos disponibles.
+ */
+function asegurar_cliente_prospecto(mysqli $conn, ?string $cedula, ?string $nombre, ?string $asesor_id, ?string $lat_str, ?string $lng_str): void {
+    if (!$cedula) return;
+    if (!table_exists($conn, 'cliente_prospecto')) return;
+
+    try {
+        $st = $conn->prepare('SELECT id, estado FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
+        if (!$st) return;
+        $st->bind_param('s', $cedula);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $st->close();
+
+        if ($row) {
+            $estadoActual = (string)($row['estado'] ?? '');
+            if ($estadoActual !== 'cliente') {
+                $upd = $conn->prepare("UPDATE cliente_prospecto SET estado='prospecto' WHERE id=?");
+                if ($upd) {
+                    $id = (string)$row['id'];
+                    $upd->bind_param('s', $id);
+                    $upd->execute();
+                    $upd->close();
+                }
+            }
+            return;
+        }
+
+        // Intentar INSERT con columnas existentes (sin romper si el hosting tiene más restricciones)
+        $id = uuid4();
+        $cols = ['id', 'cedula', 'estado'];
+        $vals = [$id, $cedula, 'prospecto'];
+
+        if (column_exists($conn, 'cliente_prospecto', 'nombre')) {
+            $cols[] = 'nombre';
+            $vals[] = ($nombre ?: '');
+        }
+        if ($asesor_id && column_exists($conn, 'cliente_prospecto', 'asesor_id')) {
+            $cols[] = 'asesor_id';
+            $vals[] = $asesor_id;
+        }
+        if ($lat_str !== null && column_exists($conn, 'cliente_prospecto', 'latitud')) {
+            $cols[] = 'latitud';
+            $vals[] = $lat_str;
+        }
+        if ($lng_str !== null && column_exists($conn, 'cliente_prospecto', 'longitud')) {
+            $cols[] = 'longitud';
+            $vals[] = $lng_str;
+        }
+
+        $ph = implode(',', array_fill(0, count($cols), '?'));
+        $colList = implode(', ', $cols);
+        $sql = "INSERT INTO cliente_prospecto ($colList) VALUES ($ph)";
+
+        $types = str_repeat('s', count($vals));
+        $ins = $conn->prepare($sql);
+        if (!$ins) return;
+        $ins->bind_param($types, ...$vals);
+        $ins->execute();
+        $ins->close();
+    } catch (\Throwable $ignored) {
+        // No bloquear el guardado de la ficha por errores de cliente_prospecto
+    }
+}
+
 // ── Parámetros comunes ────────────────────────────────────────
 $usuario_id    = s('usuario_id');
 $asesor_id     = s('asesor_id');
@@ -284,6 +365,9 @@ try {
 } catch (\Throwable $e) {
     respond('error', '[ficha_producto] ' . $e->getMessage());
 }
+
+    // Antes de aprobar cualquier transacción, la persona debe ser PROSPECTO
+    asegurar_cliente_prospecto($conn, $cedula ?: null, $nombre ?: null, $asesor_val ?: null, $lat_str, $lng_str);
 
 // ── Insertar detalle según tipo ───────────────────────────────
 try {

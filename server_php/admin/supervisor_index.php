@@ -392,20 +392,64 @@ $currentPage = 'dashboard';
                 </div>
             </div>
 
-            <!-- Últimos clientes -->
+            <!-- Últimos registros (prospectos y clientes) -->
             <div class="col-md-7">
                 <div class="section-card">
                     <div class="section-header">
-                        <h5><i class="fas fa-address-book" style="color:#3b82f6;"></i>Últimos Clientes</h5>
+                        <h5><i class="fas fa-address-book" style="color:#3b82f6;"></i>Últimos Prospectos y Clientes</h5>
                         <a href="clientes.php" class="sec-link">Ver todos →</a>
                     </div>
                     <?php if (empty($ultimos_clientes)): ?>
-                    <div class="empty-msg"><i class="fas fa-inbox"></i>Sin clientes registrados aún</div>
+                    <div class="empty-msg"><i class="fas fa-inbox"></i>Sin prospectos ni clientes registrados aún</div>
                     <?php else: ?>
                         <?php foreach ($ultimos_clientes as $cli):
                             $ini = '';
                             foreach (explode(' ', $cli['nombre']) as $p) { $ini .= strtoupper(mb_substr($p,0,1)); if (strlen($ini)>=2) break; }
-                            $estClass = ['prospecto'=>'est-prospecto','cliente'=>'est-cliente','pendiente'=>'est-pendiente','descartado'=>'est-descartado'][$cli['estado']] ?? 'est-prospecto';
+                            $estadoDb = strtolower((string)($cli['estado'] ?? 'prospecto'));
+                            $esDesc = ($estadoDb === 'descartado');
+
+                            // Regla: Cliente solo si tiene al menos una aprobación
+                            $esCliente = false;
+                            if (!$esDesc) {
+                                try {
+                                    $ced = (string)($cli['cedula'] ?? '');
+                                    $cid = (string)($cli['id'] ?? '');
+
+                                    // fichas aprobadas
+                                    $hasFp = (bool)$pdo->query("SHOW TABLES LIKE 'ficha_producto'")->fetchColumn();
+                                    $hasRev = $hasFp ? (bool)$pdo->query("SHOW COLUMNS FROM ficha_producto LIKE 'estado_revision'")->fetchColumn() : false;
+                                    if ($ced && $hasFp && $hasRev) {
+                                        $st = $pdo->prepare("SELECT 1 FROM ficha_producto WHERE cliente_cedula = ? AND estado_revision = 'aprobada' LIMIT 1");
+                                        $st->execute([$ced]);
+                                        $esCliente = (bool)$st->fetchColumn();
+                                    }
+
+                                    // crédito formal aprobado/desembolsado
+                                    if (!$esCliente) {
+                                        $hasCp = (bool)$pdo->query("SHOW TABLES LIKE 'credito_proceso'")->fetchColumn();
+                                        if ($cid && $hasCp) {
+                                            $hasEstadoCred = (bool)$pdo->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado_credito'")->fetchColumn();
+                                            $hasEstado = (bool)$pdo->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado'")->fetchColumn();
+                                            $col = $hasEstadoCred ? 'estado_credito' : ($hasEstado ? 'estado' : null);
+                                            if ($col) {
+                                                $st = $pdo->prepare("SELECT 1 FROM credito_proceso WHERE cliente_prospecto_id = ? AND $col IN ('aprobado','desembolsado') LIMIT 1");
+                                                $st->execute([$cid]);
+                                                $esCliente = (bool)$st->fetchColumn();
+                                            }
+                                        }
+                                    }
+                                } catch (Throwable $e) {
+                                    $esCliente = ($estadoDb === 'cliente');
+                                }
+                            }
+
+                            if ($esDesc) {
+                                $estClass = 'est-descartado';
+                                $estLabel = 'Descartado';
+                            } else {
+                                $estClass = $esCliente ? 'est-cliente' : 'est-prospecto';
+                                $estLabel = $esCliente ? 'Cliente' : 'Prospecto';
+                            }
                         ?>
                         <a href="ver_cliente.php?id=<?= urlencode($cli['cedula'] ?? '') ?>" class="cli-row" style="text-decoration:none;">
                             <div class="cli-avatar"><?= htmlspecialchars($ini ?: '?') ?></div>
@@ -413,7 +457,7 @@ $currentPage = 'dashboard';
                                 <div class="cli-name"><?= htmlspecialchars($cli['nombre']) ?></div>
                                 <div class="cli-sub"><?= htmlspecialchars($cli['asesor_nombre']) ?> · <?= htmlspecialchars($cli['ciudad'] ?? '—') ?> · <?= date('d/m/Y', strtotime($cli['created_at'])) ?></div>
                             </div>
-                            <span class="cli-estado <?= $estClass ?>"><?= ucfirst($cli['estado']) ?></span>
+                            <span class="cli-estado <?= $estClass ?>"><?= htmlspecialchars($estLabel) ?></span>
                         </a>
                         <?php endforeach; ?>
                     <?php endif; ?>

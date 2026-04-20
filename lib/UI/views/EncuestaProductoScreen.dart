@@ -954,7 +954,7 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
-                'Toca cada documento que el cliente entregó al asesor:',
+                'Toca cada documento que el prospecto entregó al asesor:',
                 style: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey),
               ),
             ),
@@ -1017,7 +1017,7 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
             _docTarjeta(
               key: '_docFotoCliente',
               icon: Icons.face_rounded,
-              label: 'Foto del cliente',
+              label: 'Foto del prospecto',
               sublabel: 'Foto para expediente',
               value: _docFotoCliente,
             ),

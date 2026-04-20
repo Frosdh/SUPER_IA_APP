@@ -1,6 +1,66 @@
 <?php
 require_once 'db_admin.php';
 
+function table_exists_pdo(PDO $pdo, string $table): bool {
+    try {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1');
+        $st->execute([$table]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try {
+            return (bool)$pdo->query("SHOW TABLES LIKE " . $pdo->quote($table))->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+function column_exists_pdo(PDO $pdo, string $table, string $col): bool {
+    try {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1');
+        $st->execute([$table, $col]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try {
+            return (bool)$pdo->query("SHOW COLUMNS FROM `$table` LIKE " . $pdo->quote($col))->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+function cliente_es_cliente_por_aprobacion(PDO $pdo, ?string $clienteId, ?string $cedula): bool {
+    // Si ya está marcado como cliente en BD, ok
+    // (La regla final la decide la UI/negocio, no solo el campo estado)
+    $cedula = $cedula ? trim($cedula) : '';
+    $clienteId = $clienteId ? trim($clienteId) : '';
+
+    try {
+        // 1) Aprobación de fichas (cualquier producto)
+        if ($cedula && table_exists_pdo($pdo, 'ficha_producto') && column_exists_pdo($pdo, 'ficha_producto', 'estado_revision')) {
+            $st = $pdo->prepare("SELECT 1 FROM ficha_producto WHERE cliente_cedula = ? AND estado_revision = 'aprobada' LIMIT 1");
+            $st->execute([$cedula]);
+            if ($st->fetchColumn()) return true;
+        }
+
+        // 2) Crédito formal aprobado/desembolsado
+        if ($clienteId && table_exists_pdo($pdo, 'credito_proceso')) {
+            // Compatibilidad de nombres de columna en algunos despliegues
+            $has_estado_credito = column_exists_pdo($pdo, 'credito_proceso', 'estado_credito');
+            $has_estado = column_exists_pdo($pdo, 'credito_proceso', 'estado');
+            $estadoCol = $has_estado_credito ? 'estado_credito' : ($has_estado ? 'estado' : null);
+            if ($estadoCol) {
+                $st = $pdo->prepare("SELECT 1 FROM credito_proceso WHERE cliente_prospecto_id = ? AND $estadoCol IN ('aprobado','desembolsado') LIMIT 1");
+                $st->execute([$clienteId]);
+                if ($st->fetchColumn()) return true;
+            }
+        }
+    } catch (Throwable $e) {
+        return false;
+    }
+    return false;
+}
+
 // Verificar sesión de super_admin, admin, supervisor o asesor
 if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true) {
     $user_role = 'super_admin';
@@ -29,7 +89,7 @@ try {
     if ($user_role === 'super_admin' || $user_role === 'admin') {
         // SuperAdmin y Admin ven todos los clientes
         $query = "
-            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, 
+            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.estado,
                    CONCAT_WS(' - ', cp.zona, cp.ciudad) as region, 
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion, 
@@ -55,7 +115,7 @@ try {
             $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
         } else {
         $query = "
-            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, 
+            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.estado,
                    CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion, 
@@ -83,7 +143,7 @@ try {
             $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
         } else {
         $query = "
-            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, 
+            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.estado,
                    CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion
@@ -169,7 +229,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA - Clientes</title>
+    <title>Super_IA - Prospectos y Clientes</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -417,13 +477,15 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     <!-- CONTENT -->
     <div class="content-area">
         <div class="page-header">
-            <h1><i class="fas fa-briefcase me-2"></i>Clientes</h1>
-            <p class="text-muted mt-2">Total de clientes: <strong><?php echo count($clientes); ?></strong></p>
+            <h1><i class="fas fa-briefcase me-2"></i>Prospectos y Clientes</h1>
+            <p class="text-muted mt-2">Total de registros: <strong><?php echo count($clientes); ?></strong>
+                <small class="d-block">Un registro se muestra como <strong>Cliente</strong> cuando el Supervisor aprueba al menos una ficha de producto (crédito, cuenta o inversión). Mientras tanto, es <strong>Prospecto</strong>.</small>
+            </p>
         </div>
 
         <div class="table-card">
             <div class="card-header-custom">
-                <h6>💼 Listado de Clientes</h6>
+                <h6>💼 Listado de Prospectos y Clientes</h6>
             </div>
             
             <table class="table table-hover">
@@ -445,7 +507,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                     <?php if (empty($clientes)): ?>
                     <tr>
                         <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
-                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay clientes para mostrar
+                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay prospectos ni clientes para mostrar
                         </td>
                     </tr>
                     <?php else: ?>
@@ -460,14 +522,22 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                         <td><?php echo htmlspecialchars($cliente['region'] ?: 'Sin región'); ?></td>
                         <td><?php echo date('d/m/Y', strtotime($cliente['fecha_creacion'])); ?></td>
                         <td>
-                            <?php if ($cliente['activo']): ?>
-                                <span class="badge badge-success" style="color: white;">✓ Activo</span>
-                            <?php else: ?>
-                                <span class="badge badge-danger" style="color: white;">✗ Inactivo</span>
-                            <?php endif; ?>
+                            <?php
+                                $estadoDb = strtolower((string)($cliente['estado'] ?? ''));
+                                if ($estadoDb === 'descartado') {
+                                    echo '<span class="badge badge-danger" style="color:white;">✗ Descartado</span>';
+                                } else {
+                                    $esCliente = cliente_es_cliente_por_aprobacion($pdo, (string)($cliente['id'] ?? ''), (string)($cliente['cedula'] ?? ''));
+                                    if ($esCliente) {
+                                        echo '<span class="badge badge-success" style="color:white;">✓ Cliente</span>';
+                                    } else {
+                                        echo '<span class="badge" style="background:#f59e0b;color:#111827;">Prospecto</span>';
+                                    }
+                                }
+                            ?>
                         </td>
                         <td>
-                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-outline-primary" title="Ver encuesta y fichas del cliente">
+                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-outline-primary" title="Ver encuesta y fichas del prospecto/cliente">
                                 <i class="fas fa-eye"></i>
                             </a>
                         </td>

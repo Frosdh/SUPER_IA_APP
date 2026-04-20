@@ -134,17 +134,90 @@ class Super_IA_Dashboard {
      * Contar clientes/prospectos del equipo del supervisor
      */
     public function countClientesBySupervisor($supervisor_id) {
-        $query = "
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN estado = 'cliente' THEN 1 ELSE 0 END) as clientes,
-                SUM(CASE WHEN estado = 'prospecto' THEN 1 ELSE 0 END) as prospectos
-            FROM cliente_prospecto cp
-            JOIN asesor a ON a.id = cp.asesor_id
-            WHERE a.supervisor_id = (
-                SELECT id FROM supervisor WHERE usuario_id = ?
-            )
-        ";
+        // Regla: Cliente solo si tiene alguna aprobación (fichas aprobadas o crédito aprobado/desembolsado).
+        // Si el esquema no tiene tablas/columnas, hacemos fallback al campo cp.estado.
+
+        $has_fp = false;
+        $has_fp_estado = false;
+        $has_cp = false;
+        $cp_estado_col = null;
+
+        try {
+            $rs = $this->conn->query("SHOW TABLES LIKE 'ficha_producto'");
+            $has_fp = $rs && $rs->num_rows > 0;
+            if ($has_fp) {
+                $rs2 = $this->conn->query("SHOW COLUMNS FROM ficha_producto LIKE 'estado_revision'");
+                $has_fp_estado = $rs2 && $rs2->num_rows > 0;
+            }
+
+            $rs3 = $this->conn->query("SHOW TABLES LIKE 'credito_proceso'");
+            $has_cp = $rs3 && $rs3->num_rows > 0;
+            if ($has_cp) {
+                $rsc = $this->conn->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado_credito'");
+                if ($rsc && $rsc->num_rows > 0) $cp_estado_col = 'estado_credito';
+                else {
+                    $rsc2 = $this->conn->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado'");
+                    if ($rsc2 && $rsc2->num_rows > 0) $cp_estado_col = 'estado';
+                }
+            }
+        } catch (\Throwable $e) {
+            $has_fp = $has_fp_estado = $has_cp = false;
+            $cp_estado_col = null;
+        }
+
+        if ($has_fp && $has_fp_estado) {
+            // Query con EXISTS (evita JOIN pesado y respeta la regla de aprobaciones)
+            $query = "
+                SELECT
+                    COUNT(*) as total,
+                    SUM(
+                        CASE
+                            WHEN cp.estado = 'descartado' THEN 0
+                            WHEN cp.estado = 'cliente' THEN 1
+                            WHEN EXISTS (
+                                SELECT 1 FROM ficha_producto fp
+                                WHERE fp.cliente_cedula = cp.cedula
+                                  AND fp.estado_revision = 'aprobada'
+                                LIMIT 1
+                            ) THEN 1
+                            " . ($has_cp && $cp_estado_col ? "WHEN EXISTS (SELECT 1 FROM credito_proceso cr WHERE cr.cliente_prospecto_id = cp.id AND cr.$cp_estado_col IN ('aprobado','desembolsado') LIMIT 1) THEN 1" : "") . "
+                            ELSE 0
+                        END
+                    ) as clientes,
+                    SUM(
+                        CASE
+                            WHEN cp.estado = 'descartado' THEN 0
+                            WHEN cp.estado = 'cliente' THEN 0
+                            WHEN EXISTS (
+                                SELECT 1 FROM ficha_producto fp
+                                WHERE fp.cliente_cedula = cp.cedula
+                                  AND fp.estado_revision = 'aprobada'
+                                LIMIT 1
+                            ) THEN 0
+                            " . ($has_cp && $cp_estado_col ? "WHEN EXISTS (SELECT 1 FROM credito_proceso cr WHERE cr.cliente_prospecto_id = cp.id AND cr.$cp_estado_col IN ('aprobado','desembolsado') LIMIT 1) THEN 0" : "") . "
+                            ELSE 1
+                        END
+                    ) as prospectos
+                FROM cliente_prospecto cp
+                JOIN asesor a ON a.id = cp.asesor_id
+                WHERE a.supervisor_id = (
+                    SELECT id FROM supervisor WHERE usuario_id = ?
+                )
+            ";
+        } else {
+            // Fallback simple por estado
+            $query = "
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN estado = 'cliente' THEN 1 ELSE 0 END) as clientes,
+                    SUM(CASE WHEN estado IN ('prospecto','pendiente') THEN 1 ELSE 0 END) as prospectos
+                FROM cliente_prospecto cp
+                JOIN asesor a ON a.id = cp.asesor_id
+                WHERE a.supervisor_id = (
+                    SELECT id FROM supervisor WHERE usuario_id = ?
+                )
+            ";
+        }
         
         $stmt = $this->conn->prepare($query);
         if (!$stmt) {

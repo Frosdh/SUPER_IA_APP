@@ -5,6 +5,61 @@
 // ============================================================
 require_once 'db_admin.php'; // PDO
 
+function table_exists_pdo(PDO $pdo, string $table): bool {
+    try {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1');
+        $st->execute([$table]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try {
+            return (bool)$pdo->query("SHOW TABLES LIKE " . $pdo->quote($table))->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+function column_exists_pdo(PDO $pdo, string $table, string $col): bool {
+    try {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1');
+        $st->execute([$table, $col]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try {
+            return (bool)$pdo->query("SHOW COLUMNS FROM `$table` LIKE " . $pdo->quote($col))->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+function cliente_es_cliente_por_aprobacion(PDO $pdo, string $clienteId, ?string $cedula): bool {
+    $cedula = $cedula ? trim($cedula) : '';
+    $clienteId = trim($clienteId);
+
+    try {
+        if ($cedula && table_exists_pdo($pdo, 'ficha_producto') && column_exists_pdo($pdo, 'ficha_producto', 'estado_revision')) {
+            $st = $pdo->prepare("SELECT 1 FROM ficha_producto WHERE cliente_cedula = ? AND estado_revision = 'aprobada' LIMIT 1");
+            $st->execute([$cedula]);
+            if ($st->fetchColumn()) return true;
+        }
+
+        if ($clienteId && table_exists_pdo($pdo, 'credito_proceso')) {
+            $has_estado_credito = column_exists_pdo($pdo, 'credito_proceso', 'estado_credito');
+            $has_estado = column_exists_pdo($pdo, 'credito_proceso', 'estado');
+            $estadoCol = $has_estado_credito ? 'estado_credito' : ($has_estado ? 'estado' : null);
+            if ($estadoCol) {
+                $st = $pdo->prepare("SELECT 1 FROM credito_proceso WHERE cliente_prospecto_id = ? AND $estadoCol IN ('aprobado','desembolsado') LIMIT 1");
+                $st->execute([$clienteId]);
+                if ($st->fetchColumn()) return true;
+            }
+        }
+    } catch (Throwable $e) {
+        return false;
+    }
+    return false;
+}
+
 // ── Autenticación ────────────────────────────────────────────
 if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true) {
     $user_role = 'super_admin';
@@ -178,7 +233,7 @@ $is_supervisor = ($user_role === 'supervisor');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA — Detalle Cliente</title>
+    <title>Super_IA — Detalle Prospecto / Cliente</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -338,7 +393,7 @@ $is_supervisor = ($user_role === 'supervisor');
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2><i class="fas fa-address-book me-2" style="color:var(--brand-yellow);"></i>Super_IA — Detalle de Cliente</h2>
+        <h2><i class="fas fa-address-book me-2" style="color:var(--brand-yellow);"></i>Super_IA — Detalle de Prospecto / Cliente</h2>
         <div class="user-info">
             <div>
                 <strong><?php
@@ -355,8 +410,8 @@ $is_supervisor = ($user_role === 'supervisor');
     <div class="content-area">
 
         <div class="page-header">
-            <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Clientes</a>
-            <h1><i class="fas fa-user me-2"></i>Perfil del Cliente</h1>
+            <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver al listado</a>
+            <h1><i class="fas fa-user me-2"></i>Perfil de <?= htmlspecialchars($estado_label) ?></h1>
         </div>
 
         <!-- ── HERO ── -->
@@ -366,7 +421,17 @@ $is_supervisor = ($user_role === 'supervisor');
             $iniciales .= strtoupper(mb_substr($p, 0, 1));
             if (strlen($iniciales) >= 2) break;
         }
-        $estadoColor = ($cliente['estado'] ?? '') === 'descartado' ? '#ef4444' : '#10b981';
+        $estadoDb = strtolower((string)($cliente['estado'] ?? 'prospecto'));
+        $estadoColor = ($estadoDb === 'descartado') ? '#ef4444' : '#10b981';
+
+        // Regla final: solo es CLIENTE si tiene al menos una transacción aprobada
+        // (crédito/cuenta/inversión). Mientras no se apruebe, es PROSPECTO.
+        if ($estadoDb === 'descartado') {
+            $estado_label = 'Descartado';
+        } else {
+            $esCliente = cliente_es_cliente_por_aprobacion($pdo, (string)$cliente_id, (string)($cliente['cedula'] ?? ''));
+            $estado_label = $esCliente ? 'Cliente' : 'Prospecto';
+        }
         ?>
         <div class="client-hero">
             <div class="client-avatar"><?= htmlspecialchars($iniciales ?: '?') ?></div>
@@ -374,7 +439,7 @@ $is_supervisor = ($user_role === 'supervisor');
                 <h2><?= htmlspecialchars($cliente['nombre'] ?? '—') ?></h2>
                 <p>Cédula: <?= htmlspecialchars($cliente['cedula'] ?? '—') ?> &nbsp;|&nbsp; <?= htmlspecialchars($cliente['email'] ?? '—') ?></p>
                 <div class="client-hero-badges">
-                    <span class="hero-badge yellow"><?= htmlspecialchars(ucfirst($cliente['estado'] ?? 'activo')) ?></span>
+                    <span class="hero-badge yellow"><?= htmlspecialchars($estado_label) ?></span>
                     <?php if ($cliente['asesor_nombre'] ?? null): ?>
                     <span class="hero-badge"><i class="fas fa-user-tie me-1"></i><?= htmlspecialchars($cliente['asesor_nombre']) ?></span>
                     <?php endif; ?>
@@ -807,7 +872,7 @@ $is_supervisor = ($user_role === 'supervisor');
             <div class="section-body">
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    No hay fichas de productos registradas para este cliente
+                    No hay fichas de productos registradas para este prospecto/cliente
                 </div>
             </div>
         </div>

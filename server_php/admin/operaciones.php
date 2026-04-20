@@ -1,6 +1,87 @@
 <?php
 require_once 'db_admin.php';
 
+function uuid4(): string {
+    $data = random_bytes(16);
+    $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+    $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+    return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+}
+
+function table_exists_pdo(PDO $pdo, string $table): bool {
+    try {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ? LIMIT 1');
+        $st->execute([$table]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try {
+            return (bool)$pdo->query("SHOW TABLES LIKE " . $pdo->quote($table))->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+function column_exists_pdo(PDO $pdo, string $table, string $col): bool {
+    try {
+        $st = $pdo->prepare('SELECT 1 FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ? LIMIT 1');
+        $st->execute([$table, $col]);
+        return (bool)$st->fetchColumn();
+    } catch (Throwable $e) {
+        try {
+            return (bool)$pdo->query("SHOW COLUMNS FROM `$table` LIKE " . $pdo->quote($col))->fetchColumn();
+        } catch (Throwable $e2) {
+            return false;
+        }
+    }
+}
+
+/**
+ * Promueve a CLIENTE cuando se aprueba una solicitud.
+ * - Si existe en cliente_prospecto por cédula, actualiza estado='cliente'.
+ * - Si no existe, intenta crearlo con campos mínimos disponibles.
+ * No bloquea el flujo si la tabla/columnas no existen.
+ */
+function promover_a_cliente(PDO $pdo, ?string $cedula, ?string $nombre, ?string $asesorId): void {
+    if (!$cedula) return;
+    if (!table_exists_pdo($pdo, 'cliente_prospecto')) return;
+
+    try {
+        $st = $pdo->prepare('SELECT id, estado FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
+        $st->execute([$cedula]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+
+        if ($row) {
+            if (($row['estado'] ?? '') !== 'cliente') {
+                $upd = $pdo->prepare("UPDATE cliente_prospecto SET estado='cliente' WHERE id = ?");
+                $upd->execute([(string)$row['id']]);
+            }
+            return;
+        }
+
+        // Insert mínimo (solo columnas que existan)
+        $id = uuid4();
+        $cols = ['id', 'cedula', 'estado'];
+        $vals = [$id, $cedula, 'cliente'];
+
+        if (column_exists_pdo($pdo, 'cliente_prospecto', 'nombre')) {
+            $cols[] = 'nombre';
+            $vals[] = ($nombre ?? '');
+        }
+        if ($asesorId && column_exists_pdo($pdo, 'cliente_prospecto', 'asesor_id')) {
+            $cols[] = 'asesor_id';
+            $vals[] = $asesorId;
+        }
+
+        $ph = implode(',', array_fill(0, count($cols), '?'));
+        $colList = implode(', ', $cols);
+        $ins = $pdo->prepare("INSERT INTO cliente_prospecto ($colList) VALUES ($ph)");
+        $ins->execute($vals);
+    } catch (Throwable $ignored) {
+        // Silencioso: no impedir aprobación de ficha
+    }
+}
+
 // Verificar sesión de super_admin, admin, supervisor o asesor
 if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true) {
     $user_role = 'super_admin';
@@ -47,6 +128,50 @@ if (empty($_SESSION['csrf_token'])) {
 }
 $csrf_token = $_SESSION['csrf_token'];
 
+// ── Sub-sección: tipo de operación (crédito / inversiones / cuentas) ──
+$tipos_map = [
+    'credito' => [
+        'label'       => 'Crédito',
+        'titulo'      => 'Operaciones de Crédito',
+        'tabla'       => 'ficha_credito',
+        'alias'       => 'fc',
+        'monto_col'   => 'monto_credito',
+        'icon'        => 'fa-hand-holding-usd',
+        'usa_proceso' => true,
+    ],
+    'inversiones' => [
+        'label'       => 'Inversiones',
+        'titulo'      => 'Operaciones de Inversiones',
+        'tabla'       => 'ficha_inversiones',
+        'alias'       => 'fi',
+        'monto_col'   => 'monto_inversion',
+        'icon'        => 'fa-chart-line',
+        'usa_proceso' => false,
+    ],
+    'cuenta_ahorros' => [
+        'label'       => 'Cuenta de Ahorros',
+        'titulo'      => 'Solicitudes de Cuenta de Ahorros',
+        'tabla'       => 'ficha_cuenta_ahorros',
+        'alias'       => 'fa',
+        'monto_col'   => 'monto_inicial',
+        'icon'        => 'fa-piggy-bank',
+        'usa_proceso' => false,
+    ],
+    'cuenta_corriente' => [
+        'label'       => 'Cuenta Corriente',
+        'titulo'      => 'Solicitudes de Cuenta Corriente',
+        'tabla'       => 'ficha_cuenta_corriente',
+        'alias'       => 'fcc',
+        'monto_col'   => 'monto_deposito_prom',
+        'icon'        => 'fa-wallet',
+        'usa_proceso' => false,
+    ],
+];
+
+$tipo = $_GET['tipo'] ?? $_POST['tipo'] ?? 'credito';
+if (!isset($tipos_map[$tipo])) $tipo = 'credito';
+$tipo_info = $tipos_map[$tipo];
+
 // ── Migración no destructiva: estado de revisión de fichas ───
 try {
     $exists = $pdo->query("SHOW TABLES LIKE 'ficha_producto'")->fetchColumn();
@@ -80,10 +205,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $accion    = $_POST['accion'] ?? '';
         $origen    = $_POST['origen'] ?? '';
-        $idCredito = $_POST['id_credito'] ?? '';
+        $idFicha   = $_POST['id_ficha'] ?? '';
+        $tipoPost  = $_POST['tipo'] ?? $tipo;
+        if (!isset($tipos_map[$tipoPost])) $tipoPost = $tipo;
         $obs       = trim((string)($_POST['observaciones'] ?? ''));
 
-        if ($origen === 'ficha' && is_string($idCredito) && $idCredito !== '' && ($accion === 'aprobar' || $accion === 'rechazar')) {
+        if ($origen === 'ficha' && is_string($idFicha) && $idFicha !== '' && ($accion === 'aprobar' || $accion === 'rechazar')) {
             if (!in_array($user_role, ['super_admin', 'admin', 'supervisor'], true)) {
                 $mensaje_error = 'No autorizado.';
             } else {
@@ -93,22 +220,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stOwn = $pdo->prepare(
                             "SELECT fp.id
                              FROM ficha_producto fp
-                             WHERE fp.id = ? AND fp.producto_tipo = 'credito'
+                             WHERE fp.id = ? AND fp.producto_tipo = ?
                                AND (
                                  fp.asesor_id  COLLATE utf8mb4_unicode_ci IN (SELECT id         FROM asesor WHERE supervisor_id IN (?,?))
                                  OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN (SELECT usuario_id FROM asesor WHERE supervisor_id IN (?,?))
                                )
                              LIMIT 1"
                         );
-                        $stOwn->execute([$idCredito,
+                        $stOwn->execute([$idFicha, $tipoPost,
                                          $supervisor_table_id, $user_id,
                                          $supervisor_table_id, $user_id]);
                         if (!$stOwn->fetchColumn()) {
                             throw new Exception('No tienes permiso para procesar esta solicitud.');
                         }
                     } else {
-                        $stOwn = $pdo->prepare("SELECT id FROM ficha_producto WHERE id = ? AND producto_tipo = 'credito' LIMIT 1");
-                        $stOwn->execute([$idCredito]);
+                        $stOwn = $pdo->prepare("SELECT id FROM ficha_producto WHERE id = ? AND producto_tipo = ? LIMIT 1");
+                        $stOwn->execute([$idFicha, $tipoPost]);
                         if (!$stOwn->fetchColumn()) {
                             throw new Exception('Solicitud no encontrada.');
                         }
@@ -122,11 +249,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              revision_usuario_id = ?,
                              revision_at = NOW(),
                              revision_observaciones = ?
-                         WHERE id = ? AND producto_tipo = 'credito' AND estado_revision = 'pendiente'"
+                         WHERE id = ? AND producto_tipo = ? AND estado_revision = 'pendiente'"
                     );
-                    $stUp->execute([$nuevoEstado, (string)$user_id, $obs, $idCredito]);
+                    $stUp->execute([$nuevoEstado, (string)$user_id, $obs, $idFicha, $tipoPost]);
 
                     if ($stUp->rowCount() > 0) {
+                        if ($accion === 'aprobar') {
+                            // Promover prospecto a cliente al aprobar cualquier producto
+                            try {
+                                $stF = $pdo->prepare('SELECT cliente_cedula, cliente_nombre, asesor_id, usuario_id FROM ficha_producto WHERE id = ? AND producto_tipo = ? LIMIT 1');
+                                $stF->execute([$idFicha, $tipoPost]);
+                                $f = $stF->fetch(PDO::FETCH_ASSOC) ?: [];
+
+                                $ced = isset($f['cliente_cedula']) ? (string)$f['cliente_cedula'] : null;
+                                $nom = isset($f['cliente_nombre']) ? (string)$f['cliente_nombre'] : null;
+                                $ases = isset($f['asesor_id']) ? (string)$f['asesor_id'] : null;
+
+                                // Si no hay asesor_id directo, intentar resolver por usuario_id
+                                if ((!$ases || $ases === '') && !empty($f['usuario_id'])) {
+                                    try {
+                                        $stA = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
+                                        $stA->execute([(string)$f['usuario_id']]);
+                                        $ases = (string)($stA->fetchColumn() ?: '');
+                                    } catch (Throwable $e) {
+                                        $ases = $ases ?: null;
+                                    }
+                                }
+
+                                promover_a_cliente($pdo, $ced ?: null, $nom ?: null, $ases ?: null);
+                            } catch (Throwable $ignored) {}
+                        }
                         $mensaje_exito = ($accion === 'aprobar') ? 'Solicitud aprobada.' : 'Solicitud rechazada.';
                     } else {
                         $mensaje_error = 'No se pudo actualizar (quizá ya fue procesada).';
@@ -146,6 +298,9 @@ $operaciones = [];
 // FUENTE 1 — credito_proceso (procesos formales en sistema)
 // ═══════════════════════════════════════════════════════════
 try {
+    if (!$tipo_info['usa_proceso']) {
+        throw new Exception('skip');
+    }
     if ($user_role === 'super_admin' || $user_role === 'admin') {
         $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
                      cp.monto_aprobado as cantidad, cp.estado_credito as estado,
@@ -180,10 +335,10 @@ try {
         $st->execute([$asesor_table_id]);
     }
     $operaciones = array_merge($operaciones, $st->fetchAll());
-} catch (PDOException $e) { /* tabla puede no existir aún */ }
+} catch (Throwable $e) { /* tabla puede no existir aún o no aplica */ }
 
 // ═══════════════════════════════════════════════════════════
-// FUENTE 2 — ficha_producto + ficha_credito (encuesta móvil)
+// FUENTE 2 — ficha_producto + ficha_* (solicitudes desde app)
 // ═══════════════════════════════════════════════════════════
 // Columna estado_revision: intentar crearla si no existe (silencioso)
 try {
@@ -197,6 +352,17 @@ try {
 
 $fuente2_error = '';
 try {
+    // Tabla específica según tipo
+    $detail_table = $tipo_info['tabla'];
+    $detail_alias = $tipo_info['alias'];
+    $amount_col   = $tipo_info['monto_col'];
+
+    // Si falta alguna tabla requerida, no rompemos la página
+    $has_fp = $pdo->query("SHOW TABLES LIKE 'ficha_producto'")->fetchColumn();
+    $has_detail = $pdo->query("SHOW TABLES LIKE '$detail_table'")->fetchColumn();
+    if (!$has_fp || !$has_detail) {
+        $st = null;
+    } else {
     // Selector de estado (compatible con y sin columna estado_revision)
     $estado_case = "CASE
                          WHEN fp.estado_revision = 'aprobada'  THEN 'aprobado'
@@ -204,16 +370,16 @@ try {
                          ELSE 'solicitud_ficha'
                      END";
 
-    $select_base = "SELECT fp.id as id_credito,
+     $select_base = "SELECT fp.id as id_ficha,
                      COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
                      COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
-                     fc.monto_credito as cantidad,
+                            $detail_alias.$amount_col as cantidad,
                      $estado_case as estado,
                      fp.created_at as fecha_creacion,
                      u.nombre as asesor_nombre,
                      'ficha' as origen
               FROM ficha_producto fp
-              JOIN ficha_credito fc ON fc.ficha_id COLLATE utf8mb4_unicode_ci = fp.id COLLATE utf8mb4_unicode_ci
+                  JOIN $detail_table $detail_alias ON $detail_alias.ficha_id COLLATE utf8mb4_unicode_ci = fp.id COLLATE utf8mb4_unicode_ci
               LEFT JOIN asesor    a  ON (
                     a.id        = fp.asesor_id  COLLATE utf8mb4_unicode_ci
                  OR a.usuario_id = fp.usuario_id COLLATE utf8mb4_unicode_ci
@@ -223,8 +389,9 @@ try {
               LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula COLLATE utf8mb4_unicode_ci";
 
     if ($user_role === 'super_admin' || $user_role === 'admin') {
-        $q  = "$select_base WHERE fp.producto_tipo = 'credito' ORDER BY fp.created_at DESC";
-        $st = $pdo->query($q);
+        $q  = "$select_base WHERE fp.producto_tipo = ? ORDER BY fp.created_at DESC";
+        $st = $pdo->prepare($q);
+        $st->execute([$tipo]);
 
     } elseif ($user_role === 'supervisor') {
         $sid = $supervisor_table_id;
@@ -248,14 +415,14 @@ try {
             // COLLATE utf8mb4_unicode_ci resuelve el mismatch de colaciones
             // entre ficha_producto (general_ci) y asesor (unicode_ci)
             $q  = "$select_base
-                   WHERE fp.producto_tipo = 'credito'
+                                     WHERE fp.producto_tipo = ?
                      AND (
                        fp.asesor_id  COLLATE utf8mb4_unicode_ci IN ($placeholders)
                        OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN ($placeholders)
                      )
                    ORDER BY fp.created_at DESC";
             $st = $pdo->prepare($q);
-            $st->execute(array_merge($all_ids, $all_ids));
+                        $st->execute(array_merge([$tipo], $all_ids, $all_ids));
         }
 
     } else {
@@ -266,15 +433,16 @@ try {
         } else {
             $ph = implode(',', array_fill(0, count($allIds), '?'));
             $q  = "$select_base
-                   WHERE fp.producto_tipo = 'credito'
+                                     WHERE fp.producto_tipo = ?
                      AND (
                        fp.asesor_id  COLLATE utf8mb4_unicode_ci IN ($ph)
                        OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN ($ph)
                      )
                    ORDER BY fp.created_at DESC";
             $st = $pdo->prepare($q);
-            $st->execute(array_merge($allIds, $allIds));
+                        $st->execute(array_merge([$tipo], $allIds, $allIds));
         }
+    }
     }
 
     if ($st !== null) {
@@ -302,13 +470,15 @@ $currentPage        = 'operaciones';
 $alertas_pendientes = $alertas_pendientes ?? 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 $is_supervisor_ui   = ($user_role === 'supervisor');
+$page_title         = $tipo_info['titulo'];
+$table_title        = 'Solicitudes de ' . $tipo_info['label'];
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA - Operaciones de Crédito</title>
+    <title>Super_IA - <?= htmlspecialchars($page_title) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -572,7 +742,19 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     <div class="content-area">
 
         <div class="page-header">
-            <h1><i class="fas fa-handshake me-2"></i>Operaciones de Crédito</h1>
+            <h1><i class="fas fa-handshake me-2"></i><?= htmlspecialchars($page_title) ?></h1>
+
+            <div class="mt-3 d-flex gap-2 flex-wrap">
+                <?php foreach ($tipos_map as $k => $info): ?>
+                    <a
+                        href="operaciones.php?tipo=<?= urlencode($k) ?>"
+                        class="btn btn-sm <?= ($k === $tipo) ? 'btn-primary' : 'btn-outline-primary' ?>"
+                        style="border-radius:999px;"
+                    >
+                        <i class="fas <?= htmlspecialchars($info['icon']) ?> me-1"></i><?= htmlspecialchars($info['label']) ?>
+                    </a>
+                <?php endforeach; ?>
+            </div>
         </div>
 
         <?php if (!empty($mensaje_exito)): ?>
@@ -610,13 +792,13 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
         <!-- TABLA DE OPERACIONES -->
         <div class="table-card">
             <div class="card-header-custom d-flex justify-content-between align-items-center">
-                <h6><i class="fas fa-list me-2"></i>Solicitudes de Crédito</h6>
+                <h6><i class="fas fa-list me-2"></i><?= htmlspecialchars($table_title) ?></h6>
                 <span class="badge bg-secondary"><?= $total_ops ?> registros</span>
             </div>
             <?php if (empty($operaciones)): ?>
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-inbox fa-3x mb-3 d-block" style="opacity:.3"></i>
-                <p class="mb-0">No hay solicitudes de crédito registradas aún.</p>
+                <p class="mb-0">No hay solicitudes registradas aún.</p>
                 <?php if ($user_role === 'supervisor'): ?>
                 <small>Las fichas que llenen sus asesores desde la app aparecerán aquí.</small>
                 <?php endif; ?>
@@ -670,7 +852,8 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                                 <?php if ($origen === 'ficha' && $estado === 'solicitud_ficha'): ?>
                                 <form method="POST" class="d-flex gap-1" style="flex-wrap:nowrap">
                                     <input type="hidden" name="csrf_token"  value="<?= htmlspecialchars($csrf_token) ?>">
-                                    <input type="hidden" name="id_credito"  value="<?= htmlspecialchars($op['id_credito'] ?? '') ?>">
+                                    <input type="hidden" name="tipo"       value="<?= htmlspecialchars($tipo) ?>">
+                                    <input type="hidden" name="id_ficha"   value="<?= htmlspecialchars($op['id_ficha'] ?? ($op['id_credito'] ?? '')) ?>">
                                     <input type="hidden" name="origen"      value="ficha">
                                     <button type="submit" name="accion" value="aprobar"
                                         class="btn btn-sm btn-success"

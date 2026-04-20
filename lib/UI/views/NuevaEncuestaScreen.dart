@@ -22,8 +22,19 @@ enum _Paso {
 class NuevaEncuestaScreen extends StatefulWidget {
   final String tipoTarea;
 
-  const NuevaEncuestaScreen({Key? key, this.tipoTarea = 'prospecto_nuevo'})
-      : super(key: key);
+  /// Datos para prellenar el formulario (paso 1). Útil cuando se abre la
+  /// encuesta desde la agenda de tareas tras consultar por cédula.
+  /// Claves esperadas (todas opcionales):
+  ///   cedula, nombres, apellidos, nombre, telefono, celular, email,
+  ///   direccion, ciudad, actividad, nombre_empresa, tiene_ruc (0|1),
+  ///   tiene_rise (0|1), es_cliente (0|1)
+  final Map<String, dynamic>? initialData;
+
+  const NuevaEncuestaScreen({
+    Key? key,
+    this.tipoTarea = 'prospecto_nuevo',
+    this.initialData,
+  }) : super(key: key);
 
   @override
   _NuevaEncuestaScreenState createState() => _NuevaEncuestaScreenState();
@@ -37,7 +48,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   double? _latInicio, _lngInicio;
   double? _latFin, _lngFin;
 
-  // ── Paso 1: Datos del cliente ────────────────────────────────
+  // ── Paso 1: Datos del prospecto ──────────────────────────────
   final _nombreCtrl = TextEditingController();
   final _apellidosCtrl = TextEditingController();
   final _cedulaCtrl = TextEditingController();
@@ -116,6 +127,66 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   void initState() {
     super.initState();
     _obtenerGPS();
+    _aplicarInitialData();
+  }
+
+  /// Si la encuesta se abre desde la agenda con una cédula que ya existe
+  /// en la base, prellena los controladores del paso 1.
+  void _aplicarInitialData() {
+    final d = widget.initialData;
+    if (d == null || d.isEmpty) return;
+
+    String _s(dynamic v) => (v ?? '').toString();
+    int _i(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    // Si vienen 'nombres' y 'apellidos' separados, úsalos; si no, intenta
+    // partir 'nombre' completo en primer token (nombre) y resto (apellidos).
+    final nombresSep = _s(d['nombres']);
+    final apellidosSep = _s(d['apellidos']);
+    if (nombresSep.isNotEmpty || apellidosSep.isNotEmpty) {
+      _nombreCtrl.text = nombresSep;
+      _apellidosCtrl.text = apellidosSep;
+    } else {
+      final nombreFull = _s(d['nombre']).trim();
+      if (nombreFull.isNotEmpty) {
+        final parts = nombreFull.split(RegExp(r'\s+'));
+        if (parts.length == 1) {
+          _nombreCtrl.text = parts[0];
+        } else {
+          _nombreCtrl.text = parts.first;
+          _apellidosCtrl.text = parts.sublist(1).join(' ');
+        }
+      }
+    }
+
+    _cedulaCtrl.text  = _s(d['cedula']);
+    _telefonoCtrl.text = _s(d['telefono']);
+    _celularCtrl.text  = _s(d['celular']);
+    _emailCtrl.text    = _s(d['email']);
+    _direccionCtrl.text = _s(d['direccion']);
+    _ciudadCtrl.text    = _s(d['ciudad']);
+
+    final act = _s(d['actividad']);
+    if (act.isNotEmpty) _actividad = act;
+
+    final ne = _s(d['nombre_empresa']);
+    if (ne.isNotEmpty) {
+      _empresaCtrl.text = ne;
+      _tieneEmpresa = true;
+    }
+
+    final tieneRuc  = _i(d['tiene_ruc'])  == 1;
+    final tieneRise = _i(d['tiene_rise']) == 1;
+    if (tieneRuc) {
+      _regimenTributario = 'ruc';
+    } else if (tieneRise) {
+      _regimenTributario = 'rise';
+    }
   }
 
   @override
@@ -457,8 +528,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               const SizedBox(height: 10),
               Text(
                 fueEncuestado
-                    ? 'Encuesta y datos del cliente guardados correctamente.'
-                    : 'Se registró que el cliente no quiso ser encuestado.',
+                    ? 'Encuesta y datos del prospecto guardados correctamente.'
+                    : 'Se registró que el prospecto no quiso ser encuestado.',
                 style:
                     TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
                 textAlign: TextAlign.center,
@@ -638,7 +709,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ? 'Visita de Recuperación'
             : 'Nueva Tarea';
       case _Paso.datosCliente:
-        return 'Datos del Cliente';
+        return 'Datos del Prospecto';
       case _Paso.productosActuales:
         return 'Situación Financiera';
       case _Paso.interesProductos:
@@ -733,7 +804,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
         const SizedBox(height: 24),
         Text(
-          '¿El cliente desea ser\nencuestado?',
+          '¿El prospecto desea ser\nencuestado?',
           style: TextStyle(
             color: ConstantColors.textDark,
             fontSize: 22,
@@ -744,7 +815,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          'Seleccione la respuesta del cliente para continuar.',
+          'Seleccione la respuesta del prospecto para continuar.',
           style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
           textAlign: TextAlign.center,
         ),
@@ -851,7 +922,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
-  // ── PASO 1: Datos del cliente ────────────────────────────────
+  // ── PASO 1: Datos del prospecto ──────────────────────────────
 
   Widget _buildPasoDatosCliente() {
     return Form(
