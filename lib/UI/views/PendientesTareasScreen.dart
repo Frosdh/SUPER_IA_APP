@@ -17,6 +17,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
   bool _loading = true;
   String? _error;
   List<Map<String, dynamic>> _tareas = const [];
+  final Map<String, bool> _buenVisto = {};
 
   @override
   void initState() {
@@ -187,6 +188,105 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
     }
   }
 
+  Future<void> _finalizarTarea(String tareaId) async {
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final asesorId = await AuthPrefs.getAsesorId();
+
+      if (usuarioId.isEmpty) {
+        throw Exception('Sesión no encontrada');
+      }
+
+      final url = Uri.parse('${Constants.apiBaseUrl}/finalizar_tarea.php');
+      final resp = await http.post(url, body: {
+        'usuario_id': usuarioId,
+        if (asesorId.isNotEmpty) 'asesor_id': asesorId,
+        'tarea_id': tareaId,
+      }).timeout(const Duration(seconds: 20));
+
+      final decoded = json.decode(resp.body);
+      if (decoded is! Map) {
+        throw Exception('Respuesta invalida');
+      }
+
+      final status = decoded['status']?.toString() ?? '';
+      if (status != 'success') {
+        final msg = decoded['message']?.toString() ?? 'No se pudo finalizar';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: ConstantColors.warning,
+          ),
+        );
+        return;
+      }
+
+      _buenVisto.remove(tareaId);
+      await _cargar();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: ConstantColors.warning,
+        ),
+      );
+    }
+  }
+
+  Future<void> _posponerTarea(String tareaId, DateTime nuevaFecha) async {
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final asesorId = await AuthPrefs.getAsesorId();
+
+      if (usuarioId.isEmpty) {
+        throw Exception('Sesión no encontrada');
+      }
+
+      final fechaStr = nuevaFecha.toIso8601String().substring(0, 10);
+
+      final url = Uri.parse('${Constants.apiBaseUrl}/posponer_tarea.php');
+      final resp = await http.post(url, body: {
+        'usuario_id': usuarioId,
+        if (asesorId.isNotEmpty) 'asesor_id': asesorId,
+        'tarea_id': tareaId,
+        'nueva_fecha': fechaStr,
+      }).timeout(const Duration(seconds: 20));
+
+      final decoded = json.decode(resp.body);
+      if (decoded is! Map) {
+        throw Exception('Respuesta invalida');
+      }
+
+      final status = decoded['status']?.toString() ?? '';
+      if (status != 'success') {
+        final msg = decoded['message']?.toString() ?? 'No se pudo posponer';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: ConstantColors.warning,
+          ),
+        );
+        return;
+      }
+
+      _buenVisto.remove(tareaId);
+      await _cargar();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: ConstantColors.warning,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hoy = DateTime.now().toIso8601String().substring(0, 10);
@@ -285,6 +385,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         final fijada = (t['seleccion_fijada']?.toString() ?? '0') == '1';
         final selDia = t['seleccionada_dia']?.toString() ?? '';
         final esHoySeleccionada = estado == 'en_proceso' && (selDia.isEmpty || selDia == hoy);
+        final buenVisto = _buenVisto[tareaId] ?? false;
 
         final fechaMostrar = estado == 'completada' ? fechaReal : fechaProg;
         final horaMostrar = estado == 'completada' ? horaReal : horaProg;
@@ -543,6 +644,97 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                   ],
                 ],
               ),
+
+              if (isProc) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: ConstantColors.borderColor),
+                        ),
+                        child: Row(
+                          children: [
+                            Checkbox(
+                              value: buenVisto,
+                              onChanged: tareaId.isEmpty
+                                  ? null
+                                  : (v) {
+                                      setState(() {
+                                        _buenVisto[tareaId] = v ?? false;
+                                      });
+                                    },
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              side: BorderSide(color: Colors.white.withOpacity(0.35)),
+                              activeColor: Colors.green.shade700,
+                              checkColor: Colors.white,
+                            ),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'Completado',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: ConstantColors.textWhite,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    OutlinedButton.icon(
+                      onPressed: tareaId.isEmpty
+                          ? null
+                          : () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now().add(const Duration(days: 1)),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (picked == null) return;
+                              await _posponerTarea(tareaId, picked);
+                            },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(color: Colors.white.withOpacity(0.25)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.event_repeat_rounded, size: 16),
+                      label: const Text(
+                        'Posponer',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: (tareaId.isEmpty || !buenVisto) ? null : () => _finalizarTarea(tareaId),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green.shade700,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      icon: const Icon(Icons.check_circle_rounded, size: 16),
+                      label: const Text(
+                        'Finalizar',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         );

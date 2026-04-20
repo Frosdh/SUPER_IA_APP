@@ -294,7 +294,11 @@ if ($supervisor_table_id) {
         .main-content{flex:1;margin-left:230px;display:flex;flex-direction:column;overflow:hidden;}
         .navbar-custom{background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));color:#fff;padding:15px 30px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
         .navbar-custom h2{margin:0;font-size:20px;font-weight:700;}
-        .btn-logout{background:rgba(255,221,0,.15);color:#fff;border:1px solid rgba(255,221,0,.28);padding:8px 15px;border-radius:10px;text-decoration:none;font-weight:600;}
+        .user-info{display:flex;align-items:center;gap:15px;}
+        .user-info > div{text-align:right;line-height:1.25;}
+        .user-info small{opacity:.75;font-size:12px;}
+        .btn-logout{background:rgba(255,221,0,.15);color:#fff;border:1px solid rgba(255,221,0,.28);padding:8px 15px;border-radius:10px;text-decoration:none;font-weight:600;transition:background .2s;}
+        .btn-logout:hover{background:rgba(255,221,0,.24);color:#fff;}
         .content-area{flex:1;overflow-y:auto;padding:28px 30px;}
         .card-block{background:#fff;border-radius:16px;box-shadow:var(--brand-shadow);border:1px solid var(--brand-border);padding:22px;margin-bottom:22px;}
         .card-block h3{font-size:17px;font-weight:800;margin-bottom:16px;color:var(--brand-navy-deep);display:flex;align-items:center;gap:10px;}
@@ -329,7 +333,10 @@ if ($supervisor_table_id) {
     <div class="navbar-custom">
         <h2><i class="fas fa-bullseye" style="color:var(--brand-yellow);"></i> Metas del Equipo</h2>
         <div class="user-info">
-            <div><strong><?= htmlspecialchars($supervisor_nombre) ?></strong></div>
+            <div>
+                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
+                <small><?= htmlspecialchars($supervisor_rol) ?></small>
+            </div>
             <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
         </div>
     </div>

@@ -134,6 +134,29 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   bool _docSolicitudCred = false;
   bool _docFotoCliente   = false;
 
+  // ── DOCUMENTOS CUENTA CORRIENTE ────────────────────────────
+  bool _ccDocCedula         = false;
+  bool _ccDocPapeleta       = false;
+  bool _ccDocPlanilla       = false;
+  bool _ccDocCorreo         = false;
+  bool _ccDocCelular        = false;
+  bool _ccDocDepositoInicial= false;
+
+  // ── DOCUMENTOS CUENTA AHORROS ──────────────────────────────
+  bool _ahDocCedula         = false;
+  bool _ahDocPapeleta       = false;
+  bool _ahDocPlanilla       = false;
+  bool _ahDocCorreo         = false;
+  bool _ahDocCelular        = false;
+  bool _ahDocDepositoInicial= false;
+
+  // ── DOCUMENTOS/REQUISITOS INVERSIONES ──────────────────────
+  bool _invCuentaActiva      = false;
+  bool _invMontoMinimo       = false;
+  bool _invContratoInversion = false;
+  bool _invOrigenFondos      = false;
+  bool _invActualizacionKyc  = false;
+
   // ── INSTITUCIONES FINANCIERAS (cargadas desde API) ──────────
   List<String> _instituciones = [];
   bool _institucionesCargadas = false;
@@ -388,20 +411,6 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     'garante_conyuge_celular':     _garConyugeCelularCtrl.text.trim(),
     // Dirección
     'direccion_sitio':             _direccionSitioCtrl.text.trim(),
-    // Empresa
-    'tiene_empresa':               _tieneEmpresa == null ? '' : (_tieneEmpresa! ? '1' : '0'),
-    'venta_lv':               _tieneEmpresa == true ? _ventaLvCtrl.text.trim()  : '',
-    'venta_sabado':           _tieneEmpresa == true ? _ventaSabCtrl.text.trim() : '',
-    'venta_domingo':          _tieneEmpresa == true ? _ventaDomCtrl.text.trim() : '',
-    'mes_alta_venta':         _tieneEmpresa == true ? (_mesAltaVenta ?? '') : '',
-    'mes_baja_venta':         _tieneEmpresa == true ? (_mesBajaVenta ?? '') : '',
-    'compra_lv':              _tieneEmpresa == true ? _compraLvCtrl.text.trim()  : '',
-    'compra_sabado':          _tieneEmpresa == true ? _compraSabCtrl.text.trim() : '',
-    'compra_domingo':         _tieneEmpresa == true ? _compraDomCtrl.text.trim() : '',
-    'mes_alta_compra':        _tieneEmpresa == true ? (_mesAltaCompra ?? '') : '',
-    'dias_atencion_lv':       _tieneEmpresa == true ? (_diaLv  ? '1' : '0') : '0',
-    'dias_atencion_sab':      _tieneEmpresa == true ? (_diaSab ? '1' : '0') : '0',
-    'dias_atencion_dom':      _tieneEmpresa == true ? (_diaDom ? '1' : '0') : '0',
     // Documentos recibidos
     'doc_cedula':             _docCedula          ? '1' : '0',
     'doc_planilla':           _docPlanilla        ? '1' : '0',
@@ -429,6 +438,14 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     'tiene_cc_otra':        _tieneCCOtraInst == null ? '' : (_tieneCCOtraInst! ? '1' : '0'),
     'institucion_cc':       _instCCSeleccionada ?? '',
     'observaciones':        _obsCCCtrl.text.trim(),
+
+    // Documentos / requisitos
+    'doc_cedula':           _ccDocCedula ? '1' : '0',
+    'doc_papeleta':         _ccDocPapeleta ? '1' : '0',
+    'doc_planilla':         _ccDocPlanilla ? '1' : '0',
+    'doc_correo':           _ccDocCorreo ? '1' : '0',
+    'doc_celular':          _ccDocCelular ? '1' : '0',
+    'doc_deposito_inicial': _ccDocDepositoInicial ? '1' : '0',
   };
 
   Map<String, String> _bodyAhorros() => {
@@ -443,6 +460,14 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     'tiene_ahorro_otra':    _tieneAhorroOtraInst == null ? '' : (_tieneAhorroOtraInst! ? '1' : '0'),
     'institucion_ahorro':   _instAhSeleccionada ?? '',
     'observaciones':        _obsAhCtrl.text.trim(),
+
+    // Documentos / requisitos
+    'doc_cedula':           _ahDocCedula ? '1' : '0',
+    'doc_papeleta':         _ahDocPapeleta ? '1' : '0',
+    'doc_planilla':         _ahDocPlanilla ? '1' : '0',
+    'doc_correo':           _ahDocCorreo ? '1' : '0',
+    'doc_celular':          _ahDocCelular ? '1' : '0',
+    'doc_deposito_inicial': _ahDocDepositoInicial ? '1' : '0',
   };
 
   Map<String, String> _bodyInversiones() => {
@@ -454,6 +479,13 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     'institucion_competencia': _instInvSeleccionada ?? '',
     'renovacion_auto':         _renovacionAuto == null ? '' : (_renovacionAuto! ? '1' : '0'),
     'observaciones':           _obsInvCtrl.text.trim(),
+
+    // Documentos / requisitos
+    'req_cuenta_activa':       _invCuentaActiva ? '1' : '0',
+    'req_monto_minimo':        _invMontoMinimo ? '1' : '0',
+    'doc_contrato_inversion':  _invContratoInversion ? '1' : '0',
+    'doc_origen_fondos':       _invOrigenFondos ? '1' : '0',
+    'doc_actualizacion_kyc':   _invActualizacionKyc ? '1' : '0',
   };
 
   void _mostrarExito() {
@@ -894,57 +926,6 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           ],
         ),
 
-        // ── Empresa / Negocio ──────────────────────────────────
-        _tarjetaSeccion(
-          icon: Icons.storefront_rounded,
-          color: const Color(0xFFF59E0B),
-          titulo: 'Información de Empresa / Negocio',
-          children: [
-            _titulo('¿El solicitante tiene empresa o negocio?'),
-            _chipsSiNo(
-              value: _tieneEmpresa,
-              onChanged: (v) => setState(() => _tieneEmpresa = v),
-            ),
-            if (_tieneEmpresa == true) ...[
-              const SizedBox(height: 16),
-              const Divider(height: 4),
-              const SizedBox(height: 12),
-              _titulo('Comportamiento de Ventas (monto \$ al día)'),
-              Row(children: [
-                Expanded(child: _campo(controller: _ventaLvCtrl,  label: 'Lun – Vie', icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-                const SizedBox(width: 8),
-                Expanded(child: _campo(controller: _ventaSabCtrl, label: 'Sábado',    icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-                const SizedBox(width: 8),
-                Expanded(child: _campo(controller: _ventaDomCtrl, label: 'Domingo',   icon: Icons.trending_up_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-              ]),
-              Row(children: [
-                Expanded(child: _dropdownMes('Mes alta venta', _mesAltaVenta, (v) => setState(() => _mesAltaVenta = v))),
-                const SizedBox(width: 10),
-                Expanded(child: _dropdownMes('Mes baja venta', _mesBajaVenta, (v) => setState(() => _mesBajaVenta = v))),
-              ]),
-              const SizedBox(height: 10),
-              _titulo('Comportamiento de Compras (monto \$ al día)'),
-              Row(children: [
-                Expanded(child: _campo(controller: _compraLvCtrl,  label: 'Lun – Vie', icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-                const SizedBox(width: 8),
-                Expanded(child: _campo(controller: _compraSabCtrl, label: 'Sábado',    icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-                const SizedBox(width: 8),
-                Expanded(child: _campo(controller: _compraDomCtrl, label: 'Domingo',   icon: Icons.shopping_cart_rounded, keyboardType: TextInputType.number, inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.]'))])),
-              ]),
-              _dropdownMes('Mes alta compra', _mesAltaCompra, (v) => setState(() => _mesAltaCompra = v)),
-              const SizedBox(height: 10),
-              _titulo('Días de atención del negocio'),
-              Row(children: [
-                _chipDia('Lun–Vie', _diaLv,  (v) => setState(() => _diaLv  = v)),
-                const SizedBox(width: 8),
-                _chipDia('Sábado',  _diaSab, (v) => setState(() => _diaSab = v)),
-                const SizedBox(width: 8),
-                _chipDia('Domingo', _diaDom, (v) => setState(() => _diaDom = v)),
-              ]),
-            ],
-          ],
-        ),
-
         // ── Checklist documentos ────────────────────────────────
         _tarjetaSeccion(
           icon: Icons.checklist_rounded,
@@ -1045,46 +1026,37 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           children: [
             _campo(controller: _ccNombreCtrl, label: 'Nombre completo', icon: Icons.person_rounded),
             Row(children: [
-              Expanded(child: _campo(
-                controller: _ccCedulaCtrl, label: 'Cédula de identidad',
-                icon: Icons.badge_rounded, keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              )),
+              Expanded(
+                child: _campo(
+                  controller: _ccCedulaCtrl,
+                  label: 'Cédula de identidad',
+                  icon: Icons.badge_rounded,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _campo(
-                controller: _ccCelularCtrl, label: 'Celular',
-                icon: Icons.phone_rounded, keyboardType: TextInputType.phone,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              )),
+              Expanded(
+                child: _campo(
+                  controller: _ccCelularCtrl,
+                  label: 'Celular',
+                  icon: Icons.phone_rounded,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+              ),
             ]),
             _titulo('Estado civil'),
             _chipsOpciones(
               opciones: const [
-                ('soltero',     'Soltero/a'),
-                ('casado',      'Casado/a'),
+                ('soltero', 'Soltero/a'),
+                ('casado', 'Casado/a'),
                 ('union_libre', 'Unión libre'),
-                ('divorciado',  'Divorciado/a'),
+                ('divorciado', 'Divorciado/a'),
               ],
               seleccionado: _ccEstadoCivil,
               onChanged: (v) => setState(() => _ccEstadoCivil = v),
               wrap: true,
-            ),
-          ],
-        ),
-        // ── Datos de la cuenta ───────────────────────────────────
-        _tarjetaSeccion(
-          icon: Icons.account_balance_rounded,
-          color: widget.tipo.color,
-          titulo: 'Datos de Cuenta Corriente',
-          children: [
-            _titulo('Tipo de cuenta'),
-            _chipsOpciones(
-              opciones: [
-                ('personal',    'Personal'),
-                ('empresarial', 'Empresarial'),
-              ],
-              seleccionado: _tipoCC,
-              onChanged: (v) => setState(() => _tipoCC = v),
             ),
             const SizedBox(height: 12),
             _campo(
@@ -1144,6 +1116,64 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
               label: 'Observaciones',
               icon: Icons.notes_rounded,
               maxLines: 3,
+            ),
+          ],
+        ),
+
+        // ── Checklist documentos ────────────────────────────────
+        _tarjetaSeccion(
+          icon: Icons.checklist_rounded,
+          color: const Color(0xFF3B82F6),
+          titulo: 'Documentos (Cuenta Corriente)',
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Toca cada documento que el prospecto entregó al asesor:',
+                style: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey),
+              ),
+            ),
+            _docTarjetaTap(
+              icon: Icons.badge_rounded,
+              label: 'Cédula de identidad',
+              sublabel: 'Original y copia',
+              value: _ccDocCedula,
+              onTap: () => setState(() => _ccDocCedula = !_ccDocCedula),
+            ),
+            _docTarjetaTap(
+              icon: Icons.how_to_vote_rounded,
+              label: 'Papeleta de votación',
+              sublabel: 'Obligatoria (Ecuador)',
+              value: _ccDocPapeleta,
+              onTap: () => setState(() => _ccDocPapeleta = !_ccDocPapeleta),
+            ),
+            _docTarjetaTap(
+              icon: Icons.receipt_long_rounded,
+              label: 'Planilla de servicios básicos',
+              sublabel: 'Luz, agua o teléfono (domicilio)',
+              value: _ccDocPlanilla,
+              onTap: () => setState(() => _ccDocPlanilla = !_ccDocPlanilla),
+            ),
+            _docTarjetaTap(
+              icon: Icons.email_rounded,
+              label: 'Correo electrónico',
+              sublabel: 'Para notificaciones',
+              value: _ccDocCorreo,
+              onTap: () => setState(() => _ccDocCorreo = !_ccDocCorreo),
+            ),
+            _docTarjetaTap(
+              icon: Icons.phone_rounded,
+              label: 'Número de celular',
+              sublabel: 'Contacto del titular',
+              value: _ccDocCelular,
+              onTap: () => setState(() => _ccDocCelular = !_ccDocCelular),
+            ),
+            _docTarjetaTap(
+              icon: Icons.attach_money_rounded,
+              label: 'Depósito inicial',
+              sublabel: 'Según entidad (ej. \$5–\$50)',
+              value: _ccDocDepositoInicial,
+              onTap: () => setState(() => _ccDocDepositoInicial = !_ccDocDepositoInicial),
             ),
           ],
         ),
@@ -1261,6 +1291,64 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
             ),
           ],
         ),
+
+        // ── Checklist documentos ────────────────────────────────
+        _tarjetaSeccion(
+          icon: Icons.checklist_rounded,
+          color: const Color(0xFF3B82F6),
+          titulo: 'Documentos (Cuenta de Ahorros)',
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Toca cada documento que el prospecto entregó al asesor:',
+                style: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey),
+              ),
+            ),
+            _docTarjetaTap(
+              icon: Icons.badge_rounded,
+              label: 'Cédula de identidad',
+              sublabel: 'Original y copia',
+              value: _ahDocCedula,
+              onTap: () => setState(() => _ahDocCedula = !_ahDocCedula),
+            ),
+            _docTarjetaTap(
+              icon: Icons.how_to_vote_rounded,
+              label: 'Papeleta de votación',
+              sublabel: 'Obligatoria (Ecuador)',
+              value: _ahDocPapeleta,
+              onTap: () => setState(() => _ahDocPapeleta = !_ahDocPapeleta),
+            ),
+            _docTarjetaTap(
+              icon: Icons.receipt_long_rounded,
+              label: 'Planilla de servicios básicos',
+              sublabel: 'Luz, agua o teléfono (domicilio)',
+              value: _ahDocPlanilla,
+              onTap: () => setState(() => _ahDocPlanilla = !_ahDocPlanilla),
+            ),
+            _docTarjetaTap(
+              icon: Icons.email_rounded,
+              label: 'Correo electrónico',
+              sublabel: 'Para notificaciones',
+              value: _ahDocCorreo,
+              onTap: () => setState(() => _ahDocCorreo = !_ahDocCorreo),
+            ),
+            _docTarjetaTap(
+              icon: Icons.phone_rounded,
+              label: 'Número de celular',
+              sublabel: 'Contacto del titular',
+              value: _ahDocCelular,
+              onTap: () => setState(() => _ahDocCelular = !_ahDocCelular),
+            ),
+            _docTarjetaTap(
+              icon: Icons.attach_money_rounded,
+              label: 'Depósito inicial',
+              sublabel: 'Según entidad (ej. \$5–\$50)',
+              value: _ahDocDepositoInicial,
+              onTap: () => setState(() => _ahDocDepositoInicial = !_ahDocDepositoInicial),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
       ],
     );
@@ -1348,6 +1436,57 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
             ),
           ],
         ),
+
+        // ── Checklist documentos ────────────────────────────────
+        _tarjetaSeccion(
+          icon: Icons.checklist_rounded,
+          color: const Color(0xFF3B82F6),
+          titulo: 'Requisitos (Inversiones)',
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Toca cada requisito/documento que ya está listo:',
+                style: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey),
+              ),
+            ),
+            _docTarjetaTap(
+              icon: Icons.account_balance_rounded,
+              label: 'Cuenta activa',
+              sublabel: 'Debe tener cuenta en la entidad',
+              value: _invCuentaActiva,
+              onTap: () => setState(() => _invCuentaActiva = !_invCuentaActiva),
+            ),
+            _docTarjetaTap(
+              icon: Icons.payments_rounded,
+              label: 'Monto mínimo',
+              sublabel: 'Ej. \$100 / \$500 / \$1000',
+              value: _invMontoMinimo,
+              onTap: () => setState(() => _invMontoMinimo = !_invMontoMinimo),
+            ),
+            _docTarjetaTap(
+              icon: Icons.description_rounded,
+              label: 'Contrato de inversión',
+              sublabel: 'Firmado',
+              value: _invContratoInversion,
+              onTap: () => setState(() => _invContratoInversion = !_invContratoInversion),
+            ),
+            _docTarjetaTap(
+              icon: Icons.verified_user_rounded,
+              label: 'Declaración de origen de fondos',
+              sublabel: 'En algunos casos',
+              value: _invOrigenFondos,
+              onTap: () => setState(() => _invOrigenFondos = !_invOrigenFondos),
+            ),
+            _docTarjetaTap(
+              icon: Icons.manage_accounts_rounded,
+              label: 'Actualización de datos (KYC)',
+              sublabel: '“Conoce a tu cliente”',
+              value: _invActualizacionKyc,
+              onTap: () => setState(() => _invActualizacionKyc = !_invActualizacionKyc),
+            ),
+          ],
+        ),
         const SizedBox(height: 20),
       ],
     );
@@ -1393,12 +1532,18 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
                 child: Icon(icon, color: color, size: 18),
               ),
               const SizedBox(width: 10),
-              Text(
-                titulo,
-                style: TextStyle(
-                  color: ConstantColors.textDark,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
+              Flexible(
+                fit: FlexFit.tight,
+                child: Text(
+                  titulo,
+                  softWrap: true,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: ConstantColors.textDark,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
@@ -1710,6 +1855,79 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
               child: value
                   ? const Icon(Icons.check_rounded, size: 16, color: Colors.white)
                   : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Tarjeta de documento genérica (con callback) ───────────
+  Widget _docTarjetaTap({
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required bool value,
+    required VoidCallback onTap,
+    Color color = const Color(0xFF3B82F6),
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: value ? color.withOpacity(0.08) : ConstantColors.grey100,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: value ? color : ConstantColors.borderLight,
+            width: value ? 1.8 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: value ? color.withOpacity(0.14) : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: value ? color : ConstantColors.borderLight),
+              ),
+              child: Icon(icon, color: value ? color : ConstantColors.textDarkGrey, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                        color: ConstantColors.textDark,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      )),
+                  const SizedBox(height: 2),
+                  Text(
+                    sublabel,
+                    style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: value ? color : Colors.transparent,
+                border: Border.all(color: value ? color : ConstantColors.borderLight),
+              ),
+              child: value
+                  ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+                  : const SizedBox.shrink(),
             ),
           ],
         ),

@@ -14,6 +14,7 @@ import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
 enum _Paso {
   inicial,
   datosCliente,
+  empresaNegocio,
   productosActuales,
   interesProductos,
   busqueda
@@ -81,6 +82,27 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _tieneEmpresa = false;
   final _empresaCtrl = TextEditingController();
   final _formKeyCliente = GlobalKey<FormState>();
+
+  // ── Paso Empresa/Negocio (solo si _tieneEmpresa = true) ─────
+  final _formKeyNegocio = GlobalKey<FormState>();
+  final _ventaLvCtrl   = TextEditingController();
+  final _ventaSabCtrl  = TextEditingController();
+  final _ventaDomCtrl  = TextEditingController();
+  final _compraLvCtrl  = TextEditingController();
+  final _compraSabCtrl = TextEditingController();
+  final _compraDomCtrl = TextEditingController();
+  String? _mesAltaVenta;
+  String? _mesBajaVenta;
+  String? _mesAltaCompra;
+  bool _diaLv = true;
+  bool _diaSab = false;
+  bool _diaDom = false;
+  int _pctContado = 80; // % contado (crédito = 100 - contado)
+  final _recuperacionCreditoCtrl = TextEditingController();
+  final _costosVentasCtrl = TextEditingController();
+  final _gastosNegocioCtrl = TextEditingController();
+  final _otrosIngresosCtrl = TextEditingController();
+  final _gastosFamiliaresCtrl = TextEditingController();
 
   // ── Paso 2: Productos actuales ───────────────────────────────
   bool _mantieneAhorro = false;
@@ -212,6 +234,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _ciudadCtrl.dispose();
     _numeroRucCtrl.dispose();
     _empresaCtrl.dispose();
+    _ventaLvCtrl.dispose();
+    _ventaSabCtrl.dispose();
+    _ventaDomCtrl.dispose();
+    _compraLvCtrl.dispose();
+    _compraSabCtrl.dispose();
+    _compraDomCtrl.dispose();
+    _recuperacionCreditoCtrl.dispose();
+    _costosVentasCtrl.dispose();
+    _gastosNegocioCtrl.dispose();
+    _otrosIngresosCtrl.dispose();
+    _gastosFamiliaresCtrl.dispose();
     _instInvCtrl.dispose();
     _valorInvCtrl.dispose();
     _plazoInvCtrl.dispose();
@@ -558,6 +591,23 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'conoce_limite_rise':   _conoceLimiteRise == null ? '' : (_conoceLimiteRise! ? '1' : '0'),
       'tiene_empresa': _tieneEmpresa ? '1' : '0',
       'nombre_empresa': _empresaCtrl.text.trim(),
+      // Empresa/Negocio (si aplica)
+      'venta_lv':        _tieneEmpresa ? _ventaLvCtrl.text.trim() : '',
+      'venta_sabado':    _tieneEmpresa ? _ventaSabCtrl.text.trim() : '',
+      'venta_domingo':   _tieneEmpresa ? _ventaDomCtrl.text.trim() : '',
+      'mes_alta_venta':  _tieneEmpresa ? (_mesAltaVenta ?? '') : '',
+      'mes_baja_venta':  _tieneEmpresa ? (_mesBajaVenta ?? '') : '',
+      'compra_lv':       _tieneEmpresa ? _compraLvCtrl.text.trim() : '',
+      'compra_sabado':   _tieneEmpresa ? _compraSabCtrl.text.trim() : '',
+      'compra_domingo':  _tieneEmpresa ? _compraDomCtrl.text.trim() : '',
+      'mes_alta_compra': _tieneEmpresa ? (_mesAltaCompra ?? '') : '',
+      'dias_atencion_lv':  _tieneEmpresa ? (_diaLv  ? '1' : '0') : '0',
+      'dias_atencion_sab': _tieneEmpresa ? (_diaSab ? '1' : '0') : '0',
+      'dias_atencion_dom': _tieneEmpresa ? (_diaDom ? '1' : '0') : '0',
+      'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
+      'gastos_negocio':       _tieneEmpresa ? _gastosNegocioCtrl.text.trim() : '',
+      'otros_ingresos':       _tieneEmpresa ? _otrosIngresosCtrl.text.trim() : '',
+      'gastos_familiares':    _tieneEmpresa ? _gastosFamiliaresCtrl.text.trim() : '',
       // GPS
       'latitud_inicio': (_latInicio ?? 0).toString(),
       'longitud_inicio': (_lngInicio ?? 0).toString(),
@@ -833,16 +883,34 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Navegación entre pasos ───────────────────────────────────
 
+  List<_Paso> get _pasosActivos {
+    return [
+      _Paso.datosCliente,
+      if (_tieneEmpresa) _Paso.empresaNegocio,
+      _Paso.productosActuales,
+      _Paso.interesProductos,
+      _Paso.busqueda,
+    ];
+  }
+
   void _irSiguientePaso() {
-    final pasos = _Paso.values;
+    if (_paso == _Paso.inicial) {
+      setState(() => _paso = _Paso.datosCliente);
+      return;
+    }
+    final pasos = _pasosActivos;
     final idx = pasos.indexOf(_paso);
-    if (idx < pasos.length - 1) {
+    if (idx >= 0 && idx < pasos.length - 1) {
       setState(() => _paso = pasos[idx + 1]);
     }
   }
 
   void _irPasoPrevio() {
-    final pasos = _Paso.values;
+    if (_paso == _Paso.inicial) {
+      Navigator.pop(context);
+      return;
+    }
+    final pasos = _pasosActivos;
     final idx = pasos.indexOf(_paso);
     if (idx > 0) {
       setState(() => _paso = pasos[idx - 1]);
@@ -851,14 +919,28 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
   }
 
-  int get _indexPaso => _Paso.values.indexOf(_paso);
-  int get _totalPasos =>
-      _Paso.values.length - 1; // inicial no cuenta en progreso
+  int get _indexPaso {
+    if (_paso == _Paso.inicial) return 0;
+    final idx = _pasosActivos.indexOf(_paso);
+    return idx < 0 ? 0 : (idx + 1);
+  }
+
+  int get _totalPasos => _pasosActivos.length;
+
+  bool get _shouldShowNavButtons {
+    if (_paso == _Paso.inicial) return false;
+    if (_paso == _Paso.busqueda) return false; // botón inline
+    if (_paso == _Paso.interesProductos && _interesConocer == false) return false; // botón inline
+    return true;
+  }
 
   // ── BUILD ────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final bottomSafe = MediaQuery.of(context).padding.bottom;
+    final bottomPad = 24 + bottomSafe + (_shouldShowNavButtons ? 110 : 20);
+
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) {
@@ -876,7 +958,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                   duration: const Duration(milliseconds: 280),
                   child: SingleChildScrollView(
                     key: ValueKey(_paso),
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                    padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPad),
                     child: _buildContenidoPaso(),
                   ),
                 ),
@@ -963,6 +1045,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             : 'Nueva Tarea';
       case _Paso.datosCliente:
         return 'Datos del Prospecto';
+      case _Paso.empresaNegocio:
+        return 'Empresa / Negocio';
       case _Paso.productosActuales:
         return 'Situación Financiera';
       case _Paso.interesProductos:
@@ -975,8 +1059,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Barra de progreso ────────────────────────────────────────
 
   Widget _buildProgreso() {
-    final total = 4;
-    final actual = _indexPaso; // 1-4 después de inicial
+    final total = _totalPasos;
+    final actual = _indexPaso; // 1..total
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
       child: Column(
@@ -1020,6 +1104,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         return _buildPasoInicial();
       case _Paso.datosCliente:
         return _buildPasoDatosCliente();
+      case _Paso.empresaNegocio:
+        return _buildPasoEmpresaNegocio();
       case _Paso.productosActuales:
         return _buildPasoProductosActuales();
       case _Paso.interesProductos:
@@ -1278,7 +1364,32 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _switchItem(
             label: '¿Tiene empresa?',
             value: _tieneEmpresa,
-            onChanged: (v) => setState(() => _tieneEmpresa = v),
+            onChanged: (v) {
+              setState(() {
+                _tieneEmpresa = v;
+                if (!_tieneEmpresa) {
+                  // Limpiar datos del paso negocio si el usuario desactiva
+                  _ventaLvCtrl.clear();
+                  _ventaSabCtrl.clear();
+                  _ventaDomCtrl.clear();
+                  _compraLvCtrl.clear();
+                  _compraSabCtrl.clear();
+                  _compraDomCtrl.clear();
+                  _mesAltaVenta = null;
+                  _mesBajaVenta = null;
+                  _mesAltaCompra = null;
+                  _diaLv = true;
+                  _diaSab = false;
+                  _diaDom = false;
+                  _pctContado = 80;
+                  _recuperacionCreditoCtrl.clear();
+                  _costosVentasCtrl.clear();
+                  _gastosNegocioCtrl.clear();
+                  _otrosIngresosCtrl.clear();
+                  _gastosFamiliaresCtrl.clear();
+                }
+              });
+            },
           ),
           if (_tieneEmpresa) ...[
             const SizedBox(height: 8),
@@ -1286,9 +1397,243 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               controller: _empresaCtrl,
               label: 'Nombre de la empresa',
               icon: Icons.business_rounded,
+              validator: (v) {
+                if (!_tieneEmpresa) return null;
+                if (v == null || v.trim().isEmpty) return 'Ingrese el nombre del negocio';
+                return null;
+              },
             ),
           ],
           ],
+        ],
+      ),
+    );
+  }
+
+  // ── PASO: Empresa / Negocio ─────────────────────────────────
+
+  double _toDouble(String s) {
+    final t = s.trim().replaceAll(',', '.');
+    return double.tryParse(t) ?? 0.0;
+  }
+
+  Widget _dropdownMesSimple(String label, String? value, ValueChanged<String?> onChanged) {
+    const meses = <String, String>{
+      'enero': 'Enero',
+      'febrero': 'Febrero',
+      'marzo': 'Marzo',
+      'abril': 'Abril',
+      'mayo': 'Mayo',
+      'junio': 'Junio',
+      'julio': 'Julio',
+      'agosto': 'Agosto',
+      'septiembre': 'Septiembre',
+      'octubre': 'Octubre',
+      'noviembre': 'Noviembre',
+      'diciembre': 'Diciembre',
+    };
+
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        hintText: 'Seleccione',
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      ),
+      items: meses.entries
+          .map((e) => DropdownMenuItem<String>(value: e.key, child: Text(e.value)))
+          .toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildPasoEmpresaNegocio() {
+    // Si por alguna razón entran aquí sin empresa, saltar
+    if (!_tieneEmpresa) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _paso = _Paso.productosActuales);
+      });
+      return const SizedBox.shrink();
+    }
+
+    final ventaSemana = _toDouble(_ventaLvCtrl.text) * 5 + _toDouble(_ventaSabCtrl.text) + _toDouble(_ventaDomCtrl.text);
+    final compraSemana = _toDouble(_compraLvCtrl.text) * 5 + _toDouble(_compraSabCtrl.text) + _toDouble(_compraDomCtrl.text);
+
+    return Form(
+      key: _formKeyNegocio,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _seccionTitulo('Empresa / Negocio'),
+          Text(
+            'Datos aproximados para entender el movimiento del negocio (sin ser un interrogatorio).',
+            style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+
+          _seccionTitulo('Comportamiento de ventas (monto \$ al día)'),
+          Row(children: [
+            Expanded(child: _campo(
+              controller: _ventaLvCtrl,
+              label: 'Lun – Vie',
+              icon: Icons.trending_up_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+              validator: (v) {
+                if (!_tieneEmpresa) return null;
+                if (v == null || v.trim().isEmpty) return 'Requerido';
+                return null;
+              },
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _campo(
+              controller: _ventaSabCtrl,
+              label: 'Sábado',
+              icon: Icons.trending_up_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _campo(
+              controller: _ventaDomCtrl,
+              label: 'Domingo',
+              icon: Icons.trending_up_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+            )),
+          ]),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(child: _dropdownMesSimple('Mes alto (venta)', _mesAltaVenta, (v) => setState(() => _mesAltaVenta = v))),
+            const SizedBox(width: 10),
+            Expanded(child: _dropdownMesSimple('Mes bajo (venta)', _mesBajaVenta, (v) => setState(() => _mesBajaVenta = v))),
+          ]),
+
+          const SizedBox(height: 16),
+          _seccionTitulo('Comportamiento de compras (monto \$ al día)'),
+          Row(children: [
+            Expanded(child: _campo(
+              controller: _compraLvCtrl,
+              label: 'Lun – Vie',
+              icon: Icons.shopping_cart_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+              validator: (v) {
+                if (!_tieneEmpresa) return null;
+                if (v == null || v.trim().isEmpty) return 'Requerido';
+                return null;
+              },
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _campo(
+              controller: _compraSabCtrl,
+              label: 'Sábado',
+              icon: Icons.shopping_cart_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: _campo(
+              controller: _compraDomCtrl,
+              label: 'Domingo',
+              icon: Icons.shopping_cart_rounded,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+            )),
+          ]),
+          const SizedBox(height: 10),
+          _dropdownMesSimple('Mes alto (compra)', _mesAltaCompra, (v) => setState(() => _mesAltaCompra = v)),
+
+          const SizedBox(height: 14),
+          _seccionTitulo('Días de atención'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilterChip(
+                label: const Text('Lun–Vie'),
+                selected: _diaLv,
+                onSelected: (v) => setState(() => _diaLv = v),
+              ),
+              FilterChip(
+                label: const Text('Sábado'),
+                selected: _diaSab,
+                onSelected: (v) => setState(() => _diaSab = v),
+              ),
+              FilterChip(
+                label: const Text('Domingo'),
+                selected: _diaDom,
+                onSelected: (v) => setState(() => _diaDom = v),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 18),
+          _seccionTitulo('Flujo de ingresos y gastos (mensual)'),
+          const SizedBox(height: 4),
+          _campo(
+            controller: _costosVentasCtrl,
+            label: 'Costos de ventas (aprox.)',
+            icon: Icons.receipt_long_rounded,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+            validator: (v) {
+              if (!_tieneEmpresa) return null;
+              if (v == null || v.trim().isEmpty) return 'Requerido';
+              return null;
+            },
+          ),
+          const SizedBox(height: 10),
+          _campo(
+            controller: _gastosNegocioCtrl,
+            label: 'Gastos del negocio (aprox.)',
+            icon: Icons.store_rounded,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+            validator: (v) {
+              if (!_tieneEmpresa) return null;
+              if (v == null || v.trim().isEmpty) return 'Requerido';
+              return null;
+            },
+          ),
+          const SizedBox(height: 10),
+          _campo(
+            controller: _otrosIngresosCtrl,
+            label: 'Otros ingresos (aprox.)',
+            icon: Icons.add_circle_outline_rounded,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+          ),
+          const SizedBox(height: 10),
+          _campo(
+            controller: _gastosFamiliaresCtrl,
+            label: 'Gastos familiares (aprox.)',
+            icon: Icons.family_restroom_rounded,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+          ),
+
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: ConstantColors.grey100,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: ConstantColors.borderLight),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Resumen rápido (semana)\nVentas: ${ventaSemana.toStringAsFixed(0)}  |  Compras: ${compraSemana.toStringAsFixed(0)}',
+                    style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12.5, height: 1.35),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1579,10 +1924,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Botones de navegación ────────────────────────────────────
 
   Widget? _buildBotonesNavegacion() {
-    if (_paso == _Paso.inicial) return null;
-    if (_paso == _Paso.busqueda) return null; // botón inline
-    if (_paso == _Paso.interesProductos && _interesConocer == false)
-      return null; // botón inline
+    if (!_shouldShowNavButtons) return null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1647,6 +1989,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   void _avanzarPaso() {
     if (_paso == _Paso.datosCliente) {
       if (!(_formKeyCliente.currentState?.validate() ?? false)) return;
+    }
+    if (_paso == _Paso.empresaNegocio) {
+      if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
     }
     _irSiguientePaso();
   }

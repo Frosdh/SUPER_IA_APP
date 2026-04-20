@@ -140,6 +140,28 @@ $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
 
+// Empresa / Negocio (levantamiento suave)
+$tiene_empresa_post = (int)($_POST['tiene_empresa'] ?? 0);
+$venta_lv           = floatOrNull($_POST['venta_lv'] ?? '');
+$venta_sabado       = floatOrNull($_POST['venta_sabado'] ?? '');
+$venta_domingo      = floatOrNull($_POST['venta_domingo'] ?? '');
+$mes_alta_venta     = strOrNull($_POST['mes_alta_venta'] ?? '');
+$mes_baja_venta     = strOrNull($_POST['mes_baja_venta'] ?? '');
+$compra_lv          = floatOrNull($_POST['compra_lv'] ?? '');
+$compra_sabado      = floatOrNull($_POST['compra_sabado'] ?? '');
+$compra_domingo     = floatOrNull($_POST['compra_domingo'] ?? '');
+$mes_alta_compra    = strOrNull($_POST['mes_alta_compra'] ?? '');
+$dia_lv             = (int)($_POST['dias_atencion_lv'] ?? 0);
+$dia_sab            = (int)($_POST['dias_atencion_sab'] ?? 0);
+$dia_dom            = (int)($_POST['dias_atencion_dom'] ?? 0);
+$pct_contado        = intOrNull($_POST['pct_contado'] ?? null);
+$pct_credito        = intOrNull($_POST['pct_credito'] ?? null);
+$recuperacion_credito = floatOrNull($_POST['recuperacion_credito'] ?? '');
+$costos_ventas        = floatOrNull($_POST['costos_ventas'] ?? '');
+$gastos_negocio       = floatOrNull($_POST['gastos_negocio'] ?? '');
+$otros_ingresos       = floatOrNull($_POST['otros_ingresos'] ?? '');
+$gastos_familiares    = floatOrNull($_POST['gastos_familiares'] ?? '');
+
 // Validar enums
 $acuerdos_ok = ['nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'];
 if (!in_array($acuerdo, $acuerdos_ok)) $acuerdo = 'ninguno';
@@ -277,6 +299,79 @@ try {
     );
     $st->execute();
     $st->close();
+
+    // ── 3c. Guardar levantamiento Empresa/Negocio (si aplica) ──
+    if ($tiene_empresa_post === 1) {
+        $GLOBALS['phase'] = 'NEGOCIO';
+        // Asegurar tabla
+        $conn->query(
+            "CREATE TABLE IF NOT EXISTS encuesta_negocio (
+                id                 CHAR(36)   NOT NULL PRIMARY KEY,
+                tarea_id           CHAR(36)   NOT NULL,
+                venta_lv           DECIMAL(12,2) DEFAULT NULL,
+                venta_sabado       DECIMAL(12,2) DEFAULT NULL,
+                venta_domingo      DECIMAL(12,2) DEFAULT NULL,
+                mes_alta_venta     VARCHAR(20) DEFAULT NULL,
+                mes_baja_venta     VARCHAR(20) DEFAULT NULL,
+                compra_lv          DECIMAL(12,2) DEFAULT NULL,
+                compra_sabado      DECIMAL(12,2) DEFAULT NULL,
+                compra_domingo     DECIMAL(12,2) DEFAULT NULL,
+                mes_alta_compra    VARCHAR(20) DEFAULT NULL,
+                dia_lv             TINYINT(1)  NOT NULL DEFAULT 0,
+                dia_sab            TINYINT(1)  NOT NULL DEFAULT 0,
+                dia_dom            TINYINT(1)  NOT NULL DEFAULT 0,
+                pct_contado        INT DEFAULT NULL,
+                pct_credito        INT DEFAULT NULL,
+                recuperacion_credito DECIMAL(12,2) DEFAULT NULL,
+                costos_ventas        DECIMAL(12,2) DEFAULT NULL,
+                gastos_negocio       DECIMAL(12,2) DEFAULT NULL,
+                otros_ingresos       DECIMAL(12,2) DEFAULT NULL,
+                gastos_familiares    DECIMAL(12,2) DEFAULT NULL,
+                created_at         DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_en_tarea (tarea_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+
+        $negocio_id = genUUID();
+        $stN = $conn->prepare(
+            "INSERT INTO encuesta_negocio
+             (id, tarea_id,
+              venta_lv, venta_sabado, venta_domingo, mes_alta_venta, mes_baja_venta,
+              compra_lv, compra_sabado, compra_domingo, mes_alta_compra,
+              dia_lv, dia_sab, dia_dom,
+              pct_contado, pct_credito,
+              recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+        );
+
+        // Normalizar null -> 0 para evitar warnings en bind_param numérico
+        $venta_lv_n = $venta_lv ?? 0.0;
+        $venta_sab_n = $venta_sabado ?? 0.0;
+        $venta_dom_n = $venta_domingo ?? 0.0;
+        $compra_lv_n = $compra_lv ?? 0.0;
+        $compra_sab_n = $compra_sabado ?? 0.0;
+        $compra_dom_n = $compra_domingo ?? 0.0;
+        $pct_cont_n = $pct_contado ?? 0;
+        $pct_cred_n = $pct_credito ?? 0;
+        $recup_n = $recuperacion_credito ?? 0.0;
+        $costos_n = $costos_ventas ?? 0.0;
+        $gastos_n = $gastos_negocio ?? 0.0;
+        $otros_n = $otros_ingresos ?? 0.0;
+        $gfam_n = $gastos_familiares ?? 0.0;
+
+        // types: ss ddd ss ddd s iiiii ddddd
+        $stN->bind_param(
+            'ssdddssdddsiiiiiddddd',
+            $negocio_id, $tarea_id,
+            $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
+            $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
+            $dia_lv, $dia_sab, $dia_dom,
+            $pct_cont_n, $pct_cred_n,
+            $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n
+        );
+        $stN->execute();
+        $stN->close();
+    }
 
     // ── 3b. Alerta de modificación (solo si el cliente ya existía) ──
     if ($es_cliente_existente && $asesor_id !== null) {

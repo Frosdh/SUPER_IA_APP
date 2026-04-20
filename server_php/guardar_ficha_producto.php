@@ -259,6 +259,13 @@ try {
             tiene_nomina         TINYINT(1) DEFAULT NULL,
             tiene_cc_otra        TINYINT(1) DEFAULT NULL,
             institucion_cc       VARCHAR(200) DEFAULT NULL,
+            -- Documentos / requisitos
+            doc_cedula           TINYINT(1) DEFAULT 0,
+            doc_papeleta         TINYINT(1) DEFAULT 0,
+            doc_planilla         TINYINT(1) DEFAULT 0,
+            doc_correo           TINYINT(1) DEFAULT 0,
+            doc_celular          TINYINT(1) DEFAULT 0,
+            doc_deposito_inicial TINYINT(1) DEFAULT 0,
             observaciones        TEXT DEFAULT NULL,
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -271,6 +278,12 @@ try {
         'titular_estado_civil' => "ADD COLUMN titular_estado_civil VARCHAR(20) DEFAULT NULL AFTER titular_celular",
         'tiene_cc_otra'        => "ADD COLUMN tiene_cc_otra TINYINT(1) DEFAULT NULL AFTER tiene_nomina",
         'institucion_cc'       => "ADD COLUMN institucion_cc VARCHAR(200) DEFAULT NULL AFTER tiene_cc_otra",
+        'doc_cedula'           => "ADD COLUMN doc_cedula TINYINT(1) DEFAULT 0 AFTER institucion_cc",
+        'doc_papeleta'         => "ADD COLUMN doc_papeleta TINYINT(1) DEFAULT 0 AFTER doc_cedula",
+        'doc_planilla'         => "ADD COLUMN doc_planilla TINYINT(1) DEFAULT 0 AFTER doc_papeleta",
+        'doc_correo'           => "ADD COLUMN doc_correo TINYINT(1) DEFAULT 0 AFTER doc_planilla",
+        'doc_celular'          => "ADD COLUMN doc_celular TINYINT(1) DEFAULT 0 AFTER doc_correo",
+        'doc_deposito_inicial' => "ADD COLUMN doc_deposito_inicial TINYINT(1) DEFAULT 0 AFTER doc_celular",
     ] as $col => $ddl) {
         $chk = $conn->query("SHOW COLUMNS FROM ficha_cuenta_corriente LIKE '$col'");
         if ($chk && $chk->num_rows === 0) $conn->query("ALTER TABLE ficha_cuenta_corriente $ddl");
@@ -290,6 +303,13 @@ try {
             objetivo_ahorro      TEXT DEFAULT NULL,
             tiene_ahorro_otra    TINYINT(1) DEFAULT NULL,
             institucion_ahorro   VARCHAR(200) DEFAULT NULL,
+            -- Documentos / requisitos
+            doc_cedula           TINYINT(1) DEFAULT 0,
+            doc_papeleta         TINYINT(1) DEFAULT 0,
+            doc_planilla         TINYINT(1) DEFAULT 0,
+            doc_correo           TINYINT(1) DEFAULT 0,
+            doc_celular          TINYINT(1) DEFAULT 0,
+            doc_deposito_inicial TINYINT(1) DEFAULT 0,
             observaciones        TEXT DEFAULT NULL,
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -300,6 +320,12 @@ try {
         'titular_cedula'       => "ADD COLUMN titular_cedula VARCHAR(20) DEFAULT NULL AFTER titular_nombre",
         'titular_celular'      => "ADD COLUMN titular_celular VARCHAR(20) DEFAULT NULL AFTER titular_cedula",
         'titular_estado_civil' => "ADD COLUMN titular_estado_civil VARCHAR(20) DEFAULT NULL AFTER titular_celular",
+        'doc_cedula'           => "ADD COLUMN doc_cedula TINYINT(1) DEFAULT 0 AFTER institucion_ahorro",
+        'doc_papeleta'         => "ADD COLUMN doc_papeleta TINYINT(1) DEFAULT 0 AFTER doc_cedula",
+        'doc_planilla'         => "ADD COLUMN doc_planilla TINYINT(1) DEFAULT 0 AFTER doc_papeleta",
+        'doc_correo'           => "ADD COLUMN doc_correo TINYINT(1) DEFAULT 0 AFTER doc_planilla",
+        'doc_celular'          => "ADD COLUMN doc_celular TINYINT(1) DEFAULT 0 AFTER doc_correo",
+        'doc_deposito_inicial' => "ADD COLUMN doc_deposito_inicial TINYINT(1) DEFAULT 0 AFTER doc_celular",
     ] as $col => $ddl) {
         $chk = $conn->query("SHOW COLUMNS FROM ficha_cuenta_ahorros LIKE '$col'");
         if ($chk && $chk->num_rows === 0) $conn->query("ALTER TABLE ficha_cuenta_ahorros $ddl");
@@ -316,6 +342,12 @@ try {
             tiene_inv_otra           TINYINT(1) DEFAULT NULL,
             institucion_competencia  VARCHAR(200) DEFAULT NULL,
             renovacion_auto          TINYINT(1) DEFAULT NULL,
+            -- Documentos / requisitos
+            req_cuenta_activa        TINYINT(1) DEFAULT 0,
+            req_monto_minimo         TINYINT(1) DEFAULT 0,
+            doc_contrato_inversion   TINYINT(1) DEFAULT 0,
+            doc_origen_fondos        TINYINT(1) DEFAULT 0,
+            doc_actualizacion_kyc    TINYINT(1) DEFAULT 0,
             observaciones            TEXT DEFAULT NULL,
             FOREIGN KEY (ficha_id) REFERENCES ficha_producto(id) ON DELETE CASCADE
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
@@ -323,6 +355,11 @@ try {
     // Migración no-destructiva ficha_inversiones
     foreach ([
         'institucion_competencia' => "ADD COLUMN institucion_competencia VARCHAR(200) DEFAULT NULL AFTER tiene_inv_otra",
+        'req_cuenta_activa'       => "ADD COLUMN req_cuenta_activa TINYINT(1) DEFAULT 0 AFTER renovacion_auto",
+        'req_monto_minimo'        => "ADD COLUMN req_monto_minimo TINYINT(1) DEFAULT 0 AFTER req_cuenta_activa",
+        'doc_contrato_inversion'  => "ADD COLUMN doc_contrato_inversion TINYINT(1) DEFAULT 0 AFTER req_monto_minimo",
+        'doc_origen_fondos'       => "ADD COLUMN doc_origen_fondos TINYINT(1) DEFAULT 0 AFTER doc_contrato_inversion",
+        'doc_actualizacion_kyc'   => "ADD COLUMN doc_actualizacion_kyc TINYINT(1) DEFAULT 0 AFTER doc_origen_fondos",
     ] as $col => $ddl) {
         $chk = $conn->query("SHOW COLUMNS FROM ficha_inversiones LIKE '$col'");
         if ($chk && $chk->num_rows === 0) $conn->query("ALTER TABLE ficha_inversiones $ddl");
@@ -476,6 +513,14 @@ try {
             $inst_cc  = s('institucion_cc')        ?: null;
             $obs      = s('observaciones')         ?: null;
 
+            // Documentos / requisitos
+            $dc      = s('doc_cedula');
+            $dpap    = s('doc_papeleta');
+            $dpl     = s('doc_planilla');
+            $dcor    = s('doc_correo');
+            $dcel    = s('doc_celular');
+            $ddep    = s('doc_deposito_inicial');
+
             $st = $conn->prepare("
                 INSERT INTO ficha_cuenta_corriente
                     (id, ficha_id, tipo_cc,
@@ -483,15 +528,17 @@ try {
                      proposito, monto_deposito_prom,
                      usa_cheques, requiere_td, ingreso_mensual, tiene_nomina,
                      tiene_cc_otra, institucion_cc,
+                     doc_cedula, doc_papeleta, doc_planilla, doc_correo, doc_celular, doc_deposito_inicial,
                      observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
-            $st->bind_param('ssssssssssssssss', // 16 s
+            $st->bind_param('ssssssssssssssssssssss', // 22 s
                 $detalle_id, $ficha_id, $tipo,
                 $tnom, $tced, $tcel, $tec,
                 $prop, $mdep,
                 $usc, $rtd, $ing, $nom,
                 $cc_otra, $inst_cc,
+                $dc, $dpap, $dpl, $dcor, $dcel, $ddep,
                 $obs
             );
             $st->execute();
@@ -511,19 +558,31 @@ try {
             $inst  = s('institucion_ahorro')    ?: null;
             $obs   = s('observaciones')         ?: null;
 
+            // Documentos / requisitos
+            $dc      = s('doc_cedula');
+            $dpap    = s('doc_papeleta');
+            $dpl     = s('doc_planilla');
+            $dcor    = s('doc_correo');
+            $dcel    = s('doc_celular');
+            $ddep    = s('doc_deposito_inicial');
+
             $st = $conn->prepare("
                 INSERT INTO ficha_cuenta_ahorros
                     (id, ficha_id, tipo_ahorro,
                      titular_nombre, titular_cedula, titular_celular, titular_estado_civil,
                      monto_inicial, frecuencia_deposito,
-                     objetivo_ahorro, tiene_ahorro_otra, institucion_ahorro, observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                     objetivo_ahorro, tiene_ahorro_otra, institucion_ahorro,
+                     doc_cedula, doc_papeleta, doc_planilla, doc_correo, doc_celular, doc_deposito_inicial,
+                     observaciones)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
-            $st->bind_param('sssssssssssss', // 13 s
+            $st->bind_param('sssssssssssssssssss', // 19 s
                 $detalle_id, $ficha_id, $tipo,
                 $tnom, $tced, $tcel, $tec,
                 $moin, $frec,
-                $obj, $ota, $inst, $obs
+                $obj, $ota, $inst,
+                $dc, $dpap, $dpl, $dcor, $dcel, $ddep,
+                $obs
             );
             $st->execute();
             $st->close();
@@ -539,16 +598,27 @@ try {
             $renov    = s('renovacion_auto')         ?: null;
             $obs      = s('observaciones')           ?: null;
 
+            // Documentos / requisitos
+            $rca      = s('req_cuenta_activa');
+            $rmm      = s('req_monto_minimo');
+            $dci      = s('doc_contrato_inversion');
+            $dof      = s('doc_origen_fondos');
+            $dkyc     = s('doc_actualizacion_kyc');
+
             $st = $conn->prepare("
                 INSERT INTO ficha_inversiones
                     (id, ficha_id, tipo_inversion, monto_inversion, plazo_meses,
                      objetivo_inversion, tiene_inv_otra, institucion_competencia,
-                     renovacion_auto, observaciones)
-                VALUES (?,?,?,?,?,?,?,?,?,?)
+                     renovacion_auto,
+                     req_cuenta_activa, req_monto_minimo, doc_contrato_inversion, doc_origen_fondos, doc_actualizacion_kyc,
+                     observaciones)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ");
-            $st->bind_param('ssssssssss', // 10 s
+            $st->bind_param('sssssssssssssss', // 15 s
                 $detalle_id, $ficha_id, $tipo, $monto, $plazo,
-                $obj, $inv_otra, $inst_comp, $renov, $obs
+                $obj, $inv_otra, $inst_comp, $renov,
+                $rca, $rmm, $dci, $dof, $dkyc,
+                $obs
             );
             $st->execute();
             $st->close();
