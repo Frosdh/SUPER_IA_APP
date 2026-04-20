@@ -44,6 +44,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   _Paso _paso = _Paso.inicial;
   bool _guardando = false;
 
+  // Prospecto nuevo vs existente (determinado por búsqueda de cédula)
+  bool? _esProspectoNuevo;
+
+  // Solo para prospecto nuevo: origen del prospecto
+  // 'frio' => no conoce/no sigue; 'seguidor' => sí conoce/sigue
+  String? _origenProspecto;
+
   // GPS
   double? _latInicio, _lngInicio;
   double? _latFin, _lngFin;
@@ -136,6 +143,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     final d = widget.initialData;
     if (d == null || d.isEmpty) return;
 
+    // Si la pantalla se abrió con datos iniciales, asumimos que provienen
+    // de un prospecto/cliente ya existente.
+    _esProspectoNuevo = false;
+
     String _s(dynamic v) => (v ?? '').toString();
     int _i(dynamic v) {
       if (v == null) return 0;
@@ -211,6 +222,247 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     super.dispose();
   }
 
+  /// Aplica un Map de datos (mismos campos que initialData) sobre los
+  /// controllers del paso 1. Se usa tras consultar por cédula en el SÍ.
+  void _aplicarDatosProspectoEncontrado(Map<String, dynamic> d) {
+    String _s(dynamic v) => (v ?? '').toString();
+    int _i(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    final nombresSep = _s(d['nombres']);
+    final apellidosSep = _s(d['apellidos']);
+    if (nombresSep.isNotEmpty || apellidosSep.isNotEmpty) {
+      _nombreCtrl.text = nombresSep;
+      _apellidosCtrl.text = apellidosSep;
+    } else {
+      final nombreFull = _s(d['nombre']).trim();
+      if (nombreFull.isNotEmpty) {
+        final parts = nombreFull.split(RegExp(r'\s+'));
+        if (parts.length == 1) {
+          _nombreCtrl.text = parts[0];
+        } else {
+          _nombreCtrl.text = parts.first;
+          _apellidosCtrl.text = parts.sublist(1).join(' ');
+        }
+      }
+    }
+
+    _cedulaCtrl.text    = _s(d['cedula']);
+    _telefonoCtrl.text  = _s(d['telefono']);
+    _celularCtrl.text   = _s(d['celular']);
+    _emailCtrl.text     = _s(d['email']);
+    _direccionCtrl.text = _s(d['direccion']);
+    _ciudadCtrl.text    = _s(d['ciudad']);
+
+    final act = _s(d['actividad']);
+    if (act.isNotEmpty) _actividad = act;
+
+    final ne = _s(d['nombre_empresa']);
+    if (ne.isNotEmpty) {
+      _empresaCtrl.text = ne;
+      _tieneEmpresa = true;
+    }
+
+    final tieneRuc  = _i(d['tiene_ruc'])  == 1;
+    final tieneRise = _i(d['tiene_rise']) == 1;
+    if (tieneRuc) {
+      _regimenTributario = 'ruc';
+    } else if (tieneRise) {
+      _regimenTributario = 'rise';
+    }
+  }
+
+  /// Flujo al tocar "SÍ" en "¿El prospecto desea ser encuestado?":
+  /// 1) Muestra diálogo para ingresar cédula.
+  /// 2) Consulta buscar_prospecto_por_cedula.php.
+  /// 3) Si existe → precarga datos y avanza al paso 1.
+  /// 4) Si no existe → precarga solo la cédula y avanza al paso 1.
+  Future<void> _iniciarFlujoConCedula() async {
+    final cedulaCtrl = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool _dialogYaCerro = false;
+
+    final cedulaIngresada = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: const Text(
+          'Buscar prospecto por cédula',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Si la cédula ya existe en la base, se cargarán los datos del prospecto o cliente. '
+                'Si no existe, se registrará como nuevo prospecto.',
+                style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12.5),
+              ),
+              const SizedBox(height: 14),
+              TextFormField(
+                controller: cedulaCtrl,
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: InputDecoration(
+                  labelText: 'Cédula',
+                  prefixIcon: const Icon(Icons.badge_rounded),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                validator: (v) {
+                  final t = (v ?? '').trim();
+                  if (t.isEmpty) return 'Cédula requerida';
+                  if (t.length < 6) return 'Cédula inválida';
+                  return null;
+                },
+                onFieldSubmitted: (_) {
+                    if (_dialogYaCerro) return;
+                    if (!(formKey.currentState?.validate() ?? false)) return;
+                    _dialogYaCerro = true;
+                    Navigator.of(dctx).pop(cedulaCtrl.text.trim());
+                },
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () {
+                if (_dialogYaCerro) return;
+                _dialogYaCerro = true;
+                Navigator.of(dctx).pop(null);
+              },
+            child: const Text('Continuar sin buscar'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ConstantColors.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.search_rounded, size: 18),
+            label: const Text('Buscar',
+                style: TextStyle(fontWeight: FontWeight.w800)),
+            onPressed: () {
+              if (_dialogYaCerro) return;
+              if (!(formKey.currentState?.validate() ?? false)) return;
+              _dialogYaCerro = true;
+              Navigator.of(dctx).pop(cedulaCtrl.text.trim());
+            },
+          ),
+        ],
+      ),
+    );
+
+    // Esperar a que el diálogo se desmonte antes de liberar el controller
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      cedulaCtrl.dispose();
+    });
+    // Si el usuario cancela (o no ingresa cédula), igual avanzamos al formulario
+    // para poder registrar el prospecto manualmente.
+    if (cedulaIngresada == null || cedulaIngresada.isEmpty) {
+      if (!mounted) return;
+      _esProspectoNuevo = true;
+      _origenProspecto = null;
+      setState(() => _paso = _Paso.datosCliente);
+      return;
+    }
+    if (!mounted) return;
+
+    // Loader mientras consulta
+    BuildContext? loaderCtx;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        loaderCtx = ctx;
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
+
+    Map<String, dynamic> resultado;
+    try {
+      final url = Uri.parse('${Constants.apiBaseUrl}/buscar_prospecto_por_cedula.php');
+      final resp = await http.post(url, body: {'cedula': cedulaIngresada})
+          .timeout(const Duration(seconds: 15));
+      final decoded = json.decode(resp.body);
+      if (decoded is Map) {
+        resultado = Map<String, dynamic>.from(decoded);
+      } else {
+        resultado = {'status': 'error', 'message': 'Respuesta inválida del servidor'};
+      }
+    } catch (e) {
+      resultado = {'status': 'error', 'message': e.toString()};
+    }
+
+    if (loaderCtx != null) {
+      Navigator.of(loaderCtx!).pop(); // cerrar loader (solo el diálogo)
+    }
+    if (!mounted) return;
+
+    // Si por alguna razón la ruta ya no está activa, no tocar UI.
+    final route = ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
+
+    final status = resultado['status']?.toString() ?? '';
+
+    if (status == 'error') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(resultado['message']?.toString() ?? 'Error consultando cédula'),
+          backgroundColor: ConstantColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (status == 'found') {
+      final data = (resultado['data'] is Map)
+          ? Map<String, dynamic>.from(resultado['data'] as Map)
+          : <String, dynamic>{};
+      final tipo = (resultado['tipo'] ?? 'prospecto').toString();
+      final nombre = (data['nombre'] ?? '').toString();
+
+      _aplicarDatosProspectoEncontrado(data);
+      _esProspectoNuevo = false;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tipo == 'cliente'
+                ? 'Cliente existente: $nombre. Datos cargados.'
+                : 'Prospecto existente: $nombre. Datos cargados.',
+          ),
+          backgroundColor: tipo == 'cliente' ? Colors.green.shade700 : ConstantColors.primaryBlue,
+        ),
+      );
+    } else {
+      // not_found
+      _cedulaCtrl.text = cedulaIngresada;
+      _esProspectoNuevo = true;
+      _origenProspecto = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Cédula nueva. Se registrará como nuevo prospecto.'),
+          backgroundColor: ConstantColors.warning,
+        ),
+      );
+    }
+
+    if (!mounted) return;
+    final route2 = ModalRoute.of(context);
+    if (route2 == null || !route2.isCurrent) return;
+    setState(() => _paso = _Paso.datosCliente);
+  }
+
   Future<void> _obtenerGPS() async {
     try {
       final pos = await Geolocator.getCurrentPosition(
@@ -281,6 +533,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       if (asesorId.isNotEmpty) 'asesor_id': asesorId,
       'tipo_tarea': widget.tipoTarea,
       'fue_encuestado': fueEncuestado ? '1' : '0',
+      'origen_prospecto': _origenProspecto ?? '',
       // Cliente
       'nombre': _nombreCtrl.text.trim(),
       'apellidos': _apellidosCtrl.text.trim(),
@@ -828,7 +1081,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 sublabel: 'Continuar con encuesta',
                 color: ConstantColors.success,
                 icon: Icons.check_circle_rounded,
-                onTap: () => setState(() => _paso = _Paso.datosCliente),
+                onTap: _iniciarFlujoConCedula,
               ),
             ),
             const SizedBox(width: 12),
@@ -930,6 +1183,42 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_esProspectoNuevo == true && _origenProspecto == null) ...[
+            _seccionTitulo('Tipo de prospecto'),
+            Text(
+              'Seleccione una opción para continuar con el registro del prospecto.',
+              style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _botonRespuestaGrande(
+                    label: 'FRÍO',
+                    sublabel: 'No conoce / no nos sigue',
+                    color: ConstantColors.warning,
+                    icon: Icons.ac_unit_rounded,
+                    onTap: () => setState(() => _origenProspecto = 'frio'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _botonRespuestaGrande(
+                    label: 'SEGUIDOR',
+                    sublabel: 'Sí conoce / sí nos sigue',
+                    color: ConstantColors.primaryBlue,
+                    icon: Icons.favorite_rounded,
+                    onTap: () => setState(() => _origenProspecto = 'seguidor'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+          ],
+          if (_esProspectoNuevo == true && _origenProspecto == null)
+            const SizedBox(height: 6),
+
+          if (!(_esProspectoNuevo == true && _origenProspecto == null)) ...[
           _seccionTitulo('Información Personal'),
           _campo(
             controller: _nombreCtrl,
@@ -998,6 +1287,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               label: 'Nombre de la empresa',
               icon: Icons.business_rounded,
             ),
+          ],
           ],
         ],
       ),

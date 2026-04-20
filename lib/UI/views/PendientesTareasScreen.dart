@@ -1,12 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
-import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 
 class PendientesTareasScreen extends StatefulWidget {
   const PendientesTareasScreen({super.key});
@@ -141,182 +139,6 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         ),
       );
     }
-  }
-
-  /// Busca un prospecto/cliente por cédula en el backend.
-  /// Retorna un Map con: { 'status': 'found'|'not_found'|'error', 'tipo': ..., 'data': {...} }
-  Future<Map<String, dynamic>> _buscarPorCedula(String cedula) async {
-    final url = Uri.parse('${Constants.apiBaseUrl}/buscar_prospecto_por_cedula.php');
-    final resp = await http.post(url, body: {
-      'cedula': cedula,
-    }).timeout(const Duration(seconds: 15));
-
-    final decoded = json.decode(resp.body);
-    if (decoded is! Map) {
-      return {'status': 'error', 'message': 'Respuesta inválida'};
-    }
-    return Map<String, dynamic>.from(decoded);
-  }
-
-  /// Flujo: pide cédula → busca → navega a NuevaEncuestaScreen
-  /// con datos prellenados si existe, o solo con la cédula si no.
-  Future<void> _iniciarEncuestaConCedula({required String tipoTareaOriginal}) async {
-    final cedulaCtrl = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
-    final cedulaIngresada = await showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dctx) {
-        return AlertDialog(
-          backgroundColor: ConstantColors.backgroundCard,
-          title: const Text(
-            'Encuestar prospecto',
-            style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w800),
-          ),
-          content: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Ingresa la cédula. Si ya existe en la base se cargarán sus datos; si no, se registrará como nuevo prospecto.',
-                  style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: cedulaCtrl,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  style: const TextStyle(color: ConstantColors.textWhite),
-                  decoration: InputDecoration(
-                    labelText: 'Cédula',
-                    labelStyle: const TextStyle(color: ConstantColors.textGrey),
-                    prefixIcon: const Icon(Icons.badge_rounded, color: ConstantColors.textGrey),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.06),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: ConstantColors.borderColor),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(color: ConstantColors.borderColor),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: ConstantColors.warning, width: 1.5),
-                    ),
-                  ),
-                  validator: (v) {
-                    final t = (v ?? '').trim();
-                    if (t.isEmpty) return 'Cédula requerida';
-                    if (t.length < 6) return 'Cédula inválida';
-                    return null;
-                  },
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dctx).pop(null),
-              child: const Text('Cancelar', style: TextStyle(color: ConstantColors.textGrey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: ConstantColors.warning,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () {
-                if (!(formKey.currentState?.validate() ?? false)) return;
-                Navigator.of(dctx).pop(cedulaCtrl.text.trim());
-              },
-              child: const Text('Buscar', style: TextStyle(fontWeight: FontWeight.w800)),
-            ),
-          ],
-        );
-      },
-    );
-
-    cedulaCtrl.dispose();
-
-    if (cedulaIngresada == null || cedulaIngresada.isEmpty) return;
-    if (!mounted) return;
-
-    // Loader mientras busca
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    Map<String, dynamic> resultado;
-    try {
-      resultado = await _buscarPorCedula(cedulaIngresada);
-    } catch (e) {
-      resultado = {'status': 'error', 'message': e.toString()};
-    }
-
-    if (mounted) Navigator.of(context, rootNavigator: true).pop(); // cerrar loader
-    if (!mounted) return;
-
-    final status = resultado['status']?.toString() ?? '';
-
-    if (status == 'error') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(resultado['message']?.toString() ?? 'Error de búsqueda'),
-          backgroundColor: ConstantColors.warning,
-        ),
-      );
-      return;
-    }
-
-    // Preparar initialData para NuevaEncuestaScreen
-    Map<String, dynamic> initial;
-    if (status == 'found') {
-      final data = (resultado['data'] is Map) ? Map<String, dynamic>.from(resultado['data']) : <String, dynamic>{};
-      initial = data;
-      final tipo = (resultado['tipo'] ?? 'prospecto').toString();
-
-      // Info rápida al asesor
-      final nombre = (data['nombre'] ?? '').toString();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            tipo == 'cliente'
-                ? 'Cliente existente: $nombre. Se cargaron sus datos.'
-                : 'Prospecto existente: $nombre. Se cargaron sus datos.',
-          ),
-          backgroundColor: tipo == 'cliente' ? Colors.green.shade700 : Colors.blue.shade700,
-        ),
-      );
-    } else {
-      // not_found → solo precargar cédula
-      initial = {'cedula': cedulaIngresada};
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cédula nueva: se registrará como nuevo prospecto.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-    }
-
-    // Navegar a la encuesta con datos (o solo con cédula)
-    await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NuevaEncuestaScreen(
-          tipoTarea: tipoTareaOriginal.isNotEmpty ? tipoTareaOriginal : 'prospecto_nuevo',
-          initialData: initial,
-        ),
-      ),
-    );
-
-    // Refrescar la lista de tareas al volver
-    if (mounted) _cargar();
   }
 
   Future<void> _fijarTareasHoy() async {
@@ -560,27 +382,6 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-              // ── Botón "Encuestar" solo para prospecto_nuevo pendiente ──
-              if (tipo == 'prospecto_nuevo' && !isDone && !isCancel) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _iniciarEncuestaConCedula(tipoTareaOriginal: tipo),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ConstantColors.primaryBlue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(Icons.assignment_ind_rounded, size: 18),
-                    label: const Text(
-                      'Encuestar (ingresar cédula)',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
               Row(
                 children: [
                   Expanded(

@@ -86,6 +86,14 @@ $tiene_ruc       = (int)($_POST['tiene_ruc']          ?? 0);
 $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
 $nombre_empresa  = strOrNull($_POST['nombre_empresa'] ?? '');
 
+// Origen del prospecto (solo aplica a prospecto nuevo; se almacena en cliente_prospecto)
+$origen_prospecto = strOrNull($_POST['origen_prospecto'] ?? '');
+if ($origen_prospecto !== null) {
+    $origen_prospecto = strtolower($origen_prospecto);
+    $origen_ok = ['frio','seguidor'];
+    if (!in_array($origen_prospecto, $origen_ok, true)) $origen_prospecto = null;
+}
+
 // Validar actividad
 $acts_ok = ['negocio_propio','empleado_privado','empleado_publico','profesional'];
 if ($actividad !== null && !in_array($actividad, $acts_ok, true)) $actividad = null;
@@ -158,6 +166,13 @@ try {
     $GLOBALS['phase'] = 'ASESOR_RESOLVE';
     $asesor_id = null;
 
+    // Asegurar columna para origen de prospecto
+    try {
+        $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN origen_prospecto VARCHAR(20) DEFAULT NULL");
+    } catch (\Throwable $e) {
+        // ignorar si ya existe
+    }
+
     if ($asesor_id_in !== '') {
         $st = $conn->prepare('SELECT id FROM asesor WHERE id = ? LIMIT 1');
         $st->bind_param('s', $asesor_id_in);
@@ -210,13 +225,13 @@ try {
             "INSERT INTO cliente_prospecto
              (id, nombre, cedula, telefono, telefono2, email, direccion, ciudad,
               actividad, nombre_empresa, tiene_ruc, tiene_rise, asesor_id,
-              latitud, longitud, estado)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
+              latitud, longitud, origen_prospecto, estado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
         );
-        $st->bind_param('ssssssssssiisdd',
+        $st->bind_param('ssssssssssiisdds',
             $cliente_id, $nombre_completo, $cedula, $telefono, $celular,
             $email_c, $direccion, $ciudad, $actividad, $nombre_empresa,
-            $tiene_ruc, $tiene_rise, $asesor_id, $lat_ini, $lng_ini
+            $tiene_ruc, $tiene_rise, $asesor_id, $lat_ini, $lng_ini, $origen_prospecto
         );
         $st->execute();
         $st->close();
@@ -225,12 +240,13 @@ try {
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
              SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=COALESCE(?, ciudad),
-                 actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, asesor_id=?
+                 actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, asesor_id=?,
+                 origen_prospecto=COALESCE(?, origen_prospecto)
              WHERE id=?"
         );
-        $st->bind_param('ssssssssiiss',
+        $st->bind_param('ssssssssiisss',
             $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
-            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $asesor_id, $cliente_id
+            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $asesor_id, $origen_prospecto, $cliente_id
         );
         $st->execute();
         $st->close();
