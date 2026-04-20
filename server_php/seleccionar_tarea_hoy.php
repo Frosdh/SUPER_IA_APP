@@ -125,8 +125,13 @@ try {
             exit;
         }
 
-        // No permitir seleccionar tareas futuras
-        if ($fecha_prog !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_prog)) {
+        // Detectar si es una tarea pospuesta: ya está en_proceso pero su día seleccionado
+        // no es hoy (el asesor la aplazó para otra fecha). En ese caso SI se permite
+        // traerla de vuelta a hoy aunque fecha_programada esté en el futuro.
+        $esPospuesta = ($estado === 'en_proceso' && $sel_dia !== '' && $sel_dia !== date('Y-m-d'));
+
+        // No permitir seleccionar tareas futuras (excepto si está pospuesta)
+        if (!$esPospuesta && $fecha_prog !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_prog)) {
             if ($fecha_prog > date('Y-m-d')) {
                 echo json_encode(['status' => 'error', 'message' => 'Solo puedes seleccionar tareas de hoy o anteriores'], JSON_UNESCAPED_UNICODE);
                 exit;
@@ -144,17 +149,34 @@ try {
             $prev = $estado;
         }
 
-        $stUp = $conn->prepare(
-            "UPDATE tarea
-             SET estado='en_proceso',
-                 estado_seleccion_prev = ?,
-                 seleccionada_dia = CURDATE(),
-                 seleccionada_at  = NOW(),
-                 seleccion_fijada = 0,
-                 seleccion_fijada_at = NULL
-             WHERE id = ? AND asesor_id = ?
-               AND estado IN ('programada','pendiente','postergada','en_proceso')"
-        );
+        // Para tareas pospuestas, además actualizamos fecha_programada a hoy
+        // para que no se vuelvan a filtrar como "futuras" en las próximas consultas.
+        if ($esPospuesta) {
+            $stUp = $conn->prepare(
+                "UPDATE tarea
+                 SET estado='en_proceso',
+                     estado_seleccion_prev = ?,
+                     fecha_programada = CURDATE(),
+                     seleccionada_dia = CURDATE(),
+                     seleccionada_at  = NOW(),
+                     seleccion_fijada = 0,
+                     seleccion_fijada_at = NULL
+                 WHERE id = ? AND asesor_id = ?
+                   AND estado IN ('programada','pendiente','postergada','en_proceso')"
+            );
+        } else {
+            $stUp = $conn->prepare(
+                "UPDATE tarea
+                 SET estado='en_proceso',
+                     estado_seleccion_prev = ?,
+                     seleccionada_dia = CURDATE(),
+                     seleccionada_at  = NOW(),
+                     seleccion_fijada = 0,
+                     seleccion_fijada_at = NULL
+                 WHERE id = ? AND asesor_id = ?
+                   AND estado IN ('programada','pendiente','postergada','en_proceso')"
+            );
+        }
         $stUp->bind_param('sss', $prev, $tarea_id, $asesor_id);
         $ok = $stUp->execute();
         $stUp->close();

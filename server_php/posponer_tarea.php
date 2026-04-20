@@ -67,6 +67,7 @@ try {
         'seleccionada_at'       => "ADD COLUMN seleccionada_at DATETIME DEFAULT NULL AFTER seleccionada_dia",
         'seleccion_fijada'      => "ADD COLUMN seleccion_fijada TINYINT(1) NOT NULL DEFAULT 0 AFTER seleccionada_at",
         'seleccion_fijada_at'   => "ADD COLUMN seleccion_fijada_at DATETIME DEFAULT NULL AFTER seleccion_fijada",
+        'pospuesta_de_dia'      => "ADD COLUMN pospuesta_de_dia DATE DEFAULT NULL AFTER seleccion_fijada_at",
     ] as $col => $ddl) {
         $chk = $conn->query("SHOW COLUMNS FROM tarea LIKE '$col'");
         if ($chk && $chk->num_rows === 0) {
@@ -75,7 +76,10 @@ try {
     }
 
     // Verificar tarea pertenece al asesor y que sea editable
-    $stChk = $conn->prepare('SELECT estado, estado_seleccion_prev FROM tarea WHERE id = ? AND asesor_id = ? LIMIT 1');
+    $stChk = $conn->prepare(
+        'SELECT estado, estado_seleccion_prev, seleccionada_dia, fecha_programada, pospuesta_de_dia
+         FROM tarea WHERE id = ? AND asesor_id = ? LIMIT 1'
+    );
     $stChk->bind_param('ss', $tarea_id, $asesor_id);
     $stChk->execute();
     $r = $stChk->get_result()->fetch_assoc();
@@ -86,8 +90,11 @@ try {
         exit;
     }
 
-    $estado = (string)($r['estado'] ?? '');
-    $prev   = (string)($r['estado_seleccion_prev'] ?? '');
+    $estado    = (string)($r['estado'] ?? '');
+    $prev      = (string)($r['estado_seleccion_prev'] ?? '');
+    $sel_dia   = (string)($r['seleccionada_dia'] ?? '');
+    $fecha_prog= (string)($r['fecha_programada'] ?? '');
+    $pospDia   = (string)($r['pospuesta_de_dia'] ?? '');
 
     if ($estado === 'cancelada') {
         echo json_encode(['status' => 'error', 'message' => 'La tarea está cancelada'], JSON_UNESCAPED_UNICODE);
@@ -103,6 +110,20 @@ try {
         $prev = $estado;
     }
 
+    // Día original: solo se fija la PRIMERA vez que se pospone. Si ya hay
+    // un pospuesta_de_dia registrado, se conserva (para no perder el día
+    // realmente original si el asesor pospone múltiples veces).
+    // Prioridad: seleccionada_dia > fecha_programada > hoy.
+    if ($pospDia === '') {
+        if ($sel_dia !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $sel_dia)) {
+            $pospDia = $sel_dia;
+        } elseif ($fecha_prog !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_prog)) {
+            $pospDia = $fecha_prog;
+        } else {
+            $pospDia = date('Y-m-d');
+        }
+    }
+
     // Reprogramar: mantener en_proceso pero con nueva seleccionada_dia
     $stUp = $conn->prepare(
         "UPDATE tarea
@@ -112,10 +133,11 @@ try {
              seleccionada_dia = ?,
              seleccionada_at  = NOW(),
              seleccion_fijada = 0,
-             seleccion_fijada_at = NULL
+             seleccion_fijada_at = NULL,
+             pospuesta_de_dia = ?
          WHERE id = ? AND asesor_id = ?"
     );
-    $stUp->bind_param('sssss', $nueva_fecha, $prev, $nueva_fecha, $tarea_id, $asesor_id);
+    $stUp->bind_param('ssssss', $nueva_fecha, $prev, $nueva_fecha, $pospDia, $tarea_id, $asesor_id);
     $ok = $stUp->execute();
     $stUp->close();
 

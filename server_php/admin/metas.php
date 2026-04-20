@@ -254,6 +254,180 @@ if ($supervisor_table_id && $metas_instaladas) {
     }
 }
 
+// ── Filtros para el listado de tareas del equipo ─────────────
+$tareas_asesor_filtro = trim($_GET['t_asesor'] ?? '');
+$tareas_desde         = trim($_GET['t_desde'] ?? '');
+$tareas_hasta         = trim($_GET['t_hasta'] ?? '');
+
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tareas_desde)) {
+    $tareas_desde = date('Y-m-d', strtotime('-7 days'));
+}
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $tareas_hasta)) {
+    $tareas_hasta = date('Y-m-d');
+}
+if ($tareas_desde > $tareas_hasta) {
+    // swap si el usuario invirtió el rango
+    [$tareas_desde, $tareas_hasta] = [$tareas_hasta, $tareas_desde];
+}
+
+// Validar que el asesor filtrado pertenezca al supervisor
+$asesor_ids_equipo = array_map(fn($a) => (string)$a['id'], $asesores);
+if ($tareas_asesor_filtro !== '' && !in_array($tareas_asesor_filtro, $asesor_ids_equipo, true)) {
+    $tareas_asesor_filtro = '';
+}
+
+// ── Cargar tareas del equipo (completadas + incompletas + programadas) ─
+$tareas_completadas = [];
+$tareas_incompletas = [];
+$tareas_programadas = [];
+
+if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
+    // Asegurar que existan las columnas de trazabilidad (no destructivo)
+    try {
+        $has_pospuesta = (bool)$pdo->query("SHOW COLUMNS FROM tarea LIKE 'pospuesta_de_dia'")->fetchColumn();
+        if (!$has_pospuesta) {
+            try {
+                $pdo->exec("ALTER TABLE tarea ADD COLUMN pospuesta_de_dia DATE DEFAULT NULL");
+            } catch (PDOException $e) { /* ignorar si el hosting bloquea ALTER */ }
+        }
+    } catch (PDOException $e) { /* ignorar */ }
+
+    try {
+        $ph = implode(',', array_fill(0, count($asesor_ids_equipo), '?'));
+
+        // --- Completadas en el rango ---
+        $sqlC = "SELECT t.id, t.tipo_tarea, t.estado,
+                        t.fecha_programada, t.hora_programada,
+                        t.fecha_realizada, t.hora_realizada,
+                        t.seleccionada_dia, t.observaciones,
+                        u.nombre AS asesor_nombre,
+                        cp.nombre AS cliente_nombre,
+                        cp.ciudad AS cliente_ciudad
+                 FROM tarea t
+                 JOIN asesor a ON a.id = t.asesor_id
+                 JOIN usuario u ON u.id = a.usuario_id
+                 LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+                 WHERE a.supervisor_id = ?
+                   AND t.asesor_id IN ($ph)
+                   AND t.estado = 'completada'
+                   AND t.fecha_realizada BETWEEN ? AND ?";
+        $paramsC = array_merge([$supervisor_table_id], $asesor_ids_equipo, [$tareas_desde, $tareas_hasta]);
+        if ($tareas_asesor_filtro !== '') {
+            $sqlC .= " AND t.asesor_id = ?";
+            $paramsC[] = $tareas_asesor_filtro;
+        }
+        $sqlC .= " ORDER BY t.fecha_realizada DESC, t.hora_realizada DESC LIMIT 300";
+
+        $stC = $pdo->prepare($sqlC);
+        $stC->execute($paramsC);
+        $tareas_completadas = $stC->fetchAll();
+
+        // --- Incompletas: tareas NO completadas cuyo día efectivo (el día
+        // en que realmente se esperaba hacerla) haya caído dentro del
+        // rango pedido.
+        //
+        // Día efectivo:
+        //   - Si fue pospuesta: el día original (pospuesta_de_dia)
+        //   - Si no: la fecha_programada
+        //
+        // Regla de cuándo contar como incompleta:
+        //   - Si la tarea fue POSPUESTA: cuenta inmediatamente como
+        //     incompleta del día original — el solo hecho de haberla
+        //     pospuesto ya indica que no se hará ese día.
+        //   - Si NO fue pospuesta: solo cuenta si el día ya pasó
+        //     (o si es hoy después de las 18:00), porque todavía
+        //     podría cumplirse en el transcurso del día. ---
+        $sqlI = "SELECT t.id, t.tipo_tarea, t.estado,
+                        t.fecha_programada, t.hora_programada,
+                        t.fecha_realizada, t.hora_realizada,
+                        t.seleccionada_dia, t.seleccionada_at,
+                        t.pospuesta_de_dia, t.observaciones,
+                        u.nombre AS asesor_nombre,
+                        cp.nombre AS cliente_nombre,
+                        cp.ciudad AS cliente_ciudad
+                 FROM tarea t
+                 JOIN asesor a ON a.id = t.asesor_id
+                 JOIN usuario u ON u.id = a.usuario_id
+                 LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+                 WHERE a.supervisor_id = ?
+                   AND t.asesor_id IN ($ph)
+                   AND t.estado <> 'completada'
+                   AND (
+                        -- Caso pospuesta: cuenta inmediatamente contra el día original
+                        (t.pospuesta_de_dia IS NOT NULL
+                           AND t.pospuesta_de_dia BETWEEN ? AND ?)
+                     OR
+                        -- Caso no pospuesta: fecha_programada ya tiene que haber pasado
+                        -- (o ya haber terminado la jornada si es hoy)
+                        (t.pospuesta_de_dia IS NULL
+                           AND t.fecha_programada BETWEEN ? AND ?
+                           AND (
+                                t.fecha_programada < CURDATE()
+                             OR (t.fecha_programada = CURDATE() AND HOUR(NOW()) >= 18)
+                           ))
+                   )";
+        $paramsI = array_merge(
+            [$supervisor_table_id],
+            $asesor_ids_equipo,
+            [$tareas_desde, $tareas_hasta, $tareas_desde, $tareas_hasta]
+        );
+        if ($tareas_asesor_filtro !== '') {
+            $sqlI .= " AND t.asesor_id = ?";
+            $paramsI[] = $tareas_asesor_filtro;
+        }
+        $sqlI .= " ORDER BY COALESCE(t.pospuesta_de_dia, t.fecha_programada) DESC,
+                            t.hora_programada DESC
+                   LIMIT 300";
+
+        $stI = $pdo->prepare($sqlI);
+        $stI->execute($paramsI);
+        $tareas_incompletas = $stI->fetchAll();
+
+        // --- Programadas: tareas NO completadas cuya fecha_programada
+        // cae en el rango Y aún no ha terminado la jornada de ese día.
+        // Incluye las pospuestas que fueron reasignadas a otro día
+        // (porque su fecha_programada es ahora el día nuevo). ---
+        $sqlP = "SELECT t.id, t.tipo_tarea, t.estado,
+                        t.fecha_programada, t.hora_programada,
+                        t.seleccionada_dia, t.pospuesta_de_dia,
+                        t.observaciones,
+                        u.nombre AS asesor_nombre,
+                        cp.nombre AS cliente_nombre,
+                        cp.ciudad AS cliente_ciudad
+                 FROM tarea t
+                 JOIN asesor a ON a.id = t.asesor_id
+                 JOIN usuario u ON u.id = a.usuario_id
+                 LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+                 WHERE a.supervisor_id = ?
+                   AND t.asesor_id IN ($ph)
+                   AND t.estado NOT IN ('completada','cancelada')
+                   AND t.fecha_programada BETWEEN ? AND ?
+                   AND (
+                        t.fecha_programada > CURDATE()
+                     OR (t.fecha_programada = CURDATE() AND HOUR(NOW()) < 18)
+                   )";
+        $paramsP = array_merge(
+            [$supervisor_table_id],
+            $asesor_ids_equipo,
+            [$tareas_desde, $tareas_hasta]
+        );
+        if ($tareas_asesor_filtro !== '') {
+            $sqlP .= " AND t.asesor_id = ?";
+            $paramsP[] = $tareas_asesor_filtro;
+        }
+        $sqlP .= " ORDER BY t.fecha_programada ASC, t.hora_programada ASC LIMIT 300";
+
+        $stP = $pdo->prepare($sqlP);
+        $stP->execute($paramsP);
+        $tareas_programadas = $stP->fetchAll();
+    } catch (PDOException $e) {
+        // Fallback silencioso si la tabla aún no tiene las columnas nuevas
+        $tareas_completadas = [];
+        $tareas_incompletas = [];
+        $tareas_programadas = [];
+    }
+}
+
 // Alertas pendientes (para badge del sidebar)
 if ($supervisor_table_id) {
     try {
@@ -263,6 +437,43 @@ if ($supervisor_table_id) {
     } catch (PDOException $e) {
         $alertas_pendientes = 0;
     }
+}
+
+// Helper para nombre legible del tipo de tarea
+function metas_tipo_tarea_label($tipo) {
+    switch ($tipo) {
+        case 'nueva_cita_campo':      return 'Nueva cita en campo';
+        case 'nueva_cita_oficina':    return 'Nueva cita en oficina';
+        case 'documentos_pendientes': return 'Recolectar documentación';
+        case 'levantamiento':         return 'Levantamiento';
+        default: return ucfirst(str_replace('_', ' ', (string)$tipo));
+    }
+}
+
+// Helper para etiqueta + clase visual de estado.
+// Para el supervisor, una tarea pospuesta cuenta como INCOMPLETA — aunque
+// el asesor la vea como "pospuesta" desde la app, aquí se muestra así para
+// que el supervisor vea claramente que no se hizo el día original.
+function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada, $pospuesta_de_dia = null) {
+    $hoy = date('Y-m-d');
+    if ($estado === 'completada') return ['Completada', 'est-completado'];
+    if ($estado === 'cancelada')  return ['Cancelada',  'est-no_cumplido'];
+
+    // Si la tarea tiene registro de haber sido pospuesta → INCOMPLETA
+    if (!empty($pospuesta_de_dia)) {
+        return ['Incompleta', 'est-no_cumplido'];
+    }
+
+    // Caso legacy (sin pospuesta_de_dia registrado): la tarea está en
+    // proceso pero con seleccionada_dia distinta a hoy → INCOMPLETA
+    if ($estado === 'en_proceso' && $seleccionada_dia && $seleccionada_dia !== $hoy) {
+        return ['Incompleta', 'est-no_cumplido'];
+    }
+    if ($estado === 'en_proceso') return ['En proceso', 'est-pendiente'];
+    if ($estado === 'postergada') return ['Postergada', 'est-pendiente'];
+    if ($estado === 'programada') return ['Programada', 'est-pendiente'];
+    if ($estado === 'pendiente')  return ['Pendiente',  'est-pendiente'];
+    return [$estado ?: '—', 'est-pendiente'];
 }
 ?>
 <!DOCTYPE html>
@@ -452,6 +663,250 @@ if ($supervisor_table_id) {
                                 <td class="avance"><?= $fmt($m['avance_cuenta_corriente'], $m['meta_cuenta_corriente']) ?></td>
                                 <td class="avance"><?= $fmt($m['avance_inversiones'], $m['meta_inversiones']) ?></td>
                                 <td><span class="est-badge <?= $estClass ?>"><?= $estLabel ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <!-- ── TAREAS DEL EQUIPO (seleccionadas por los asesores) ── -->
+        <div class="card-block">
+            <h3><i class="fas fa-tasks" style="color:#8b5cf6;"></i> Tareas del Equipo</h3>
+
+            <form method="get" class="filter-bar">
+                <!-- conservar filtro de fecha de metas -->
+                <input type="hidden" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>">
+                <div style="min-width:200px;">
+                    <label>Asesor</label>
+                    <select name="t_asesor" onchange="this.form.submit()">
+                        <option value="">— Todos mis asesores —</option>
+                        <?php foreach ($asesores as $a): ?>
+                            <option value="<?= htmlspecialchars($a['id']) ?>" <?= $tareas_asesor_filtro === (string)$a['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($a['nombre']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div>
+                    <label>Desde</label>
+                    <input type="date" name="t_desde" value="<?= htmlspecialchars($tareas_desde) ?>" onchange="this.form.submit()">
+                </div>
+                <div>
+                    <label>Hasta</label>
+                    <input type="date" name="t_hasta" value="<?= htmlspecialchars($tareas_hasta) ?>" onchange="this.form.submit()">
+                </div>
+                <div>
+                    <button type="submit" class="btn-save" style="margin-top:0;padding:10px 18px;">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                </div>
+            </form>
+
+            <!-- Tareas Incompletas / Pospuestas -->
+            <h4 style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--brand-navy-deep);">
+                <i class="fas fa-hourglass-half" style="color:#d97706;"></i>
+                Tareas incompletas / pospuestas
+                <span style="font-weight:500;color:var(--brand-gray);font-size:12px;">
+                    (<?= count($tareas_incompletas) ?>)
+                </span>
+            </h4>
+            <?php if (empty($tareas_incompletas)): ?>
+                <p style="color:var(--brand-gray);padding:14px;text-align:center;">
+                    <i class="fas fa-check-double"></i>
+                    No hay tareas incompletas en este rango.
+                </p>
+            <?php else: ?>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asesor</th>
+                                <th>Cliente</th>
+                                <th>Tipo</th>
+                                <th>Día original</th>
+                                <th>Reprogramada</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($tareas_incompletas as $t): ?>
+                            <?php
+                            [$estLabel, $estClass] = metas_estado_tarea_badge(
+                                $t['estado'] ?? '',
+                                $t['seleccionada_dia'] ?? '',
+                                $t['fecha_programada'] ?? '',
+                                $t['pospuesta_de_dia'] ?? null
+                            );
+                            $tipoTxt    = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
+                            $fechaProg  = trim(($t['fecha_programada'] ?? '') . ' ' . ($t['hora_programada'] ?? ''));
+                            $selDia     = $t['seleccionada_dia']  ?? '';
+                            $pospDia    = $t['pospuesta_de_dia']  ?? '';
+
+                            // Día original: el registro explícito si existe,
+                            // si no, el seleccionada_dia o el fecha_programada.
+                            $diaOriginal = $pospDia !== '' ? $pospDia
+                                         : ($selDia !== '' ? $selDia
+                                         : ($t['fecha_programada'] ?? ''));
+
+                            // Reprogramada: si está pospuesta, mostramos la
+                            // fecha nueva (fecha_programada o seleccionada_dia).
+                            $reprog = '';
+                            if ($pospDia !== '') {
+                                $reprog = $t['fecha_programada'] ?? '';
+                                if ($reprog === '' || $reprog === $pospDia) {
+                                    $reprog = $selDia;
+                                }
+                            }
+                            ?>
+                            <tr>
+                                <td><b><?= htmlspecialchars($t['asesor_nombre'] ?? '') ?></b></td>
+                                <td>
+                                    <?= htmlspecialchars($t['cliente_nombre'] ?? '—') ?>
+                                    <?php if (!empty($t['cliente_ciudad'])): ?>
+                                        <div style="color:var(--brand-gray);font-size:11px;">
+                                            <?= htmlspecialchars($t['cliente_ciudad']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= htmlspecialchars($tipoTxt) ?></td>
+                                <td>
+                                    <?= htmlspecialchars($diaOriginal ?: '—') ?>
+                                    <?php if (!empty($t['hora_programada']) && $pospDia === ''): ?>
+                                        <div style="color:var(--brand-gray);font-size:11px;">
+                                            <?= htmlspecialchars($t['hora_programada']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($reprog !== ''): ?>
+                                        <span style="color:#d97706;font-weight:700;">
+                                            <i class="fas fa-arrow-right" style="font-size:10px;"></i>
+                                            <?= htmlspecialchars($reprog) ?>
+                                        </span>
+                                    <?php else: ?>
+                                        <span style="color:var(--brand-gray);">—</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td><span class="est-badge <?= $estClass ?>"><?= htmlspecialchars($estLabel) ?></span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+
+            <!-- Tareas Programadas -->
+            <h4 style="margin:22px 0 10px;font-size:15px;font-weight:800;color:var(--brand-navy-deep);">
+                <i class="fas fa-calendar-alt" style="color:#3b82f6;"></i>
+                Tareas programadas
+                <span style="font-weight:500;color:var(--brand-gray);font-size:12px;">
+                    (<?= count($tareas_programadas) ?>)
+                </span>
+            </h4>
+            <?php if (empty($tareas_programadas)): ?>
+                <p style="color:var(--brand-gray);padding:14px;text-align:center;">
+                    <i class="fas fa-inbox"></i>
+                    No hay tareas programadas en este rango.
+                </p>
+            <?php else: ?>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asesor</th>
+                                <th>Cliente</th>
+                                <th>Tipo</th>
+                                <th>Fecha</th>
+                                <th>Hora</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($tareas_programadas as $t): ?>
+                            <?php
+                            $tipoTxt   = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
+                            $fechaProg = $t['fecha_programada'] ?? '';
+                            $horaProg  = $t['hora_programada']  ?? '';
+                            $fuePosp   = !empty($t['pospuesta_de_dia']);
+                            ?>
+                            <tr>
+                                <td><b><?= htmlspecialchars($t['asesor_nombre'] ?? '') ?></b></td>
+                                <td>
+                                    <?= htmlspecialchars($t['cliente_nombre'] ?? '—') ?>
+                                    <?php if (!empty($t['cliente_ciudad'])): ?>
+                                        <div style="color:var(--brand-gray);font-size:11px;">
+                                            <?= htmlspecialchars($t['cliente_ciudad']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= htmlspecialchars($tipoTxt) ?></td>
+                                <td>
+                                    <?= htmlspecialchars($fechaProg ?: '—') ?>
+                                    <?php if ($fuePosp): ?>
+                                        <div style="color:#d97706;font-size:11px;font-weight:700;">
+                                            <i class="fas fa-history" style="font-size:9px;"></i>
+                                            Reprogramada desde <?= htmlspecialchars($t['pospuesta_de_dia']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= htmlspecialchars($horaProg ?: '—') ?></td>
+                                <td><span class="est-badge est-pendiente">Programada</span></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+
+            <!-- Tareas Completadas -->
+            <h4 style="margin:22px 0 10px;font-size:15px;font-weight:800;color:var(--brand-navy-deep);">
+                <i class="fas fa-check-circle" style="color:#10b981;"></i>
+                Tareas completadas
+                <span style="font-weight:500;color:var(--brand-gray);font-size:12px;">
+                    (<?= count($tareas_completadas) ?>)
+                </span>
+            </h4>
+            <?php if (empty($tareas_completadas)): ?>
+                <p style="color:var(--brand-gray);padding:14px;text-align:center;">
+                    <i class="fas fa-inbox"></i>
+                    No hay tareas completadas en este rango.
+                </p>
+            <?php else: ?>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Asesor</th>
+                                <th>Cliente</th>
+                                <th>Tipo</th>
+                                <th>Programada</th>
+                                <th>Realizada</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($tareas_completadas as $t): ?>
+                            <?php
+                            $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
+                            $fechaProg = trim(($t['fecha_programada'] ?? '') . ' ' . ($t['hora_programada'] ?? ''));
+                            $fechaReal = trim(($t['fecha_realizada']  ?? '') . ' ' . ($t['hora_realizada']  ?? ''));
+                            ?>
+                            <tr>
+                                <td><b><?= htmlspecialchars($t['asesor_nombre'] ?? '') ?></b></td>
+                                <td>
+                                    <?= htmlspecialchars($t['cliente_nombre'] ?? '—') ?>
+                                    <?php if (!empty($t['cliente_ciudad'])): ?>
+                                        <div style="color:var(--brand-gray);font-size:11px;">
+                                            <?= htmlspecialchars($t['cliente_ciudad']) ?>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
+                                <td><?= htmlspecialchars($tipoTxt) ?></td>
+                                <td><?= htmlspecialchars(trim($fechaProg)) ?: '—' ?></td>
+                                <td><?= htmlspecialchars(trim($fechaReal)) ?: '—' ?></td>
+                                <td><span class="est-badge est-completado">Completada</span></td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>

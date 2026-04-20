@@ -390,10 +390,21 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         final fechaMostrar = estado == 'completada' ? fechaReal : fechaProg;
         final horaMostrar = estado == 'completada' ? horaReal : horaProg;
 
-        final isProg = estado == 'programada';
-        final isProc = estado == 'en_proceso';
+        // Detectar estado "pospuesta": en_proceso con seleccionada_dia distinta a hoy
+        // (se usa solo para habilitar el botón "Seleccionar hoy"; visualmente se
+        // muestra como "programada" porque para el asesor y el supervisor el día
+        // nuevo es una tarea agendada como cualquier otra).
+        final esPospuesta = estado == 'en_proceso' && selDia.isNotEmpty && selDia != hoy;
+
+        final isProg = estado == 'programada' || esPospuesta;
+        final isProc = estado == 'en_proceso' && !esPospuesta;
         final isDone = estado == 'completada';
         final isCancel = estado == 'cancelada';
+        final isPosp = esPospuesta;
+
+        final badgeLabel = isPosp
+            ? 'programada'
+            : (estado.isEmpty ? '—' : estado);
 
         final badgeBg = isDone
             ? Colors.green.shade50
@@ -439,7 +450,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                       border: Border.all(color: badgeBorder),
                     ),
                     child: Text(
-                      estado.isEmpty ? '—' : estado,
+                      badgeLabel,
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 12,
@@ -540,69 +551,8 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                                   ],
                                 ),
                               )
-                            : (estado == 'en_proceso'
-                                ? (fijada
-                                    ? Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white.withOpacity(0.06),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(color: ConstantColors.borderColor),
-                                        ),
-                                        child: Row(
-                                          children: const [
-                                            Icon(Icons.lock_rounded, size: 16, color: ConstantColors.textWhite),
-                                            SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                'Fijada (no se puede deseleccionar)',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: TextStyle(
-                                                  color: ConstantColors.textWhite,
-                                                  fontWeight: FontWeight.w700,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      )
-                                    : (esHoySeleccionada
-                                        ? OutlinedButton(
-                                            onPressed: tareaId.isEmpty
-                                                ? null
-                                                : () => _setSeleccionHoy(tareaId, seleccionar: false),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: Colors.red.shade200,
-                                              side: BorderSide(color: Colors.red.shade200.withOpacity(0.7)),
-                                              padding: const EdgeInsets.symmetric(vertical: 12),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                            ),
-                                            child: const Text(
-                                              'Quitar de hoy',
-                                              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                                            ),
-                                          )
-                                        : Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(0.06),
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: ConstantColors.borderColor),
-                                            ),
-                                            child: Text(
-                                              selDia.trim().isEmpty ? 'En proceso' : 'En proceso (seleccionada: $selDia)',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                color: ConstantColors.textWhite,
-                                                fontWeight: FontWeight.w700,
-                                                fontSize: 12,
-                                              ),
-                                            ),
-                                          )))
-                                : ElevatedButton(
+                            : (isPosp
+                                ? ElevatedButton(
                                     onPressed: tareaId.isEmpty
                                         ? null
                                         : () => _setSeleccionHoy(tareaId, seleccionar: true),
@@ -616,7 +566,84 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                                       'Seleccionar hoy',
                                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
                                     ),
-                                  ))),
+                                  )
+                                : (estado == 'en_proceso'
+                                    ? (fijada
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(0.06),
+                                              borderRadius: BorderRadius.circular(12),
+                                              border: Border.all(color: ConstantColors.borderColor),
+                                            ),
+                                            child: Row(
+                                              children: const [
+                                                Icon(Icons.lock_rounded, size: 16, color: ConstantColors.textWhite),
+                                                SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Fijada (no se puede deseleccionar)',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: TextStyle(
+                                                      color: ConstantColors.textWhite,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : (esHoySeleccionada
+                                            ? OutlinedButton(
+                                                onPressed: tareaId.isEmpty
+                                                    ? null
+                                                    : () => _setSeleccionHoy(tareaId, seleccionar: false),
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: Colors.red.shade200,
+                                                  side: BorderSide(color: Colors.red.shade200.withOpacity(0.7)),
+                                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                                ),
+                                                child: const Text(
+                                                  'Quitar de hoy',
+                                                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                                ),
+                                              )
+                                            : Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withOpacity(0.06),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  border: Border.all(color: ConstantColors.borderColor),
+                                                ),
+                                                child: Text(
+                                                  selDia.trim().isEmpty ? 'En proceso' : 'En proceso (seleccionada: $selDia)',
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(
+                                                    color: ConstantColors.textWhite,
+                                                    fontWeight: FontWeight.w700,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              )))
+                                    : ElevatedButton(
+                                        onPressed: tareaId.isEmpty
+                                            ? null
+                                            : () => _setSeleccionHoy(tareaId, seleccionar: true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: ConstantColors.warning,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(vertical: 12),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                        ),
+                                        child: const Text(
+                                          'Seleccionar hoy',
+                                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                        ),
+                                      )))),
                   ),
                   if (hasCoord) ...[
                     const SizedBox(width: 10),
