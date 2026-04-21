@@ -43,6 +43,8 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $sqlAlertas = "
         SELECT 
             am.id as id_alerta,
+            am.valor_anterior as valor_anterior,
+            am.valor_nuevo as valor_nuevo,
             'Modificación de tarea' as tipo,
             CONCAT('La tarea ', t.id, ' fue modificada por el asesor ', u_asesor.nombre) as mensaje,
             cp.nombre as cliente_nombre,
@@ -65,6 +67,8 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $sqlAlertas = "
         SELECT 
             am.id as id_alerta,
+            am.valor_anterior as valor_anterior,
+            am.valor_nuevo as valor_nuevo,
             'Modificación de tarea' as tipo,
             CONCAT('La tarea ', t.id, ' fue modificada por el asesor ', u_asesor.nombre) as mensaje,
             cp.nombre as cliente_nombre,
@@ -89,6 +93,8 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $sqlAlertas = "
         SELECT 
             am.id as id_alerta,
+            am.valor_anterior as valor_anterior,
+            am.valor_nuevo as valor_nuevo,
             'Modificación de tarea' as tipo,
             CONCAT('La tarea ', t.id, ' fue modificada') as mensaje,
             cp.nombre as cliente_nombre,
@@ -434,7 +440,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <a href="#" class="btn btn-sm btn-outline-primary" title="Ver detalles">
+                                <a href="alertas_detalle.php?id=<?php echo urlencode($alerta['id_alerta']); ?>" class="btn btn-sm btn-outline-primary" title="Ver detalles">
                                     <i class="fas fa-eye"></i>
                                 </a>
                             </td>

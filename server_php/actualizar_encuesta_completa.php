@@ -225,6 +225,48 @@ try {
     }
 
     $conn->begin_transaction();
+    // ── 2. Actualizar cliente_prospecto (NO se toca la cédula) ─
+
+    // ── SNAPSHOT: obtener estado previo de cliente/encuestas/acuerdo ─
+    $GLOBALS['phase'] = 'SNAP_PREV';
+    $prev_snapshot = [
+        'cliente' => null,
+        'encuesta_comercial' => null,
+        'encuesta_negocio' => null,
+        'acuerdo_visita' => null,
+    ];
+    if ($cliente_id !== '') {
+        try {
+            $stC = $conn->prepare('SELECT * FROM cliente_prospecto WHERE id = ? LIMIT 1');
+            $stC->bind_param('s', $cliente_id);
+            $stC->execute();
+            $prev_snapshot['cliente'] = $stC->get_result()->fetch_assoc() ?: null;
+            $stC->close();
+        } catch (\Throwable $_) { $prev_snapshot['cliente'] = null; }
+    }
+    try {
+        $stE = $conn->prepare('SELECT * FROM encuesta_comercial WHERE tarea_id = ? ORDER BY id DESC LIMIT 1');
+        $stE->bind_param('s', $tarea_id);
+        $stE->execute();
+        $prev_snapshot['encuesta_comercial'] = $stE->get_result()->fetch_assoc() ?: null;
+        $stE->close();
+    } catch (\Throwable $_) { $prev_snapshot['encuesta_comercial'] = null; }
+    try {
+        $stN = $conn->prepare('SELECT * FROM encuesta_negocio WHERE tarea_id = ? ORDER BY id DESC LIMIT 1');
+        $stN->bind_param('s', $tarea_id);
+        $stN->execute();
+        $prev_snapshot['encuesta_negocio'] = $stN->get_result()->fetch_assoc() ?: null;
+        $stN->close();
+    } catch (\Throwable $_) { $prev_snapshot['encuesta_negocio'] = null; }
+    try {
+        $stA = $conn->prepare('SELECT * FROM acuerdo_visita WHERE tarea_id = ? ORDER BY id DESC LIMIT 1');
+        $stA->bind_param('s', $tarea_id);
+        $stA->execute();
+        $prev_snapshot['acuerdo_visita'] = $stA->get_result()->fetch_assoc() ?: null;
+        $stA->close();
+    } catch (\Throwable $_) { $prev_snapshot['acuerdo_visita'] = null; }
+
+    $conn->begin_transaction();
 
     // ── 2. Actualizar cliente_prospecto (NO se toca la cédula) ─
     $GLOBALS['phase'] = 'UPDATE_CLIENTE';
