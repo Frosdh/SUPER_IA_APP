@@ -95,7 +95,7 @@ try {
         }
         $new_raw = json_encode($new, JSON_UNESCAPED_UNICODE);
     }
-} catch (	hrowable $_) {
+} catch (\Throwable $_) {
     // ignore DB fallback failures
 }
 
@@ -219,21 +219,7 @@ if (isset($_POST['marcar_revisada'])) {
         </div>
     </div>
 
-    <hr/>
-    <div class="row">
-        <div class="col-md-6">
-            <h5>Original (raw)</h5>
-            <div class="col-json">
-                <?php echo pretty_json($ant, $ant_raw); ?>
-            </div>
-        </div>
-        <div class="col-md-6">
-            <h5>Modificada (raw)</h5>
-            <div class="col-json">
-                <?php echo pretty_json($new, $new_raw); ?>
-            </div>
-        </div>
-    </div>
+    <!-- Raw JSON blocks removed per UX request -->
 
     <form method="post" class="mt-3">
         <button name="marcar_revisada" class="btn btn-success">Marcar como revisada</button>

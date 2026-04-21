@@ -233,7 +233,7 @@ $is_supervisor = ($user_role === 'supervisor');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA — Detalle Prospecto / Cliente</title>
+    <title>Super_IA — Detalle Cliente</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -393,7 +393,7 @@ $is_supervisor = ($user_role === 'supervisor');
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2><i class="fas fa-address-book me-2" style="color:var(--brand-yellow);"></i>Super_IA — Detalle de Prospecto / Cliente</h2>
+        <h2><i class="fas fa-address-book me-2" style="color:var(--brand-yellow);"></i>Super_IA — Detalle de Cliente</h2>
         <div class="user-info">
             <div>
                 <strong><?php
@@ -410,8 +410,8 @@ $is_supervisor = ($user_role === 'supervisor');
     <div class="content-area">
 
         <div class="page-header">
-            <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver al listado</a>
-            <h1><i class="fas fa-user me-2"></i>Perfil de <?= htmlspecialchars($estado_label) ?></h1>
+            <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Clientes</a>
+            <h1><i class="fas fa-user me-2"></i>Perfil del Cliente</h1>
         </div>
 
         <!-- ── HERO ── -->
@@ -872,7 +872,7 @@ $is_supervisor = ($user_role === 'supervisor');
             <div class="section-body">
                 <div class="empty-state">
                     <i class="fas fa-inbox"></i>
-                    No hay fichas de productos registradas para este prospecto/cliente
+                    No hay fichas de productos registradas para este cliente
                 </div>
             </div>
         </div>

@@ -424,18 +424,35 @@ try {
             $val_nuevo  = "Asesor: $asesor_nombre_alerta | Cliente: $nombre_completo (cédula: $cedula) | Tipo: $tipo_tarea | Fecha: " . date('d/m/Y H:i');
             $alerta_id  = genUUID();
 
-            $stAl = $conn->prepare(
-                "INSERT INTO alerta_modificacion
-                 (id, tarea_id, asesor_id, supervisor_id, campo_modificado, valor_anterior, valor_nuevo)
-                 VALUES (?, ?, ?, ?, ?, ?, ?)"
-            );
-            if ($stAl) {
-                $stAl->bind_param('sssssss',
-                    $alerta_id, $tarea_id, $asesor_id, $sup_id,
-                    $campo_mod, $val_ant, $val_nuevo
+            // Prevent duplicate alerts: if an alert for this tarea_id was created very recently, skip
+            $skip_insert = false;
+            try {
+                $stChk = $conn->prepare("SELECT COUNT(*) AS cnt FROM alerta_modificacion WHERE tarea_id = ? AND created_at >= (NOW() - INTERVAL 2 MINUTE)");
+                if ($stChk) {
+                    $stChk->bind_param('s', $tarea_id);
+                    $stChk->execute();
+                    $rchk = $stChk->get_result()->fetch_assoc();
+                    $stChk->close();
+                    if (!empty($rchk) && (int)$rchk['cnt'] > 0) {
+                        $skip_insert = true;
+                    }
+                }
+            } catch (\Throwable $_) { /* ignore check failures, proceed to insert */ }
+
+            if (!$skip_insert) {
+                $stAl = $conn->prepare(
+                    "INSERT INTO alerta_modificacion
+                     (id, tarea_id, asesor_id, supervisor_id, campo_modificado, valor_anterior, valor_nuevo)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)"
                 );
-                $stAl->execute();
-                $stAl->close();
+                if ($stAl) {
+                    $stAl->bind_param('sssssss',
+                        $alerta_id, $tarea_id, $asesor_id, $sup_id,
+                        $campo_mod, $val_ant, $val_nuevo
+                    );
+                    $stAl->execute();
+                    $stAl->close();
+                }
             }
         } catch (\Throwable $eAl) {
             // No bloquear el flujo principal por un error de alerta

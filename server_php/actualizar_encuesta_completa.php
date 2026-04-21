@@ -267,8 +267,88 @@ try {
     } catch (\Throwable $_) { $prev_snapshot['acuerdo_visita'] = null; }
 
     $conn->begin_transaction();
+    
+    // Ensure table exists (so we can insert provisional alert)
+    $conn->query("CREATE TABLE IF NOT EXISTS alerta_modificacion (
+                id               CHAR(36)     NOT NULL PRIMARY KEY,
+                tarea_id         CHAR(36)     NOT NULL,
+                asesor_id        CHAR(36)     NOT NULL,
+                supervisor_id    CHAR(36)     DEFAULT NULL,
+                campo_modificado VARCHAR(120) DEFAULT 'visita_cliente',
+                valor_anterior   TEXT         DEFAULT NULL,
+                valor_nuevo      TEXT         DEFAULT NULL,
+                vista_supervisor TINYINT(1)   NOT NULL DEFAULT 0,
+                vista_at         DATETIME     DEFAULT NULL,
+                created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_am_asesor (asesor_id),
+                KEY idx_am_supervisor (supervisor_id),
+                KEY idx_am_no_vista (vista_supervisor)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 
-    // ── 2. Actualizar cliente_prospecto (NO se toca la cédula) ─
+    // Try to determine supervisor and asesor nombre early so we can create a provisional alert
+    $sup_id = null;
+    try {
+        $stSup = $conn->prepare('SELECT supervisor_id FROM asesor WHERE id = ? LIMIT 1');
+        if ($stSup) {
+            $stSup->bind_param('s', $asesor_id);
+            $stSup->execute();
+            $rowSup = $stSup->get_result()->fetch_assoc();
+            if ($rowSup) $sup_id = $rowSup['supervisor_id'] ?: null;
+            $stSup->close();
+        }
+    } catch (\Throwable $_) { $sup_id = null; }
+
+    $asesor_nombre_alerta = '';
+    try {
+        $stNm = $conn->prepare('SELECT u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE a.id = ? LIMIT 1');
+        if ($stNm) {
+            $stNm->bind_param('s', $asesor_id);
+            $stNm->execute();
+            $rowNm = $stNm->get_result()->fetch_assoc();
+            if ($rowNm) $asesor_nombre_alerta = $rowNm['nombre'];
+            $stNm->close();
+        }
+    } catch (\Throwable $_) { $asesor_nombre_alerta = ''; }
+
+    $conn->begin_transaction();
+
+    // Insert provisional alerta with valor_anterior so admin can see backup even before updates finish
+    try {
+        $campo_mod = 'Modificación de encuesta finalizada';
+        $alerta_id = genUUID();
+        // Prefer partial output on error so we keep as much snapshot as possible.
+        $val_ant_json = @json_encode($prev_snapshot, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        // If encoding still fails, store a short textual fallback summary
+        if ($val_ant_json === false || $val_ant_json === null) {
+            $summary = [];
+            if (!empty($prev_snapshot['cliente']) && is_array($prev_snapshot['cliente'])) {
+                $p = $prev_snapshot['cliente'];
+                $name = (($p['nombre'] ?? '') ?: ($p['nombre_completo'] ?? ''));
+                $phone = ($p['telefono'] ?? $p['telefono2'] ?? '');
+                $email = ($p['email'] ?? $p['email_cliente'] ?? '');
+                $parts = [];
+                if ($name) $parts[] = 'Cliente: ' . $name . ' (id=' . ($p['id'] ?? '') . ')';
+                if ($phone) $parts[] = 'Tel: ' . $phone;
+                if ($email) $parts[] = 'Email: ' . $email;
+                if (!empty($parts)) $summary[] = implode(' | ', $parts);
+            }
+            if (!empty($prev_snapshot['encuesta_comercial'])) $summary[] = 'Encuesta comercial: existente';
+            if (!empty($prev_snapshot['encuesta_negocio'])) $summary[] = 'Encuesta negocio: existente';
+            if (!empty($prev_snapshot['acuerdo_visita'])) $summary[] = 'Acuerdo visita: existente';
+            $val_ant_json = json_encode(['summary' => implode(' | ', $summary), 'partial' => true], JSON_UNESCAPED_UNICODE);
+        }
+        $stAlPrep = $conn->prepare(
+            "INSERT INTO alerta_modificacion (id, tarea_id, asesor_id, supervisor_id, campo_modificado, valor_anterior, valor_nuevo)
+             VALUES (?, ?, ?, ?, ?, ?, NULL)"
+        );
+        if ($stAlPrep) {
+            $stAlPrep->bind_param('ssssss', $alerta_id, $tarea_id, $asesor_id, $sup_id, $campo_mod, $val_ant_json);
+            $stAlPrep->execute();
+            $stAlPrep->close();
+        }
+    } catch (\Throwable $_) {
+        // non-fatal, continue
+    }
     $GLOBALS['phase'] = 'UPDATE_CLIENTE';
     if ($cliente_id !== '') {
         $st = $conn->prepare(
@@ -599,19 +679,75 @@ try {
             $stNm->close();
         }
 
-        $campo_mod = 'Modificación de encuesta finalizada';
-        $val_nuevo = "Asesor: $asesor_nombre_alerta | Cliente: $nombre_completo | Tarea: $tarea_id | Fecha: " . date('d/m/Y H:i');
-        $alerta_id = genUUID();
+        // --- SNAPSHOT: estado posterior (nuevo) ---
+        $GLOBALS['phase'] = 'SNAP_NEW';
+        $new_snapshot = [
+            'cliente' => null,
+            'encuesta_comercial' => null,
+            'encuesta_negocio' => null,
+            'acuerdo_visita' => null,
+        ];
+        try {
+            if ($cliente_id !== '') {
+                $s = $conn->prepare('SELECT * FROM cliente_prospecto WHERE id = ? LIMIT 1');
+                $s->bind_param('s', $cliente_id);
+                $s->execute();
+                $new_snapshot['cliente'] = $s->get_result()->fetch_assoc() ?: null;
+                $s->close();
+            }
+            $s = $conn->prepare('SELECT * FROM encuesta_comercial WHERE tarea_id = ? ORDER BY id DESC LIMIT 1');
+            $s->bind_param('s', $tarea_id);
+            $s->execute();
+            $new_snapshot['encuesta_comercial'] = $s->get_result()->fetch_assoc() ?: null;
+            $s->close();
 
-        $stAl = $conn->prepare(
-            "INSERT INTO alerta_modificacion
-             (id, tarea_id, asesor_id, supervisor_id, campo_modificado, valor_anterior, valor_nuevo)
-             VALUES (?, ?, ?, ?, ?, NULL, ?)"
-        );
-        if ($stAl) {
-            $stAl->bind_param('ssssss', $alerta_id, $tarea_id, $asesor_id, $sup_id, $campo_mod, $val_nuevo);
-            $stAl->execute();
-            $stAl->close();
+            $s = $conn->prepare('SELECT * FROM encuesta_negocio WHERE tarea_id = ? ORDER BY id DESC LIMIT 1');
+            $s->bind_param('s', $tarea_id);
+            $s->execute();
+            $new_snapshot['encuesta_negocio'] = $s->get_result()->fetch_assoc() ?: null;
+            $s->close();
+
+            $s = $conn->prepare('SELECT * FROM acuerdo_visita WHERE tarea_id = ? ORDER BY id DESC LIMIT 1');
+            $s->bind_param('s', $tarea_id);
+            $s->execute();
+            $new_snapshot['acuerdo_visita'] = $s->get_result()->fetch_assoc() ?: null;
+            $s->close();
+        } catch (\Throwable $_) {
+            // ignore non-fatal snapshot failures
+        }
+
+        // Prepare JSON values (fallback to short summary if encoding fails)
+        $val_new_json = @json_encode($new_snapshot, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        if ($val_new_json === false || $val_new_json === null) {
+            // try to extract phone/email from new snapshot cliente
+            $cphone = '';
+            $cemail = '';
+            if (!empty($new_snapshot['cliente']) && is_array($new_snapshot['cliente'])) {
+                $c = $new_snapshot['cliente'];
+                $cphone = $c['telefono'] ?? $c['telefono2'] ?? '';
+                $cemail = $c['email'] ?? $c['email_cliente'] ?? '';
+                $cliente_name_new = ($c['nombre'] ?? $c['nombre_completo'] ?? $nombre_completo);
+            } else {
+                $cliente_name_new = $nombre_completo;
+            }
+            $parts = ["Asesor: $asesor_nombre_alerta", "Cliente: $cliente_name_new", "Tarea: $tarea_id", "Fecha: " . date('d/m/Y H:i')];
+            if ($cphone) $parts[] = 'Tel: ' . $cphone;
+            if ($cemail) $parts[] = 'Email: ' . $cemail;
+            $val_new_json = json_encode(['summary' => implode(' | ', $parts), 'partial' => true], JSON_UNESCAPED_UNICODE);
+        }
+
+        // Update the provisional alerta record setting valor_nuevo
+        try {
+            if (isset($alerta_id)) {
+                $stUpd = $conn->prepare('UPDATE alerta_modificacion SET valor_nuevo = ? WHERE id = ?');
+                if ($stUpd) {
+                    $stUpd->bind_param('ss', $val_new_json, $alerta_id);
+                    $stUpd->execute();
+                    $stUpd->close();
+                }
+            }
+        } catch (\Throwable $_) {
+            // ignore update failure
         }
     } catch (\Throwable $eAl) {
         error_log('[actualizar_encuesta_completa] Alerta: ' . $eAl->getMessage());

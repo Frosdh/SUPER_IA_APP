@@ -229,7 +229,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA - Prospectos y Clientes</title>
+    <title>Super_IA - Clientes</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -477,15 +477,13 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     <!-- CONTENT -->
     <div class="content-area">
         <div class="page-header">
-            <h1><i class="fas fa-briefcase me-2"></i>Prospectos y Clientes</h1>
-            <p class="text-muted mt-2">Total de registros: <strong><?php echo count($clientes); ?></strong>
-                <small class="d-block">Un registro se muestra como <strong>Cliente</strong> cuando el Supervisor aprueba al menos una ficha de producto (crédito, cuenta o inversión). Mientras tanto, es <strong>Prospecto</strong>.</small>
-            </p>
+            <h1><i class="fas fa-briefcase me-2"></i>Clientes</h1>
+            <p class="text-muted mt-2">Total de clientes: <strong><?php echo count($clientes); ?></strong></p>
         </div>
 
         <div class="table-card">
             <div class="card-header-custom">
-                <h6>💼 Listado de Prospectos y Clientes</h6>
+                <h6>💼 Listado de Clientes</h6>
             </div>
             
             <table class="table table-hover">
@@ -507,7 +505,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                     <?php if (empty($clientes)): ?>
                     <tr>
                         <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
-                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay prospectos ni clientes para mostrar
+                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay clientes para mostrar
                         </td>
                     </tr>
                     <?php else: ?>
@@ -537,7 +535,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                             ?>
                         </td>
                         <td>
-                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-outline-primary" title="Ver encuesta y fichas del prospecto/cliente">
+                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-outline-primary" title="Ver encuesta y fichas del cliente">
                                 <i class="fas fa-eye"></i>
                             </a>
                         </td>

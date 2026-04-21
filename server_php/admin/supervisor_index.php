@@ -392,15 +392,15 @@ $currentPage = 'dashboard';
                 </div>
             </div>
 
-            <!-- Últimos registros (prospectos y clientes) -->
+            <!-- Últimos clientes -->
             <div class="col-md-7">
                 <div class="section-card">
                     <div class="section-header">
-                        <h5><i class="fas fa-address-book" style="color:#3b82f6;"></i>Últimos Prospectos y Clientes</h5>
+                        <h5><i class="fas fa-address-book" style="color:#3b82f6;"></i>Últimos Clientes</h5>
                         <a href="clientes.php" class="sec-link">Ver todos →</a>
                     </div>
                     <?php if (empty($ultimos_clientes)): ?>
-                    <div class="empty-msg"><i class="fas fa-inbox"></i>Sin prospectos ni clientes registrados aún</div>
+                    <div class="empty-msg"><i class="fas fa-inbox"></i>Sin clientes registrados aún</div>
                     <?php else: ?>
                         <?php foreach ($ultimos_clientes as $cli):
                             $ini = '';

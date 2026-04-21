@@ -43,6 +43,7 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $sqlAlertas = "
         SELECT 
             am.id as id_alerta,
+            am.tarea_id as tarea_id,
             am.valor_anterior as valor_anterior,
             am.valor_nuevo as valor_nuevo,
             'Modificación de tarea' as tipo,
@@ -67,6 +68,7 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $sqlAlertas = "
         SELECT 
             am.id as id_alerta,
+            am.tarea_id as tarea_id,
             am.valor_anterior as valor_anterior,
             am.valor_nuevo as valor_nuevo,
             'Modificación de tarea' as tipo,
@@ -93,6 +95,7 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $sqlAlertas = "
         SELECT 
             am.id as id_alerta,
+            am.tarea_id as tarea_id,
             am.valor_anterior as valor_anterior,
             am.valor_nuevo as valor_nuevo,
             'Modificación de tarea' as tipo,
@@ -111,6 +114,178 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $alertas = $stmt->fetchAll();
     $col_asesor = false;
 }
+
+// Dedupe alerts by tarea_id: prefer alerts that have a valor_anterior (snapshot)
+$deduped = [];
+foreach ($alertas as $row) {
+    $tid = $row['tarea_id'] ?? null;
+    if ($tid === null) {
+        // keep as-is
+        $deduped[] = $row;
+        continue;
+    }
+    if (!isset($deduped[$tid])) {
+        $deduped[$tid] = $row;
+        continue;
+    }
+    // prefer existing with valor_anterior non-empty
+    $cur = $deduped[$tid];
+    $cur_has_prev = !empty($cur['valor_anterior']);
+    $row_has_prev = !empty($row['valor_anterior']);
+    if ($row_has_prev && !$cur_has_prev) {
+        $deduped[$tid] = $row;
+        continue;
+    }
+    // otherwise prefer newer (by fecha)
+    $cur_time = strtotime($cur['fecha'] ?? '1970-01-01');
+    $row_time = strtotime($row['fecha'] ?? '1970-01-01');
+    if ($row_time > $cur_time) $deduped[$tid] = $row;
+}
+
+// Rebuild alertas as numerically indexed array
+$alertas = array_values($deduped);
+
+// Preferir nombre de cliente desde snapshot almacenado en la alerta (valor_anterior/valor_nuevo)
+function extract_cliente_from_snapshot($txt) {
+    if (empty($txt)) return null;
+    $d = json_decode($txt, true);
+    if ($d && is_array($d)) {
+        if (!empty($d['cliente']) && is_array($d['cliente'])) {
+            $c = $d['cliente'];
+            if (!empty($c['nombre'])) return $c['nombre'];
+            if (!empty($c['nombre_completo'])) return $c['nombre_completo'];
+            if (!empty($c['nombre_cliente'])) return $c['nombre_cliente'];
+        }
+        // some fallbacks: a summary string we stored earlier
+        if (!empty($d['summary']) && is_string($d['summary'])) return $d['summary'];
+    }
+    return null;
+}
+
+// Extract detailed client info and simple 'tramites' summary from a snapshot JSON
+function extract_cliente_details($txt) {
+    $out = ['name'=>null,'phone'=>null,'email'=>null,'tramites'=>[]];
+    if (empty($txt)) return $out;
+    $d = json_decode($txt, true);
+    if (!is_array($d)) return $out;
+    // cliente section
+    if (!empty($d['cliente']) && is_array($d['cliente'])) {
+        $c = $d['cliente'];
+        $out['name'] = $c['nombre'] ?? $c['nombre_completo'] ?? $out['name'];
+        $out['phone'] = $c['telefono'] ?? $c['telefono2'] ?? $out['phone'];
+        $out['email'] = $c['email'] ?? $c['email_cliente'] ?? $out['email'];
+    }
+    // encuesta_comercial: intereses / acuerdos
+    if (!empty($d['encuesta_comercial']) && is_array($d['encuesta_comercial'])) {
+        $e = $d['encuesta_comercial'];
+        if (!empty($e['tiene_inversiones']) || !empty($e['valor_inversion'])) $out['tramites'][] = 'Inversión';
+        if (!empty($e['interes_cc'])) $out['tramites'][] = 'Cuenta Débito';
+        if (!empty($e['interes_ahorro'])) $out['tramites'][] = 'Cuenta Ahorros';
+        if (!empty($e['interes_credito'])) $out['tramites'][] = 'Interés Crédito';
+        if (!empty($e['interes_inversion'])) $out['tramites'][] = 'Interés Inversión';
+        if (!empty($e['acuerdo_logrado']) && $e['acuerdo_logrado'] !== 'ninguno') $out['tramites'][] = 'Acuerdo: ' . $e['acuerdo_logrado'];
+    }
+    // acuerdo_visita: si existe, add
+    if (!empty($d['acuerdo_visita']) && is_array($d['acuerdo_visita'])) {
+        $a = $d['acuerdo_visita'];
+        if (!empty($a['tipo_acuerdo'])) $out['tramites'][] = 'Acuerdo visita: ' . $a['tipo_acuerdo'];
+    }
+    // unique and short
+    $out['tramites'] = array_values(array_unique($out['tramites']));
+    return $out;
+}
+
+// Collect normalized tramites keys from decoded snapshot array
+function collect_tramites_from_decoded($d) {
+    $out = [];
+    if (!is_array($d)) return $out;
+    if (!empty($d['encuesta_comercial']) && is_array($d['encuesta_comercial'])) {
+        $e = $d['encuesta_comercial'];
+        if (!empty($e['tiene_inversiones']) || !empty($e['valor_inversion'])) $out[] = 'inversion';
+        if (!empty($e['interes_cc'])) $out[] = 'cuenta_debito';
+        if (!empty($e['interes_ahorro'])) $out[] = 'cuenta_ahorros';
+        if (!empty($e['interes_credito'])) $out[] = 'interes_credito';
+        if (!empty($e['interes_inversion'])) $out[] = 'interes_inversion';
+        if (!empty($e['acuerdo_logrado']) && $e['acuerdo_logrado'] !== 'ninguno') $out[] = 'acuerdo_' . $e['acuerdo_logrado'];
+    }
+    if (!empty($d['acuerdo_visita']) && is_array($d['acuerdo_visita'])) {
+        $a = $d['acuerdo_visita'];
+        if (!empty($a['tipo_acuerdo'])) $out[] = 'acuerdo_visita_' . $a['tipo_acuerdo'];
+    }
+    // unique
+    $out = array_values(array_unique($out));
+    return $out;
+}
+
+// Compare tramites between prev and new snapshot JSON strings; return list of changes with status
+function compare_tramites($prevTxt, $newTxt) {
+    $prev = [];
+    $new = [];
+    if (!empty($prevTxt)) {
+        $d = json_decode($prevTxt, true);
+        if (is_array($d)) $prev = collect_tramites_from_decoded($d);
+    }
+    if (!empty($newTxt)) {
+        $d2 = json_decode($newTxt, true);
+        if (is_array($d2)) $new = collect_tramites_from_decoded($d2);
+    }
+    $added = array_values(array_diff($new, $prev));
+    $removed = array_values(array_diff($prev, $new));
+    $changes = [];
+    foreach ($added as $k) $changes[] = ['key'=>$k,'status'=>'added'];
+    foreach ($removed as $k) $changes[] = ['key'=>$k,'status'=>'removed'];
+    return $changes;
+}
+
+// Map tramite key to human label and color class
+function tramite_label_and_color($key) {
+    $map = [
+        'inversion' => ['Inversión','success'],
+        'cuenta_debito' => ['Cuenta Débito','primary'],
+        'cuenta_ahorros' => ['Cuenta Ahorros','info'],
+        'interes_credito' => ['Interés Crédito','danger'],
+        'interes_inversion' => ['Interés Inversión','warning'],
+        'acuerdo_nueva_cita_campo' => ['Acuerdo: Cita Campo','warning'],
+        'acuerdo_nueva_cita_oficina' => ['Acuerdo: Cita Oficina','warning'],
+        'acuerdo_reprogramacion' => ['Acuerdo: Reprogramación','warning'],
+        'acuerdo_seguimiento' => ['Acuerdo: Seguimiento','warning'],
+        'acuerdo_otro' => ['Acuerdo: Otro','warning'],
+        'acuerdo_visita_nueva_cita_campo' => ['Acuerdo Visita: Cita Campo','warning'],
+        'acuerdo_visita_nueva_cita_oficina' => ['Acuerdo Visita: Cita Oficina','warning'],
+    ];
+    if (isset($map[$key])) return $map[$key];
+    // default
+    return [ucfirst(str_replace(['_','-'], [' ',' '], $key)), 'secondary'];
+}
+
+foreach ($alertas as &$a) {
+    $ant_txt = $a['valor_anterior'] ?? null;
+    $new_txt = $a['valor_nuevo'] ?? null;
+    $ant_det = extract_cliente_details($ant_txt);
+    $new_det = extract_cliente_details($new_txt);
+    // Prefer showing the 'antes' snapshot if exists, otherwise 'despues', otherwise DB value
+    if ($ant_det['name']) {
+        $a['cliente_nombre_display'] = $ant_det['name'];
+        $a['cliente_phone'] = $ant_det['phone'];
+        $a['cliente_email'] = $ant_det['email'];
+        // Determine only changed tramites between prev and new
+        $a['cliente_tramites'] = compare_tramites($ant_txt, $new_txt);
+        $a['cliente_display_source'] = 'antes';
+    } elseif ($new_det['name']) {
+        $a['cliente_nombre_display'] = $new_det['name'];
+        $a['cliente_phone'] = $new_det['phone'];
+        $a['cliente_email'] = $new_det['email'];
+        $a['cliente_tramites'] = compare_tramites($ant_txt, $new_txt);
+        $a['cliente_display_source'] = 'despues';
+    } else {
+        $a['cliente_nombre_display'] = $a['cliente_nombre'] ?? 'Sin cliente';
+        $a['cliente_phone'] = null;
+        $a['cliente_email'] = null;
+        $a['cliente_tramites'] = [];
+        $a['cliente_display_source'] = 'actual';
+    }
+}
+unset($a);
 
 // ======================
 // 2. (Opcional) Alertas adicionales: tareas vencidas
@@ -232,8 +407,19 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 <?php endif; ?>
     </style>
-</head>
-<body>
+    <!-- Custom light palette for tramite badges -->
+    <style>
+        .tram-badge { padding:4px 8px; border-radius:8px; font-weight:600; display:inline-block; margin-right:6px; font-size:0.85rem; }
+        .tram-success { background:#d1fae5; color:#065f46; }
+        .tram-primary { background:#dbeafe; color:#1e3a8a; }
+        .tram-info { background:#e0f2fe; color:#0369a1; }
+        .tram-danger { background:#fee2e2; color:#7f1d1d; }
+        .tram-warning { background:#fffbeb; color:#92400e; }
+        .tram-secondary { background:#f3f4f6; color:#374151; }
+    </style>
+    </style>
+    </head>
+    <body>
 
 <!-- SIDEBAR -->
 <?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php'; else: ?>
@@ -427,7 +613,32 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                             <td><strong>#<?php echo htmlspecialchars(substr($alerta['id_alerta'], 0, 8)); ?></strong></td>
                             <td><span class="badge" style="background: #3182fe;"><?php echo htmlspecialchars($alerta['tipo']); ?></span></td>
                             <td><?php echo htmlspecialchars(substr($alerta['mensaje'], 0, 80) . (strlen($alerta['mensaje']) > 80 ? '…' : '')); ?></td>
-                            <td><?php echo htmlspecialchars($alerta['cliente_nombre'] ?? 'Sin cliente'); ?></td>
+                            <td>
+                                <?php echo htmlspecialchars($alerta['cliente_nombre_display'] ?? ($alerta['cliente_nombre'] ?? 'Sin cliente')); ?>
+                                <?php if (!empty($alerta['cliente_phone']) || !empty($alerta['cliente_email'])): ?>
+                                    <br/>
+                                    <small class="text-muted">
+                                        <?php if (!empty($alerta['cliente_phone'])): ?>📞 <?php echo htmlspecialchars($alerta['cliente_phone']); ?><?php endif; ?>
+                                        <?php if (!empty($alerta['cliente_phone']) && !empty($alerta['cliente_email'])): ?> — <?php endif; ?>
+                                        <?php if (!empty($alerta['cliente_email'])): ?>✉️ <?php echo htmlspecialchars($alerta['cliente_email']); ?><?php endif; ?>
+                                    </small>
+                                <?php endif; ?>
+                                <?php if (!empty($alerta['cliente_display_source'])): ?>
+                                    <br/><small class="text-muted">Mostrando: <?php echo $alerta['cliente_display_source'] === 'antes' ? 'Antes' : ($alerta['cliente_display_source'] === 'despues' ? 'Ahora' : 'Actual'); ?></small>
+                                <?php endif; ?>
+                                <?php if (!empty($alerta['cliente_tramites']) && is_array($alerta['cliente_tramites'])): ?>
+                                    <div style="margin-top:6px;">
+                                        <?php foreach ($alerta['cliente_tramites'] as $ct): ?>
+                                            <?php $info = tramite_label_and_color($ct['key']); $label = $info[0]; $color = $info[1]; ?>
+                                            <?php if ($ct['status'] === 'added'): ?>
+                                                <span class="badge bg-<?php echo $color; ?> text-white" style="margin-right:6px; font-weight:600;">+ <?php echo htmlspecialchars($label); ?></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-<?php echo $color; ?> text-white" style="margin-right:6px; font-weight:600; opacity:0.85;">− <?php echo htmlspecialchars($label); ?></span>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php endif; ?>
+                            </td>
                             <?php if ($col_asesor): ?>
                             <td><?php echo htmlspecialchars($alerta['asesor_nombre'] ?? 'N/A'); ?></td>
                             <?php endif; ?>
