@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 
 class PendientesTareasScreen extends StatefulWidget {
   const PendientesTareasScreen({super.key});
@@ -188,6 +189,36 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
     }
   }
 
+  /// Abre la pantalla [NuevaEncuestaScreen] en modo edición con los datos
+  /// completos de la tarea finalizada. Al volver se recarga la lista por si
+  /// cambió alguna observación, nombre u otro dato visible.
+  Future<void> _abrirEdicionEncuesta(Map<String, dynamic> tarea) async {
+    final tareaId = tarea['id']?.toString() ?? '';
+    if (tareaId.isEmpty) return;
+
+    final tipo = tarea['tipo_tarea']?.toString() ?? 'prospecto_nuevo';
+
+    final modificado = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NuevaEncuestaScreen(
+          tipoTarea: tipo,
+          tareaIdEdicion: tareaId,
+        ),
+      ),
+    );
+
+    if (modificado == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Datos de la encuesta actualizados.'),
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+      await _cargar();
+    }
+  }
+
   Future<void> _finalizarTarea(String tareaId) async {
     try {
       final usuarioId = await AuthPrefs.getUsuarioId();
@@ -232,6 +263,23 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
           content: Text(msg),
           backgroundColor: ConstantColors.warning,
         ),
+      );
+    }
+  }
+
+  Future<void> _editarEncuesta(String tareaId) async {
+    try {
+      if (tareaId.isEmpty) return;
+      final result = await Navigator.of(context).push<bool?>(
+        MaterialPageRoute(
+          builder: (_) => NuevaEncuestaScreen(tareaIdEdicion: tareaId),
+        ),
+      );
+      // Si se guardaron cambios, recargar la lista
+      if (result == true) await _cargar();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo abrir editor: $e'), backgroundColor: ConstantColors.error),
       );
     }
   }
@@ -671,6 +719,32 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                   ],
                 ],
               ),
+
+              if (isDone) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: tareaId.isEmpty
+                        ? null
+                        : () => _abrirEdicionEncuesta(t),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: ConstantColors.warning,
+                      side: BorderSide(
+                          color: ConstantColors.warning.withOpacity(0.7)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.edit_note_rounded, size: 18),
+                    label: const Text(
+                      'Modificar datos',
+                      style: TextStyle(
+                          fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
 
               if (isProc) ...[
                 const SizedBox(height: 10),

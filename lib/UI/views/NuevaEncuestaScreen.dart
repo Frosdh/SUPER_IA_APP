@@ -31,11 +31,21 @@ class NuevaEncuestaScreen extends StatefulWidget {
   ///   tiene_rise (0|1), es_cliente (0|1)
   final Map<String, dynamic>? initialData;
 
+  /// Cuando se pasa un [tareaIdEdicion] la pantalla entra en modo edición:
+  /// carga todos los datos de la encuesta previamente guardada, bloquea la
+  /// cédula y al guardar llama a actualizar_encuesta_completa.php (sin
+  /// cerrar segmentos ni crear nuevas tareas).
+  final String? tareaIdEdicion;
+
   const NuevaEncuestaScreen({
     Key? key,
     this.tipoTarea = 'prospecto_nuevo',
     this.initialData,
+    this.tareaIdEdicion,
   }) : super(key: key);
+
+  bool get modoEdicion =>
+      tareaIdEdicion != null && tareaIdEdicion!.trim().isNotEmpty;
 
   @override
   _NuevaEncuestaScreenState createState() => _NuevaEncuestaScreenState();
@@ -44,6 +54,10 @@ class NuevaEncuestaScreen extends StatefulWidget {
 class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   _Paso _paso = _Paso.inicial;
   bool _guardando = false;
+
+  // ── Modo edición ─────────────────────────────────────────────
+  bool _cargandoEdicion = false;
+  String? _errorEdicion;
 
   // Prospecto nuevo vs existente (determinado por búsqueda de cédula)
   bool? _esProspectoNuevo;
@@ -157,6 +171,224 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     super.initState();
     _obtenerGPS();
     _aplicarInitialData();
+    if (widget.modoEdicion) {
+      _cargandoEdicion = true;
+      // Saltar el paso "inicial" (Sí/No encuestado) porque ya viene
+      // de una tarea finalizada y vamos directo a los datos.
+      _paso = _Paso.datosCliente;
+      _esProspectoNuevo = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _cargarEncuestaEnEdicion();
+      });
+    }
+  }
+
+  /// Carga todos los datos de una encuesta previamente guardada para
+  /// permitir modificarla. Se usa solo cuando [widget.modoEdicion] es true.
+  Future<void> _cargarEncuestaEnEdicion() async {
+    final tid = widget.tareaIdEdicion ?? '';
+    if (tid.isEmpty) return;
+
+    setState(() {
+      _cargandoEdicion = true;
+      _errorEdicion = null;
+    });
+
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final asesorId = await AuthPrefs.getAsesorId();
+
+      final url = Uri.parse('${Constants.apiBaseUrl}/obtener_encuesta_completa.php');
+      final resp = await http.post(url, body: {
+        'tarea_id': tid,
+        'usuario_id': usuarioId,
+        if (asesorId.isNotEmpty) 'asesor_id': asesorId,
+      }).timeout(const Duration(seconds: 20));
+
+      final decoded = json.decode(resp.body);
+      if (decoded is! Map) {
+        throw Exception('Respuesta inválida del servidor');
+      }
+      if (decoded['status']?.toString() != 'success') {
+        throw Exception(decoded['message']?.toString() ?? 'No se pudo cargar la encuesta');
+      }
+
+      final data = Map<String, dynamic>.from(decoded['data'] as Map);
+      _aplicarDatosEdicion(data);
+
+      if (!mounted) return;
+      setState(() {
+        _cargandoEdicion = false;
+        _errorEdicion = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _cargandoEdicion = false;
+        _errorEdicion = e.toString().replaceFirst('Exception: ', '');
+      });
+    }
+  }
+
+  /// Aplica el payload de `obtener_encuesta_completa.php` sobre todos los
+  /// controllers / flags del formulario.
+  void _aplicarDatosEdicion(Map<String, dynamic> data) {
+    String _s(dynamic v) => (v ?? '').toString();
+    int _i(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString()) ?? 0;
+    }
+    bool? _ib(dynamic v) {
+      if (v == null) return null;
+      if (v is bool) return v;
+      if (v is int) return v == 1;
+      if (v is num) return v.toInt() == 1;
+      final s = v.toString().trim();
+      if (s.isEmpty) return null;
+      return s == '1' || s.toLowerCase() == 'true';
+    }
+    double _d(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+    DateTime? _fecha(String s) {
+      if (s.isEmpty) return null;
+      // Formatos: YYYY-MM-DD o YYYY-MM-DD HH:MM:SS
+      final base = s.length >= 10 ? s.substring(0, 10) : s;
+      try {
+        final parts = base.split('-');
+        if (parts.length != 3) return null;
+        return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      } catch (_) {
+        return null;
+      }
+    }
+    TimeOfDay? _hora(String s) {
+      if (s.isEmpty) return null;
+      final partes = s.split(':');
+      if (partes.length < 2) return null;
+      final h = int.tryParse(partes[0]);
+      final m = int.tryParse(partes[1]);
+      if (h == null || m == null) return null;
+      return TimeOfDay(hour: h, minute: m);
+    }
+
+    // ── Cliente ────────────────────────────────────────────────
+    final cliente = data['cliente'] is Map
+        ? Map<String, dynamic>.from(data['cliente'] as Map)
+        : <String, dynamic>{};
+    if (cliente.isNotEmpty) {
+      final nombreFull = _s(cliente['nombre']).trim();
+      if (nombreFull.isNotEmpty) {
+        final parts = nombreFull.split(RegExp(r'\s+'));
+        if (parts.length == 1) {
+          _nombreCtrl.text = parts[0];
+          _apellidosCtrl.text = '';
+        } else {
+          _nombreCtrl.text = parts.first;
+          _apellidosCtrl.text = parts.sublist(1).join(' ');
+        }
+      }
+      _cedulaCtrl.text    = _s(cliente['cedula']);
+      _telefonoCtrl.text  = _s(cliente['telefono']);
+      _celularCtrl.text   = _s(cliente['celular']);
+      _emailCtrl.text     = _s(cliente['email']);
+      _direccionCtrl.text = _s(cliente['direccion']);
+      _ciudadCtrl.text    = _s(cliente['ciudad']);
+
+      final act = _s(cliente['actividad']);
+      _actividad = act.isEmpty ? null : act;
+
+      final ne = _s(cliente['nombre_empresa']);
+      if (ne.isNotEmpty) {
+        _empresaCtrl.text = ne;
+        _tieneEmpresa = true;
+      } else {
+        _empresaCtrl.text = '';
+        _tieneEmpresa = false;
+      }
+
+      final tieneRuc = _i(cliente['tiene_ruc']) == 1;
+      final tieneRise = _i(cliente['tiene_rise']) == 1;
+      if (tieneRuc) {
+        _regimenTributario = 'ruc';
+      } else if (tieneRise) {
+        _regimenTributario = 'rise';
+      } else {
+        _regimenTributario = 'no_registrado';
+      }
+
+      final op = _s(cliente['origen_prospecto']);
+      if (op.isNotEmpty) _origenProspecto = op;
+    }
+
+    // ── Tarea (observaciones como punto de partida) ────────────
+    final tarea = data['tarea'] is Map
+        ? Map<String, dynamic>.from(data['tarea'] as Map)
+        : <String, dynamic>{};
+    final obsTarea = _s(tarea['observaciones']);
+    if (obsTarea.isNotEmpty) _obsCtrl.text = obsTarea;
+
+    // ── Encuesta negocio ───────────────────────────────────────
+    final neg = data['encuesta_negocio'];
+    if (neg is Map) {
+      final n = Map<String, dynamic>.from(neg);
+      _tieneEmpresa = true;
+      _ventaLvCtrl.text      = _d(n['venta_lv']).toStringAsFixed(2);
+      _ventaSabCtrl.text     = _d(n['venta_sabado']).toStringAsFixed(2);
+      _ventaDomCtrl.text     = _d(n['venta_domingo']).toStringAsFixed(2);
+      _compraLvCtrl.text     = _d(n['compra_lv']).toStringAsFixed(2);
+      _compraSabCtrl.text    = _d(n['compra_sabado']).toStringAsFixed(2);
+      _compraDomCtrl.text    = _d(n['compra_domingo']).toStringAsFixed(2);
+      _mesAltaVenta          = _s(n['mes_alta_venta']).isEmpty  ? null : _s(n['mes_alta_venta']);
+      _mesBajaVenta          = _s(n['mes_baja_venta']).isEmpty  ? null : _s(n['mes_baja_venta']);
+      _mesAltaCompra         = _s(n['mes_alta_compra']).isEmpty ? null : _s(n['mes_alta_compra']);
+      _diaLv  = _i(n['dia_lv'])  == 1;
+      _diaSab = _i(n['dia_sab']) == 1;
+      _diaDom = _i(n['dia_dom']) == 1;
+      final pct = n['pct_contado'];
+      if (pct != null) _pctContado = _i(pct);
+      _recuperacionCreditoCtrl.text = _d(n['recuperacion_credito']).toStringAsFixed(2);
+      _costosVentasCtrl.text        = _d(n['costos_ventas']).toStringAsFixed(2);
+      _gastosNegocioCtrl.text       = _d(n['gastos_negocio']).toStringAsFixed(2);
+      _otrosIngresosCtrl.text       = _d(n['otros_ingresos']).toStringAsFixed(2);
+      _gastosFamiliaresCtrl.text    = _d(n['gastos_familiares']).toStringAsFixed(2);
+    }
+
+    // ── Encuesta comercial ─────────────────────────────────────
+    final enc = data['encuesta_comercial'];
+    if (enc is Map) {
+      final e = Map<String, dynamic>.from(enc);
+      _mantieneAhorro    = _i(e['mantiene_cuenta_ahorro'])    == 1;
+      _mantieneCorriente = _i(e['mantiene_cuenta_corriente']) == 1;
+      _tieneInversiones  = _ib(e['tiene_inversiones']);
+      _instInvCtrl.text  = _s(e['institucion_inversiones']);
+      final vi = e['valor_inversion'];
+      _valorInvCtrl.text = vi == null ? '' : _d(vi).toStringAsFixed(2);
+      _plazoInvCtrl.text = _s(e['plazo_inversion']);
+      _fechaVencInv      = _fecha(_s(e['fecha_vencimiento_inversion']));
+      _tieneOpsCred      = _ib(e['tiene_operaciones_crediticias']);
+      _instCredCtrl.text = _s(e['institucion_credito']);
+      _interesConocer    = _ib(e['interes_conocer_productos']);
+      _interesCC     = _i(e['interes_cc'])        == 1;
+      _interesAhorro = _i(e['interes_ahorro'])    == 1;
+      _interesInv    = _i(e['interes_inversion']) == 1;
+      _interesCred   = _i(e['interes_credito'])   == 1;
+      _razonYaTrabaja = _i(e['razon_ya_trabaja_institucion']) == 1;
+      _razonDesconfia = _i(e['razon_desconfia_servicios'])    == 1;
+      _razonAGusto    = _i(e['razon_agusto_actual'])          == 1;
+      _razonMalaExp   = _i(e['razon_mala_experiencia'])       == 1;
+      _razonOtrosCtrl.text = _s(e['razon_otros']);
+      final ac = _s(e['acuerdo_logrado']);
+      if (ac.isNotEmpty) _acuerdo = ac;
+      _fechaAcuerdo = _fecha(_s(e['fecha_acuerdo']));
+      _horaAcuerdo  = _hora (_s(e['hora_acuerdo']));
+      final obs = _s(e['observaciones']);
+      if (obs.isNotEmpty) _obsCtrl.text = obs;
+    }
   }
 
   /// Si la encuesta se abre desde la agenda con una cédula que ya existe
@@ -567,6 +799,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'tipo_tarea': widget.tipoTarea,
       'fue_encuestado': fueEncuestado ? '1' : '0',
       'origen_prospecto': _origenProspecto ?? '',
+      if (widget.modoEdicion) 'tarea_id': widget.tareaIdEdicion ?? '',
       // Cliente
       'nombre': _nombreCtrl.text.trim(),
       'apellidos': _apellidosCtrl.text.trim(),
@@ -672,9 +905,12 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
 
     try {
-      final url = Uri.parse('${Constants.apiBaseUrl}/guardar_cliente_encuesta.php');
+      final endpoint = widget.modoEdicion
+          ? 'actualizar_encuesta_completa.php'
+          : 'guardar_cliente_encuesta.php';
+      final url = Uri.parse('${Constants.apiBaseUrl}/$endpoint');
       debugPrint(
-        '>>> [ENC] POST $url usuario_id=$usuarioId asesor_id=${asesorId.isNotEmpty ? asesorId : '-'} fue_encuestado=${fueEncuestado ? 1 : 0}',
+        '>>> [ENC] POST $url usuario_id=$usuarioId asesor_id=${asesorId.isNotEmpty ? asesorId : '-'} fue_encuestado=${fueEncuestado ? 1 : 0} edicion=${widget.modoEdicion}',
       );
 
       final resp = await http
@@ -716,32 +952,38 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       }
 
       if (data['status'] == 'success') {
-        // ── Cerrar segmento de ruta actual e iniciar el siguiente ──
-        final tareaId = data['tarea_id']?.toString() ?? '';
-        _cerrarYNuevoSegmento(tareaId: tareaId);
+        if (widget.modoEdicion) {
+          // En modo edición NO se cierran/abren segmentos ni se crean nuevas
+          // tareas: solo se informa el éxito y se vuelve a la lista.
+          _mostrarDialogoModificacionOk();
+        } else {
+          // ── Cerrar segmento de ruta actual e iniciar el siguiente ──
+          final tareaId = data['tarea_id']?.toString() ?? '';
+          _cerrarYNuevoSegmento(tareaId: tareaId);
 
-        String? seguimientoTexto;
-        final followId = data['tarea_followup_id']?.toString() ?? '';
-        if (followId.isNotEmpty) {
-          final tipo = data['tarea_followup_tipo']?.toString() ?? '';
-          final fecha = data['tarea_followup_fecha']?.toString() ?? '';
-          final hora = data['tarea_followup_hora']?.toString() ?? '';
+          String? seguimientoTexto;
+          final followId = data['tarea_followup_id']?.toString() ?? '';
+          if (followId.isNotEmpty) {
+            final tipo = data['tarea_followup_tipo']?.toString() ?? '';
+            final fecha = data['tarea_followup_fecha']?.toString() ?? '';
+            final hora = data['tarea_followup_hora']?.toString() ?? '';
 
-          final tipoLabel = <String, String>{
-            'nueva_cita_campo': 'Nueva cita en campo',
-            'nueva_cita_oficina': 'Nueva cita en oficina',
-            'documentos_pendientes': 'Recolectar documentación',
-            'levantamiento': 'Levantamiento',
-          }[tipo] ?? tipo;
+            final tipoLabel = <String, String>{
+              'nueva_cita_campo': 'Nueva cita en campo',
+              'nueva_cita_oficina': 'Nueva cita en oficina',
+              'documentos_pendientes': 'Recolectar documentación',
+              'levantamiento': 'Levantamiento',
+            }[tipo] ?? tipo;
 
-          final fechaHora = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
-          seguimientoTexto = 'Se creó una nueva tarea: $tipoLabel${fechaHora.isNotEmpty ? ' ($fechaHora)' : ''}.';
+            final fechaHora = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
+            seguimientoTexto = 'Se creó una nueva tarea: $tipoLabel${fechaHora.isNotEmpty ? ' ($fechaHora)' : ''}.';
+          }
+
+          _mostrarDialogoFinalizado(
+            fueEncuestado: fueEncuestado,
+            seguimientoTexto: seguimientoTexto,
+          );
         }
-
-        _mostrarDialogoFinalizado(
-          fueEncuestado: fueEncuestado,
-          seguimientoTexto: seguimientoTexto,
-        );
       } else {
         _mostrarError(data['message']?.toString() ?? 'Error al guardar');
       }
@@ -788,6 +1030,76 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     } catch (e) {
       debugPrint('⚠️ Error al gestionar segmento de ruta: $e');
     }
+  }
+
+  /// Diálogo que se muestra cuando una edición de encuesta se guardó
+  /// correctamente. A diferencia del modo normal, no cerramos segmentos
+  /// ni creamos nuevas tareas.
+  void _mostrarDialogoModificacionOk() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: ConstantColors.grey100,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      ConstantColors.success,
+                      ConstantColors.primaryBlue,
+                    ],
+                  ),
+                ),
+                child: const Icon(Icons.save_rounded, color: Colors.white, size: 34),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Cambios guardados',
+                style: TextStyle(
+                  color: ConstantColors.textDark,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Los datos de la encuesta se actualizaron correctamente.',
+                style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pop(true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ConstantColors.warning,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Volver',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   void _mostrarDialogoFinalizado({
@@ -949,25 +1261,118 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       child: Scaffold(
         backgroundColor: ConstantColors.grey100,
         body: SafeArea(
-          child: Column(
+          child: Stack(
             children: [
-              _buildAppBar(),
-              if (_paso != _Paso.inicial) _buildProgreso(),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  child: SingleChildScrollView(
-                    key: ValueKey(_paso),
-                    padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPad),
-                    child: _buildContenidoPaso(),
+              Column(
+                children: [
+                  _buildAppBar(),
+                  if (widget.modoEdicion) _buildBannerEdicion(),
+                  if (_paso != _Paso.inicial) _buildProgreso(),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 280),
+                      child: SingleChildScrollView(
+                        key: ValueKey(_paso),
+                        padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPad),
+                        child: _buildContenidoPaso(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              if (_cargandoEdicion)
+                Container(
+                  color: Colors.black.withOpacity(0.35),
+                  child: const Center(
+                    child: Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                            SizedBox(width: 14),
+                            Text('Cargando encuesta…',
+                                style: TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              if (_errorEdicion != null && !_cargandoEdicion)
+                Positioned(
+                  top: 10,
+                  left: 16,
+                  right: 16,
+                  child: Material(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.error_outline_rounded,
+                              color: Colors.red.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'No se pudo cargar la encuesta: $_errorEdicion',
+                              style: TextStyle(
+                                color: Colors.red.shade800,
+                                fontSize: 12.5,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: _cargarEncuestaEnEdicion,
+                            child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         floatingActionButton: _buildBotonesNavegacion(),
+      ),
+    );
+  }
+
+  /// Banner visible en modo edición para que el asesor sepa que está
+  /// modificando una encuesta ya finalizada.
+  Widget _buildBannerEdicion() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: ConstantColors.warning.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ConstantColors.warning.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.edit_note_rounded, color: ConstantColors.warning, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Estás modificando una encuesta finalizada. '
+              'Se pueden cambiar todos los datos excepto la cédula.',
+              style: TextStyle(
+                color: ConstantColors.textDark,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1038,6 +1443,21 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   }
 
   String _tituloPaso() {
+    if (widget.modoEdicion) {
+      switch (_paso) {
+        case _Paso.inicial:
+        case _Paso.datosCliente:
+          return 'Modificar datos';
+        case _Paso.empresaNegocio:
+          return 'Modificar negocio';
+        case _Paso.productosActuales:
+          return 'Modificar productos';
+        case _Paso.interesProductos:
+          return 'Modificar interés';
+        case _Paso.busqueda:
+          return 'Modificar cierre';
+      }
+    }
     switch (_paso) {
       case _Paso.inicial:
         return widget.tipoTarea == 'recuperacion'
@@ -1320,10 +1740,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           ),
           _campo(
             controller: _cedulaCtrl,
-            label: 'Cédula',
+            label: widget.modoEdicion ? 'Cédula (no editable)' : 'Cédula',
             icon: Icons.badge_rounded,
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            readOnly: widget.modoEdicion,
           ),
           _campo(
             controller: _telefonoCtrl,
@@ -1832,8 +2253,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(height: 20),
           // Terminal: botón Finalizar Tarea
           _botonFinalizar(
-            label: 'Finalizar Tarea',
-            sublabel: 'Se guardará la encuesta como sin interés',
+            label: widget.modoEdicion ? 'Guardar cambios' : 'Finalizar Tarea',
+            sublabel: widget.modoEdicion
+                ? 'Se actualizará la encuesta como sin interés'
+                : 'Se guardará la encuesta como sin interés',
             onTap: () => _guardarEncuesta(fueEncuestado: true),
           ),
         ],
@@ -1913,8 +2336,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
         const SizedBox(height: 20),
         _botonFinalizar(
-          label: 'Finalizar y Guardar',
-          sublabel: 'Se guardarán todos los datos de la encuesta',
+          label: widget.modoEdicion ? 'Guardar cambios' : 'Finalizar y Guardar',
+          sublabel: widget.modoEdicion
+              ? 'Se actualizarán todos los datos de la encuesta'
+              : 'Se guardarán todos los datos de la encuesta',
           onTap: () => _guardarEncuesta(fueEncuestado: true),
         ),
       ],
@@ -2060,6 +2485,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     List<TextInputFormatter>? inputFormatters,
     int maxLines = 1,
     String? Function(String?)? validator,
+    bool readOnly = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -2069,12 +2495,27 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         inputFormatters: inputFormatters,
         maxLines: maxLines,
         validator: validator,
-        style: TextStyle(color: ConstantColors.textDark, fontSize: 14),
+        readOnly: readOnly,
+        enableInteractiveSelection: !readOnly,
+        style: TextStyle(
+          color: readOnly ? ConstantColors.textDarkGrey : ConstantColors.textDark,
+          fontSize: 14,
+        ),
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon, color: ConstantColors.warning, size: 20),
+          prefixIcon: Icon(
+            readOnly ? Icons.lock_rounded : icon,
+            color: readOnly ? ConstantColors.textDarkGrey : ConstantColors.warning,
+            size: 20,
+          ),
+          suffixIcon: readOnly
+              ? Icon(Icons.block_rounded,
+                  color: ConstantColors.textDarkGrey, size: 18)
+              : null,
           filled: true,
-          fillColor: ConstantColors.grey100,
+          fillColor: readOnly
+              ? ConstantColors.grey100.withOpacity(0.5)
+              : ConstantColors.grey100,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
             borderSide: BorderSide(color: ConstantColors.borderLight),
