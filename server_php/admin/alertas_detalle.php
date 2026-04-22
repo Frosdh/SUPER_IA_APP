@@ -152,7 +152,7 @@ function eyn($label,$v) {
     return '<div class="d-row"><span class="d-lbl">'.htmlspecialchars($label).'</span><span class="d-val">'.$chip.'</span></div>';
 }
 function estado_badge($e) {
-    $map=['completada'=>['#ecfdf5','#065f46','✓'],'en_proceso'=>['#dbeafe','#1e40af','⚡'],'programada'=>['#fffbeb','#92400e','📅'],'pendiente'=>['#fffbeb','#92400e','⏳'],'cancelada'=>['#fef2f2','#991b1b','✗'],'postergada'=>['#f3e8ff','#6b21a8','↺']];
+    $map=['completada'=>['#ecfdf5','#065f46','✓'],'en_proceso'=>['#dbeafe','#1e40af','⚡'],'programada'=>['#fffbeb','#92400e','📅'],'pendiente'=>['#fffbeb','#92400e','⏳'],'cancelada'=>['#fef2f2','#991b1b','🚫'],'postergada'=>['#f3e8ff','#6b21a8','↺']];
     [$bg,$cl,$ic]=$map[$e]??['#f3f4f6','#6b7280','?'];
     return "<span style='background:$bg;color:$cl;border-radius:6px;padding:2px 9px;font-size:12px;font-weight:700;'>$ic ".htmlspecialchars(ucfirst(str_replace('_',' ',$e)))."</span>";
 }
@@ -638,7 +638,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
             <tbody>
             <?php foreach($tramites as $tr):
                 $ec=$tr['estado_credito']??'prospectado';
-                $ecols=['desembolsado'=>['#10b981','✓ Desembolsado'],'aprobado'=>['#22c55e','✓ Aprobado'],'analisis'=>['#3b82f6','🔍 En análisis'],'solicitud'=>['#6366f1','📋 Solicitud'],'levantamiento'=>['#f59e0b','📐 Levantamiento'],'entrevista_venta'=>['#8b5cf6','🗣 Entrevista'],'rechazado'=>['#ef4444','✗ Rechazado'],'recuperacion'=>['#dc2626','⚠ Recuperación'],'prospectado'=>['#9ca3af','🔎 Prospectado']];
+                $ecols=['desembolsado'=>['#10b981','✓ Desembolsado'],'aprobado'=>['#22c55e','✓ Aprobado'],'analisis'=>['#3b82f6','🔍 En análisis'],'solicitud'=>['#6366f1','📋 Solicitud'],'levantamiento'=>['#f59e0b','📐 Levantamiento'],'entrevista_venta'=>['#8b5cf6','🗣 Entrevista'],'rechazado'=>['#ef4444','🚫 Rechazado'],'recuperacion'=>['#dc2626','⚠ Recuperación'],'prospectado'=>['#9ca3af','🔎 Prospectado']];
                 [$ec_col,$ec_lbl]=$ecols[$ec]??['#9ca3af',ucfirst($ec)];
             ?>
             <tr>
