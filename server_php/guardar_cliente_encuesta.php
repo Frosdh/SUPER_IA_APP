@@ -162,9 +162,24 @@ $gastos_negocio       = floatOrNull($_POST['gastos_negocio'] ?? '');
 $otros_ingresos       = floatOrNull($_POST['otros_ingresos'] ?? '');
 $gastos_familiares    = floatOrNull($_POST['gastos_familiares'] ?? '');
 
-// Validar enums
-$acuerdos_ok = ['nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'];
-if (!in_array($acuerdo, $acuerdos_ok)) $acuerdo = 'ninguno';
+$
+// Normalize/validate acuerdo: accept frontend variants and map to DB enum values
+$incoming_acuerdo = $acuerdo;
+$acuerdo_map = [
+    // common mobile values -> map to DB-supported enum
+    'documentos_pendientes' => 'otro',
+    'recolectar_documentacion' => 'otro',
+    'levantamiento' => 'otro',
+    'levantamiento_campo' => 'otro',
+];
+$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','ninguno'];
+if (in_array($incoming_acuerdo, $db_acuerdos_allowed, true)) {
+    $acuerdo = $incoming_acuerdo;
+} elseif (isset($acuerdo_map[$incoming_acuerdo])) {
+    $acuerdo = $acuerdo_map[$incoming_acuerdo];
+} else {
+    $acuerdo = 'ninguno';
+}
 $tipos_ok = ['prospecto_nuevo','visita_frio','evaluacion','recuperacion','documentos_pendientes','post_venta','nueva_cita_campo','nueva_cita_oficina','levantamiento'];
 if (!in_array($tipo_tarea, $tipos_ok)) $tipo_tarea = 'prospecto_nuevo';
 

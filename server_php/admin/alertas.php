@@ -10,11 +10,9 @@ if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_i
     $user_id = $_SESSION['admin_id'];
 } elseif (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
     $user_role = 'supervisor';
-    // En login.php, se guarda usuario.id
     $user_id = $_SESSION['supervisor_id'];
 } elseif (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
     $user_role = 'asesor';
-    // En login.php, se guarda usuario.id
     $user_id = $_SESSION['asesor_id'];
 } else {
     header('Location: login.php?role=admin');
@@ -36,12 +34,11 @@ if ($user_role === 'asesor') {
 }
 
 // ======================
-// 1. Alertas de modificaciones de tareas (tabla alerta_modificacion)
+// 1. Alertas de modificaciones de tareas
 // ======================
 if ($user_role === 'super_admin' || $user_role === 'admin') {
-    // Admin ve todas las modificaciones
     $sqlAlertas = "
-        SELECT 
+        SELECT
             am.id as id_alerta,
             am.tarea_id as tarea_id,
             am.valor_anterior as valor_anterior,
@@ -64,9 +61,8 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $col_asesor = true;
 
 } elseif ($user_role === 'supervisor') {
-    // Supervisor ve modificaciones de sus asesores
     $sqlAlertas = "
-        SELECT 
+        SELECT
             am.id as id_alerta,
             am.tarea_id as tarea_id,
             am.valor_anterior as valor_anterior,
@@ -91,9 +87,8 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $col_asesor = true;
 
 } else { // asesor
-    // Asesor ve solo las alertas relacionadas con sus propias tareas
     $sqlAlertas = "
-        SELECT 
+        SELECT
             am.id as id_alerta,
             am.tarea_id as tarea_id,
             am.valor_anterior as valor_anterior,
@@ -115,37 +110,22 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
     $col_asesor = false;
 }
 
-// Dedupe alerts by tarea_id: prefer alerts that have a valor_anterior (snapshot)
+// Dedupe alerts by tarea_id
 $deduped = [];
 foreach ($alertas as $row) {
     $tid = $row['tarea_id'] ?? null;
-    if ($tid === null) {
-        // keep as-is
-        $deduped[] = $row;
-        continue;
-    }
-    if (!isset($deduped[$tid])) {
-        $deduped[$tid] = $row;
-        continue;
-    }
-    // prefer existing with valor_anterior non-empty
+    if ($tid === null) { $deduped[] = $row; continue; }
+    if (!isset($deduped[$tid])) { $deduped[$tid] = $row; continue; }
     $cur = $deduped[$tid];
     $cur_has_prev = !empty($cur['valor_anterior']);
     $row_has_prev = !empty($row['valor_anterior']);
-    if ($row_has_prev && !$cur_has_prev) {
-        $deduped[$tid] = $row;
-        continue;
-    }
-    // otherwise prefer newer (by fecha)
+    if ($row_has_prev && !$cur_has_prev) { $deduped[$tid] = $row; continue; }
     $cur_time = strtotime($cur['fecha'] ?? '1970-01-01');
     $row_time = strtotime($row['fecha'] ?? '1970-01-01');
     if ($row_time > $cur_time) $deduped[$tid] = $row;
 }
-
-// Rebuild alertas as numerically indexed array
 $alertas = array_values($deduped);
 
-// Preferir nombre de cliente desde snapshot almacenado en la alerta (valor_anterior/valor_nuevo)
 function extract_cliente_from_snapshot($txt) {
     if (empty($txt)) return null;
     $d = json_decode($txt, true);
@@ -156,26 +136,22 @@ function extract_cliente_from_snapshot($txt) {
             if (!empty($c['nombre_completo'])) return $c['nombre_completo'];
             if (!empty($c['nombre_cliente'])) return $c['nombre_cliente'];
         }
-        // some fallbacks: a summary string we stored earlier
         if (!empty($d['summary']) && is_string($d['summary'])) return $d['summary'];
     }
     return null;
 }
 
-// Extract detailed client info and simple 'tramites' summary from a snapshot JSON
 function extract_cliente_details($txt) {
     $out = ['name'=>null,'phone'=>null,'email'=>null,'tramites'=>[]];
     if (empty($txt)) return $out;
     $d = json_decode($txt, true);
     if (!is_array($d)) return $out;
-    // cliente section
     if (!empty($d['cliente']) && is_array($d['cliente'])) {
         $c = $d['cliente'];
         $out['name'] = $c['nombre'] ?? $c['nombre_completo'] ?? $out['name'];
         $out['phone'] = $c['telefono'] ?? $c['telefono2'] ?? $out['phone'];
         $out['email'] = $c['email'] ?? $c['email_cliente'] ?? $out['email'];
     }
-    // encuesta_comercial: intereses / acuerdos
     if (!empty($d['encuesta_comercial']) && is_array($d['encuesta_comercial'])) {
         $e = $d['encuesta_comercial'];
         if (!empty($e['tiene_inversiones']) || !empty($e['valor_inversion'])) $out['tramites'][] = 'Inversión';
@@ -185,17 +161,14 @@ function extract_cliente_details($txt) {
         if (!empty($e['interes_inversion'])) $out['tramites'][] = 'Interés Inversión';
         if (!empty($e['acuerdo_logrado']) && $e['acuerdo_logrado'] !== 'ninguno') $out['tramites'][] = 'Acuerdo: ' . $e['acuerdo_logrado'];
     }
-    // acuerdo_visita: si existe, add
     if (!empty($d['acuerdo_visita']) && is_array($d['acuerdo_visita'])) {
         $a = $d['acuerdo_visita'];
         if (!empty($a['tipo_acuerdo'])) $out['tramites'][] = 'Acuerdo visita: ' . $a['tipo_acuerdo'];
     }
-    // unique and short
     $out['tramites'] = array_values(array_unique($out['tramites']));
     return $out;
 }
 
-// Collect normalized tramites keys from decoded snapshot array
 function collect_tramites_from_decoded($d) {
     $out = [];
     if (!is_array($d)) return $out;
@@ -212,23 +185,13 @@ function collect_tramites_from_decoded($d) {
         $a = $d['acuerdo_visita'];
         if (!empty($a['tipo_acuerdo'])) $out[] = 'acuerdo_visita_' . $a['tipo_acuerdo'];
     }
-    // unique
-    $out = array_values(array_unique($out));
-    return $out;
+    return array_values(array_unique($out));
 }
 
-// Compare tramites between prev and new snapshot JSON strings; return list of changes with status
 function compare_tramites($prevTxt, $newTxt) {
-    $prev = [];
-    $new = [];
-    if (!empty($prevTxt)) {
-        $d = json_decode($prevTxt, true);
-        if (is_array($d)) $prev = collect_tramites_from_decoded($d);
-    }
-    if (!empty($newTxt)) {
-        $d2 = json_decode($newTxt, true);
-        if (is_array($d2)) $new = collect_tramites_from_decoded($d2);
-    }
+    $prev = []; $new = [];
+    if (!empty($prevTxt)) { $d = json_decode($prevTxt, true); if (is_array($d)) $prev = collect_tramites_from_decoded($d); }
+    if (!empty($newTxt))  { $d2 = json_decode($newTxt, true); if (is_array($d2)) $new = collect_tramites_from_decoded($d2); }
     $added = array_values(array_diff($new, $prev));
     $removed = array_values(array_diff($prev, $new));
     $changes = [];
@@ -237,7 +200,6 @@ function compare_tramites($prevTxt, $newTxt) {
     return $changes;
 }
 
-// Map tramite key to human label and color class
 function tramite_label_and_color($key) {
     $map = [
         'inversion' => ['Inversión','success'],
@@ -254,7 +216,6 @@ function tramite_label_and_color($key) {
         'acuerdo_visita_nueva_cita_oficina' => ['Acuerdo Visita: Cita Oficina','warning'],
     ];
     if (isset($map[$key])) return $map[$key];
-    // default
     return [ucfirst(str_replace(['_','-'], [' ',' '], $key)), 'secondary'];
 }
 
@@ -263,12 +224,10 @@ foreach ($alertas as &$a) {
     $new_txt = $a['valor_nuevo'] ?? null;
     $ant_det = extract_cliente_details($ant_txt);
     $new_det = extract_cliente_details($new_txt);
-    // Prefer showing the 'antes' snapshot if exists, otherwise 'despues', otherwise DB value
     if ($ant_det['name']) {
         $a['cliente_nombre_display'] = $ant_det['name'];
         $a['cliente_phone'] = $ant_det['phone'];
         $a['cliente_email'] = $ant_det['email'];
-        // Determine only changed tramites between prev and new
         $a['cliente_tramites'] = compare_tramites($ant_txt, $new_txt);
         $a['cliente_display_source'] = 'antes';
     } elseif ($new_det['name']) {
@@ -288,13 +247,7 @@ foreach ($alertas as &$a) {
 unset($a);
 
 // ======================
-// 2. (Opcional) Alertas adicionales: tareas vencidas
-// ======================
-// Puedes agregar aquí tareas con fecha_programada < CURDATE() y estado != 'completada'
-// y fusionarlas con $alertas. Por simplicidad no lo incluyo, pero puedes añadirlo.
-
-// ======================
-// Estadísticas para el resumen
+// Estadísticas
 // ======================
 $total_alertas = count($alertas);
 $pendientes = 0;
@@ -310,9 +263,25 @@ $stats = [
 ];
 
 $currentPage        = 'alertas';
-$alertas_pendientes = 0; // ya está en la página activa, no hace falta badge aquí
+$alertas_pendientes = 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 $is_supervisor_ui = ($user_role === 'supervisor');
+
+// Handler: marcar alerta como revisada (acepta POST normal o AJAX)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) && isset($_POST['id'])) {
+    $id_to_mark = $_POST['id'];
+    $up = $pdo->prepare('UPDATE alerta_modificacion SET vista_supervisor = 1, vista_at = NOW() WHERE id = :id');
+    $ok = $up->execute([':id' => $id_to_mark]);
+    $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
+    if ($isAjax) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => (bool)$ok]);
+        exit;
+    } else {
+        header('Location: alertas.php');
+        exit;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -407,16 +376,124 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 <?php endif; ?>
     </style>
-    <!-- Custom light palette for tramite badges -->
+
+    <!-- Badges de trámite -->
     <style>
         .tram-badge { padding:4px 8px; border-radius:8px; font-weight:600; display:inline-block; margin-right:6px; font-size:0.85rem; }
         .tram-success { background:#d1fae5; color:#065f46; }
         .tram-primary { background:#dbeafe; color:#1e3a8a; }
-        .tram-info { background:#e0f2fe; color:#0369a1; }
-        .tram-danger { background:#fee2e2; color:#7f1d1d; }
+        .tram-info    { background:#e0f2fe; color:#0369a1; }
+        .tram-danger  { background:#fee2e2; color:#7f1d1d; }
         .tram-warning { background:#fffbeb; color:#92400e; }
         .tram-secondary { background:#f3f4f6; color:#374151; }
     </style>
+
+    <!-- ================================================================
+         VENTANA EMERGENTE (modal) PROPIA — dentro de la aplicación.
+         Namespace .alm-*  para evitar colisión con cualquier otro CSS/modal.
+         z-index alto + aislamiento total del contenido.
+         ================================================================ -->
+    <style>
+        .alm-backdrop {
+            position: fixed; inset: 0;
+            background: rgba(10, 39, 72, 0.55);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            z-index: 99990;
+            display: none;
+            align-items: center; justify-content: center;
+            padding: 24px;
+            animation: almFade .18s ease-out;
+        }
+        .alm-backdrop.alm-open { display: flex; }
+        @keyframes almFade { from { opacity:0; } to { opacity:1; } }
+
+        .alm-dialog {
+            background: #ffffff;
+            width: 100%;
+            max-width: 1100px;
+            max-height: 92vh;
+            border-radius: 18px;
+            box-shadow: 0 30px 80px rgba(0,0,0,.35);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+            position: relative;
+            isolation: isolate;                /* aísla z-index hijos */
+            animation: almPop .22s cubic-bezier(.2,.9,.3,1.1);
+        }
+        @keyframes almPop { from { transform: translateY(14px) scale(.98); opacity:0; } to { transform:none; opacity:1; } }
+
+        .alm-header {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px;
+            padding: 18px 22px;
+            background: linear-gradient(135deg, #0a2748, #123a6d);
+            color: #fff;
+            border-bottom: 3px solid #ffdd00;
+        }
+        .alm-header .alm-title {
+            display:flex; align-items:center; gap:10px;
+            font-weight: 800; font-size: 16px; letter-spacing:.2px;
+        }
+        .alm-header .alm-title i { color:#ffdd00; }
+        .alm-header-actions { display:flex; align-items:center; gap:10px; }
+
+        .alm-btn {
+            border: none; cursor: pointer;
+            padding: 9px 16px; border-radius: 10px;
+            font-weight: 700; font-size: 13px;
+            display:inline-flex; align-items:center; gap:8px;
+            transition: all .18s ease;
+        }
+        .alm-btn-mark {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #fff;
+            box-shadow: 0 8px 16px rgba(16,185,129,.25);
+        }
+        .alm-btn-mark:hover { transform: translateY(-1px); box-shadow: 0 12px 20px rgba(16,185,129,.35); }
+        .alm-btn-mark:disabled { opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
+        .alm-btn-close {
+            background: rgba(255,255,255,.1);
+            color: #fff;
+            width: 38px; height: 38px; padding: 0;
+            border-radius: 50%;
+            font-size: 18px;
+            justify-content: center;
+        }
+        .alm-btn-close:hover { background: rgba(255,221,0,.25); color:#ffdd00; }
+
+        .alm-body {
+            flex: 1 1 auto;
+            overflow: auto;
+            background: #f4f6f9;
+            padding: 0;                        /* el partial trae su propio padding */
+            /* aislar el contenido cargado por AJAX para que NADA herede de la página */
+            contain: content;
+        }
+        .alm-body > * { max-width: 100%; }
+
+        .alm-loader {
+            display:flex; align-items:center; justify-content:center;
+            gap: 14px; padding: 80px 20px;
+            color: #6b7280; font-weight: 600;
+        }
+        .alm-loader .alm-spin {
+            width: 28px; height: 28px;
+            border: 3px solid #e5e9f0;
+            border-top-color: #0a2748;
+            border-radius: 50%;
+            animation: almSpin .8s linear infinite;
+        }
+        @keyframes almSpin { to { transform: rotate(360deg); } }
+
+        /* evitar scroll del body mientras el modal está abierto */
+        body.alm-lock { overflow: hidden; }
+
+        @media (max-width: 720px) {
+            .alm-backdrop { padding: 8px; }
+            .alm-dialog { max-height: 96vh; border-radius: 14px; }
+            .alm-header { padding: 14px 16px; }
+        }
     </style>
     </head>
     <body>
@@ -430,95 +507,49 @@ $is_supervisor_ui = ($user_role === 'supervisor');
     <div class="sidebar-section">
         <div class="sidebar-section-title">Principal</div>
         <?php if ($user_role === 'supervisor'): ?>
-        <a href="supervisor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_superIA.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
+        <a href="supervisor_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo_superIA.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
         <?php elseif ($user_role === 'super_admin'): ?>
-        <a href="super_admin_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <a href="mapa_calor.php" class="sidebar-link">
-            <i class="fas fa-fire"></i> Mapa de Calor
-        </a>
-        <a href="historial_rutas.php" class="sidebar-link">
-            <i class="fas fa-history"></i> Historial de Viajes
-        </a>
+        <a href="super_admin_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
+        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
+        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
         <?php elseif ($user_role === 'admin'): ?>
-        <a href="index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <a href="mapa_calor.php" class="sidebar-link">
-            <i class="fas fa-fire"></i> Mapa de Calor
-        </a>
-        <a href="historial_rutas.php" class="sidebar-link">
-            <i class="fas fa-history"></i> Historial de Viajes
-        </a>
+        <a href="index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
+        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
+        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
         <?php else: ?>
-        <a href="<?php echo ($user_role === 'supervisor') ? 'supervisor_index.php' : 'asesor_index.php'; ?>" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
+        <a href="<?php echo ($user_role === 'supervisor') ? 'supervisor_index.php' : 'asesor_index.php'; ?>" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
         <?php endif; ?>
     </div>
-
     <div class="sidebar-section">
         <div class="sidebar-section-title">Gestión</div>
         <?php if ($user_role === 'super_admin' || $user_role === 'admin'): ?>
-        <a href="usuarios.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Usuarios
-        </a>
+        <a href="usuarios.php" class="sidebar-link"><i class="fas fa-users"></i> Usuarios</a>
         <?php endif; ?>
-        <a href="clientes.php" class="sidebar-link">
-            <i class="fas fa-briefcase"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link">
-            <i class="fas fa-handshake"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link active">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
+        <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Clientes</a>
+        <a href="operaciones.php" class="sidebar-link"><i class="fas fa-handshake"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Operaciones</a>
+        <a href="alertas.php" class="sidebar-link active"><i class="fas fa-bell"></i> Alertas</a>
     </div>
-
     <?php if ($user_role === 'supervisor'): ?>
     <div class="sidebar-section">
         <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Mis Asesores
-        </a>
-        <a href="registro_asesor.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link">
-            <i class="fas fa-file-circle-check"></i> Solicitudes de Asesor
-        </a>
+        <a href="mis_asesores.php" class="sidebar-link"><i class="fas fa-users"></i> Mis Asesores</a>
+        <a href="registro_asesor.php" class="sidebar-link"><i class="fas fa-user-plus"></i> Crear Asesor</a>
+        <a href="administrar_solicitudes_asesor.php" class="sidebar-link"><i class="fas fa-file-circle-check"></i> Solicitudes de Asesor</a>
     </div>
     <?php endif; ?>
-
     <?php if ($user_role === 'super_admin'): ?>
     <div class="sidebar-section">
         <div class="sidebar-section-title">Super Administración</div>
-        <a href="administrar_solicitudes_admin.php" class="sidebar-link">
-            <i class="fas fa-file-alt"></i> Solicitudes de Admin
-        </a>
+        <a href="administrar_solicitudes_admin.php" class="sidebar-link"><i class="fas fa-file-alt"></i> Solicitudes de Admin</a>
     </div>
     <?php endif; ?>
-
     <div class="sidebar-section">
         <div class="sidebar-section-title">Configuración</div>
-        <a href="#" class="sidebar-link">
-            <i class="fas fa-cog"></i> Configuración
-        </a>
+        <a href="#" class="sidebar-link"><i class="fas fa-cog"></i> Configuración</a>
     </div>
 </div>
 <?php endif; ?>
@@ -528,8 +559,8 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         <?php if ($user_role === 'supervisor'): ?>
             <h2><i class="fas fa-shield-halved me-2" style="color: var(--brand-yellow);"></i>Super_IA - Supervisor</h2>
         <?php else: ?>
-            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA 
-                <?php 
+            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA
+                <?php
                 if ($user_role === 'super_admin') echo '- SuperAdministrador';
                 elseif ($user_role === 'admin') echo '- Admin';
                 elseif ($user_role === 'supervisor') echo '- Supervisor';
@@ -540,7 +571,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         <div class="user-info">
             <div>
                 <strong>
-                    <?php 
+                    <?php
                     if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_nombre']);
                     elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_nombre']);
                     elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_nombre']);
@@ -548,7 +579,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                     ?>
                 </strong><br>
                 <small>
-                    <?php 
+                    <?php
                     if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_rol']);
                     elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_rol']);
                     elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_rol']);
@@ -559,6 +590,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
             <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
         </div>
     </div>
+
     <div class="content-area">
         <div class="page-header">
             <h1><i class="fas fa-bell me-2"></i>Centro de Alertas</h1>
@@ -567,15 +599,15 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         <!-- Estadísticas -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="number"><?php echo $stats['total_alertas']; ?></div>
+                <div id="alertas-total" class="number"><?php echo $stats['total_alertas']; ?></div>
                 <div class="label">Total de Alertas</div>
             </div>
             <div class="stat-card">
-                <div class="number" style="color: #ef4444;"><?php echo $stats['pendientes']; ?></div>
+                <div id="alertas-pendientes" class="number" style="color: #ef4444;"><?php echo $stats['pendientes']; ?></div>
                 <div class="label">Pendientes</div>
             </div>
             <div class="stat-card">
-                <div class="number" style="color: #10b981;"><?php echo $stats['revisadas']; ?></div>
+                <div id="alertas-revisadas" class="number" style="color: #10b981;"><?php echo $stats['revisadas']; ?></div>
                 <div class="label">Revisadas</div>
             </div>
         </div>
@@ -585,16 +617,14 @@ $is_supervisor_ui = ($user_role === 'supervisor');
             <div class="card-header-custom">
                 <h6>⚠️ Listado de Alertas</h6>
             </div>
-            <table class="table table-hover">
+            <table class="table table-hover" id="alertas-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
+                        <th>#</th>
                         <th>Tipo</th>
                         <th>Mensaje</th>
                         <th>Cliente</th>
-                        <?php if ($col_asesor): ?>
-                        <th>Asesor Asignado</th>
-                        <?php endif; ?>
+                        <?php if ($col_asesor): ?><th>Asesor Asignado</th><?php endif; ?>
                         <th>Fecha</th>
                         <th>Estado</th>
                         <th>Acciones</th>
@@ -609,7 +639,7 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                     </tr>
                     <?php else: ?>
                         <?php foreach ($alertas as $alerta): ?>
-                        <tr>
+                        <tr data-alerta-id="<?php echo htmlspecialchars($alerta['id_alerta']); ?>">
                             <td><strong>#<?php echo htmlspecialchars(substr($alerta['id_alerta'], 0, 8)); ?></strong></td>
                             <td><span class="badge" style="background: #3182fe;"><?php echo htmlspecialchars($alerta['tipo']); ?></span></td>
                             <td><?php echo htmlspecialchars(substr($alerta['mensaje'], 0, 80) . (strlen($alerta['mensaje']) > 80 ? '…' : '')); ?></td>
@@ -651,9 +681,13 @@ $is_supervisor_ui = ($user_role === 'supervisor');
                                 <?php endif; ?>
                             </td>
                             <td>
-                                <a href="alertas_detalle.php?id=<?php echo urlencode($alerta['id_alerta']); ?>" class="btn btn-sm btn-outline-primary" title="Ver detalles">
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary open-alert-detail"
+                                        title="Ver detalles"
+                                        data-alerta-id="<?php echo htmlspecialchars($alerta['id_alerta']); ?>"
+                                        data-estado="<?php echo htmlspecialchars($alerta['estado']); ?>">
                                     <i class="fas fa-eye"></i>
-                                </a>
+                                </button>
                             </td>
                         </tr>
                         <?php endforeach; ?>
@@ -663,6 +697,121 @@ $is_supervisor_ui = ($user_role === 'supervisor');
         </div>
     </div>
 </div>
+
+<!-- =========================================================
+     VENTANA EMERGENTE (dentro de la aplicación)
+     Se inyecta al final del <body> para evitar cualquier
+     contexto de apilamiento (stacking) raro del layout.
+     ========================================================= -->
+<div id="alm-backdrop" class="alm-backdrop" role="dialog" aria-modal="true" aria-labelledby="alm-title">
+    <div class="alm-dialog">
+        <div class="alm-header">
+            <div class="alm-title" id="alm-title">
+                <i class="fas fa-triangle-exclamation"></i>
+                <span>Detalle de la Alerta</span>
+            </div>
+            <div class="alm-header-actions">
+                <button type="button" class="alm-btn alm-btn-close" id="alm-btn-close" aria-label="Cerrar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        <div class="alm-body" id="alm-body">
+            <div class="alm-loader">
+                <div class="alm-spin"></div>
+                <span>Cargando detalle de la alerta...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function(){
+    'use strict';
+
+    var _currentId = null;
+
+    var backdrop = document.getElementById('alm-backdrop');
+    var body     = document.getElementById('alm-body');
+    var btnClose = document.getElementById('alm-btn-close');
+
+    function openModal(alertaId, estado) {
+        _currentId = alertaId;
+
+        // Resetea contenido a loader (limpia cualquier residuo previo)
+        body.innerHTML = '<div class="alm-loader"><div class="alm-spin"></div><span>Cargando detalle de la alerta...</span></div>';
+
+        backdrop.classList.add('alm-open');
+        document.body.classList.add('alm-lock');
+
+        // Fetch AJAX al MISMO archivo alertas_detalle.php
+        var url = 'alertas_detalle.php?id=' + encodeURIComponent(alertaId) + '&ajax=1&_ts=' + Date.now();
+        fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' },
+            cache: 'no-store'
+        })
+        .then(function(r){
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.text();
+        })
+        .then(function(html){
+            // Protección: si el server devolvió un documento HTML completo (por error),
+            // extraer solo el contenido útil (el <div class="adx-wrap">...</div>).
+            var cleaned = html;
+            var iHead = html.toLowerCase().indexOf('<!doctype');
+            if (iHead === -1) iHead = html.toLowerCase().indexOf('<html');
+            if (iHead !== -1) {
+                // intenta aislar adx-wrap
+                var m = html.match(/<div[^>]*class=["'][^"']*adx-wrap[^"']*["'][\s\S]*?<\/div>\s*(?:<\/body>|<\/main>|$)/i);
+                if (m && m[0]) cleaned = m[0];
+            }
+            body.innerHTML = cleaned;
+            body.scrollTop = 0;
+        })
+        .catch(function(err){
+            body.innerHTML =
+              '<div style="padding:60px 20px; text-align:center;">' +
+                '<i class="fas fa-triangle-exclamation fa-2x" style="color:#ef4444;"></i>' +
+                '<p style="margin-top:14px; color:#b91c1c; font-weight:700;">No se pudo cargar el detalle.</p>' +
+                '<small style="color:#6b7280;">' + (err && err.message ? err.message : '') + '</small>' +
+              '</div>';
+        });
+    }
+
+    function closeModal() {
+        backdrop.classList.remove('alm-open');
+        document.body.classList.remove('alm-lock');
+        body.innerHTML = '';        // importante: libera contenido anterior
+        _currentId = null;
+    }
+
+    // Click en "Ver detalles" (delegación)
+    document.addEventListener('click', function(e){
+        var t = e.target.closest('.open-alert-detail');
+        if (t) {
+            e.preventDefault();
+            var id = t.getAttribute('data-alerta-id');
+            var es = t.getAttribute('data-estado') || 'abierta';
+            if (id) openModal(id, es);
+            return;
+        }
+    });
+
+    // Cerrar: botón X
+    btnClose.addEventListener('click', closeModal);
+    // Cerrar: click fuera del dialog
+    backdrop.addEventListener('click', function(e){
+        if (e.target === backdrop) closeModal();
+    });
+    // Cerrar: tecla ESC
+    document.addEventListener('keydown', function(e){
+        if (e.key === 'Escape' && backdrop.classList.contains('alm-open')) closeModal();
+    });
+
+})();
+</script>
 
 </body>
 </html>

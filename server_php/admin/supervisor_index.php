@@ -135,17 +135,33 @@ if ($supervisor_table_id) {
 $ultimas_alertas = [];
 if ($supervisor_table_id) {
     try {
-        $st = $pdo->prepare("
-            SELECT am.campo_modificado, am.valor_nuevo, am.created_at, u.nombre as asesor_nombre
+        $st = $pdo->prepare("SELECT am.id as id_alerta, am.campo_modificado, am.valor_nuevo, am.created_at, u.nombre as asesor_nombre
             FROM alerta_modificacion am
             JOIN asesor a ON a.id = am.asesor_id
             JOIN usuario u ON u.id = a.usuario_id
             WHERE am.supervisor_id = ? AND am.vista_supervisor = 0
-            ORDER BY am.created_at DESC LIMIT 5
-        ");
+            ORDER BY am.created_at DESC LIMIT 5");
         $st->execute([$supervisor_table_id]);
         $ultimas_alertas = $st->fetchAll();
     } catch (PDOException $e) {}
+}
+
+// ── Créditos aprobados para recuperación (últimos aprobados/desembolsados) ──
+$creditos_aprobados = [];
+if ($supervisor_table_id) {
+    try {
+        $st = $pdo->prepare("SELECT cp.id, cp.cliente_prospecto_id, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+                                     cp.monto_aprobado, cp.fecha_desembolso, cp.created_at,
+                                     a.id as asesor_id, u.nombre as asesor_nombre
+                              FROM credito_proceso cp
+                              JOIN cliente_prospecto cl ON cl.id = cp.cliente_prospecto_id
+                              LEFT JOIN asesor a ON a.id = cp.asesor_id
+                              LEFT JOIN usuario u ON u.id = a.usuario_id
+                              WHERE a.supervisor_id = ? AND cp.estado_credito IN('aprobado','desembolsado')
+                              ORDER BY cp.created_at DESC LIMIT 12");
+        $st->execute([$supervisor_table_id]);
+        $creditos_aprobados = $st->fetchAll();
+    } catch (PDOException $e) { /* silencioso */ }
 }
 
 $pct_tareas = $tareas_hoy > 0 ? round($tareas_completadas * 100 / $tareas_hoy) : 0;
@@ -365,9 +381,75 @@ $currentPage = 'dashboard';
             </a>
             <a href="alertas.php" class="kpi-card <?= $alertas_pendientes > 0 ? 'kpi-red' : 'kpi-blue' ?>">
                 <div class="kpi-icon"><i class="fas fa-bell"></i></div>
-                <div class="kpi-num"><?= $alertas_pendientes ?></div>
+                <div id="supervisor-alertas-pendientes" class="kpi-num"><?= $alertas_pendientes ?></div>
                 <div class="kpi-label">Alertas pendientes</div>
             </a>
+        </div>
+
+        <!-- Recuperación: Créditos aprobados/desembolsados -->
+        <div class="section-card" style="margin-top:14px;">
+            <div class="section-header">
+                <h5><i class="fas fa-user-clock" style="color:#dc2626;"></i>Recuperación — Créditos Aprobados</h5>
+                <span class="sec-badge"><?= count($creditos_aprobados) ?></span>
+            </div>
+            <div style="padding:12px 18px;">
+                <?php if (empty($creditos_aprobados)): ?>
+                    <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>No hay créditos recientes aprobados/desembolsados</div>
+                <?php else: ?>
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th></th>
+                                <th>Cliente</th>
+                                <th>Asesor</th>
+                                <th>Monto</th>
+                                <th>Desembolso</th>
+                                <th>Meses desde desemb.</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($creditos_aprobados as $cr):
+                            $fecha = $cr['fecha_desembolso'] ?: $cr['created_at'];
+                            $dt0 = new DateTime($fecha);
+                            $dt1 = new DateTime();
+                            $diff = ($dt1->y - $dt0->y) * 12 + ($dt1->m - $dt0->m);
+                            $meses = max(0, (int)$diff);
+                        ?>
+                        <tr>
+                            <td><input type="checkbox" class="chk-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"></td>
+                            <td><?= htmlspecialchars($cr['cliente_nombre'] ?? $cr['cliente_cedula']) ?><br><small class="text-muted"><?= htmlspecialchars($cr['cliente_cedula'] ?? '') ?></small></td>
+                            <td><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></td>
+                            <td>$<?= number_format((float)($cr['monto_aprobado'] ?? 0),2) ?></td>
+                            <td><?= $fecha ? date('d/m/Y', strtotime($fecha)) : '—' ?></td>
+                            <td><?= $meses ?></td>
+                            <td style="white-space:nowrap;">
+                                <button class="btn btn-sm btn-warning btn-crear-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>" data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>" data-meses="<?= $meses ?>">Crear tarea recuperación</button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:8px;">
+                        <div>
+                            <select id="bulk_asesor_sel" class="form-select form-select-sm" style="width:260px;display:inline-block;margin-right:6px;">
+                                <option value="">Usar asesor original</option>
+                                <?php
+                                    // Lista de asesores del supervisor
+                                    try {
+                                        $st = $pdo->prepare('SELECT id, (SELECT nombre FROM usuario u WHERE u.id = a.usuario_id) as nombre FROM asesor a WHERE a.supervisor_id = ?');
+                                        $st->execute([$supervisor_table_id]);
+                                        $asesList = $st->fetchAll();
+                                    } catch (Throwable $_) { $asesList = []; }
+                                    foreach ($asesList as $as) echo '<option value="' . htmlspecialchars($as['id']) . '">' . htmlspecialchars($as['nombre'] ?? $as['id']) . '</option>';
+                                ?>
+                            </select>
+                        </div>
+                        <button id="bulk_create_rec" class="btn btn-sm btn-danger">Crear tareas (seleccionados)</button>
+                        <small class="text-muted">Puedes seleccionar varias filas y crear tareas de recuperación en lote.</small>
+                    </div>
+                <?php endif; ?>
+            </div>
         </div>
 
         <!-- GRID INFERIOR -->
@@ -494,7 +576,7 @@ $currentPage = 'dashboard';
 
             <!-- Alertas recientes -->
             <div class="col-md-6">
-                <div class="section-card">
+                <div class="section-card" id="alertas-section">
                     <div class="section-header">
                         <h5><i class="fas fa-bell" style="color:#ef4444;"></i>Alertas Sin Ver</h5>
                         <a href="alertas.php" class="sec-link">Ver todas →</a>
@@ -503,7 +585,7 @@ $currentPage = 'dashboard';
                     <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>Sin alertas pendientes 🎉</div>
                     <?php else: ?>
                         <?php foreach ($ultimas_alertas as $al): ?>
-                        <div class="act-item">
+                        <div class="act-item open-alert-detail" data-alerta-id="<?= htmlspecialchars($al['id_alerta'] ?? $al['id'] ?? '') ?>" style="cursor:pointer;">
                             <div class="act-dot dot-alert"><i class="fas fa-exclamation"></i></div>
                             <div class="act-body">
                                 <div class="act-title"><?= htmlspecialchars($al['campo_modificado'] ?? 'Modificación detectada') ?></div>
@@ -520,5 +602,180 @@ $currentPage = 'dashboard';
         </div><!-- /.row -->
     </div><!-- /.content-area -->
 </div><!-- /.main-content -->
-</body>
-</html>
+
+    <script>
+    document.addEventListener('click', function(e){
+        // Crear tarea individual
+        if (e.target && e.target.matches('.btn-crear-rec')){
+            var btn = e.target;
+            var creditoId = btn.getAttribute('data-credito-id');
+            var asesorId = btn.getAttribute('data-asesor-id') || '';
+            var meses = btn.getAttribute('data-meses') || 0;
+            var mensaje = 'Cliente con crédito aprobado — pendiente desde hace ' + meses + ' meses.';
+            btn.disabled = true;
+            fetch('crear_tarea_recuperacion.php', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ credito_id: creditoId, asesor_id: asesorId, mensaje: mensaje })
+            }).then(r=>r.json()).then(j=>{ btn.disabled=false; if (j.status==='success') alert('Tarea creada'); else alert('Error: '+(j.message||'')) }).catch(x=>{btn.disabled=false; alert('Error de red')});
+        }
+
+        // Bulk create
+        if (e.target && e.target.id === 'bulk_create_rec'){
+            var checks = Array.from(document.querySelectorAll('.chk-rec:checked')).map(function(c){return c.getAttribute('data-credito-id');});
+            if (checks.length === 0) { alert('Seleccione al menos un crédito'); return; }
+            var asesorSel = document.getElementById('bulk_asesor_sel');
+            var asesorId = asesorSel ? asesorSel.value : '';
+            var mensaje = 'Tarea de recuperación generada por supervisor';
+            e.target.disabled = true;
+            fetch('crear_tarea_recuperacion.php', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ credito_ids: checks, asesor_id: asesorId, mensaje: mensaje })
+            }).then(r=>r.json()).then(j=>{ e.target.disabled=false; if (j.status==='success') { alert('Tareas creadas: '+ j.created.length); window.location.reload(); } else alert('Error: '+(j.message||'')) }).catch(x=>{e.target.disabled=false; alert('Error de red')});
+        }
+    });
+    </script>
+            <!-- Modal: Detalle de Alerta -->
+            <div class="modal fade" id="alertDetailModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div id="alertDetailContent">
+                            <!-- Cargado dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+            <script>
+            (function(){
+                // Helper: set HTML and execute embedded scripts
+                function setHTMLWithScripts(container, html) {
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(html, 'text/html');
+                    // clear container
+                    container.innerHTML = '';
+                    // move children
+                    Array.from(doc.body.childNodes).forEach(function(n){
+                        if (n.tagName && n.tagName.toLowerCase() === 'script') return; // skip scripts for now
+                        container.appendChild(document.importNode(n, true));
+                    });
+                    // execute scripts separately
+                    Array.from(doc.scripts || []).forEach(function(s){
+                        var ns = document.createElement('script');
+                        if (s.src) { ns.src = s.src; }
+                        ns.type = s.type || 'text/javascript';
+                        ns.text = s.textContent || s.innerText || '';
+                        container.appendChild(ns);
+                    });
+                }
+
+                // Restore original alertas section HTML and refresh main content area partially
+                window.cerrarModalAlerta = window.cerrarModalAlerta || function(){
+                    try {
+                        var sec = document.getElementById('alertas-section');
+                        if (window._originalAlertasHTML && sec) sec.innerHTML = window._originalAlertasHTML;
+                        // rebind alert click handlers
+                        rebindAlertClicks();
+                        // Refresh small parts of content-area if needed (counts, badges)
+                        fetch(window.location.href, { cache:'no-store' }).then(function(r){ return r.text(); }).then(function(t){
+                            try {
+                                var m = t.match(/<div class="content-area">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/i);
+                                if (m && m[1]) {
+                                    var contentEl = document.querySelector('.content-area');
+                                    if (contentEl) contentEl.innerHTML = m[1];
+                                }
+                            } catch (err) { /* ignore */ }
+                        }).catch(function(){ /* ignore */ });
+                    } catch (err) { console.error(err); }
+                };
+
+                function openAlertInCenter(id){
+                    if (!id) return;
+                    var sec = document.getElementById('alertas-section');
+                    if (!sec) return;
+                    // save original if not saved
+                    if (!window._originalAlertasHTML) window._originalAlertasHTML = sec.innerHTML;
+                    // show loading (keep styling similar to section)
+                    sec.innerHTML = '<div class="p-4">Cargando detalle…</div>';
+                    fetch('alertas_detalle.php?id=' + encodeURIComponent(id) + '&ajax=1')
+                        .then(function(r){ if (!r.ok) throw new Error('Error al cargar'); return r.text(); })
+                        .then(function(html){ setHTMLWithScripts(sec, html); })
+                        .catch(function(err){ sec.innerHTML = '<div class="p-4 text-danger">No se pudo cargar el detalle.</div>'; console.error(err); });
+                }
+
+                function openAlertInSidebar(id){
+                    // fallback: inject into sidebar (for pages that expect sidebar behavior)
+                    if (!id) return;
+                    var side = document.querySelector('.sidebar');
+                    if (!side) return;
+                    if (!window._originalSidebarHTML) window._originalSidebarHTML = side.innerHTML;
+                    side.innerHTML = '<div style="padding:18px;color:#fff;">Cargando detalle…</div>';
+                    fetch('alertas_detalle.php?id=' + encodeURIComponent(id) + '&ajax=1')
+                        .then(function(r){ if (!r.ok) throw new Error('Error al cargar'); return r.text(); })
+                        .then(function(html){ setHTMLWithScripts(side, html); })
+                        .catch(function(err){ side.innerHTML = '<div style="padding:18px;color:#fff;">No se pudo cargar el detalle.</div>'; console.error(err); });
+                }
+
+                // Global entrypoint: prefer center (#alertas-section) then fallback to sidebar/modal
+                window.openAlertDetail = window.openAlertDetail || function(id){
+                    if (document.getElementById('alertas-section')) return openAlertInCenter(id);
+                    return openAlertInSidebar(id);
+                };
+
+                function onClickAlert(e){
+                    var el = e.currentTarget || this;
+                    var id = el.getAttribute('data-alerta-id');
+                    if (!id) return;
+                    // If user holds ctrl/cmd or middle click, open full page
+                    if (e.ctrlKey || e.metaKey || e.which === 2) { window.open('alertas_detalle.php?id='+encodeURIComponent(id),'_blank'); return; }
+                    // prefer global entrypoint
+                    window.openAlertDetail(id);
+                }
+
+                function rebindAlertClicks(){
+                    document.querySelectorAll('.open-alert-detail').forEach(function(node){
+                        node.removeEventListener('click', onClickAlert);
+                        node.addEventListener('click', onClickAlert);
+                    });
+                }
+
+                document.addEventListener('DOMContentLoaded', function(){
+                    // store original alertas section HTML
+                    var sec = document.getElementById('alertas-section');
+                    if (sec && !window._originalAlertasHTML) window._originalAlertasHTML = sec.innerHTML;
+                    rebindAlertClicks();
+                    // Listen for alertaRevisada events to update KPI and quick links
+                    window.addEventListener('alertaRevisada', function(ev){
+                        try {
+                            var k = document.getElementById('supervisor-alertas-pendientes');
+                            if (k) {
+                                var n = parseInt(k.textContent||k.innerText||0)||0; if (n>0) n = n-1; k.textContent = n;
+                            }
+                            var quick = document.querySelector('.quick-btn.q-red');
+                            if (quick) {
+                                var txt = quick.textContent || quick.innerText || '';
+                                var m = txt.match(/Alertas\s*\((\d+)\)/);
+                                if (m) {
+                                    var nn = parseInt(m[1]) - 1; if (nn < 0) nn = 0;
+                                    quick.innerHTML = '<i class="fas fa-bell"></i>Alertas' + (nn>0 ? ' ('+nn+')' : '');
+                                }
+                            }
+                        } catch (err) { /* ignore */ }
+                    });
+                });
+                // Intercept clicks on links with class ajax-center to load their page into the center
+                document.body.addEventListener('click', function(e){
+                    var a = e.target.closest && e.target.closest('a.ajax-center');
+                    if (!a) return;
+                    var href = a.getAttribute('href');
+                    if (!href) return;
+                    e.preventDefault();
+                    var center = document.getElementById('alertas-section') || document.querySelector('.content-area');
+                    if (!center) { window.location.href = href; return; }
+                    center.innerHTML = '<div class="p-4">Cargando…</div>';
+                    fetch(href + (href.indexOf('?')===-1? '?':'&') + 'ajax_center=1').then(function(r){ if(!r.ok) throw new Error('Error'); return r.text(); }).then(function(html){ center.innerHTML = html; if (typeof initAlertBindings === 'function') initAlertBindings(); if (typeof rebindAlertClicks === 'function') rebindAlertClicks(); }).catch(function(){ center.innerHTML = '<div class="p-4 text-danger">No se pudo cargar la sección.</div>'; });
+                });
+            })();
+            </script>
+    </body>
+    </html>

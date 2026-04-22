@@ -117,7 +117,7 @@ try {
         LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
         WHERE t.asesor_id = ?
           AND (
-            (t.estado IN ('programada','pendiente','postergada','en_proceso') AND t.fecha_programada >= ?)
+            (t.estado IN ('programada','pendiente','postergada','en_proceso') AND (t.fecha_programada IS NULL OR t.fecha_programada = '0000-00-00' OR t.fecha_programada >= ?))
             OR
             (t.estado = 'completada' AND t.fecha_realizada >= ?)
           )

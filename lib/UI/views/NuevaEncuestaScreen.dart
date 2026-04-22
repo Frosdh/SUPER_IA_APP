@@ -1163,7 +1163,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.of(ctx).pop();
-                    Navigator.of(context).pop();
+                    Navigator.of(context).pop(true);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ConstantColors.warning,
