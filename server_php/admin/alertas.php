@@ -452,6 +452,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
         }
         .alm-btn-mark:hover { transform: translateY(-1px); box-shadow: 0 12px 20px rgba(16,185,129,.35); }
         .alm-btn-mark:disabled { opacity:.6; cursor:not-allowed; transform:none; box-shadow:none; }
+
+        .alm-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 14px 22px;
+            border-top: 1px solid rgba(255,255,255,.12);
+            background: linear-gradient(135deg, #0a2748, #123a6d);
+            flex-shrink: 0;
+        }
+        .alm-btn-open {
+            background: transparent;
+            color: rgba(255,255,255,.7);
+            border: 1px solid rgba(255,255,255,.2);
+            font-size: 12px; padding: 7px 14px;
+            text-decoration: none;
+        }
+        .alm-btn-open:hover { background: rgba(255,255,255,.1); color: #fff; }
+        .alm-footer-center { display:flex; gap:10px; align-items:center; }
         .alm-btn-close {
             background: rgba(255,255,255,.1);
             color: #fff;
@@ -722,6 +739,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
                 <span>Cargando detalle de la alerta...</span>
             </div>
         </div>
+        <div class="alm-footer">
+            <a href="#" id="alm-btn-open" class="alm-btn alm-btn-open" target="_blank">
+                <i class="fas fa-arrow-up-right-from-square"></i> Abrir en página completa
+            </a>
+            <div class="alm-footer-center">
+                <button type="button" id="alm-btn-mark" class="alm-btn alm-btn-mark" style="display:none;">
+                    <i class="fas fa-check"></i> Marcar como Revisada
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -729,17 +756,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
 (function(){
     'use strict';
 
-    var _currentId = null;
+    var _currentId  = null;
+    var _currentEstado = null;
 
     var backdrop = document.getElementById('alm-backdrop');
     var body     = document.getElementById('alm-body');
     var btnClose = document.getElementById('alm-btn-close');
+    var btnMark  = document.getElementById('alm-btn-mark');
+    var btnOpen  = document.getElementById('alm-btn-open');
 
     function openModal(alertaId, estado) {
-        _currentId = alertaId;
+        _currentId     = alertaId;
+        _currentEstado = estado;
 
-        // Resetea contenido a loader (limpia cualquier residuo previo)
+        // Resetea contenido a loader
         body.innerHTML = '<div class="alm-loader"><div class="alm-spin"></div><span>Cargando detalle de la alerta...</span></div>';
+
+        // Botón marcar: solo visible si la alerta está abierta/pendiente
+        btnMark.disabled = false;
+        btnMark.innerHTML = '<i class="fas fa-check"></i> Marcar como Revisada';
+        btnMark.style.display = (estado === 'abierta') ? 'inline-flex' : 'none';
+
+        // Link "Abrir en página completa"
+        btnOpen.href = 'alertas_detalle.php?id=' + encodeURIComponent(alertaId);
 
         backdrop.classList.add('alm-open');
         document.body.classList.add('alm-lock');
@@ -783,8 +822,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
     function closeModal() {
         backdrop.classList.remove('alm-open');
         document.body.classList.remove('alm-lock');
-        body.innerHTML = '';        // importante: libera contenido anterior
-        _currentId = null;
+        body.innerHTML = '';
+        _currentId     = null;
+        _currentEstado = null;
     }
 
     // Click en "Ver detalles" (delegación)
@@ -808,6 +848,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
     // Cerrar: tecla ESC
     document.addEventListener('keydown', function(e){
         if (e.key === 'Escape' && backdrop.classList.contains('alm-open')) closeModal();
+    });
+
+    // ── MARCAR COMO REVISADA ──────────────────────────────────────
+    btnMark.addEventListener('click', function(){
+        if (!_currentId) return;
+        var id = _currentId;
+
+        btnMark.disabled = true;
+        btnMark.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
+
+        var fd = new FormData();
+        fd.append('marcar_revisada', '1');
+        fd.append('id', id);
+
+        fetch('marcar_alerta_revisada.php', {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (data && data.success) {
+                // 1. Actualizar badge de la fila en la tabla
+                var tr = document.querySelector('tr[data-alerta-id="' + id + '"]');
+                if (tr) {
+                    // Estado badge en columna
+                    var estadoCell = tr.querySelector('td:nth-last-child(2)');
+                    if (estadoCell) estadoCell.innerHTML = '<span class="badge" style="background:#10b981;">✓ Cerrada</span>';
+                    // Actualizar data-estado del botón "Ver"
+                    var btnRow = tr.querySelector('.open-alert-detail');
+                    if (btnRow) btnRow.setAttribute('data-estado', 'cerrada');
+                }
+                // 2. Actualizar contadores en el encabezado
+                var elPend = document.getElementById('alertas-pendientes');
+                var elRev  = document.getElementById('alertas-revisadas');
+                if (elPend) {
+                    var p = parseInt(elPend.textContent, 10);
+                    if (!isNaN(p) && p > 0) elPend.textContent = (p - 1);
+                }
+                if (elRev) {
+                    var r = parseInt(elRev.textContent, 10);
+                    if (!isNaN(r)) elRev.textContent = (r + 1);
+                }
+                // 3. Feedback visual y cerrar modal
+                btnMark.innerHTML = '<i class="fas fa-check-double"></i> ¡Revisada!';
+                setTimeout(closeModal, 700);
+            } else {
+                btnMark.disabled = false;
+                btnMark.innerHTML = '<i class="fas fa-check"></i> Marcar como Revisada';
+                alert(data && data.message ? data.message : 'No se pudo marcar la alerta.');
+            }
+        })
+        .catch(function(err){
+            btnMark.disabled = false;
+            btnMark.innerHTML = '<i class="fas fa-check"></i> Marcar como Revisada';
+            alert('Error de red: ' + (err ? err.message : ''));
+        });
     });
 
 })();
