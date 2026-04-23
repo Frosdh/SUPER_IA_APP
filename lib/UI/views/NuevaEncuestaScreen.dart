@@ -99,16 +99,32 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Paso Empresa/Negocio (solo si _tieneEmpresa = true) ─────
   final _formKeyNegocio = GlobalKey<FormState>();
-  final _ventaLvCtrl   = TextEditingController();
+  String? _tipoEmpresa; // 'servicio_producto' | 'comercio'
+  // Ventas por día (Lun–Dom)
+  final _ventaLunCtrl  = TextEditingController();
+  final _ventaMarCtrl  = TextEditingController();
+  final _ventaMieCtrl  = TextEditingController();
+  final _ventaJueCtrl  = TextEditingController();
+  final _ventaVieCtrl  = TextEditingController();
   final _ventaSabCtrl  = TextEditingController();
   final _ventaDomCtrl  = TextEditingController();
-  final _compraLvCtrl  = TextEditingController();
-  final _compraSabCtrl = TextEditingController();
-  final _compraDomCtrl = TextEditingController();
+  // Compras por día (Lun–Dom)
+  final _compraLunCtrl  = TextEditingController();
+  final _compraMarCtrl  = TextEditingController();
+  final _compraMieCtrl  = TextEditingController();
+  final _compraJueCtrl  = TextEditingController();
+  final _compraVieCtrl  = TextEditingController();
+  final _compraSabCtrl  = TextEditingController();
+  final _compraDomCtrl  = TextEditingController();
   String? _mesAltaVenta;
   String? _mesBajaVenta;
   String? _mesAltaCompra;
-  bool _diaLv = true;
+  // Días de atención individuales
+  bool _diaLun = true;
+  bool _diaMar = true;
+  bool _diaMie = true;
+  bool _diaJue = true;
+  bool _diaVie = true;
   bool _diaSab = false;
   bool _diaDom = false;
   int _pctContado = 80; // % contado (crédito = 100 - contado)
@@ -337,18 +353,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (neg is Map) {
       final n = Map<String, dynamic>.from(neg);
       _tieneEmpresa = true;
-      _ventaLvCtrl.text      = _d(n['venta_lv']).toStringAsFixed(2);
-      _ventaSabCtrl.text     = _d(n['venta_sabado']).toStringAsFixed(2);
-      _ventaDomCtrl.text     = _d(n['venta_domingo']).toStringAsFixed(2);
-      _compraLvCtrl.text     = _d(n['compra_lv']).toStringAsFixed(2);
-      _compraSabCtrl.text    = _d(n['compra_sabado']).toStringAsFixed(2);
-      _compraDomCtrl.text    = _d(n['compra_domingo']).toStringAsFixed(2);
-      _mesAltaVenta          = _s(n['mes_alta_venta']).isEmpty  ? null : _s(n['mes_alta_venta']);
-      _mesBajaVenta          = _s(n['mes_baja_venta']).isEmpty  ? null : _s(n['mes_baja_venta']);
-      _mesAltaCompra         = _s(n['mes_alta_compra']).isEmpty ? null : _s(n['mes_alta_compra']);
-      _diaLv  = _i(n['dia_lv'])  == 1;
+      _tipoEmpresa = _s(n['tipo_empresa']).isEmpty ? null : _s(n['tipo_empresa']);
+      // Cargar por día individual; fallback al campo agrupado antiguo (retrocompatibilidad)
+      final lvVenta = _d(n['venta_lv']).toStringAsFixed(2);
+      _ventaLunCtrl.text  = _d(n['venta_lunes']).toStringAsFixed(2)  != '0.00' ? _d(n['venta_lunes']).toStringAsFixed(2)  : lvVenta;
+      _ventaMarCtrl.text  = _d(n['venta_martes']).toStringAsFixed(2) != '0.00' ? _d(n['venta_martes']).toStringAsFixed(2) : lvVenta;
+      _ventaMieCtrl.text  = _d(n['venta_miercoles']).toStringAsFixed(2) != '0.00' ? _d(n['venta_miercoles']).toStringAsFixed(2) : lvVenta;
+      _ventaJueCtrl.text  = _d(n['venta_jueves']).toStringAsFixed(2) != '0.00' ? _d(n['venta_jueves']).toStringAsFixed(2) : lvVenta;
+      _ventaVieCtrl.text  = _d(n['venta_viernes']).toStringAsFixed(2) != '0.00' ? _d(n['venta_viernes']).toStringAsFixed(2) : lvVenta;
+      _ventaSabCtrl.text  = _d(n['venta_sabado']).toStringAsFixed(2);
+      _ventaDomCtrl.text  = _d(n['venta_domingo']).toStringAsFixed(2);
+      final lvCompra = _d(n['compra_lv']).toStringAsFixed(2);
+      _compraLunCtrl.text = _d(n['compra_lunes']).toStringAsFixed(2)  != '0.00' ? _d(n['compra_lunes']).toStringAsFixed(2)  : lvCompra;
+      _compraMarCtrl.text = _d(n['compra_martes']).toStringAsFixed(2) != '0.00' ? _d(n['compra_martes']).toStringAsFixed(2) : lvCompra;
+      _compraMieCtrl.text = _d(n['compra_miercoles']).toStringAsFixed(2) != '0.00' ? _d(n['compra_miercoles']).toStringAsFixed(2) : lvCompra;
+      _compraJueCtrl.text = _d(n['compra_jueves']).toStringAsFixed(2) != '0.00' ? _d(n['compra_jueves']).toStringAsFixed(2) : lvCompra;
+      _compraVieCtrl.text = _d(n['compra_viernes']).toStringAsFixed(2) != '0.00' ? _d(n['compra_viernes']).toStringAsFixed(2) : lvCompra;
+      _compraSabCtrl.text = _d(n['compra_sabado']).toStringAsFixed(2);
+      _compraDomCtrl.text = _d(n['compra_domingo']).toStringAsFixed(2);
+      _mesAltaVenta       = _s(n['mes_alta_venta']).isEmpty  ? null : _s(n['mes_alta_venta']);
+      _mesBajaVenta       = _s(n['mes_baja_venta']).isEmpty  ? null : _s(n['mes_baja_venta']);
+      _mesAltaCompra      = _s(n['mes_alta_compra']).isEmpty ? null : _s(n['mes_alta_compra']);
+      _diaLun = _i(n['dia_lun']) == 1;
+      _diaMar = _i(n['dia_mar']) == 1;
+      _diaMie = _i(n['dia_mie']) == 1;
+      _diaJue = _i(n['dia_jue']) == 1;
+      _diaVie = _i(n['dia_vie']) == 1;
       _diaSab = _i(n['dia_sab']) == 1;
       _diaDom = _i(n['dia_dom']) == 1;
+      // Retrocompatibilidad: si vienen los campos agrupados
+      if (_i(n['dia_lv']) == 1) { _diaLun = _diaMar = _diaMie = _diaJue = _diaVie = true; }
       final pct = n['pct_contado'];
       if (pct != null) _pctContado = _i(pct);
       _recuperacionCreditoCtrl.text = _d(n['recuperacion_credito']).toStringAsFixed(2);
@@ -466,10 +500,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _ciudadCtrl.dispose();
     _numeroRucCtrl.dispose();
     _empresaCtrl.dispose();
-    _ventaLvCtrl.dispose();
+    _ventaLunCtrl.dispose();
+    _ventaMarCtrl.dispose();
+    _ventaMieCtrl.dispose();
+    _ventaJueCtrl.dispose();
+    _ventaVieCtrl.dispose();
     _ventaSabCtrl.dispose();
     _ventaDomCtrl.dispose();
-    _compraLvCtrl.dispose();
+    _compraLunCtrl.dispose();
+    _compraMarCtrl.dispose();
+    _compraMieCtrl.dispose();
+    _compraJueCtrl.dispose();
+    _compraVieCtrl.dispose();
     _compraSabCtrl.dispose();
     _compraDomCtrl.dispose();
     _recuperacionCreditoCtrl.dispose();

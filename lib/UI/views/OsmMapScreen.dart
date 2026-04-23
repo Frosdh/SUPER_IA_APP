@@ -18,6 +18,7 @@ import 'package:super_ia/Core/Services/SOSService.dart';
 import 'package:super_ia/Core/Services/ShareTripService.dart';
 import 'package:super_ia/UI/views/ChatScreen.dart';
 import 'package:super_ia/UI/views/MetasDiariasScreen.dart';
+import 'package:super_ia/UI/views/AgendaRecuperacionScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 import 'package:super_ia/UI/views/PendientesTareasScreen.dart';
 import 'package:super_ia/UI/views/WelcomeScreen.dart';
@@ -2961,13 +2962,54 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                 right: 16,
                 bottom: currentPanelHeight + 72,
                 child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          const NuevaEncuestaScreen(tipoTarea: 'recuperacion'),
-                    ),
-                  ),
+                  onTap: () async {
+                    final res = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AgendaRecuperacionScreen(),
+                      ),
+                    );
+
+                    if (!mounted) return;
+                    if (res is! Map) return;
+
+                    double? parseDouble(dynamic v) {
+                      if (v == null) return null;
+                      if (v is num) return v.toDouble();
+                      return double.tryParse(v.toString());
+                    }
+
+                    final lat = parseDouble(res['destino_lat']);
+                    final lng = parseDouble(res['destino_lng']);
+                    final nombre = (res['destino_nombre']?.toString() ?? '').trim();
+
+                    if (lat == null || lng == null) return;
+                    if (lat == 0.0 && lng == 0.0) return;
+
+                    final destino = LatLng(lat, lng);
+                    FocusScope.of(context).unfocus();
+                    setState(() {
+                      _destino = destino;
+                      _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
+                      _paradasIntermedias = [];
+                      _agregandoParada = false;
+                      _sugerencias = [];
+                      _mostrandoSugerencias = false;
+                      _mostrandoRecientes = false;
+                      _ajustandoRecogida = false;
+                      _actualizandoRecogida = false;
+                      _seleccionandoDestinoMapa = false;
+                      _actualizandoDestinoMapa = false;
+                      _searchController.text = _destinoNombre;
+                      _calculandoRuta = true;
+                      _mostrandoPanel = true;
+                      _rutaInfo = null;
+                      _rutaPuntos = [];
+                    });
+
+                    _mapController.move(destino, 14.0);
+                    _calcularRuta(destino);
+                  },
                   child: Container(
                     padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     decoration: BoxDecoration(

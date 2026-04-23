@@ -23,6 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $usuario_id   = trim($_POST['usuario_id'] ?? '');
 $asesor_id_in = trim($_POST['asesor_id'] ?? '');
 $desde        = trim($_POST['desde'] ?? '');
+// Filtro opcional por tipo de tarea (ej: 'recuperacion'). Vacío = todos los tipos.
+$tipo_filter  = trim($_POST['tipo'] ?? '');
 
 if ($usuario_id === '') {
     echo json_encode(['status' => 'error', 'message' => 'usuario_id requerido'], JSON_UNESCAPED_UNICODE);
@@ -92,6 +94,9 @@ try {
         $stExp->close();
     }
 
+    // Cláusula adicional cuando se filtra por tipo (ej: recuperacion)
+    $tipoClause = ($tipo_filter !== '') ? "t.tipo_tarea = '$tipo_filter' AND" : '';
+
     $sql = "
         SELECT
             t.id,
@@ -108,17 +113,22 @@ try {
             t.seleccion_fijada_at,
             t.created_at,
             t.asesor_id,
-            cp.id        AS cliente_id,
-            cp.nombre    AS cliente_nombre,
-            cp.ciudad    AS cliente_ciudad,
-            cp.direccion AS cliente_direccion,
-            cp.latitud   AS cliente_latitud,
-            cp.longitud  AS cliente_longitud
+            cp.id                      AS cliente_id,
+            cp.nombre                  AS cliente_nombre,
+            COALESCE(cp.cedula,   '')  AS cliente_cedula,
+            COALESCE(cp.telefono, '')  AS cliente_telefono,
+            cp.ciudad                  AS cliente_ciudad,
+            cp.direccion               AS cliente_direccion,
+            cp.latitud                 AS cliente_latitud,
+            cp.longitud                AS cliente_longitud,
+            (SELECT DATE_FORMAT(cred.created_at, '%Y-%m-%d')
+             FROM credito_proceso cred
+             WHERE cred.cliente_prospecto_id = t.cliente_prospecto_id
+             ORDER BY cred.created_at DESC
+             LIMIT 1)                 AS fecha_credito
         FROM tarea t
         LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-        WHERE (
-            -- Tareas propias del asesor: todas las pendientes (sin filtro de fecha)
-            -- y las completadas/canceladas solo de hoy
+        WHERE $tipoClause (
             (
                 t.asesor_id = ?
                 AND (
@@ -127,7 +137,6 @@ try {
                 )
             )
             OR
-            -- Tareas del pool (sin asesor asignado): visibles a todos hasta que alguien las fije
             (
                 t.asesor_id IS NULL
                 AND t.seleccion_fijada = 0
@@ -164,12 +173,15 @@ try {
             'seleccion_fijada' => (string)($r['seleccion_fijada'] ?? '0'),
             'seleccion_fijada_at' => (string)($r['seleccion_fijada_at'] ?? ''),
             'es_pool' => $esPool ? '1' : '0',   // 1 = tarea disponible para cualquier asesor
-            'cliente_id' => (string)($r['cliente_id'] ?? ''),
-            'cliente_nombre' => (string)($r['cliente_nombre'] ?? ''),
-            'cliente_ciudad' => (string)($r['cliente_ciudad'] ?? ''),
+            'cliente_id'        => (string)($r['cliente_id'] ?? ''),
+            'cliente_nombre'    => (string)($r['cliente_nombre'] ?? ''),
+            'cliente_cedula'    => (string)($r['cliente_cedula'] ?? ''),
+            'cliente_telefono'  => (string)($r['cliente_telefono'] ?? ''),
+            'cliente_ciudad'    => (string)($r['cliente_ciudad'] ?? ''),
             'cliente_direccion' => (string)($r['cliente_direccion'] ?? ''),
-            'cliente_latitud' => (string)($r['cliente_latitud'] ?? ''),
-            'cliente_longitud' => (string)($r['cliente_longitud'] ?? ''),
+            'cliente_latitud'   => (string)($r['cliente_latitud'] ?? ''),
+            'cliente_longitud'  => (string)($r['cliente_longitud'] ?? ''),
+            'fecha_credito'     => (string)($r['fecha_credito'] ?? ''),
         ];
     }
     $st->close();

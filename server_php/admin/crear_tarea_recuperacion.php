@@ -156,7 +156,7 @@ foreach ($creditos as $cid) {
                     if (!$cpRow) { $errors[] = "Cliente de crédito $cid no encontrado"; continue; }
                     $cliente_id = $cpRow['id'];
                 } else {
-                    $errors[] = "Crédito $cid no encontrado";
+                    $errors[] = "Crédito (proceso) $cid no encontrado";
                     continue;
                 }
             } else {
@@ -165,91 +165,68 @@ foreach ($creditos as $cid) {
             }
         }
 
-        // Armar la observación con meses en mora
-        $obs = $mensaje_base;
-        if ($meses_mora !== null) {
-            $obs .= " — Meses en mora: $meses_mora";
-        }
-        $obs .= " (credito_ref:$cid)";
-
-        // Determinar lista de asesores destino (ya resueltos como asesor.id)
-        if ($distribuir && !empty($asesores_equipo)) {
-            $destinos = $asesores_equipo; // ya son asesor.id (SELECT id FROM asesor)
-        } elseif ($asesor_override) {
-            // El override viene del front: puede ser asesor.id o usuario_id → resolver
-            $resolved = $resolverAsesorId($asesor_override);
-            $destinos = $resolved ? [$resolved] : [$asesor_override];
-        } elseif ($asesor_original) {
-            $destinos = [$asesor_original];
-        } else {
-            $errors[] = "Crédito $cid sin asesor asignado";
+        if (!$cliente_id) {
+            $errors[] = "No se pudo resolver cliente para crédito $cid";
             continue;
         }
 
-        foreach ($destinos as $asesor_id) {
-            // Generar UUID v4 compatible
-            $tarea_id = sprintf('%08x-%04x-4%03x-%04x-%012x',
-                mt_rand(0, 0xffffffff),
-                mt_rand(0, 0xffff),
-                mt_rand(0, 0x0fff),
-                mt_rand(0, 0x3fff) | 0x8000,
-                mt_rand(0, 0xffffffffffff)
-            );
-
-            // Insertar tarea de recuperación
-            $ins = $pdo->prepare(
-                "INSERT INTO tarea
-                   (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
-                    fecha_programada, observaciones, created_at)
-                 VALUES (?, ?, ?, 'recuperacion', 'programada', ?, ?, NOW())"
-            );
-            $ins->execute([$tarea_id, $asesor_id, $cliente_id, $fecha_prog, $obs]);
-
-            // ── Insertar en agenda_detalle para que aparezca en la agenda móvil del asesor ──
-            // Buscar o crear el agenda_dia del asesor para esa fecha
-            $agenda_dia_id = null;
-            try {
-                $stAD = $pdo->prepare(
-                    "SELECT id FROM agenda_detalle
-                     WHERE tarea_id = ? LIMIT 1"
-                );
-                $stAD->execute([$tarea_id]);
-                $existeAD = $stAD->fetchColumn();
-
-                if (!$existeAD) {
-                    // Insertar agenda_detalle directamente (la app leerá las tareas de recuperación)
-                    $agenda_det_id = sprintf('%08x-%04x-4%03x-%04x-%012x',
-                        mt_rand(0, 0xffffffff),
-                        mt_rand(0, 0xffff),
-                        mt_rand(0, 0x0fff),
-                        mt_rand(0, 0x3fff) | 0x8000,
-                        mt_rand(0, 0xffffffffffff)
-                    );
-                    // agenda_dia_id: buscar si ya existe un registro de agenda para este asesor y fecha
-                    // Como agenda_detalle solo requiere agenda_dia_id (que puede ser null en algunos esquemas),
-                    // usamos el tarea_id como referencia directa.
-                    $insAD = $pdo->prepare(
-                        "INSERT INTO agenda_detalle
-                           (id, agenda_dia_id, tarea_id, tipo, completado, postergado)
-                         VALUES (?, NULL, ?, 'recuperacion', 0, 0)"
-                    );
-                    $insAD->execute([$agenda_det_id, $tarea_id]);
-                }
-            } catch (Throwable $eAD) {
-                // No bloquear si falla agenda_detalle; la tarea ya fue creada
-                error_log('[crear_tarea_rec agenda_detalle] ' . $eAD->getMessage());
-            }
-
-            $created[] = ['credito_id'=>$cid, 'tarea_id'=>$tarea_id, 'asesor_id'=>$asesor_id];
+        // Determinar lista de asesores destino
+        $asesores_destino = [];
+        if ($distribuir) {
+            $asesores_destino = $asesores_equipo; // ya validados arriba
+        } elseif ($asesor_override) {
+            $asesores_destino = [$asesor_override];
+        } elseif ($asesor_original) {
+            $asesores_destino = [$asesor_original];
+        } else {
+            // Sin asesor → tarea de pool (asesor_id NULL)
+            $asesores_destino = [null];
         }
+
+        // Construir mensaje con meses en mora si aplica
+        $obs = $mensaje_base;
+        if ($meses_mora !== null) {
+            $obs = "Meses en mora: $meses_mora. " . $obs;
+        }
+
+        // Insertar tarea por cada asesor destino
+        foreach ($asesores_destino as $aid) {
+            $tareaId = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff) | 0x4000,
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+            );
+
+            $stIns = $pdo->prepare(
+                'INSERT INTO tarea
+                 (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado, fecha_programada, observaciones, created_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, NOW())'
+            );
+            $stIns->execute([
+                $tareaId,
+                $aid,
+                $cliente_id,
+                'recuperacion',
+                'programada',   // ENUM válido: programada|en_proceso|completada|postergada
+                $fecha_prog,
+                $obs,
+            ]);
+            $created[] = $tareaId;
+        }
+
     } catch (Throwable $e) {
         $errors[] = "Error en crédito $cid: " . $e->getMessage();
     }
 }
 
-if (empty($created)) {
-    echo json_encode(['status'=>'error','message'=>'No se crearon tareas','errors'=>$errors]);
-} else {
-    echo json_encode(['status'=>'success','created'=>$created,'errors'=>$errors,'total'=>count($created)]);
-}
-?>
+echo json_encode([
+    'status'  => empty($errors) ? 'success' : (empty($created) ? 'error' : 'partial'),
+    'total'   => count($created),
+    'created' => $created,
+    'errors'  => $errors,
+    'message' => empty($errors)
+        ? count($created) . ' tarea(s) creadas correctamente'
+        : implode('; ', $errors),
+]);
