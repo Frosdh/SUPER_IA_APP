@@ -42,85 +42,140 @@ try {
 // al momdento de ver los cleintes no me esaparece no eme stasconsumiendo de base
 
 $q = trim($_GET['q'] ?? '');
-$asesor_fil = trim($_GET['asesor_fil'] ?? '');
 
-// Debug global (muestra sesión y conteos de credito_proceso) cuando se visita ?dump=1
+// Debug global — visitar ?dump=1
 if (isset($_GET['dump']) && $_GET['dump'] == '1') {
-  echo "<pre style=\"white-space:pre-wrap;word-break:break-word;\">DEBUG GLOBAL\n\nSESSION:\n" . htmlspecialchars(var_export($_SESSION, true)) . "\n\n";
+  echo "<pre style=\"white-space:pre-wrap;word-break:break-word;font-size:12px;\">";
+  echo "=== DEBUG RECUPERACION ===\n\n";
+  echo "SESSION supervisor_id: " . htmlspecialchars($_SESSION['supervisor_id'] ?? '(vacío)') . "\n";
+  echo "supervisor_table_id resuelto: " . htmlspecialchars($supervisor_table_id ?? '(NULL — no encontrado)') . "\n\n";
+
+  // Asesores de este supervisor
   try {
-    $cntAll = $pdo->query("SELECT COUNT(*) FROM credito_proceso")->fetchColumn();
-    $cols = [];
-    $colRes = $pdo->query("SHOW COLUMNS FROM credito_proceso");
-    if ($colRes) { $cols = $colRes->fetchAll(); }
-    $sample = $pdo->query("SELECT id, cliente_prospecto_id, asesor_id, estado_credito, estado, nombre, cedula, telefono, created_at FROM credito_proceso ORDER BY created_at DESC LIMIT 20")->fetchAll();
-    echo "credito_proceso: total_rows=".intval($cntAll)."\n\n";
-    echo "COLUMNS:\n" . htmlspecialchars(var_export($cols, true)) . "\n\n";
-    echo "SAMPLE ROWS (limit 20):\n" . htmlspecialchars(var_export($sample, true)) . "\n";
-  } catch (Throwable $_) {
-    echo "(no se pudo leer credito_proceso: " . htmlspecialchars($_->getMessage()) . ")\n";
-  }
+    $asCount = $pdo->prepare('SELECT COUNT(*) FROM asesor WHERE supervisor_id = ?');
+    $asCount->execute([$supervisor_table_id]);
+    $asList = $pdo->prepare('SELECT id, usuario_id FROM asesor WHERE supervisor_id = ? LIMIT 10');
+    $asList->execute([$supervisor_table_id]);
+    echo "Asesores de este supervisor: " . $asCount->fetchColumn() . "\n";
+    echo htmlspecialchars(var_export($asList->fetchAll(PDO::FETCH_ASSOC), true)) . "\n\n";
+  } catch (Throwable $e) { echo "Error asesores: " . htmlspecialchars($e->getMessage()) . "\n\n"; }
+
+  // ficha_producto
+  try {
+    $fpAll   = $pdo->query("SELECT COUNT(*) FROM ficha_producto")->fetchColumn();
+    $fpCred  = $pdo->query("SELECT COUNT(*) FROM ficha_producto WHERE producto_tipo='credito'")->fetchColumn();
+    $fpNoRec = $pdo->query("SELECT COUNT(*) FROM ficha_producto WHERE producto_tipo='credito' AND COALESCE(estado_revision,'pendiente')!='rechazada'")->fetchColumn();
+
+    $fpByAsesorId = $pdo->prepare("SELECT COUNT(*) FROM ficha_producto WHERE producto_tipo='credito' AND asesor_id IN (SELECT id FROM asesor WHERE supervisor_id=?)");
+    $fpByAsesorId->execute([$supervisor_table_id]);
+
+    $fpByUserId = $pdo->prepare("SELECT COUNT(*) FROM ficha_producto WHERE producto_tipo='credito' AND usuario_id IN (SELECT usuario_id FROM asesor WHERE supervisor_id=?)");
+    $fpByUserId->execute([$supervisor_table_id]);
+
+    echo "ficha_producto — total: $fpAll | tipo=credito: $fpCred | no rechazada: $fpNoRec\n";
+    echo "  via asesor_id: " . $fpByAsesorId->fetchColumn() . " | via usuario_id: " . $fpByUserId->fetchColumn() . "\n\n";
+
+    // Mostrar asesores del supervisor vs fichas existentes
+    $asRows = $pdo->prepare("SELECT a.id AS asesor_id, a.usuario_id, u.nombre FROM asesor a JOIN usuario u ON u.id=a.usuario_id WHERE a.supervisor_id=?");
+    $asRows->execute([$supervisor_table_id]);
+    $asData = $asRows->fetchAll(PDO::FETCH_ASSOC);
+    echo "Asesores del supervisor:\n" . htmlspecialchars(var_export($asData, true)) . "\n\n";
+
+    $fpSample = $pdo->query("SELECT id, usuario_id, asesor_id, producto_tipo, estado_revision, cliente_cedula, created_at FROM ficha_producto WHERE producto_tipo='credito' ORDER BY created_at DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+    echo "Últimas 5 fichas crédito (usuario_id y asesor_id):\n" . htmlspecialchars(var_export($fpSample, true)) . "\n\n";
+  } catch (Throwable $e) { echo "Error ficha_producto: " . htmlspecialchars($e->getMessage()) . "\n\n"; }
+
+  // credito_proceso
+  try {
+    $cpAll = $pdo->query("SELECT COUNT(*) FROM credito_proceso")->fetchColumn();
+    $cpApro = $pdo->query("SELECT COUNT(*) FROM credito_proceso WHERE LOWER(COALESCE(estado_credito,'')) IN ('aprobado','desembolsado')")->fetchColumn();
+    echo "credito_proceso — total: $cpAll | aprobado/desembolsado: $cpApro\n";
+    $cpSample = $pdo->query("SELECT id, asesor_id, estado_credito, cedula_deudor, monto_aprobado, created_at FROM credito_proceso ORDER BY created_at DESC LIMIT 5")->fetchAll(PDO::FETCH_ASSOC);
+    echo "Últimas 5:\n" . htmlspecialchars(var_export($cpSample, true)) . "\n";
+  } catch (Throwable $e) { echo "Error credito_proceso: " . htmlspecialchars($e->getMessage()) . "\n\n"; }
+
   echo "</pre>";
-  // don't exit here; allow normal flow to continue so page renders as well
+  exit;
 }
 
-// Asesores del supervisor
+// Asesores del supervisor — necesarios para modal de asignación
 $asesores_lista = [];
-if ($supervisor_table_id) {
-  $last_ex = null;
-  try {
+try {
+  if ($supervisor_table_id) {
     $st = $pdo->prepare('SELECT a.id, u.nombre FROM asesor a JOIN usuario u ON u.id=a.usuario_id WHERE a.supervisor_id=? ORDER BY u.nombre');
     $st->execute([$supervisor_table_id]);
     $asesores_lista = $st->fetchAll();
-  } catch (Throwable $_) {
   }
+} catch (Throwable $_) {}
+
+// ══════════════════════════════════════════════════════════════
+// CRÉDITOS APROBADOS — mismo patrón que operaciones.php
+// Usa COLLATE utf8mb4_unicode_ci para resolver mismatch de colaciones
+// entre ficha_producto y asesor.
+// ══════════════════════════════════════════════════════════════
+$creditos = [];
+
+// Paso 1: obtener todos los IDs de asesores de este supervisor
+$all_ids = [];
+if ($supervisor_table_id) {
+  try {
+    $sess_uid = $_SESSION['supervisor_id'] ?? '';
+    $stA = $pdo->prepare("SELECT id, usuario_id FROM asesor WHERE supervisor_id IN (?, ?)");
+    $stA->execute([$supervisor_table_id, $sess_uid]);
+    $asesores_rows = $stA->fetchAll(PDO::FETCH_ASSOC);
+    $asesor_ids  = array_column($asesores_rows, 'id');
+    $usuario_ids = array_column($asesores_rows, 'usuario_id');
+    $all_ids = array_values(array_unique(array_filter(array_merge($asesor_ids, $usuario_ids))));
+  } catch (Throwable $_) {}
 }
 
-// ── Créditos aprobados — doble fuente ─────────────────────────
-// Fuente 1: ficha_producto + ficha_credito (fichas enviadas desde la app móvil y aprobadas)
-// Fuente 2: credito_proceso (aprobaciones registradas en el panel admin)
-// Se combinan y deduplicar por cedula+asesor.
-$creditos = [];
-if ($supervisor_table_id) {
-  $show_all = isset($_GET['all']) && $_GET['all'] == '1';
-  $sid      = $supervisor_table_id;
-
-  // ── FUENTE 1: ficha_producto + ficha_credito ──────────────
+// FUENTE 1: ficha_producto + ficha_credito (app móvil)
+// Solo fichas APROBADAS (estado_revision = 'aprobada')
+if (!empty($all_ids)) {
   try {
-    $f1params = [];
-    $f1conds  = ["fp.producto_tipo = 'credito'", "fp.estado_revision = 'aprobada'"];
-    if (!$show_all) {
-      $f1conds[]          = '(a.supervisor_id = :sid OR cp.asesor_id IN (SELECT id FROM asesor WHERE supervisor_id = :sid2))';
-      $f1params[':sid']   = $sid;
-      $f1params[':sid2']  = $sid;
-    }
+    $ph = implode(',', array_fill(0, count($all_ids), '?'));
     $f1sql = "
       SELECT
         fp.id,
-        fp.cliente_cedula   AS cedula,
-        COALESCE(cp.nombre, fp.cliente_nombre, '') AS cliente_nombre,
-        COALESCE(cp.telefono, '') AS telefono,
-        COALESCE(cp.email,    '') AS email,
-        COALESCE(fp.asesor_id, cp.asesor_id) AS asesor_id,
-        u.nombre             AS asesor_nombre,
-        COALESCE(fc.monto_credito, '') AS monto_aprobado,
-        fp.created_at        AS fecha_desembolso,
+        fp.cliente_cedula                                             AS cedula,
+        COALESCE(cp.nombre, fp.cliente_nombre, '')                    AS cliente_nombre,
+        COALESCE(cp.telefono, '')                                     AS telefono,
+        COALESCE(cp.email, '')                                        AS email,
+        a.id                                                          AS asesor_id,
+        u.nombre                                                      AS asesor_nombre,
+        COALESCE(fc.monto_credito, '')                                AS monto_aprobado,
+        fp.created_at                                                 AS fecha_desembolso,
         fp.created_at,
-        'ficha'              AS fuente
+        fp.estado_revision,
+        'ficha'                                                       AS fuente
       FROM ficha_producto fp
-      LEFT JOIN ficha_credito    fc ON fc.ficha_id   = fp.id
-      LEFT JOIN asesor            a  ON a.id          = fp.asesor_id
-      LEFT JOIN usuario           u  ON u.id          = a.usuario_id
-      LEFT JOIN cliente_prospecto cp ON cp.cedula     = fp.cliente_cedula
-      WHERE " . implode(' AND ', $f1conds) . "
+      LEFT JOIN ficha_credito     fc ON fc.ficha_id = fp.id
+      LEFT JOIN asesor             a  ON (
+            a.id         = fp.asesor_id  COLLATE utf8mb4_unicode_ci
+         OR a.usuario_id = fp.usuario_id COLLATE utf8mb4_unicode_ci
+         OR a.id         = fp.usuario_id COLLATE utf8mb4_unicode_ci
+      )
+      LEFT JOIN usuario            u  ON u.id = a.usuario_id
+      LEFT JOIN cliente_prospecto  cp ON cp.cedula = fp.cliente_cedula COLLATE utf8mb4_unicode_ci
+      WHERE fp.producto_tipo = 'credito'
+        AND fp.estado_revision = 'aprobada'
+        AND (
+          fp.asesor_id  COLLATE utf8mb4_unicode_ci IN ($ph)
+          OR fp.usuario_id COLLATE utf8mb4_unicode_ci IN ($ph)
+        )
       ORDER BY fp.created_at DESC
       LIMIT 500
     ";
     $st1 = $pdo->prepare($f1sql);
-    $st1->execute($f1params);
+    $st1->execute(array_merge($all_ids, $all_ids));
     $creditos = $st1->fetchAll(PDO::FETCH_ASSOC);
-  } catch (Throwable $eF1) { /* tabla puede no existir aún */ }
+  } catch (Throwable $eF1) {
+    error_log('[recuperacion F1] ' . $eF1->getMessage());
+  }
+}
 
-  // ── FUENTE 2: credito_proceso ─────────────────────────────
+// FUENTE 2: credito_proceso (aprobado/desembolsado)
+if (!empty($all_ids)) {
   try {
     $cpEstadoCol = null;
     if ($pdo->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado_credito'")->fetchColumn())
@@ -132,65 +187,58 @@ if ($supervisor_table_id) {
       ? "LOWER(COALESCE(cp2.$cpEstadoCol,'')) IN ('aprobado','desembolsado')"
       : '1=1';
 
-    $f2params = [];
-    $f2conds  = [$estadoCond];
-    if (!$show_all) {
-      $f2conds[]           = '(a2.supervisor_id = :sid OR cl2.asesor_id IN (SELECT id FROM asesor WHERE supervisor_id = :sid2))';
-      $f2params[':sid']    = $sid;
-      $f2params[':sid2']   = $sid;
-    }
+    $ph2 = implode(',', array_fill(0, count($all_ids), '?'));
     $f2sql = "
       SELECT
         cp2.id,
-        COALESCE(cl2.cedula, cp2.cedula, '') AS cedula,
-        COALESCE(cl2.nombre, cp2.nombre, '') AS cliente_nombre,
-        COALESCE(cl2.telefono, cp2.telefono, '') AS telefono,
-        COALESCE(cl2.email, cp2.email, '') AS email,
-        COALESCE(cp2.asesor_id, cl2.asesor_id) AS asesor_id,
-        u2.nombre AS asesor_nombre,
+        COALESCE(cl2.cedula, cp2.cedula_deudor, '')   AS cedula,
+        COALESCE(cl2.nombre, '')                       AS cliente_nombre,
+        COALESCE(cl2.telefono, '')                     AS telefono,
+        COALESCE(cl2.email, '')                        AS email,
+        cp2.asesor_id                                  AS asesor_id,
+        u2.nombre                                      AS asesor_nombre,
         cp2.monto_aprobado,
         cp2.fecha_desembolso,
         cp2.created_at,
-        'proceso' AS fuente
+        'aprobada'                                     AS estado_revision,
+        'proceso'                                      AS fuente
       FROM credito_proceso cp2
-      LEFT JOIN cliente_prospecto cl2 ON cl2.id = cp2.cliente_prospecto_id
-      LEFT JOIN asesor a2  ON a2.id  = cp2.asesor_id
-      LEFT JOIN usuario u2 ON u2.id  = a2.usuario_id
-      WHERE " . implode(' AND ', $f2conds) . "
+      LEFT JOIN cliente_prospecto cl2 ON cl2.id  = cp2.cliente_prospecto_id
+      LEFT JOIN asesor             a2  ON a2.id   = cp2.asesor_id
+      LEFT JOIN usuario            u2  ON u2.id   = a2.usuario_id
+      WHERE $estadoCond
+        AND cp2.asesor_id COLLATE utf8mb4_unicode_ci IN ($ph2)
       ORDER BY cp2.created_at DESC
       LIMIT 500
     ";
     $st2 = $pdo->prepare($f2sql);
-    $st2->execute($f2params);
+    $st2->execute($all_ids);
     $creditos2 = $st2->fetchAll(PDO::FETCH_ASSOC);
-    // Deduplicar: si una cédula ya está en los resultados de fuente1, no agregar de fuente2
+
+    // Deduplicar por cédula
     $cedulasVistas = array_column($creditos, 'cedula');
     foreach ($creditos2 as $row) {
-      if (!in_array($row['cedula'], $cedulasVistas, true)) {
-        $creditos[] = $row;
+      if ($row['cedula'] !== '' && !in_array($row['cedula'], $cedulasVistas, true)) {
+        $creditos[]      = $row;
         $cedulasVistas[] = $row['cedula'];
       }
     }
-  } catch (Throwable $eF2) { /* tabla puede no existir */ }
-
-  // ── Filtros PHP (para cuando vengan por GET, no AJAX) ────────
-  if ($q !== '') {
-    $qLow = strtolower($q);
-    $creditos = array_filter($creditos, function($r) use ($qLow) {
-      return str_contains(strtolower($r['cliente_nombre']??''), $qLow)
-          || str_contains($r['cedula']??'', $qLow)
-          || str_contains(strtolower($r['asesor_nombre']??''), $qLow);
-    });
-    $creditos = array_values($creditos);
+  } catch (Throwable $eF2) {
+    error_log('[recuperacion F2] ' . $eF2->getMessage());
   }
-  if ($asesor_fil !== '') {
-    $creditos = array_filter($creditos, fn($r) => ($r['asesor_id']??'') === $asesor_fil);
-    $creditos = array_values($creditos);
-  }
-
-  // Ordenar: más recientes primero
-  usort($creditos, fn($a,$b) => strcmp($b['created_at']??'', $a['created_at']??''));
 }
+
+// Filtro GET por nombre/cédula
+if ($q !== '') {
+  $qLow = strtolower($q);
+  $creditos = array_values(array_filter($creditos, function($r) use ($qLow) {
+    return str_contains(strtolower($r['cliente_nombre'] ?? ''), $qLow)
+        || str_contains($r['cedula'] ?? '', $qLow);
+  }));
+}
+
+// Ordenar: más recientes primero
+usort($creditos, fn($a, $b) => strcmp($b['created_at'] ?? '', $a['created_at'] ?? ''));
 
 $currentPage = 'recuperacion';
 ?>
@@ -578,22 +626,13 @@ $currentPage = 'recuperacion';
         </div>
       </div>
 
-      <!-- FILTROS -->
+      <!-- FILTROS — solo búsqueda por cliente/cédula -->
       <div class="filter-bar">
         <i class="fas fa-search" style="color:var(--brand-gray);"></i>
-        <input type="text" id="inputBusqueda" value="<?= htmlspecialchars($q) ?>" placeholder="Buscar por nombre, cédula, asesor… (filtra al escribir)" style="min-width:260px;flex:1;padding:9px 14px;border:1.5px solid var(--brand-border);border-radius:9px;font-size:14px;outline:none;" oninput="filtrarTabla()">
-        <select id="selectAsesorLive" style="padding:9px 12px;border:1.5px solid var(--brand-border);border-radius:9px;font-size:13.5px;" onchange="filtrarTabla()">
-          <option value="">Todos los asesores</option>
-          <?php foreach ($asesores_lista as $as): ?>
-            <option value="<?= strtolower(htmlspecialchars($as['nombre'])) ?>"><?= htmlspecialchars($as['nombre']) ?></option>
-          <?php endforeach; ?>
-        </select>
-        <select id="selectMoraLive" style="padding:9px 12px;border:1.5px solid var(--brand-border);border-radius:9px;font-size:13.5px;" onchange="filtrarTabla()">
-          <option value="">Todos los meses</option>
-          <option value="baja">0–3 meses</option>
-          <option value="media">4–6 meses</option>
-          <option value="alta">+6 meses</option>
-        </select>
+        <input type="text" id="inputBusqueda" value="<?= htmlspecialchars($q) ?>"
+          placeholder="Buscar por nombre o cédula del cliente…"
+          style="min-width:260px;flex:1;padding:9px 14px;border:1.5px solid var(--brand-border);border-radius:9px;font-size:14px;outline:none;"
+          oninput="filtrarTabla()">
         <span id="cntResultados" style="font-size:13px;color:var(--brand-gray);margin-left:auto;"></span>
       </div>
 
@@ -605,7 +644,7 @@ $currentPage = 'recuperacion';
         </div>
         <?php if (empty($creditos)): ?>
           <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>
-            <p>No se encontraron créditos aprobados<?= ($q || $asesor_fil) ? ' con esos filtros' : '' ?>.</p>
+            <p>No se encontraron créditos aprobados<?= $q ? ' con esos filtros' : '' ?>.</p>
           </div>
         <?php else: ?>
           <div style="overflow-x:auto;">
@@ -643,7 +682,11 @@ $currentPage = 'recuperacion';
                         data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
                         data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"></td>
                     <td>
-                      <div style="font-weight:700;"><?= $nombreDisplay ?></div>
+                      <div style="font-weight:700;"><?= $nombreDisplay ?>
+                        <?php if (($cr['fuente']??'') === 'ficha' && ($cr['estado_revision']??'') === 'pendiente'): ?>
+                          <span style="font-size:10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;padding:1px 5px;font-weight:600;vertical-align:middle;margin-left:4px;">Pendiente revisión</span>
+                        <?php endif; ?>
+                      </div>
                       <small class="text-muted"><?= htmlspecialchars($cr['cedula'] ?? '') ?><?= !empty($cr['telefono']) ? ' · ' . htmlspecialchars($cr['telefono']) : '' ?></small>
                     </td>
                     <td><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></td>
@@ -876,37 +919,25 @@ $currentPage = 'recuperacion';
         document.body.appendChild(t);
         setTimeout(() => t.remove(), 4000);
       }
-      // ── FILTRADO LIVE LETRA POR LETRA ──────────────────────
+      // ── FILTRADO LIVE por nombre / cédula ──────────────────
       function filtrarTabla(){
-        var q  = (document.getElementById('inputBusqueda').value||'').toLowerCase().trim();
-        var af = (document.getElementById('selectAsesorLive').value||'').toLowerCase().trim();
-        var fm = (document.getElementById('selectMoraLive').value||'').trim();
+        var q = (document.getElementById('inputBusqueda').value||'').toLowerCase().trim();
         var filas = document.querySelectorAll('#tablaCreditos tbody tr');
         var vis = 0;
         filas.forEach(function(tr){
-          var nombre  = (tr.dataset.nombre  || '').toLowerCase();
-          var cedula  = (tr.dataset.cedula  || '').toLowerCase();
-          var asesor  = (tr.dataset.asesor  || '').toLowerCase();
-          var meses   = parseInt(tr.dataset.meses)||0;
-          var okQ = !q  || nombre.includes(q) || cedula.includes(q) || asesor.includes(q);
-          var okA = !af || asesor.includes(af);
-          var okM = !fm ||
-            (fm==='baja'  && meses<=3) ||
-            (fm==='media' && meses>=4 && meses<=6) ||
-            (fm==='alta'  && meses>6);
-          var show = okQ && okA && okM;
+          if (tr.id === 'emptyFiltered') return;
+          var nombre = (tr.dataset.nombre || '').toLowerCase();
+          var cedula = (tr.dataset.cedula || '').toLowerCase();
+          var show = !q || nombre.includes(q) || cedula.includes(q);
           tr.style.display = show ? '' : 'none';
-          if(show) vis++;
+          if (show) vis++;
         });
         var cnt = document.getElementById('cntResultados');
         if(cnt) cnt.textContent = vis + ' resultado' + (vis!==1?'s':'');
-        // Actualizar badge del header
         var badge = document.querySelector('.sec-badge');
         if(badge) badge.textContent = vis + ' crédito' + (vis!==1?'s':'');
-        // Mostrar/ocultar mensaje vacío
         var vacioDiv = document.getElementById('emptyFiltered');
-        var tbody = document.querySelector('#tablaCreditos tbody');
-        if(vacioDiv) vacioDiv.style.display = (vis === 0 && tbody) ? 'block' : 'none';
+        if(vacioDiv) vacioDiv.style.display = (vis === 0) ? '' : 'none';
       }
       // Ejecutar al cargar
       document.addEventListener('DOMContentLoaded', function(){ filtrarTabla(); buildSuggestions(); });
@@ -971,8 +1002,9 @@ $currentPage = 'recuperacion';
         if(e.target.closest('#suggestionsBox') || e.target.closest('#inputBusqueda')) return;
         hideSuggestions();
       });
+      // Exponer filtrarTabla al scope global (input usa oninput)
+      window.filtrarTabla = filtrarTabla;
     })();
   </script>
 </body>
-
 </html>

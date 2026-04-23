@@ -20,12 +20,22 @@ if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in
 }
 
 $supervisor_usuario_id = $_SESSION['supervisor_id'];
-// Resolver supervisor.id
+// Resolver supervisor.id de forma robusta: la sesión puede contener usuario_id o supervisor.id
 $supervisor_table_id = null;
 try {
-    $st = $pdo->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
-    $st->execute([$supervisor_usuario_id]);
-    $supervisor_table_id = $st->fetchColumn() ?: null;
+    $sess_sup = $_SESSION['supervisor_id'] ?? null;
+    if ($sess_sup) {
+        // Primero intentar como usuario_id
+        $st = $pdo->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+        $st->execute([$sess_sup]);
+        $supervisor_table_id = $st->fetchColumn() ?: null;
+        // Si no lo encontramos, intentar como supervisor.id directamente
+        if (!$supervisor_table_id) {
+            $st = $pdo->prepare('SELECT id FROM supervisor WHERE id = ? LIMIT 1');
+            $st->execute([$sess_sup]);
+            $supervisor_table_id = $st->fetchColumn() ?: null;
+        }
+    }
 } catch (Throwable $_) {}
 
 $payload = json_decode(file_get_contents('php://input'), true) ?: $_POST;
@@ -65,6 +75,12 @@ if ($distribuir && $supervisor_table_id) {
     } catch (Throwable $_) {}
 }
 
+// Si pidieron distribuir pero no encontramos supervisores/asesores, devolver error claro
+if ($distribuir && empty($asesores_equipo)) {
+    echo json_encode(['status'=>'error','message'=>'No se encontraron asesores del equipo para distribuir (verifique sesión de supervisor)']);
+    exit;
+}
+
 $created = [];
 $errors  = [];
 
@@ -75,15 +91,33 @@ foreach ($creditos as $cid) {
 
     try {
         $cliente_id      = null;
-        $asesor_original = null;
+        $asesor_original = null; // será siempre asesor.id (no usuario_id)
+
+        // Función inline para resolver asesor.id a partir de un valor que puede ser
+        // asesor.id o asesor.usuario_id (app a veces guarda el usuario_id directamente)
+        $resolverAsesorId = function(string $rawId) use ($pdo): ?string {
+            if (!$rawId) return null;
+            // Intentar como asesor.id directo
+            $s = $pdo->prepare('SELECT id FROM asesor WHERE id = ? LIMIT 1');
+            $s->execute([$rawId]);
+            $found = $s->fetchColumn();
+            if ($found) return (string)$found;
+            // Fallback: el rawId puede ser usuario_id
+            $s2 = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
+            $s2->execute([$rawId]);
+            $found2 = $s2->fetchColumn();
+            return $found2 ? (string)$found2 : null;
+        };
 
         if ($fuente_cid === 'ficha') {
-            // Buscar en ficha_producto → obtener cliente_cedula y asesor_id → resolver cliente_prospecto.id
-            $st = $pdo->prepare('SELECT cliente_cedula, asesor_id FROM ficha_producto WHERE id = ? LIMIT 1');
+            // Buscar en ficha_producto → obtener cliente_cedula y asesor_id
+            $st = $pdo->prepare('SELECT cliente_cedula, asesor_id, usuario_id FROM ficha_producto WHERE id = ? LIMIT 1');
             $st->execute([$cid]);
             $fp = $st->fetch();
             if ($fp) {
-                $asesor_original = $fp['asesor_id'];
+                // Resolver asesor.id (puede venir como asesor_id o usuario_id en la ficha)
+                $rawAsesor = $fp['asesor_id'] ?: $fp['usuario_id'];
+                $asesor_original = $resolverAsesorId((string)($rawAsesor ?? ''));
                 // Resolver cliente_prospecto.id por cedula
                 $stCp = $pdo->prepare('SELECT id FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
                 $stCp->execute([$fp['cliente_cedula']]);
@@ -91,31 +125,31 @@ foreach ($creditos as $cid) {
                 if ($cpRow) {
                     $cliente_id = $cpRow['id'];
                 } else {
-                    // Si no existe en cliente_prospecto, intentar obtener asesor desde la ficha y continuar sin cliente_id
                     $errors[] = "Cliente de ficha $cid no encontrado en cliente_prospecto (cédula: {$fp['cliente_cedula']})";
                     continue;
                 }
             } else {
-                // Fallback: intentar en credito_proceso por si el id corresponde allí
+                // Fallback: intentar en credito_proceso
                 $st2 = $pdo->prepare('SELECT cliente_prospecto_id, asesor_id FROM credito_proceso WHERE id = ? LIMIT 1');
                 $st2->execute([$cid]);
                 $r2 = $st2->fetch();
                 if (!$r2) { $errors[] = "Crédito (ficha) $cid no encontrado"; continue; }
                 $cliente_id      = $r2['cliente_prospecto_id'];
-                $asesor_original = $r2['asesor_id'];
+                $asesor_original = $resolverAsesorId((string)($r2['asesor_id'] ?? ''));
             }
         } else {
-            // fuente = proceso
+            // fuente = proceso (credito_proceso)
             $st = $pdo->prepare('SELECT cliente_prospecto_id, asesor_id FROM credito_proceso WHERE id = ? LIMIT 1');
             $st->execute([$cid]);
             $r = $st->fetch();
             if (!$r) {
                 // Fallback: intentar en ficha_producto por si hubo confusión de fuente
-                $stFb = $pdo->prepare('SELECT cliente_cedula, asesor_id FROM ficha_producto WHERE id = ? LIMIT 1');
+                $stFb = $pdo->prepare('SELECT cliente_cedula, asesor_id, usuario_id FROM ficha_producto WHERE id = ? LIMIT 1');
                 $stFb->execute([$cid]);
                 $fb = $stFb->fetch();
                 if ($fb) {
-                    $asesor_original = $fb['asesor_id'];
+                    $rawAsesor = $fb['asesor_id'] ?: $fb['usuario_id'];
+                    $asesor_original = $resolverAsesorId((string)($rawAsesor ?? ''));
                     $stCp = $pdo->prepare('SELECT id FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
                     $stCp->execute([$fb['cliente_cedula']]);
                     $cpRow = $stCp->fetch();
@@ -127,7 +161,7 @@ foreach ($creditos as $cid) {
                 }
             } else {
                 $cliente_id      = $r['cliente_prospecto_id'];
-                $asesor_original = $r['asesor_id'];
+                $asesor_original = $resolverAsesorId((string)($r['asesor_id'] ?? ''));
             }
         }
 
@@ -138,11 +172,13 @@ foreach ($creditos as $cid) {
         }
         $obs .= " (credito_ref:$cid)";
 
-        // Determinar lista de asesores destino
+        // Determinar lista de asesores destino (ya resueltos como asesor.id)
         if ($distribuir && !empty($asesores_equipo)) {
-            $destinos = $asesores_equipo;
+            $destinos = $asesores_equipo; // ya son asesor.id (SELECT id FROM asesor)
         } elseif ($asesor_override) {
-            $destinos = [$asesor_override];
+            // El override viene del front: puede ser asesor.id o usuario_id → resolver
+            $resolved = $resolverAsesorId($asesor_override);
+            $destinos = $resolved ? [$resolved] : [$asesor_override];
         } elseif ($asesor_original) {
             $destinos = [$asesor_original];
         } else {
@@ -151,12 +187,59 @@ foreach ($creditos as $cid) {
         }
 
         foreach ($destinos as $asesor_id) {
-            $tarea_id = bin2hex(random_bytes(16));
+            // Generar UUID v4 compatible
+            $tarea_id = sprintf('%08x-%04x-4%03x-%04x-%012x',
+                mt_rand(0, 0xffffffff),
+                mt_rand(0, 0xffff),
+                mt_rand(0, 0x0fff),
+                mt_rand(0, 0x3fff) | 0x8000,
+                mt_rand(0, 0xffffffffffff)
+            );
+
+            // Insertar tarea de recuperación
             $ins = $pdo->prepare(
-                "INSERT INTO tarea (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado, fecha_programada, observaciones)
-                 VALUES (?, ?, ?, 'recuperacion', 'programada', ?, ?)"
+                "INSERT INTO tarea
+                   (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+                    fecha_programada, observaciones, created_at)
+                 VALUES (?, ?, ?, 'recuperacion', 'programada', ?, ?, NOW())"
             );
             $ins->execute([$tarea_id, $asesor_id, $cliente_id, $fecha_prog, $obs]);
+
+            // ── Insertar en agenda_detalle para que aparezca en la agenda móvil del asesor ──
+            // Buscar o crear el agenda_dia del asesor para esa fecha
+            $agenda_dia_id = null;
+            try {
+                $stAD = $pdo->prepare(
+                    "SELECT id FROM agenda_detalle
+                     WHERE tarea_id = ? LIMIT 1"
+                );
+                $stAD->execute([$tarea_id]);
+                $existeAD = $stAD->fetchColumn();
+
+                if (!$existeAD) {
+                    // Insertar agenda_detalle directamente (la app leerá las tareas de recuperación)
+                    $agenda_det_id = sprintf('%08x-%04x-4%03x-%04x-%012x',
+                        mt_rand(0, 0xffffffff),
+                        mt_rand(0, 0xffff),
+                        mt_rand(0, 0x0fff),
+                        mt_rand(0, 0x3fff) | 0x8000,
+                        mt_rand(0, 0xffffffffffff)
+                    );
+                    // agenda_dia_id: buscar si ya existe un registro de agenda para este asesor y fecha
+                    // Como agenda_detalle solo requiere agenda_dia_id (que puede ser null en algunos esquemas),
+                    // usamos el tarea_id como referencia directa.
+                    $insAD = $pdo->prepare(
+                        "INSERT INTO agenda_detalle
+                           (id, agenda_dia_id, tarea_id, tipo, completado, postergado)
+                         VALUES (?, NULL, ?, 'recuperacion', 0, 0)"
+                    );
+                    $insAD->execute([$agenda_det_id, $tarea_id]);
+                }
+            } catch (Throwable $eAD) {
+                // No bloquear si falla agenda_detalle; la tarea ya fue creada
+                error_log('[crear_tarea_rec agenda_detalle] ' . $eAD->getMessage());
+            }
+
             $created[] = ['credito_id'=>$cid, 'tarea_id'=>$tarea_id, 'asesor_id'=>$asesor_id];
         }
     } catch (Throwable $e) {
