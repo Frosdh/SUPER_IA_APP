@@ -162,7 +162,6 @@ $gastos_negocio       = floatOrNull($_POST['gastos_negocio'] ?? '');
 $otros_ingresos       = floatOrNull($_POST['otros_ingresos'] ?? '');
 $gastos_familiares    = floatOrNull($_POST['gastos_familiares'] ?? '');
 
-$
 // Normalize/validate acuerdo: accept frontend variants and map to DB enum values
 $incoming_acuerdo = $acuerdo;
 $acuerdo_map = [
@@ -584,11 +583,13 @@ try {
             $st->close();
 
             // Crear una NUEVA tarea programada para el seguimiento
+            // Usar $incoming_acuerdo (valor original del app) para detectar el tipo,
+            // ya que $acuerdo puede estar normalizado a 'otro' por el mapa de DB.
             $tipo_followup = null;
-            if ($acuerdo === 'nueva_cita_campo') $tipo_followup = 'nueva_cita_campo';
-            elseif ($acuerdo === 'nueva_cita_oficina') $tipo_followup = 'nueva_cita_oficina';
-            elseif ($acuerdo === 'recolectar_documentacion') $tipo_followup = 'documentos_pendientes';
-            elseif ($acuerdo === 'levantamiento_campo') $tipo_followup = 'levantamiento';
+            if ($incoming_acuerdo === 'nueva_cita_campo') $tipo_followup = 'nueva_cita_campo';
+            elseif ($incoming_acuerdo === 'nueva_cita_oficina') $tipo_followup = 'nueva_cita_oficina';
+            elseif ($incoming_acuerdo === 'recolectar_documentacion') $tipo_followup = 'documentos_pendientes';
+            elseif ($incoming_acuerdo === 'levantamiento_campo') $tipo_followup = 'levantamiento';
 
             if ($tipo_followup !== null) {
                 $GLOBALS['phase'] = 'TAREA_FOLLOWUP';

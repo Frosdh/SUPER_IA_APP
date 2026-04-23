@@ -51,7 +51,7 @@ $alertas_pendientes = $alertas_pendientes ?? 0;
             <i class="fas fa-chart-bar"></i> Reportes KPI
         </a>
           <a href="recuperacion.php"
-              class="sidebar-link ajax-center <?= ($currentPage === 'recuperacion') ? 'active' : '' ?>">
+              class="sidebar-link <?= ($currentPage === 'recuperacion') ? 'active' : '' ?>">
             <i class="fas fa-user-clock"></i> Recuperación
         </a>
         <a href="metas.php"

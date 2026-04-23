@@ -432,6 +432,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         final tareaId = t['id']?.toString() ?? '';
         final fijada = (t['seleccion_fijada']?.toString() ?? '0') == '1';
         final selDia = t['seleccionada_dia']?.toString() ?? '';
+        final esPool = (t['es_pool']?.toString() ?? '0') == '1';
         final esHoySeleccionada = estado == 'en_proceso' && (selDia.isEmpty || selDia == hoy);
         final buenVisto = _buenVisto[tareaId] ?? false;
 
@@ -439,12 +440,9 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         final horaMostrar = estado == 'completada' ? horaReal : horaProg;
 
         // Detectar estado "pospuesta": en_proceso con seleccionada_dia distinta a hoy
-        // (se usa solo para habilitar el botón "Seleccionar hoy"; visualmente se
-        // muestra como "programada" porque para el asesor y el supervisor el día
-        // nuevo es una tarea agendada como cualquier otra).
         final esPospuesta = estado == 'en_proceso' && selDia.isNotEmpty && selDia != hoy;
 
-        final isProg = estado == 'programada' || esPospuesta;
+        final isProg = estado == 'programada' || estado == 'pendiente' || esPospuesta;
         final isProc = estado == 'en_proceso' && !esPospuesta;
         final isDone = estado == 'completada';
         final isCancel = estado == 'cancelada';
@@ -490,6 +488,26 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                       ),
                     ),
                   ),
+                  // Badge "Disponible" para tareas del pool
+                  if (esPool) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.teal.shade700.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.teal.shade300),
+                      ),
+                      child: Text(
+                        'Disponible',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                          color: Colors.teal.shade200,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
@@ -682,14 +700,16 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                                             ? null
                                             : () => _setSeleccionHoy(tareaId, seleccionar: true),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: ConstantColors.warning,
+                                          backgroundColor: esPool
+                                              ? Colors.teal.shade700
+                                              : ConstantColors.warning,
                                           foregroundColor: Colors.white,
                                           padding: const EdgeInsets.symmetric(vertical: 12),
                                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         ),
-                                        child: const Text(
-                                          'Seleccionar hoy',
-                                          style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                                        child: Text(
+                                          esPool ? 'Tomar tarea' : 'Seleccionar hoy',
+                                          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
                                         ),
                                       )))),
                   ),
@@ -937,25 +957,59 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
           return buildEmpty('No hay tareas seleccionadas para hoy.');
         }
       } else {
-        if (otras.isEmpty) {
+        final poolTareas = otras.where((t) => (t['es_pool']?.toString() ?? '0') == '1').toList();
+        final propiasTareas = otras.where((t) => (t['es_pool']?.toString() ?? '0') != '1').toList();
+
+        if (poolTareas.isEmpty && propiasTareas.isEmpty) {
           return buildEmpty('No hay tareas para mostrar.');
         }
 
-        widgets.add(
-          const Padding(
-            padding: EdgeInsets.only(bottom: 10),
-            child: Text(
-              'Tareas programadas',
-              style: TextStyle(
-                color: ConstantColors.textWhite,
-                fontWeight: FontWeight.w800,
-                fontSize: 14,
+        // ── Sección: Tareas disponibles (pool) ──
+        if (poolTareas.isNotEmpty) {
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.inbox_rounded, color: Colors.teal.shade300, size: 16),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Tareas disponibles',
+                    style: TextStyle(
+                      color: Colors.teal.shade200,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        );
+          );
+          for (final t in poolTareas) {
+            widgets.add(card(t));
+            widgets.add(const SizedBox(height: 10));
+          }
+          widgets.add(const SizedBox(height: 6));
+        }
 
-        for (final t in otras) {
+        // ── Sección: Mis tareas programadas ──
+        if (propiasTareas.isNotEmpty) {
+          widgets.add(
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text(
+                'Mis tareas programadas',
+                style: TextStyle(
+                  color: ConstantColors.textWhite,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+        }
+
+        for (final t in propiasTareas) {
           widgets.add(card(t));
           widgets.add(const SizedBox(height: 10));
         }

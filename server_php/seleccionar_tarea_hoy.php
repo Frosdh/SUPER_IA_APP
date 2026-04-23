@@ -96,11 +96,13 @@ try {
         $stExp->close();
     }
 
-    // Verificar tarea pertenece al asesor
+    // Verificar tarea: puede ser propia del asesor O una tarea del pool (asesor_id IS NULL)
     $stChk = $conn->prepare(
-        "SELECT estado, fecha_programada, seleccionada_dia, seleccion_fijada, estado_seleccion_prev
+        "SELECT estado, fecha_programada, seleccionada_dia, seleccion_fijada,
+                estado_seleccion_prev, asesor_id
          FROM tarea
-         WHERE id = ? AND asesor_id = ?
+         WHERE id = ?
+           AND (asesor_id = ? OR asesor_id IS NULL)
          LIMIT 1"
     );
     $stChk->bind_param('ss', $tarea_id, $asesor_id);
@@ -113,11 +115,13 @@ try {
         exit;
     }
 
-    $estado     = (string)($r['estado'] ?? '');
-    $fecha_prog = (string)($r['fecha_programada'] ?? '');
-    $sel_dia    = (string)($r['seleccionada_dia'] ?? '');
-    $fijada     = (int)($r['seleccion_fijada'] ?? 0);
-    $prev       = (string)($r['estado_seleccion_prev'] ?? '');
+    $estado        = (string)($r['estado'] ?? '');
+    $fecha_prog    = (string)($r['fecha_programada'] ?? '');
+    $sel_dia       = (string)($r['seleccionada_dia'] ?? '');
+    $fijada        = (int)($r['seleccion_fijada'] ?? 0);
+    $prev          = (string)($r['estado_seleccion_prev'] ?? '');
+    $tarea_asesor  = (string)($r['asesor_id'] ?? '');
+    $esPool        = ($tarea_asesor === '');
 
     if ($accion === 'seleccionar') {
         if ($estado === 'completada' || $estado === 'cancelada') {
@@ -125,18 +129,15 @@ try {
             exit;
         }
 
-        // Detectar si es una tarea pospuesta: ya está en_proceso pero su día seleccionado
-        // no es hoy (el asesor la aplazó para otra fecha). En ese caso SI se permite
-        // traerla de vuelta a hoy aunque fecha_programada esté en el futuro.
-        $esPospuesta = ($estado === 'en_proceso' && $sel_dia !== '' && $sel_dia !== date('Y-m-d'));
-
-        // No permitir seleccionar tareas futuras (excepto si está pospuesta)
-        if (!$esPospuesta && $fecha_prog !== '' && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha_prog)) {
-            if ($fecha_prog > date('Y-m-d')) {
-                echo json_encode(['status' => 'error', 'message' => 'Solo puedes seleccionar tareas de hoy o anteriores'], JSON_UNESCAPED_UNICODE);
-                exit;
-            }
+        // Verificar que una tarea de pool no fue ya fijada por otro asesor
+        if ($esPool && $fijada === 1) {
+            echo json_encode(['status' => 'error', 'message' => 'Esta tarea ya fue tomada por otro asesor'], JSON_UNESCAPED_UNICODE);
+            exit;
         }
+
+        // Detectar si es una tarea pospuesta: ya está en_proceso pero su día seleccionado
+        // no es hoy (el asesor la aplazó para otra fecha).
+        $esPospuesta = ($estado === 'en_proceso' && $sel_dia !== '' && $sel_dia !== date('Y-m-d'));
 
         // Si ya está seleccionada hoy, no hacer nada
         if ($estado === 'en_proceso' && $sel_dia === date('Y-m-d')) {
@@ -149,9 +150,25 @@ try {
             $prev = $estado;
         }
 
-        // Para tareas pospuestas, además actualizamos fecha_programada a hoy
-        // para que no se vuelvan a filtrar como "futuras" en las próximas consultas.
-        if ($esPospuesta) {
+        if ($esPool) {
+            // TAREA DE POOL: asignar al asesor que la selecciona (operación atómica)
+            $stUp = $conn->prepare(
+                "UPDATE tarea
+                 SET asesor_id       = ?,
+                     estado          = 'en_proceso',
+                     estado_seleccion_prev = ?,
+                     seleccionada_dia = CURDATE(),
+                     seleccionada_at  = NOW(),
+                     seleccion_fijada = 0,
+                     seleccion_fijada_at = NULL
+                 WHERE id = ?
+                   AND (asesor_id IS NULL OR asesor_id = ?)
+                   AND seleccion_fijada = 0
+                   AND estado IN ('programada','pendiente','postergada')"
+            );
+            $stUp->bind_param('ssss', $asesor_id, $prev, $tarea_id, $asesor_id);
+        } elseif ($esPospuesta) {
+            // TAREA PROPIA POSPUESTA: traer a hoy
             $stUp = $conn->prepare(
                 "UPDATE tarea
                  SET estado='en_proceso',
@@ -164,7 +181,9 @@ try {
                  WHERE id = ? AND asesor_id = ?
                    AND estado IN ('programada','pendiente','postergada','en_proceso')"
             );
+            $stUp->bind_param('sss', $prev, $tarea_id, $asesor_id);
         } else {
+            // TAREA PROPIA NORMAL
             $stUp = $conn->prepare(
                 "UPDATE tarea
                  SET estado='en_proceso',
@@ -176,19 +195,32 @@ try {
                  WHERE id = ? AND asesor_id = ?
                    AND estado IN ('programada','pendiente','postergada','en_proceso')"
             );
+            $stUp->bind_param('sss', $prev, $tarea_id, $asesor_id);
         }
-        $stUp->bind_param('sss', $prev, $tarea_id, $asesor_id);
+
         $ok = $stUp->execute();
+        $affected = $stUp->affected_rows;
         $stUp->close();
 
+        if (!$ok || $affected === 0) {
+            // Puede que otro asesor la haya tomado justo antes (race condition)
+            echo json_encode([
+                'status'  => 'error',
+                'message' => $esPool
+                    ? 'Esta tarea ya fue tomada por otro asesor'
+                    : 'No se pudo seleccionar la tarea',
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
         echo json_encode([
-            'status' => $ok ? 'success' : 'error',
-            'message' => $ok ? 'Tarea seleccionada para hoy' : 'No se pudo seleccionar la tarea',
+            'status'  => 'success',
+            'message' => 'Tarea seleccionada para hoy',
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    // deseleccionar
+    // deseleccionar — solo aplica a tareas propias del asesor
     if ($fijada === 1) {
         echo json_encode(['status' => 'error', 'message' => 'La selección ya fue fijada y no se puede deseleccionar'], JSON_UNESCAPED_UNICODE);
         exit;

@@ -107,6 +107,7 @@ try {
             t.seleccion_fijada,
             t.seleccion_fijada_at,
             t.created_at,
+            t.asesor_id,
             cp.id        AS cliente_id,
             cp.nombre    AS cliente_nombre,
             cp.ciudad    AS cliente_ciudad,
@@ -115,26 +116,40 @@ try {
             cp.longitud  AS cliente_longitud
         FROM tarea t
         LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-        WHERE t.asesor_id = ?
-          AND (
-            (t.estado IN ('programada','pendiente','postergada','en_proceso') AND (t.fecha_programada IS NULL OR t.fecha_programada = '0000-00-00' OR t.fecha_programada >= ?))
+        WHERE (
+            -- Tareas propias del asesor: todas las pendientes (sin filtro de fecha)
+            -- y las completadas/canceladas solo de hoy
+            (
+                t.asesor_id = ?
+                AND (
+                    t.estado IN ('programada','pendiente','postergada','en_proceso')
+                    OR (t.estado = 'completada' AND t.fecha_realizada >= ?)
+                )
+            )
             OR
-            (t.estado = 'completada' AND t.fecha_realizada >= ?)
-          )
+            -- Tareas del pool (sin asesor asignado): visibles a todos hasta que alguien las fije
+            (
+                t.asesor_id IS NULL
+                AND t.seleccion_fijada = 0
+                AND t.estado IN ('programada','pendiente','postergada')
+            )
+        )
         ORDER BY
           CASE WHEN t.estado = 'completada' THEN t.fecha_realizada ELSE t.fecha_programada END ASC,
           CASE WHEN t.estado = 'completada' THEN t.hora_realizada  ELSE t.hora_programada  END ASC,
           t.created_at DESC
-        LIMIT 200
+        LIMIT 300
     ";
 
     $st = $conn->prepare($sql);
-    $st->bind_param('sss', $asesor_id, $desde, $desde);
+    $st->bind_param('ss', $asesor_id, $desde);
     $st->execute();
     $res = $st->get_result();
 
     $tareas = [];
     while ($r = $res->fetch_assoc()) {
+        $tareaAsesorId = (string)($r['asesor_id'] ?? '');
+        $esPool = ($tareaAsesorId === '' || $tareaAsesorId === null);
         $tareas[] = [
             'id' => (string)($r['id'] ?? ''),
             'tipo_tarea' => (string)($r['tipo_tarea'] ?? ''),
@@ -148,6 +163,7 @@ try {
             'seleccionada_at'  => (string)($r['seleccionada_at'] ?? ''),
             'seleccion_fijada' => (string)($r['seleccion_fijada'] ?? '0'),
             'seleccion_fijada_at' => (string)($r['seleccion_fijada_at'] ?? ''),
+            'es_pool' => $esPool ? '1' : '0',   // 1 = tarea disponible para cualquier asesor
             'cliente_id' => (string)($r['cliente_id'] ?? ''),
             'cliente_nombre' => (string)($r['cliente_nombre'] ?? ''),
             'cliente_ciudad' => (string)($r['cliente_ciudad'] ?? ''),
