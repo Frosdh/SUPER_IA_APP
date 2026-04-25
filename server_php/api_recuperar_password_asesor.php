@@ -103,11 +103,10 @@ if ($action === 'enviar_otp') {
             'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
         ]);
     } else {
-        // Si SMTP no está configurado igual dejamos fluir (DEV)
         echo json_encode([
-            'status'  => 'success',
-            'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
-            // 'debug_code' => $codigo,  // descomentar solo en desarrollo
+            'status'    => 'error',
+            'message'   => 'SMTP Error: ' . ($mailErr ?: 'email_config.php no encontrado o credenciales incorrectas'),
+            'smtp_error' => $mailErr,
         ]);
     }
     exit;
