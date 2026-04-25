@@ -18,6 +18,9 @@ import 'package:super_ia/UI/views/DriverHomeScreen.dart';
 import 'package:super_ia/UI/views/DriverLoginScreen.dart';
 import 'package:super_ia/UI/views/ProfileScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
+import 'package:super_ia/UI/views/RecuperarPasswordScreen.dart';
+import 'package:super_ia/UI/views/VerificarOtpScreen.dart';
+import 'package:super_ia/UI/views/NuevaPasswordScreen.dart';
 import 'package:provider/provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -138,6 +141,9 @@ class MyApp extends StatelessWidget {
           LocationPermissionScreen.route: (context) => LocationPermissionScreen(),
           OsmMapScreen.route: (context) => OsmMapScreen(),
           ProfileScreen.route: (context) => ProfileScreen(),
+          RecuperarPasswordScreen.route: (context) => const RecuperarPasswordScreen(),
+          VerificarOtpScreen.route: (context) => const VerificarOtpScreen(),
+          NuevaPasswordScreen.route: (context) => const NuevaPasswordScreen(),
           '/nueva-encuesta': (context) {
             final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
             return NuevaEncuestaScreen(tipoTarea: args?['tipoTarea'] ?? 'prospecto_nuevo');

@@ -585,6 +585,77 @@ class ApiProvider {
     return false;
   }
 
+  // ── Recuperación de contraseña para asesores (móvil) ────────
+
+  /// Envía un OTP de 6 dígitos al email del asesor.
+  Future<Map<String, dynamic>> enviarOtpAsesor({
+    required String email,
+  }) async {
+    final url =
+        '${Constants.apiBaseUrl}/api_recuperar_password_asesor.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {'action': 'enviar_otp', 'email': email},
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red: $e'};
+    }
+  }
+
+  /// Verifica el OTP introducido por el asesor.
+  Future<Map<String, dynamic>> verificarOtpAsesor({
+    required String email,
+    required String codigo,
+  }) async {
+    final url =
+        '${Constants.apiBaseUrl}/api_recuperar_password_asesor.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {'action': 'verificar_otp', 'email': email, 'codigo': codigo},
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red: $e'};
+    }
+  }
+
+  /// Actualiza la contraseña del asesor tras verificar el OTP.
+  Future<Map<String, dynamic>> nuevaPasswordAsesor({
+    required String email,
+    required String nuevaPassword,
+  }) async {
+    final url =
+        '${Constants.apiBaseUrl}/api_recuperar_password_asesor.php';
+    try {
+      final response = await http.post(
+        Uri.parse(url),
+        body: {
+          'action': 'nueva_password',
+          'email': email,
+          'nueva_password': nuevaPassword,
+        },
+      ).timeout(const Duration(seconds: 12));
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      }
+      return {'status': 'error', 'message': 'Error HTTP ${response.statusCode}'};
+    } catch (e) {
+      return {'status': 'error', 'message': 'Error de red: $e'};
+    }
+  }
+
   // ── Obtiene la lista de cooperativas para el registro ────────
   Future<Map<String, dynamic>> obtenerCooperativas() async {
     final url = '${Constants.apiBaseUrl}/obtener_cooperativas.php';

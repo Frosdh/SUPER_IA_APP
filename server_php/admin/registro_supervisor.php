@@ -313,7 +313,19 @@ try {
 
                 <div class="form-group">
                     <label for="password"><i class="fas fa-lock me-2"></i>Contraseña</label>
-                    <input type="password" name="password" id="password" class="form-control" placeholder="••••••••" required>
+                    <div style="position:relative;">
+                        <input type="password" name="password" id="password" class="form-control" placeholder="Mín. 6 caracteres" required style="padding-right:42px;">
+                        <button type="button" onclick="toggleVis('password','eyeP')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;padding:0;font-size:14px;"><i class="fas fa-eye" id="eyeP"></i></button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="password_confirm"><i class="fas fa-lock me-2"></i>Confirmar Contraseña</label>
+                    <div style="position:relative;">
+                        <input type="password" name="password_confirm" id="password_confirm" class="form-control" placeholder="Repite tu contraseña" required style="padding-right:42px;">
+                        <button type="button" onclick="toggleVis('password_confirm','eyeC')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#64748b;cursor:pointer;padding:0;font-size:14px;"><i class="fas fa-eye" id="eyeC"></i></button>
+                    </div>
+                    <div id="pass-msg" style="margin-top:6px;font-size:12.5px;display:none;"></div>
                 </div>
 
                 <div class="form-group">
@@ -336,6 +348,49 @@ try {
     </div>
 
 <script>
+// ── Mostrar/ocultar contraseña ─────────────────────────────
+function toggleVis(inputId, iconId) {
+    const inp  = document.getElementById(inputId);
+    const icon = document.getElementById(iconId);
+    if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.classList.replace('fa-eye', 'fa-eye-slash');
+    } else {
+        inp.type = 'password';
+        icon.classList.replace('fa-eye-slash', 'fa-eye');
+    }
+}
+
+// ── Validar que las contraseñas coincidan ──────────────────
+const passInput    = document.getElementById('password');
+const confirmInput = document.getElementById('password_confirm');
+const passMsg      = document.getElementById('pass-msg');
+
+function checkPasswords() {
+    if (!confirmInput.value) { passMsg.style.display = 'none'; return; }
+    if (passInput.value === confirmInput.value) {
+        passMsg.style.display = 'block';
+        passMsg.style.color   = '#10b981';
+        passMsg.textContent   = '✔ Las contraseñas coinciden';
+    } else {
+        passMsg.style.display = 'block';
+        passMsg.style.color   = '#ef4444';
+        passMsg.textContent   = '✖ Las contraseñas no coinciden';
+    }
+}
+passInput.addEventListener('input', checkPasswords);
+confirmInput.addEventListener('input', checkPasswords);
+
+document.querySelector('form').addEventListener('submit', function(e) {
+    if (passInput.value !== confirmInput.value) {
+        e.preventDefault();
+        passMsg.style.display = 'block';
+        passMsg.style.color   = '#ef4444';
+        passMsg.textContent   = '✖ Las contraseñas no coinciden';
+        confirmInput.focus();
+    }
+});
+
 // Manejo del file upload
 document.getElementById('cooperativa').addEventListener('change', function() {
     const coopId = this.value;

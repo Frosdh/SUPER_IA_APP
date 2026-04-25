@@ -4,6 +4,7 @@ import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Networking/ApiProvider.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
 import 'package:super_ia/UI/views/LocationPermissionScreen.dart';
+import 'package:super_ia/UI/views/RecuperarPasswordScreen.dart';
 
 class SignInPage extends StatefulWidget {
   static const String route = '/signin';
@@ -439,6 +440,26 @@ class _SignInPageState extends State<SignInPage> {
                                             ),
                                           ),
                                         ],
+                                      ),
+                                    ),
+                                    SizedBox(height: 14),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: GestureDetector(
+                                        onTap: () => Navigator.pushNamed(
+                                          context,
+                                          RecuperarPasswordScreen.route,
+                                        ),
+                                        child: Text(
+                                          '¿Olvidaste tu contraseña?',
+                                          style: TextStyle(
+                                            color: ConstantColors.primaryBlue,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            decoration: TextDecoration.underline,
+                                            decorationColor: ConstantColors.primaryBlue,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                     SizedBox(height: 22),

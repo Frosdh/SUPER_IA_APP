@@ -32,7 +32,8 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
   final _apellidosController = TextEditingController();
   final _emailController = TextEditingController();
   final _telefonoController = TextEditingController();
-  final _contrasenaController = TextEditingController();
+  final _contrasenaController        = TextEditingController();
+  final _confirmarContrasenaController = TextEditingController();
 
   // Variables para los dropdowns
   List<CooperativaModel> cooperativas = [];
@@ -40,7 +41,8 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
   CooperativaModel? cooperativaSeleccionada;
   SupervisorModel? supervisorSeleccionado;
 
-  bool _obscurePassword = true;
+  bool _obscurePassword        = true;
+  bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   bool _cargandoCooperativas = false;
   bool _cargandoSupervisores = false;
@@ -78,6 +80,7 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
     _emailController.dispose();
     _telefonoController.dispose();
     _contrasenaController.dispose();
+    _confirmarContrasenaController.dispose();
     super.dispose();
   }
 
@@ -680,6 +683,93 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                                     },
                                     child: Icon(
                                       _obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: const Color(0xFF999999),
+                                      size: 18,
+                                    ),
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFE0E0E0),
+                                    ),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFFE0E0E0),
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(
+                                      color: Color(0xFF003D7A),
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
+                                  ),
+                                  filled: true,
+                                  fillColor: const Color(0xFFFAFAFA),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          // ── Confirmar Contraseña ──────────────────────────
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '🔐 Confirmar Contraseña',
+                                style: TextStyle(
+                                  color: Color(0xFF333333),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _confirmarContrasenaController,
+                                obscureText: _obscureConfirmPassword,
+                                style: const TextStyle(
+                                  color: Color(0xFF333333),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                validator: (value) {
+                                  if (value?.isEmpty ?? true) {
+                                    return 'Confirma tu contraseña';
+                                  }
+                                  if (value != _contrasenaController.text) {
+                                    return 'Las contraseñas no coinciden';
+                                  }
+                                  return null;
+                                },
+                                decoration: InputDecoration(
+                                  hintText: 'Repite tu contraseña',
+                                  hintStyle: const TextStyle(
+                                    color: Color(0xFF999999),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  suffixIcon: GestureDetector(
+                                    onTap: () {
+                                      setState(() {
+                                        _obscureConfirmPassword = !_obscureConfirmPassword;
+                                      });
+                                    },
+                                    child: Icon(
+                                      _obscureConfirmPassword
                                           ? Icons.visibility_off
                                           : Icons.visibility,
                                       color: const Color(0xFF999999),

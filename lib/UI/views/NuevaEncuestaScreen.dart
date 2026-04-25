@@ -100,6 +100,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Paso Empresa/Negocio (solo si _tieneEmpresa = true) ─────
   final _formKeyNegocio = GlobalKey<FormState>();
   String? _tipoEmpresa; // 'servicio_producto' | 'comercio'
+  // Si es producción: lista de productos con materiales y costos
+  static const int _kProdCount = 5;
+  static const int _kMatCount = 7;
+  late final List<TextEditingController> _prodNameCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<List<TextEditingController>> _prodMatCtrl = List.generate(_kProdCount, (_) => List.generate(_kMatCount, (_) => TextEditingController()));
+  late final List<TextEditingController> _prodManoCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _prodEmpaqueCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _prodOtrosCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _prodUnidadesProdCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _prodPrecioCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _prodUnidadesVendCtrl = List.generate(_kProdCount, (_) => TextEditingController());
   // Ventas por día (Lun–Dom)
   final _ventaLunCtrl  = TextEditingController();
   final _ventaMarCtrl  = TextEditingController();
@@ -519,6 +530,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _gastosNegocioCtrl.dispose();
     _otrosIngresosCtrl.dispose();
     _gastosFamiliaresCtrl.dispose();
+    // Dispose producción controllers
+    for (final c in _prodNameCtrl) c.dispose();
+    for (final row in _prodMatCtrl) for (final c in row) c.dispose();
+    for (final c in _prodManoCtrl) c.dispose();
+    for (final c in _prodEmpaqueCtrl) c.dispose();
+    for (final c in _prodOtrosCtrl) c.dispose();
+    for (final c in _prodUnidadesProdCtrl) c.dispose();
+    for (final c in _prodPrecioCtrl) c.dispose();
+    for (final c in _prodUnidadesVendCtrl) c.dispose();
     _instInvCtrl.dispose();
     _valorInvCtrl.dispose();
     _plazoInvCtrl.dispose();
@@ -835,6 +855,43 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       return;
     }
 
+    // Validaciones específicas de empresa
+    if (_tieneEmpresa) {
+      if (_tipoEmpresa == null || _tipoEmpresa!.isEmpty) {
+        setState(() => _guardando = false);
+        _mostrarError('Seleccione el tipo de empresa (Servicio/Product o Producción)');
+        return;
+      }
+      if (_tipoEmpresa == 'produccion') {
+        // Validar nombres de los 5 productos (mínimo 5)
+        for (int i = 0; i < 5; i++) {
+          if (_prodNameCtrl[i].text.trim().isEmpty) {
+            setState(() => _guardando = false);
+            _mostrarError('Ingrese el nombre del Producto ${i + 1} (mínimo 5 productos)');
+            return;
+          }
+        }
+      }
+    }
+
+    // Computar promedios/valores por día para compatibilidad y envío
+    final double _vLun = _toDouble(_ventaLunCtrl.text);
+    final double _vMar = _toDouble(_ventaMarCtrl.text);
+    final double _vMie = _toDouble(_ventaMieCtrl.text);
+    final double _vJue = _toDouble(_ventaJueCtrl.text);
+    final double _vVie = _toDouble(_ventaVieCtrl.text);
+    final double _vSab = _toDouble(_ventaSabCtrl.text);
+    final double _vDom = _toDouble(_ventaDomCtrl.text);
+    final double _cLun = _toDouble(_compraLunCtrl.text);
+    final double _cMar = _toDouble(_compraMarCtrl.text);
+    final double _cMie = _toDouble(_compraMieCtrl.text);
+    final double _cJue = _toDouble(_compraJueCtrl.text);
+    final double _cVie = _toDouble(_compraVieCtrl.text);
+    final double _cSab = _toDouble(_compraSabCtrl.text);
+    final double _cDom = _toDouble(_compraDomCtrl.text);
+    final avgVentaLv = ((_vLun + _vMar + _vMie + _vJue + _vVie) / 5.0);
+    final avgCompraLv = ((_cLun + _cMar + _cMie + _cJue + _cVie) / 5.0);
+
     final body = <String, String>{
       'usuario_id': usuarioId,
       if (asesorId.isNotEmpty) 'asesor_id': asesorId,
@@ -867,18 +924,35 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'tiene_empresa': _tieneEmpresa ? '1' : '0',
       'nombre_empresa': _empresaCtrl.text.trim(),
       // Empresa/Negocio (si aplica)
-      'venta_lv':        _tieneEmpresa ? _ventaLvCtrl.text.trim() : '',
+      // Enviar tanto los campos agrupados (compatibilidad) como por día
+      'venta_lv':        _tieneEmpresa ? avgVentaLv.toStringAsFixed(2) : '',
       'venta_sabado':    _tieneEmpresa ? _ventaSabCtrl.text.trim() : '',
       'venta_domingo':   _tieneEmpresa ? _ventaDomCtrl.text.trim() : '',
+      'venta_lunes':     _tieneEmpresa ? _ventaLunCtrl.text.trim() : '',
+      'venta_martes':    _tieneEmpresa ? _ventaMarCtrl.text.trim() : '',
+      'venta_miercoles': _tieneEmpresa ? _ventaMieCtrl.text.trim() : '',
+      'venta_jueves':    _tieneEmpresa ? _ventaJueCtrl.text.trim() : '',
+      'venta_viernes':   _tieneEmpresa ? _ventaVieCtrl.text.trim() : '',
       'mes_alta_venta':  _tieneEmpresa ? (_mesAltaVenta ?? '') : '',
       'mes_baja_venta':  _tieneEmpresa ? (_mesBajaVenta ?? '') : '',
-      'compra_lv':       _tieneEmpresa ? _compraLvCtrl.text.trim() : '',
+      'compra_lv':       _tieneEmpresa ? avgCompraLv.toStringAsFixed(2) : '',
       'compra_sabado':   _tieneEmpresa ? _compraSabCtrl.text.trim() : '',
       'compra_domingo':  _tieneEmpresa ? _compraDomCtrl.text.trim() : '',
+      'compra_lunes':    _tieneEmpresa ? _compraLunCtrl.text.trim() : '',
+      'compra_martes':   _tieneEmpresa ? _compraMarCtrl.text.trim() : '',
+      'compra_miercoles':_tieneEmpresa ? _compraMieCtrl.text.trim() : '',
+      'compra_jueves':   _tieneEmpresa ? _compraJueCtrl.text.trim() : '',
+      'compra_viernes':  _tieneEmpresa ? _compraVieCtrl.text.trim() : '',
       'mes_alta_compra': _tieneEmpresa ? (_mesAltaCompra ?? '') : '',
-      'dias_atencion_lv':  _tieneEmpresa ? (_diaLv  ? '1' : '0') : '0',
+      // Días de atención (individuales y agrupados para compatibilidad)
+      'dias_atencion_lunes':  _tieneEmpresa ? (_diaLun ? '1' : '0') : '0',
+      'dias_atencion_martes': _tieneEmpresa ? (_diaMar ? '1' : '0') : '0',
+      'dias_atencion_miercoles': _tieneEmpresa ? (_diaMie ? '1' : '0') : '0',
+      'dias_atencion_jueves': _tieneEmpresa ? (_diaJue ? '1' : '0') : '0',
+      'dias_atencion_viernes': _tieneEmpresa ? (_diaVie ? '1' : '0') : '0',
       'dias_atencion_sab': _tieneEmpresa ? (_diaSab ? '1' : '0') : '0',
       'dias_atencion_dom': _tieneEmpresa ? (_diaDom ? '1' : '0') : '0',
+      'dias_atencion_lv': _tieneEmpresa ? ((_diaLun||_diaMar||_diaMie||_diaJue||_diaVie) ? '1' : '0') : '0',
       'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
       'gastos_negocio':       _tieneEmpresa ? _gastosNegocioCtrl.text.trim() : '',
       'otros_ingresos':       _tieneEmpresa ? _otrosIngresosCtrl.text.trim() : '',
@@ -944,6 +1018,42 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             : '',
         'observaciones': _obsCtrl.text.trim(),
       });
+    }
+
+    // Si producción: empaquetar productos en JSON para envío
+    if (_tipoEmpresa == 'produccion') {
+      final prods = <Map<String, dynamic>>[];
+      for (int i = 0; i < _kProdCount; i++) {
+        final matsList = _prodMatCtrl[i].map((c) => c.text.trim()).toList();
+        final double totalMat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+        final double manoVal = _toDouble(_prodManoCtrl[i].text);
+        final double empaVal = _toDouble(_prodEmpaqueCtrl[i].text);
+        final double otrosVal = _toDouble(_prodOtrosCtrl[i].text);
+        final double costoTotalVal = totalMat + manoVal + empaVal + otrosVal;
+        final double unidadesProdVal = _toDouble(_prodUnidadesProdCtrl[i].text);
+        final double costoUnitarioVal = unidadesProdVal > 0 ? costoTotalVal / unidadesProdVal : 0.0;
+        final double precioVal = _toDouble(_prodPrecioCtrl[i].text);
+        final double unidadesVendVal = _toDouble(_prodUnidadesVendCtrl[i].text);
+        final double ventasMensualesVal = precioVal * unidadesVendVal;
+        final double costoVentasVal = costoUnitarioVal * unidadesVendVal;
+
+        prods.add({
+          'nombre': _prodNameCtrl[i].text.trim(),
+          'materias': matsList,
+          'total_materia': totalMat.toStringAsFixed(2),
+          'mano_obra': manoVal.toStringAsFixed(2),
+          'empaques': empaVal.toStringAsFixed(2),
+          'otros': otrosVal.toStringAsFixed(2),
+          'costo_total': costoTotalVal.toStringAsFixed(2),
+          'unidades_producidas': _prodUnidadesProdCtrl[i].text.trim(),
+          'costo_unitario': costoUnitarioVal.toStringAsFixed(4),
+          'precio_unitario': _prodPrecioCtrl[i].text.trim(),
+          'unidades_vendidas_mes': _prodUnidadesVendCtrl[i].text.trim(),
+          'ventas_mensuales': ventasMensualesVal.toStringAsFixed(2),
+          'costo_ventas': costoVentasVal.toStringAsFixed(2),
+        });
+      }
+      body['productos_json'] = json.encode(prods);
     }
 
     try {
@@ -1832,16 +1942,28 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 _tieneEmpresa = v;
                 if (!_tieneEmpresa) {
                   // Limpiar datos del paso negocio si el usuario desactiva
-                  _ventaLvCtrl.clear();
+                  _ventaLunCtrl.clear();
+                  _ventaMarCtrl.clear();
+                  _ventaMieCtrl.clear();
+                  _ventaJueCtrl.clear();
+                  _ventaVieCtrl.clear();
                   _ventaSabCtrl.clear();
                   _ventaDomCtrl.clear();
-                  _compraLvCtrl.clear();
+                  _compraLunCtrl.clear();
+                  _compraMarCtrl.clear();
+                  _compraMieCtrl.clear();
+                  _compraJueCtrl.clear();
+                  _compraVieCtrl.clear();
                   _compraSabCtrl.clear();
                   _compraDomCtrl.clear();
                   _mesAltaVenta = null;
                   _mesBajaVenta = null;
                   _mesAltaCompra = null;
-                  _diaLv = true;
+                  _diaLun = true;
+                  _diaMar = true;
+                  _diaMie = true;
+                  _diaJue = true;
+                  _diaVie = true;
                   _diaSab = false;
                   _diaDom = false;
                   _pctContado = 80;
@@ -1866,6 +1988,31 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 return null;
               },
             ),
+            const SizedBox(height: 8),
+            // Tipo de empresa: servicio/producto vs comercio vs producción
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: DropdownButtonFormField<String>(
+                value: _tipoEmpresa,
+                decoration: InputDecoration(
+                  labelText: 'Tipo de empresa',
+                  floatingLabelBehavior: FloatingLabelBehavior.always,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'servicio_producto', child: Text('Servicio / Producto')),
+                  DropdownMenuItem(value: 'produccion', child: Text('Producción')),
+                ],
+                onChanged: (v) => setState(() => _tipoEmpresa = v),
+              ),
+            ),
+            // Si es producción, mostrar sección de productos
+            if (_tipoEmpresa == 'produccion') ...[
+              const SizedBox(height: 12),
+              _seccionTitulo('Productos (mínimo 5)'),
+              for (int i = 0; i < _kProdCount; i++) _buildProductoCard(i),
+            ],
           ],
           ],
         ],
@@ -1921,8 +2068,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       return const SizedBox.shrink();
     }
 
-    final ventaSemana = _toDouble(_ventaLvCtrl.text) * 5 + _toDouble(_ventaSabCtrl.text) + _toDouble(_ventaDomCtrl.text);
-    final compraSemana = _toDouble(_compraLvCtrl.text) * 5 + _toDouble(_compraSabCtrl.text) + _toDouble(_compraDomCtrl.text);
+    final ventaSemana = _toDouble(_ventaLunCtrl.text) + _toDouble(_ventaMarCtrl.text) + _toDouble(_ventaMieCtrl.text) + _toDouble(_ventaJueCtrl.text) + _toDouble(_ventaVieCtrl.text) + _toDouble(_ventaSabCtrl.text) + _toDouble(_ventaDomCtrl.text);
+    final compraSemana = _toDouble(_compraLunCtrl.text) + _toDouble(_compraMarCtrl.text) + _toDouble(_compraMieCtrl.text) + _toDouble(_compraJueCtrl.text) + _toDouble(_compraVieCtrl.text) + _toDouble(_compraSabCtrl.text) + _toDouble(_compraDomCtrl.text);
 
     return Form(
       key: _formKeyNegocio,
@@ -1937,36 +2084,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(height: 16),
 
           _seccionTitulo('Comportamiento de ventas (monto \$ al día)'),
-          Row(children: [
-            Expanded(child: _campo(
-              controller: _ventaLvCtrl,
-              label: 'Lun – Vie',
-              icon: Icons.trending_up_rounded,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-              validator: (v) {
-                if (!_tieneEmpresa) return null;
-                if (v == null || v.trim().isEmpty) return 'Requerido';
-                return null;
-              },
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _campo(
-              controller: _ventaSabCtrl,
-              label: 'Sábado',
-              icon: Icons.trending_up_rounded,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _campo(
-              controller: _ventaDomCtrl,
-              label: 'Domingo',
-              icon: Icons.trending_up_rounded,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            )),
-          ]),
+          const SizedBox(height: 6),
+          // Mostrar un campo por día, de arriba hacia abajo
+          _diaCampo('Lunes', _ventaLunCtrl, Icons.trending_up_rounded),
+          _diaCampo('Martes', _ventaMarCtrl, Icons.trending_up_rounded),
+          _diaCampo('Miércoles', _ventaMieCtrl, Icons.trending_up_rounded),
+          _diaCampo('Jueves', _ventaJueCtrl, Icons.trending_up_rounded),
+          _diaCampo('Viernes', _ventaVieCtrl, Icons.trending_up_rounded),
+          _diaCampo('Sábado', _ventaSabCtrl, Icons.trending_up_rounded),
+          _diaCampo('Domingo', _ventaDomCtrl, Icons.trending_up_rounded),
           const SizedBox(height: 10),
           Row(children: [
             Expanded(child: _dropdownMesSimple('Mes alto (venta)', _mesAltaVenta, (v) => setState(() => _mesAltaVenta = v))),
@@ -1976,36 +2102,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
           const SizedBox(height: 16),
           _seccionTitulo('Comportamiento de compras (monto \$ al día)'),
-          Row(children: [
-            Expanded(child: _campo(
-              controller: _compraLvCtrl,
-              label: 'Lun – Vie',
-              icon: Icons.shopping_cart_rounded,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-              validator: (v) {
-                if (!_tieneEmpresa) return null;
-                if (v == null || v.trim().isEmpty) return 'Requerido';
-                return null;
-              },
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _campo(
-              controller: _compraSabCtrl,
-              label: 'Sábado',
-              icon: Icons.shopping_cart_rounded,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            )),
-            const SizedBox(width: 8),
-            Expanded(child: _campo(
-              controller: _compraDomCtrl,
-              label: 'Domingo',
-              icon: Icons.shopping_cart_rounded,
-              keyboardType: TextInputType.number,
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            )),
-          ]),
+          _seccionTitulo('Comportamiento de compras (monto \$ al día)'),
+          const SizedBox(height: 6),
+          _diaCampo('Lunes', _compraLunCtrl, Icons.shopping_cart_rounded),
+          _diaCampo('Martes', _compraMarCtrl, Icons.shopping_cart_rounded),
+          _diaCampo('Miércoles', _compraMieCtrl, Icons.shopping_cart_rounded),
+          _diaCampo('Jueves', _compraJueCtrl, Icons.shopping_cart_rounded),
+          _diaCampo('Viernes', _compraVieCtrl, Icons.shopping_cart_rounded),
+          _diaCampo('Sábado', _compraSabCtrl, Icons.shopping_cart_rounded),
+          _diaCampo('Domingo', _compraDomCtrl, Icons.shopping_cart_rounded),
           const SizedBox(height: 10),
           _dropdownMesSimple('Mes alto (compra)', _mesAltaCompra, (v) => setState(() => _mesAltaCompra = v)),
 
@@ -2015,21 +2120,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              FilterChip(
-                label: const Text('Lun–Vie'),
-                selected: _diaLv,
-                onSelected: (v) => setState(() => _diaLv = v),
-              ),
-              FilterChip(
-                label: const Text('Sábado'),
-                selected: _diaSab,
-                onSelected: (v) => setState(() => _diaSab = v),
-              ),
-              FilterChip(
-                label: const Text('Domingo'),
-                selected: _diaDom,
-                onSelected: (v) => setState(() => _diaDom = v),
-              ),
+              FilterChip(label: const Text('Lunes'), selected: _diaLun, onSelected: (v) => setState(() => _diaLun = v)),
+              FilterChip(label: const Text('Martes'), selected: _diaMar, onSelected: (v) => setState(() => _diaMar = v)),
+              FilterChip(label: const Text('Miércoles'), selected: _diaMie, onSelected: (v) => setState(() => _diaMie = v)),
+              FilterChip(label: const Text('Jueves'), selected: _diaJue, onSelected: (v) => setState(() => _diaJue = v)),
+              FilterChip(label: const Text('Viernes'), selected: _diaVie, onSelected: (v) => setState(() => _diaVie = v)),
+              FilterChip(label: const Text('Sábado'), selected: _diaSab, onSelected: (v) => setState(() => _diaSab = v)),
+              FilterChip(label: const Text('Domingo'), selected: _diaDom, onSelected: (v) => setState(() => _diaDom = v)),
             ],
           ),
 
@@ -2578,6 +2675,98 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13),
           contentPadding:
               const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _diaCampo(String diaLabel, TextEditingController controller, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          SizedBox(width: 100, child: Text(diaLabel, style: TextStyle(fontWeight: FontWeight.w700, color: ConstantColors.textDark))),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+              style: TextStyle(color: ConstantColors.textDark),
+              decoration: InputDecoration(
+                hintText: '0.00',
+                hintStyle: TextStyle(color: ConstantColors.textDarkGrey.withOpacity(0.6)),
+                prefixIcon: Icon(icon, color: ConstantColors.warning, size: 20),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                filled: true,
+                fillColor: ConstantColors.grey100,
+              ),
+              cursorColor: ConstantColors.textDark,
+              validator: (v) {
+                if (!_tieneEmpresa) return null;
+                // Campos por día pueden dejarse vacíos; validar en conjunto si es necesario
+                return null;
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Producto (producción) ─────────────────────────────────
+  Widget _buildProductoCard(int idx) {
+    final prodIndex = idx + 1;
+    final nombreCtrl = _prodNameCtrl[idx];
+    final mats = _prodMatCtrl[idx];
+    final mano = _prodManoCtrl[idx];
+    final empa = _prodEmpaqueCtrl[idx];
+    final otros = _prodOtrosCtrl[idx];
+    final unidadesProd = _prodUnidadesProdCtrl[idx];
+    final precio = _prodPrecioCtrl[idx];
+    final unidadesVend = _prodUnidadesVendCtrl[idx];
+
+    double sumMaterials() => mats.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+    double parse(String s) => _toDouble(s);
+    double costoTotal() => sumMaterials() + parse(mano.text) + parse(empa.text) + parse(otros.text);
+    double costoUnitario() {
+      final up = _toDouble(unidadesProd.text);
+      return up > 0 ? costoTotal() / up : 0.0;
+    }
+    double ventasMensuales() => _toDouble(precio.text) * _toDouble(unidadesVend.text);
+    double costoVentas() => costoUnitario() * _toDouble(unidadesVend.text);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Producto $prodIndex', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            _campo(controller: nombreCtrl, label: 'Nombre producto', icon: Icons.inventory_2_rounded),
+            const SizedBox(height: 6),
+            Text('Materia prima (ingrese costo por mes/unidad)', style: TextStyle(fontSize: 13, color: ConstantColors.textDarkGrey)),
+            const SizedBox(height: 6),
+            for (int m = 0; m < _kMatCount; m++) _diaCampo('Material ${m+1}', mats[m], Icons.precision_manufacturing_rounded),
+            const SizedBox(height: 6),
+            Row(children: [Expanded(child: _campo(controller: mano, label: 'Mano de obra', icon: Icons.handyman_rounded)), const SizedBox(width: 8), Expanded(child: _campo(controller: empa, label: 'Empaques', icon: Icons.inventory_2_rounded))]),
+            const SizedBox(height: 8),
+            _campo(controller: otros, label: 'Otros costos indirectos', icon: Icons.more_horiz_rounded),
+            const SizedBox(height: 8),
+            Text('Resultados', style: TextStyle(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 6),
+            Row(children: [Expanded(child: Text('Total materia: ' + sumMaterials().toStringAsFixed(2))), Expanded(child: Text('Costo total: ' + costoTotal().toStringAsFixed(2)))]),
+            const SizedBox(height: 6),
+            Row(children: [Expanded(child: _campo(controller: unidadesProd, label: 'Unidades producidas', icon: Icons.production_quantity_limits_rounded)), const SizedBox(width: 8), Expanded(child: Text('Costo unitario: ' + costoUnitario().toStringAsFixed(4)))]),
+            const SizedBox(height: 6),
+            Row(children: [Expanded(child: _campo(controller: precio, label: 'Precio unitario', icon: Icons.attach_money_rounded)), const SizedBox(width: 8), Expanded(child: _campo(controller: unidadesVend, label: 'Unidades vendidas (mes)', icon: Icons.store_rounded))]),
+            const SizedBox(height: 6),
+            Row(children: [Expanded(child: Text('Ventas mensuales: ' + ventasMensuales().toStringAsFixed(2))), Expanded(child: Text('Costo de ventas: ' + costoVentas().toStringAsFixed(2)))]),
+          ],
         ),
       ),
     );

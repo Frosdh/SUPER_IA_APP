@@ -122,6 +122,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .inp-wrap i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:14px;}
         .inp-wrap input{width:100%;padding:12px 14px 12px 40px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px;font-family:'Inter',sans-serif;color:#1e293b;transition:.2s;outline:none;}
         .inp-wrap input:focus{border-color:#6b11ff;box-shadow:0 0 0 3px rgba(107,17,255,.1);}
+        .inp-wrap .toggle-pass{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9ca3af;cursor:pointer;padding:4px;font-size:14px;line-height:1;display:flex;align-items:center;transition:.2s;}
+        .inp-wrap .toggle-pass:hover{color:#6b11ff;}
+        .inp-wrap input{padding-right:42px;}
         .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#6b11ff,#3182fe);border:none;border-radius:11px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:.22s;box-shadow:0 6px 20px rgba(107,17,255,.35);font-family:'Inter',sans-serif;margin-top:8px;}
         .btn-login:hover{opacity:.92;transform:translateY(-2px);box-shadow:0 10px 28px rgba(107,17,255,.45);}
         .btn-back{width:100%;padding:10px;background:transparent;border:1.5px solid #e5e7eb;border-radius:11px;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif;margin-top:12px;text-decoration:none;display:inline-block;text-align:center;}
@@ -155,9 +158,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
                 <div class="inp-group">
                     <label>Contraseña</label>
-                    <div class="inp-wrap"><i class="fas fa-lock"></i><input type="password" name="password" placeholder="••••••••" required></div>
+                    <div class="inp-wrap">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" id="password-input" name="password" placeholder="••••••••" required>
+                        <button type="button" class="toggle-pass" onclick="togglePass()" title="Mostrar/ocultar contraseña">
+                            <i class="fas fa-eye" id="toggle-icon"></i>
+                        </button>
+                    </div>
                 </div>
                 <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión</button>
+                <div style="text-align:right;margin-top:10px;margin-bottom:2px;">
+                    <a href="recuperar_password.php?role=<?= htmlspecialchars($role) ?>" style="font-size:12.5px;color:#6b11ff;text-decoration:none;font-weight:600;">
+                        <i class="fas fa-key me-1"></i>¿Olvidaste tu contraseña?
+                    </a>
+                </div>
                 
                 <?php if ($role === 'admin'): ?>
                 <a href="registro_admin.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Admin</a>
@@ -170,5 +184,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="login-footer">Super_IA &copy; 2026</div>
         </div>
     </div>
+    <script>
+        function togglePass() {
+            const input = document.getElementById('password-input');
+            const icon = document.getElementById('toggle-icon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+    </script>
 </body>
 </html>

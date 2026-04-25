@@ -14,7 +14,8 @@ $apellidos = trim($_POST['apellidos'] ?? '');
 $usuario = trim($_POST['usuario'] ?? '');
 $email = trim($_POST['email'] ?? '');
 $telefono = trim($_POST['telefono'] ?? '');
-$password = $_POST['password'] ?? '';
+$password         = $_POST['password'] ?? '';
+$password_confirm = $_POST['password_confirm'] ?? '';
 
 $errores = [];
 $archivo_guardado = null;
@@ -27,6 +28,7 @@ if (empty($apellidos)) $errores[] = 'Los apellidos son requeridos';
 if (empty($usuario) || strlen($usuario) < 4) $errores[] = 'Usuario debe tener al menos 4 caracteres';
 if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
 if (empty($password) || strlen($password) < 6) $errores[] = 'Contraseña debe tener al menos 6 caracteres';
+if ($password !== $password_confirm) $errores[] = 'Las contraseñas no coinciden';
 
 // Validar archivo
 $archivo_upload = $_FILES['credencial'] ?? null;
