@@ -94,8 +94,14 @@ try {
         $stExp->close();
     }
 
-    // Cláusula adicional cuando se filtra por tipo (ej: recuperacion)
-    $tipoClause = ($tipo_filter !== '') ? "t.tipo_tarea = '$tipo_filter' AND" : '';
+    // Cláusula de tipo:
+    // - Si viene filtro explícito → solo ese tipo
+    // - Si no hay filtro → excluir siempre 'recuperacion' (esas van a AgendaRecuperacion)
+    if ($tipo_filter !== '') {
+        $tipoClause = "t.tipo_tarea = '$tipo_filter' AND";
+    } else {
+        $tipoClause = "t.tipo_tarea != 'recuperacion' AND";
+    }
 
     $sql = "
         SELECT

@@ -19,7 +19,7 @@ header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$API_BUILD = '2026-04-21a';
+$API_BUILD = '2026-04-27b';
 $GLOBALS['phase'] = 'BOOT';
 
 function respond_json($code, $payload) {
@@ -86,6 +86,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 require_once __DIR__ . '/db_config.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+// NOTA: para migrar los ENUMs de acuerdo en producción,
+// corre UNA sola vez: http://tu-servidor/SUPER_IA/server_php/fix_acuerdo_enum.php
+
 // ── Leer parámetros (mismos nombres que guardar_cliente_encuesta.php) ──
 $tarea_id       = trim($_POST['tarea_id']       ?? '');
 $usuario_id     = trim($_POST['usuario_id']     ?? '');
@@ -117,6 +120,7 @@ if ($origen_prospecto !== null) {
     if (!in_array($origen_prospecto, ['frio','seguidor'], true)) $origen_prospecto = null;
 }
 
+// Validar actividad (debe coincidir con ENUM de cliente_prospecto.actividad)
 $acts_ok = ['negocio_propio','empleado_privado','empleado_publico','profesional'];
 if ($actividad !== null && !in_array($actividad, $acts_ok, true)) $actividad = null;
 
@@ -157,7 +161,8 @@ $busca_td           = (int)($_POST['que_busca_tarjeta_debito']  ?? 0);
 $busca_tc           = (int)($_POST['que_busca_tarjeta_credito'] ?? 0);
 $fecha_venc_cdp     = strOrNull($_POST['fecha_vencimiento_cdp'] ?? '');
 $interes_trabajar   = intOrNull($_POST['interes_trabajar_institucion'] ?? null);
-$acuerdo            = strOrNull($_POST['acuerdo_logrado'] ?? '') ?? 'ninguno';
+$_acuerdo_raw       = strOrNull($_POST['acuerdo_logrado'] ?? '');
+$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro']) ? $_acuerdo_raw : null;
 $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
@@ -184,9 +189,41 @@ $gastos_negocio       = floatOrNull($_POST['gastos_negocio']       ?? '');
 $otros_ingresos       = floatOrNull($_POST['otros_ingresos']       ?? '');
 $gastos_familiares    = floatOrNull($_POST['gastos_familiares']    ?? '');
 
-// Validar acuerdo
-$acuerdos_ok = ['nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'];
-if (!in_array($acuerdo, $acuerdos_ok)) $acuerdo = 'ninguno';
+// Normalize/validate acuerdo similar to guardar_cliente_encuesta
+function normalize_token_act(string $s): string {
+    $s = mb_strtolower(trim($s));
+    $s = str_replace([' ', '-', '/', '\\'], '_', $s);
+    $s = strtr($s, "ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÑñÇç",
+                       "AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuNnCc");
+    $s = preg_replace('/[^a-z0-9_]/u', '', $s);
+    return $s;
+}
+
+$incoming_acuerdo = $_acuerdo_raw;
+$acuerdo_map = [
+    'documentos_pendientes' => 'otro',
+    'recolectar_documentacion' => 'otro',
+    'recoleccion_documentacion' => 'otro',
+    'recoleccionar_documentacion' => 'otro',
+    'levantamiento' => 'otro',
+    'levantamiento_campo' => 'otro',
+    'nueva_cita_campo' => 'nueva_cita_campo',
+    'nueva_cita_oficina' => 'nueva_cita_oficina',
+    'reprogramacion' => 'reprogramacion',
+    'seguimiento' => 'seguimiento',
+    'otro' => 'otro',
+];
+$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+$mapped = null;
+$incoming_tok = null;
+if ($incoming_acuerdo !== null) {
+    $tok = normalize_token_act($incoming_acuerdo);
+    $incoming_tok = $tok;
+    if (isset($acuerdo_map[$tok])) $mapped = $acuerdo_map[$tok];
+    elseif (in_array($tok, $db_acuerdos_allowed, true)) $mapped = $tok;
+    elseif (strpos($tok, 'doc') !== false || strpos($tok, 'document') !== false) $mapped = 'otro';
+}
+$acuerdo = $mapped ?? 'otro';
 
 try {
     $GLOBALS['phase'] = 'LOAD_TAREA';
@@ -566,6 +603,42 @@ try {
                 $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
                 $tarea_id
             );
+            // Ensure DB ENUMs include expected values (avoid Data truncated errors).
+            // If ALTER fails or lacks privileges, FALLBACK the value to 'otro' when the current
+            // $acuerdo is not present in the column definition (prevents Data truncated errors).
+            try {
+                $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
+                if ($col && strpos($col['Type'], "'otro'") === false) {
+                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NULL");
+                }
+                $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
+                if ($col2 && strpos($col2['Type'], "'otro'") === false) {
+                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NOT NULL");
+                }
+
+                // Defensive: if the $acuerdo token is not present in the encuesta_comercial enum,
+                // fallback to 'otro' to avoid INSERT/UPDATE truncation errors.
+                $tmpLogDir = __DIR__ . '/tmp'; if (!is_dir($tmpLogDir)) @mkdir($tmpLogDir, 0777, true);
+                $colType = $col['Type'] ?? '';
+                if (!empty($colType) && $acuerdo !== null && strpos($colType, "'" . $acuerdo . "'") === false) {
+                    $prev = $acuerdo;
+                    $acuerdo = 'otro';
+                    @file_put_contents($tmpLogDir . '/acuerdo_debug.log', json_encode(['ts'=>date('c'),'tarea_id'=>$tarea_id,'fall_back_from'=>$prev,'to'=>$acuerdo,'reason'=>'enum_missing_update']) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                }
+            } catch (\Throwable $_) {
+                // non-fatal attempt to self-heal DB; if we cannot inspect, defensively fallback
+                $tmpLogDir = __DIR__ . '/tmp'; if (!is_dir($tmpLogDir)) @mkdir($tmpLogDir, 0777, true);
+                if ($acuerdo !== null && $acuerdo !== 'otro') {
+                    $prev = $acuerdo;
+                    $acuerdo = 'otro';
+                    @file_put_contents($tmpLogDir . '/acuerdo_debug.log', json_encode(['ts'=>date('c'),'tarea_id'=>$tarea_id,'fall_back_from'=>$prev,'to'=>$acuerdo,'reason'=>'enum_check_failed']) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                }
+            }
+
+            // debug: log incoming/mapped acuerdo values before update
+            $tmpLogDir = __DIR__ . '/tmp'; if (!is_dir($tmpLogDir)) @mkdir($tmpLogDir, 0777, true);
+            $dbg = ['ts'=>date('c'),'tarea_id'=>$tarea_id,'incoming_raw'=>$_acuerdo_raw,'incoming_tok'=>$incoming_tok ?? null,'mapped'=>$acuerdo,'op'=>'update'];
+            @file_put_contents($tmpLogDir . '/acuerdo_debug.log', json_encode($dbg, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND | LOCK_EX);
             $st->execute();
             $st->close();
         } else {
@@ -598,12 +671,48 @@ try {
                 $razon_otros,
                 $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final
             );
+            // Ensure DB ENUMs include expected values (avoid Data truncated errors).
+            // If ALTER fails or lacks privileges, FALLBACK the value to 'otro' when the current
+            // $acuerdo is not present in the column definition (prevents Data truncated errors).
+            try {
+                $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
+                if ($col && strpos($col['Type'], "'otro'") === false) {
+                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NULL");
+                }
+                $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
+                if ($col2 && strpos($col2['Type'], "'otro'") === false) {
+                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NOT NULL");
+                }
+
+                // Defensive: if the $acuerdo token is not present in the encuesta_comercial enum,
+                // fallback to 'otro' to avoid INSERT/UPDATE truncation errors.
+                $tmpLogDir = __DIR__ . '/tmp'; if (!is_dir($tmpLogDir)) @mkdir($tmpLogDir, 0777, true);
+                $colType = $col['Type'] ?? '';
+                if (!empty($colType) && $acuerdo !== null && strpos($colType, "'" . $acuerdo . "'") === false) {
+                    $prev = $acuerdo;
+                    $acuerdo = 'otro';
+                    @file_put_contents($tmpLogDir . '/acuerdo_debug.log', json_encode(['ts'=>date('c'),'tarea_id'=>$tarea_id,'fall_back_from'=>$prev,'to'=>$acuerdo,'reason'=>'enum_missing_insert']) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                }
+            } catch (\Throwable $_) {
+                // non-fatal attempt to self-heal DB; if we cannot inspect, defensively fallback
+                $tmpLogDir = __DIR__ . '/tmp'; if (!is_dir($tmpLogDir)) @mkdir($tmpLogDir, 0777, true);
+                if ($acuerdo !== null && $acuerdo !== 'otro') {
+                    $prev = $acuerdo;
+                    $acuerdo = 'otro';
+                    @file_put_contents($tmpLogDir . '/acuerdo_debug.log', json_encode(['ts'=>date('c'),'tarea_id'=>$tarea_id,'fall_back_from'=>$prev,'to'=>$acuerdo,'reason'=>'enum_check_failed_insert']) . PHP_EOL, FILE_APPEND | LOCK_EX);
+                }
+            }
+
+            // debug: log incoming/mapped acuerdo values before insert
+            $tmpLogDir = __DIR__ . '/tmp'; if (!is_dir($tmpLogDir)) @mkdir($tmpLogDir, 0777, true);
+            $dbg = ['ts'=>date('c'),'tarea_id'=>$tarea_id,'incoming_raw'=>$_acuerdo_raw,'incoming_tok'=>$incoming_tok ?? null,'mapped'=>$acuerdo,'op'=>'insert'];
+            @file_put_contents($tmpLogDir . '/acuerdo_debug.log', json_encode($dbg, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND | LOCK_EX);
             $st->execute();
             $st->close();
         }
 
         // ── 6. Acuerdo de visita (upsert) ──────────────────────
-        if ($acuerdo !== 'ninguno' && $fecha_acuerdo !== null) {
+        if ($acuerdo !== null && $fecha_acuerdo !== null) {
             $GLOBALS['phase'] = 'UPSERT_ACUERDO';
 
             $st = $conn->prepare('SELECT id FROM acuerdo_visita WHERE tarea_id = ? LIMIT 1');
@@ -630,7 +739,7 @@ try {
                 $st->close();
             }
         } else {
-            // Si el acuerdo actual queda "ninguno", borrar cualquier acuerdo previo
+            // Si no hay acuerdo (null/vacío), borrar cualquier acuerdo previo
             $st = $conn->prepare('DELETE FROM acuerdo_visita WHERE tarea_id = ?');
             $st->bind_param('s', $tarea_id);
             $st->execute();
@@ -769,10 +878,17 @@ try {
     }
     $phase = $GLOBALS['phase'] ?? 'UNKNOWN';
     error_log('[actualizar_encuesta_completa][phase=' . $phase . '] ' . $e);
+    $dbg_resp = [
+        'incoming_raw' => $_acuerdo_raw ?? null,
+        'incoming_tok' => $incoming_tok ?? null,
+        'mapped'       => $acuerdo ?? null,
+    ];
+    error_log('[actualizar_encuesta_completa][acuerdo_debug] ' . json_encode($dbg_resp, JSON_UNESCAPED_UNICODE));
     respond_json(200, [
         'status'  => 'error',
         'message' => 'Error del servidor [' . $phase . ']: ' . substr($e->getMessage(), 0, 200),
         'phase'   => $phase,
+        'acuerdo_debug' => $dbg_resp,
     ]);
 } finally {
     if (isset($conn)) { try { $conn->close(); } catch (\Throwable $_) {} }

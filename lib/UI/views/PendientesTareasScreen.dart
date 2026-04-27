@@ -76,7 +76,10 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
       final tareas = decoded['tareas'];
       if (tareas is List) {
-        _tareas = tareas.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _tareas = tareas
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .where((t) => t['tipo_tarea']?.toString() != 'recuperacion')
+            .toList();
       } else {
         _tareas = [];
       }

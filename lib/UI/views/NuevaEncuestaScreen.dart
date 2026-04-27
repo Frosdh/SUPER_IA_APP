@@ -99,18 +99,49 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Paso Empresa/Negocio (solo si _tieneEmpresa = true) ─────
   final _formKeyNegocio = GlobalKey<FormState>();
-  String? _tipoEmpresa; // 'servicio_producto' | 'comercio'
-  // Si es producción: lista de productos con materiales y costos
+  bool _tipoServProduccion = false; // Servicio/Producción
+  bool _tipoComercio = false;       // Comercio
+  // Producción: estructura completa por producto (5 productos, 7 materias)
   static const int _kProdCount = 5;
-  static const int _kMatCount = 7;
-  late final List<TextEditingController> _prodNameCtrl = List.generate(_kProdCount, (_) => TextEditingController());
-  late final List<List<TextEditingController>> _prodMatCtrl = List.generate(_kProdCount, (_) => List.generate(_kMatCount, (_) => TextEditingController()));
-  late final List<TextEditingController> _prodManoCtrl = List.generate(_kProdCount, (_) => TextEditingController());
-  late final List<TextEditingController> _prodEmpaqueCtrl = List.generate(_kProdCount, (_) => TextEditingController());
-  late final List<TextEditingController> _prodOtrosCtrl = List.generate(_kProdCount, (_) => TextEditingController());
-  late final List<TextEditingController> _prodUnidadesProdCtrl = List.generate(_kProdCount, (_) => TextEditingController());
-  late final List<TextEditingController> _prodPrecioCtrl = List.generate(_kProdCount, (_) => TextEditingController());
-  late final List<TextEditingController> _prodUnidadesVendCtrl = List.generate(_kProdCount, (_) => TextEditingController());
+  static const int _kMatCount  = 7;
+  late final List<TextEditingController> _prodNameCtrl         = List.generate(_kProdCount, (_) => TextEditingController()); // nombre
+  late final List<List<TextEditingController>> _prodMatNomCtrl = List.generate(_kProdCount, (_) => List.generate(_kMatCount, (_) => TextEditingController())); // nombre de cada materia
+  late final List<List<TextEditingController>> _prodMatCtrl    = List.generate(_kProdCount, (_) => List.generate(_kMatCount, (_) => TextEditingController())); // valor/costo de cada materia
+  late final List<TextEditingController> _prodManoCtrl         = List.generate(_kProdCount, (_) => TextEditingController()); // total mano de obra
+  late final List<TextEditingController> _prodEmpaqueCtrl      = List.generate(_kProdCount, (_) => TextEditingController()); // empaques
+  late final List<TextEditingController> _prodOtrosCtrl        = List.generate(_kProdCount, (_) => TextEditingController()); // otros costos indirectos
+  late final List<TextEditingController> _prodUnidadesProdCtrl = List.generate(_kProdCount, (_) => TextEditingController()); // (2) unidades producidas
+  late final List<TextEditingController> _prodPrecioCtrl       = List.generate(_kProdCount, (_) => TextEditingController()); // B. precio unitario
+  late final List<TextEditingController> _prodUnidadesVendCtrl = List.generate(_kProdCount, (_) => TextEditingController()); // C. unidades vendidas mes
+  late final List<TextEditingController> _prodUnidExistCtrl    = List.generate(_kProdCount, (_) => TextEditingController()); // D. unidades verificadas (inventario)
+  // Sin uso activo en producción (compatibilidad dispose)
+  late final List<TextEditingController> _prodCostoCtrl        = List.generate(_kProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _prodTipoUnidadCtrl   = List.generate(_kProdCount, (_) => TextEditingController());
+
+  // ── Activos Fijos del Negocio (10 filas) ────────────────────
+  static const int _kActivosCount = 10;
+  late final List<TextEditingController> _actNegDescCtrl   = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actNegMarcaCtrl  = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actNegModeloCtrl = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actNegSerieCtrl  = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actNegValorCtrl  = List.generate(_kActivosCount, (_) => TextEditingController());
+
+  // ── Activos Fijos del Hogar (10 filas) ──────────────────────
+  late final List<TextEditingController> _actHogDescCtrl   = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actHogMarcaCtrl  = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actHogModeloCtrl = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actHogSerieCtrl  = List.generate(_kActivosCount, (_) => TextEditingController());
+  late final List<TextEditingController> _actHogValorCtrl  = List.generate(_kActivosCount, (_) => TextEditingController());
+
+  // ── Comercio: lista de productos comercializados (mínimo 5) ─
+  static const int _kComProdCount = 5;
+  late final List<TextEditingController> _comNombreCtrl      = List.generate(_kComProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _comCostoCtrl       = List.generate(_kComProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _comPrecioCtrl      = List.generate(_kComProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _comTipoUnidadCtrl  = List.generate(_kComProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _comCantidadCtrl    = List.generate(_kComProdCount, (_) => TextEditingController());
+  late final List<TextEditingController> _comUnidExistCtrl   = List.generate(_kComProdCount, (_) => TextEditingController());
+
   // Ventas por día (Lun–Dom)
   final _ventaLunCtrl  = TextEditingController();
   final _ventaMarCtrl  = TextEditingController();
@@ -186,7 +217,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _buscaTD = false;
   bool _buscaTC = false;
   DateTime? _fechaVencCDP;
-  String _acuerdo = 'ninguno';
+  String _acuerdo = '';
   DateTime? _fechaAcuerdo;
   TimeOfDay? _horaAcuerdo;
   final _obsCtrl = TextEditingController();
@@ -364,7 +395,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (neg is Map) {
       final n = Map<String, dynamic>.from(neg);
       _tieneEmpresa = true;
-      _tipoEmpresa = _s(n['tipo_empresa']).isEmpty ? null : _s(n['tipo_empresa']);
+      final _tipoEmpresaStr = _s(n['tipo_empresa']);
+      _tipoServProduccion = _tipoEmpresaStr.contains('servicio_produccion');
+      _tipoComercio = _tipoEmpresaStr.contains('comercio');
       // Cargar por día individual; fallback al campo agrupado antiguo (retrocompatibilidad)
       final lvVenta = _d(n['venta_lv']).toStringAsFixed(2);
       _ventaLunCtrl.text  = _d(n['venta_lunes']).toStringAsFixed(2)  != '0.00' ? _d(n['venta_lunes']).toStringAsFixed(2)  : lvVenta;
@@ -401,6 +434,64 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _gastosNegocioCtrl.text       = _d(n['gastos_negocio']).toStringAsFixed(2);
       _otrosIngresosCtrl.text       = _d(n['otros_ingresos']).toStringAsFixed(2);
       _gastosFamiliaresCtrl.text    = _d(n['gastos_familiares']).toStringAsFixed(2);
+
+      // Cargar productos de Producción (si aplica)
+      final prodRaw = n['productos_json'];
+      if (prodRaw != null) {
+        try {
+          final prodList = json.decode(prodRaw.toString()) as List<dynamic>;
+          for (int i = 0; i < prodList.length && i < _kProdCount; i++) {
+            final p = Map<String, dynamic>.from(prodList[i] as Map);
+            _prodNameCtrl[i].text          = _s(p['nombre']);
+            // Materias primas (nombre + valor)
+            final mats = p['materias'];
+            if (mats is List) {
+              for (int m = 0; m < mats.length && m < _kMatCount; m++) {
+                final mat = mats[m];
+                if (mat is Map) {
+                  _prodMatNomCtrl[i][m].text = mat['nombre']?.toString() ?? '';
+                  _prodMatCtrl[i][m].text    = mat['valor']?.toString() ?? '';
+                } else {
+                  // retrocompatibilidad: si solo viene el valor
+                  _prodMatCtrl[i][m].text = mat?.toString() ?? '';
+                }
+              }
+            }
+            _prodManoCtrl[i].text          = _s(p['mano_obra']);
+            _prodEmpaqueCtrl[i].text       = _s(p['empaques']);
+            _prodOtrosCtrl[i].text         = _s(p['otros_costos']);
+            _prodUnidadesProdCtrl[i].text  = _s(p['unidades_producidas']);
+            _prodPrecioCtrl[i].text        = _s(p['precio_unitario']);
+            _prodUnidadesVendCtrl[i].text  = _s(p['unidades_vendidas']);
+            _prodUnidExistCtrl[i].text     = _s(p['unidades_verificadas']);
+          }
+        } catch (_) {}
+      }
+
+      // Cargar productos de Comercio (si aplica)
+      final comProdsRaw = n['comercio_productos_json'];
+      if (comProdsRaw != null) {
+        try {
+          final comList = json.decode(comProdsRaw.toString()) as List<dynamic>;
+          for (int i = 0; i < comList.length && i < _kComProdCount; i++) {
+            final p = Map<String, dynamic>.from(comList[i] as Map);
+            _comNombreCtrl[i].text     = _s(p['nombre']);
+            _comCostoCtrl[i].text      = _s(p['costo_unidad']);
+            _comPrecioCtrl[i].text     = _s(p['precio_venta_unidad']);
+            _comTipoUnidadCtrl[i].text = _s(p['tipo_unidad']);
+            _comCantidadCtrl[i].text   = _s(p['cantidad_vendida_mes']);
+            _comUnidExistCtrl[i].text  = _s(p['unidades_existentes']);
+          }
+        } catch (_) {}
+      }
+
+      // Cargar activos fijos del negocio
+      _cargarActivosFijos(n['activos_negocio_json'],
+          _actNegDescCtrl, _actNegMarcaCtrl, _actNegModeloCtrl, _actNegSerieCtrl, _actNegValorCtrl);
+
+      // Cargar activos fijos del hogar
+      _cargarActivosFijos(n['activos_hogar_json'],
+          _actHogDescCtrl, _actHogMarcaCtrl, _actHogModeloCtrl, _actHogSerieCtrl, _actHogValorCtrl);
     }
 
     // ── Encuesta comercial ─────────────────────────────────────
@@ -428,7 +519,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _razonMalaExp   = _i(e['razon_mala_experiencia'])       == 1;
       _razonOtrosCtrl.text = _s(e['razon_otros']);
       final ac = _s(e['acuerdo_logrado']);
-      if (ac.isNotEmpty) _acuerdo = ac;
+      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+      if (ac.isNotEmpty && _validAcuerdos.contains(ac)) _acuerdo = ac;
       _fechaAcuerdo = _fecha(_s(e['fecha_acuerdo']));
       _horaAcuerdo  = _hora (_s(e['hora_acuerdo']));
       final obs = _s(e['observaciones']);
@@ -532,13 +624,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _gastosFamiliaresCtrl.dispose();
     // Dispose producción controllers
     for (final c in _prodNameCtrl) c.dispose();
+    for (final c in _prodCostoCtrl) c.dispose();
+    for (final c in _prodPrecioCtrl) c.dispose();
+    for (final c in _prodTipoUnidadCtrl) c.dispose();
+    for (final c in _prodUnidadesVendCtrl) c.dispose();
+    for (final c in _prodUnidExistCtrl) c.dispose();
+    for (final row in _prodMatNomCtrl) for (final c in row) c.dispose();
     for (final row in _prodMatCtrl) for (final c in row) c.dispose();
     for (final c in _prodManoCtrl) c.dispose();
     for (final c in _prodEmpaqueCtrl) c.dispose();
     for (final c in _prodOtrosCtrl) c.dispose();
     for (final c in _prodUnidadesProdCtrl) c.dispose();
-    for (final c in _prodPrecioCtrl) c.dispose();
-    for (final c in _prodUnidadesVendCtrl) c.dispose();
+    // Comercio
+    for (final c in _comNombreCtrl) c.dispose();
+    for (final c in _comCostoCtrl) c.dispose();
+    for (final c in _comPrecioCtrl) c.dispose();
+    for (final c in _comTipoUnidadCtrl) c.dispose();
+    for (final c in _comCantidadCtrl) c.dispose();
+    for (final c in _comUnidExistCtrl) c.dispose();
+    // Activos fijos negocio
+    for (final c in _actNegDescCtrl)   c.dispose();
+    for (final c in _actNegMarcaCtrl)  c.dispose();
+    for (final c in _actNegModeloCtrl) c.dispose();
+    for (final c in _actNegSerieCtrl)  c.dispose();
+    for (final c in _actNegValorCtrl)  c.dispose();
+    // Activos fijos hogar
+    for (final c in _actHogDescCtrl)   c.dispose();
+    for (final c in _actHogMarcaCtrl)  c.dispose();
+    for (final c in _actHogModeloCtrl) c.dispose();
+    for (final c in _actHogSerieCtrl)  c.dispose();
+    for (final c in _actHogValorCtrl)  c.dispose();
     _instInvCtrl.dispose();
     _valorInvCtrl.dispose();
     _plazoInvCtrl.dispose();
@@ -857,17 +972,27 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     // Validaciones específicas de empresa
     if (_tieneEmpresa) {
-      if (_tipoEmpresa == null || _tipoEmpresa!.isEmpty) {
+      if (!_tipoServProduccion && !_tipoComercio) {
         setState(() => _guardando = false);
-        _mostrarError('Seleccione el tipo de empresa (Servicio/Product o Producción)');
+        _mostrarError('Seleccione el tipo de empresa (Servicio/Producción o Comercio)');
         return;
       }
-      if (_tipoEmpresa == 'produccion') {
-        // Validar nombres de los 5 productos (mínimo 5)
+      if (_tipoServProduccion) {
+        // Validar nombres de los 5 productos de producción (mínimo 5)
         for (int i = 0; i < 5; i++) {
           if (_prodNameCtrl[i].text.trim().isEmpty) {
             setState(() => _guardando = false);
-            _mostrarError('Ingrese el nombre del Producto ${i + 1} (mínimo 5 productos)');
+            _mostrarError('Ingrese el nombre del Producto de Producción ${i + 1} (mínimo 5)');
+            return;
+          }
+        }
+      }
+      if (_tipoComercio) {
+        // Validar nombres de los 5 productos de comercio (mínimo 5)
+        for (int i = 0; i < 5; i++) {
+          if (_comNombreCtrl[i].text.trim().isEmpty) {
+            setState(() => _guardando = false);
+            _mostrarError('Ingrese el nombre del Producto Comercializado ${i + 1} (mínimo 5)');
             return;
           }
         }
@@ -923,6 +1048,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'conoce_limite_rise':   _conoceLimiteRise == null ? '' : (_conoceLimiteRise! ? '1' : '0'),
       'tiene_empresa': _tieneEmpresa ? '1' : '0',
       'nombre_empresa': _empresaCtrl.text.trim(),
+      'tipo_empresa': [if (_tipoServProduccion) 'servicio_produccion', if (_tipoComercio) 'comercio'].join(','),
       // Empresa/Negocio (si aplica)
       // Enviar tanto los campos agrupados (compatibilidad) como por día
       'venta_lv':        _tieneEmpresa ? avgVentaLv.toStringAsFixed(2) : '',
@@ -1020,41 +1146,89 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       });
     }
 
-    // Si producción: empaquetar productos en JSON para envío
-    if (_tipoEmpresa == 'produccion') {
+    // Si Comercio: empaquetar productos de comercio en JSON para envío
+    if (_tipoComercio) {
+      final comProds = <Map<String, dynamic>>[];
+      for (int i = 0; i < _kComProdCount; i++) {
+        final costoVal   = _toDouble(_comCostoCtrl[i].text);
+        final precioVal  = _toDouble(_comPrecioCtrl[i].text);
+        final cantVal    = _toDouble(_comCantidadCtrl[i].text);
+        final unidVal    = _toDouble(_comUnidExistCtrl[i].text);
+        final margen     = precioVal > 0 ? (costoVal / precioVal) * 100 : 0.0;
+        comProds.add({
+          'nombre': _comNombreCtrl[i].text.trim(),
+          'costo_unidad': costoVal.toStringAsFixed(2),
+          'precio_venta_unidad': precioVal.toStringAsFixed(2),
+          'tipo_unidad': _comTipoUnidadCtrl[i].text.trim(),
+          'cantidad_vendida_mes': cantVal.toStringAsFixed(0),
+          'margen_utilidad': margen.toStringAsFixed(2),
+          'unidades_existentes': unidVal.toStringAsFixed(0),
+          'costo_total_compra': (costoVal * cantVal).toStringAsFixed(2),
+          'venta_mes': (precioVal * cantVal).toStringAsFixed(2),
+          'inventario': (unidVal * costoVal).toStringAsFixed(2),
+        });
+      }
+      body['comercio_productos_json'] = json.encode(comProds);
+    }
+
+    // Si Servicio/Producción: empaquetar productos en JSON para envío
+    if (_tipoServProduccion) {
       final prods = <Map<String, dynamic>>[];
       for (int i = 0; i < _kProdCount; i++) {
-        final matsList = _prodMatCtrl[i].map((c) => c.text.trim()).toList();
-        final double totalMat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
-        final double manoVal = _toDouble(_prodManoCtrl[i].text);
-        final double empaVal = _toDouble(_prodEmpaqueCtrl[i].text);
-        final double otrosVal = _toDouble(_prodOtrosCtrl[i].text);
-        final double costoTotalVal = totalMat + manoVal + empaVal + otrosVal;
-        final double unidadesProdVal = _toDouble(_prodUnidadesProdCtrl[i].text);
-        final double costoUnitarioVal = unidadesProdVal > 0 ? costoTotalVal / unidadesProdVal : 0.0;
-        final double precioVal = _toDouble(_prodPrecioCtrl[i].text);
-        final double unidadesVendVal = _toDouble(_prodUnidadesVendCtrl[i].text);
-        final double ventasMensualesVal = precioVal * unidadesVendVal;
-        final double costoVentasVal = costoUnitarioVal * unidadesVendVal;
+        // Construir lista de materias con nombre + valor
+        final matsList = List.generate(_kMatCount, (m) => {
+          'nombre': _prodMatNomCtrl[i][m].text.trim(),
+          'valor':  _prodMatCtrl[i][m].text.trim(),
+        });
+        final totalMat   = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+        final manoVal    = _toDouble(_prodManoCtrl[i].text);
+        final empaVal    = _toDouble(_prodEmpaqueCtrl[i].text);
+        final otrosVal   = _toDouble(_prodOtrosCtrl[i].text);
+        final costoTotal = totalMat + manoVal + empaVal + otrosVal;             // (1)
+        final unidProd   = _toDouble(_prodUnidadesProdCtrl[i].text);            // (2)
+        final costoUnit  = unidProd * costoTotal;                               // A = (2)×(1)
+        final precioB    = _toDouble(_prodPrecioCtrl[i].text);                  // B
+        final unidVendC  = _toDouble(_prodUnidadesVendCtrl[i].text);            // C
+        final unidVerifD = _toDouble(_prodUnidExistCtrl[i].text);               // D
 
         prods.add({
-          'nombre': _prodNameCtrl[i].text.trim(),
-          'materias': matsList,
-          'total_materia': totalMat.toStringAsFixed(2),
-          'mano_obra': manoVal.toStringAsFixed(2),
-          'empaques': empaVal.toStringAsFixed(2),
-          'otros': otrosVal.toStringAsFixed(2),
-          'costo_total': costoTotalVal.toStringAsFixed(2),
-          'unidades_producidas': _prodUnidadesProdCtrl[i].text.trim(),
-          'costo_unitario': costoUnitarioVal.toStringAsFixed(4),
-          'precio_unitario': _prodPrecioCtrl[i].text.trim(),
-          'unidades_vendidas_mes': _prodUnidadesVendCtrl[i].text.trim(),
-          'ventas_mensuales': ventasMensualesVal.toStringAsFixed(2),
-          'costo_ventas': costoVentasVal.toStringAsFixed(2),
+          'nombre':              _prodNameCtrl[i].text.trim(),
+          'materias':            matsList,
+          'total_materia_prima': totalMat.toStringAsFixed(2),
+          'mano_obra':           manoVal.toStringAsFixed(2),
+          'empaques':            empaVal.toStringAsFixed(2),
+          'otros_costos':        otrosVal.toStringAsFixed(2),
+          'costo_total':         costoTotal.toStringAsFixed(2),     // (1)
+          'unidades_producidas': unidProd.toStringAsFixed(0),       // (2)
+          'costo_unitario':      costoUnit.toStringAsFixed(4),      // A
+          'precio_unitario':     precioB.toStringAsFixed(2),        // B
+          'unidades_vendidas':   unidVendC.toStringAsFixed(0),      // C
+          'unidades_verificadas':unidVerifD.toStringAsFixed(0),     // D
+          'ventas_mensuales':    (precioB * unidVendC).toStringAsFixed(2),     // B×C
+          'costo_ventas':        (costoUnit * unidVendC).toStringAsFixed(2),   // A×C
+          'inventarios':         (costoUnit * unidVerifD).toStringAsFixed(2),  // A×D
         });
       }
       body['productos_json'] = json.encode(prods);
     }
+
+    // Activos fijos del negocio
+    body['activos_negocio_json'] = json.encode(List.generate(_kActivosCount, (i) => {
+      'descripcion':    _actNegDescCtrl[i].text.trim(),
+      'marca':          _actNegMarcaCtrl[i].text.trim(),
+      'modelo':         _actNegModeloCtrl[i].text.trim(),
+      'serie':          _actNegSerieCtrl[i].text.trim(),
+      'valor_comercial':_actNegValorCtrl[i].text.trim(),
+    }));
+
+    // Activos fijos del hogar
+    body['activos_hogar_json'] = json.encode(List.generate(_kActivosCount, (i) => {
+      'descripcion':    _actHogDescCtrl[i].text.trim(),
+      'marca':          _actHogMarcaCtrl[i].text.trim(),
+      'modelo':         _actHogModeloCtrl[i].text.trim(),
+      'serie':          _actHogSerieCtrl[i].text.trim(),
+      'valor_comercial':_actHogValorCtrl[i].text.trim(),
+    }));
 
     try {
       final endpoint = widget.modoEdicion
@@ -1941,6 +2115,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               setState(() {
                 _tieneEmpresa = v;
                 if (!_tieneEmpresa) {
+                  // Limpiar tipo empresa
+                  _tipoServProduccion = false;
+                  _tipoComercio = false;
                   // Limpiar datos del paso negocio si el usuario desactiva
                   _ventaLunCtrl.clear();
                   _ventaMarCtrl.clear();
@@ -1989,30 +2166,93 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               },
             ),
             const SizedBox(height: 8),
-            // Tipo de empresa: servicio/producto vs comercio vs producción
+            // Tipo de empresa: checkboxes estilo radio (puede seleccionar uno o ambos)
             Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: DropdownButtonFormField<String>(
-                value: _tipoEmpresa,
-                decoration: InputDecoration(
-                  labelText: 'Tipo de empresa',
-                  floatingLabelBehavior: FloatingLabelBehavior.always,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                'Tipo de empresa',
+                style: TextStyle(
+                  color: ConstantColors.textDarkGrey,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'servicio_producto', child: Text('Servicio / Producto')),
-                  DropdownMenuItem(value: 'produccion', child: Text('Producción')),
-                ],
-                onChanged: (v) => setState(() => _tipoEmpresa = v),
               ),
             ),
-            // Si es producción, mostrar sección de productos
-            if (_tipoEmpresa == 'produccion') ...[
-              const SizedBox(height: 12),
-              _seccionTitulo('Productos (mínimo 5)'),
-              for (int i = 0; i < _kProdCount; i++) _buildProductoCard(i),
-            ],
+            const SizedBox(height: 6),
+            ...[
+              (
+                key: 'servicio_produccion',
+                label: '🏭 Servicio / Producción',
+                sub: 'Produce o presta servicios',
+                selected: _tipoServProduccion,
+                onTap: () => setState(() => _tipoServProduccion = !_tipoServProduccion),
+              ),
+              (
+                key: 'comercio',
+                label: '🛒 Comercio',
+                sub: 'Compra y venta de productos',
+                selected: _tipoComercio,
+                onTap: () => setState(() => _tipoComercio = !_tipoComercio),
+              ),
+            ].map((opt) {
+              return GestureDetector(
+                onTap: opt.onTap,
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: opt.selected
+                        ? ConstantColors.warning.withOpacity(0.12)
+                        : ConstantColors.grey100,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: opt.selected
+                          ? ConstantColors.warning
+                          : ConstantColors.borderLight,
+                      width: opt.selected ? 1.5 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        opt.selected
+                            ? Icons.check_box_rounded
+                            : Icons.check_box_outline_blank_rounded,
+                        color: opt.selected
+                            ? ConstantColors.warning
+                            : ConstantColors.textDarkGrey,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              opt.label,
+                              style: TextStyle(
+                                color: ConstantColors.textDark,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              opt.sub,
+                              style: TextStyle(
+                                color: ConstantColors.textDarkGrey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+            // Los productos se muestran en el paso siguiente (Empresa/Negocio),
+            // después de las preguntas de ingresos y gastos.
           ],
           ],
         ],
@@ -2194,6 +2434,540 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ],
             ),
           ),
+
+          // ── Productos según tipo de empresa ─────────────────────
+          if (_tipoServProduccion) ...[
+            const SizedBox(height: 24),
+            _seccionTituloDestacado('🏭 Productos de Producción', 'Ingrese mínimo 5 productos'),
+            const SizedBox(height: 8),
+            for (int i = 0; i < _kProdCount; i++) _buildProductoCard(i),
+            _buildResumenProductos(
+              llenos: List.generate(_kProdCount, (i) => _prodNameCtrl[i].text.trim().isNotEmpty).where((v) => v).length,
+              totalCostoCompras: List.generate(_kProdCount, (i) {
+                // Costo de ventas = costoUnitario × C (unidades vendidas)
+                final mat    = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+                final ct     = mat + _toDouble(_prodManoCtrl[i].text) + _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
+                final up     = _toDouble(_prodUnidadesProdCtrl[i].text);
+                final cu     = up * ct;                                    // A = (2)×(1)
+                return cu * _toDouble(_prodUnidadesVendCtrl[i].text);
+              }).fold(0.0, (a, b) => a + b),
+              totalVentasMes: List.generate(_kProdCount, (i) =>
+                _toDouble(_prodPrecioCtrl[i].text) * _toDouble(_prodUnidadesVendCtrl[i].text)
+              ).fold(0.0, (a, b) => a + b),
+              totalInventario: List.generate(_kProdCount, (i) {
+                // Inventarios = costoUnitario × D (unidades verificadas)
+                final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+                final ct  = mat + _toDouble(_prodManoCtrl[i].text) + _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
+                final up  = _toDouble(_prodUnidadesProdCtrl[i].text);
+                final cu  = up * ct;                                       // A = (2)×(1)
+                return cu * _toDouble(_prodUnidExistCtrl[i].text);
+              }).fold(0.0, (a, b) => a + b),
+              minimo: _kProdCount,
+            ),
+          ],
+
+          if (_tipoComercio) ...[
+            const SizedBox(height: 24),
+            _seccionTituloDestacado('🛒 Productos Comercializados', 'Ingrese mínimo 5 productos'),
+            const SizedBox(height: 8),
+            for (int i = 0; i < _kComProdCount; i++) _buildComercioProductoCard(i),
+            _buildResumenProductos(
+              llenos: List.generate(_kComProdCount, (i) => _comNombreCtrl[i].text.trim().isNotEmpty).where((v) => v).length,
+              totalCostoCompras: List.generate(_kComProdCount, (i) => _toDouble(_comCantidadCtrl[i].text) * _toDouble(_comCostoCtrl[i].text)).fold(0.0, (a, b) => a + b),
+              totalVentasMes:    List.generate(_kComProdCount, (i) => _toDouble(_comPrecioCtrl[i].text) * _toDouble(_comCantidadCtrl[i].text)).fold(0.0, (a, b) => a + b),
+              totalInventario:   List.generate(_kComProdCount, (i) => _toDouble(_comUnidExistCtrl[i].text) * _toDouble(_comCostoCtrl[i].text)).fold(0.0, (a, b) => a + b),
+              minimo: _kComProdCount,
+            ),
+          ],
+
+          // ── Activos Fijos del Negocio ──────────────────────────
+          const SizedBox(height: 28),
+          _buildActivosFijos(
+            titulo: '🏢 Activos Fijos del Negocio',
+            descControllers:   _actNegDescCtrl,
+            marcaControllers:  _actNegMarcaCtrl,
+            modeloControllers: _actNegModeloCtrl,
+            serieControllers:  _actNegSerieCtrl,
+            valorControllers:  _actNegValorCtrl,
+          ),
+
+          // ── Activos Fijos del Hogar ────────────────────────────
+          const SizedBox(height: 24),
+          _buildActivosFijos(
+            titulo: '🏠 Activos Fijos del Hogar',
+            descControllers:   _actHogDescCtrl,
+            marcaControllers:  _actHogMarcaCtrl,
+            modeloControllers: _actHogModeloCtrl,
+            serieControllers:  _actHogSerieCtrl,
+            valorControllers:  _actHogValorCtrl,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _cargarActivosFijos(
+    dynamic raw,
+    List<TextEditingController> desc,
+    List<TextEditingController> marca,
+    List<TextEditingController> modelo,
+    List<TextEditingController> serie,
+    List<TextEditingController> valor,
+  ) {
+    if (raw == null) return;
+    try {
+      final list = json.decode(raw.toString()) as List<dynamic>;
+      for (int i = 0; i < list.length && i < _kActivosCount; i++) {
+        final a = Map<String, dynamic>.from(list[i] as Map);
+        final s = (dynamic v) => (v ?? '').toString();
+        desc[i].text   = s(a['descripcion']);
+        marca[i].text  = s(a['marca']);
+        modelo[i].text = s(a['modelo']);
+        serie[i].text  = s(a['serie']);
+        valor[i].text  = s(a['valor_comercial']);
+      }
+    } catch (_) {}
+  }
+
+  Widget _buildActivosFijos({
+    required String titulo,
+    required List<TextEditingController> descControllers,
+    required List<TextEditingController> marcaControllers,
+    required List<TextEditingController> modeloControllers,
+    required List<TextEditingController> serieControllers,
+    required List<TextEditingController> valorControllers,
+  }) {
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        void rebuild() { setLocal(() {}); setState(() {}); }
+
+        final totalValor = valorControllers.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ConstantColors.borderLight),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Encabezado
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.10),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                  border: Border(bottom: BorderSide(color: const Color(0xFF3B82F6).withOpacity(0.3))),
+                ),
+                child: Row(children: [
+                  Icon(Icons.account_balance_rounded, color: const Color(0xFF3B82F6), size: 20),
+                  const SizedBox(width: 10),
+                  Text(titulo,
+                      style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+                ]),
+              ),
+
+              // Cabecera de columnas
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                color: ConstantColors.grey100,
+                child: Row(children: [
+                  Expanded(flex: 4, child: _colHeader('DESCRIPCIÓN')),
+                  const SizedBox(width: 6),
+                  Expanded(flex: 3, child: _colHeader('MARCA')),
+                  const SizedBox(width: 6),
+                  Expanded(flex: 3, child: _colHeader('MODELO')),
+                  const SizedBox(width: 6),
+                  Expanded(flex: 3, child: _colHeader('SERIE')),
+                  const SizedBox(width: 6),
+                  Expanded(flex: 3, child: _colHeader('VALOR \$', right: true)),
+                ]),
+              ),
+
+              // Filas de activos
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                child: Column(
+                  children: List.generate(_kActivosCount, (i) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(flex: 4, child: _campoActivoTexto(descControllers[i],   'Descripción', rebuild)),
+                          const SizedBox(width: 6),
+                          Expanded(flex: 3, child: _campoActivoTexto(marcaControllers[i],  'Marca',       rebuild)),
+                          const SizedBox(width: 6),
+                          Expanded(flex: 3, child: _campoActivoTexto(modeloControllers[i], 'Modelo',      rebuild)),
+                          const SizedBox(width: 6),
+                          Expanded(flex: 3, child: _campoActivoTexto(serieControllers[i],  'Serie',       rebuild)),
+                          const SizedBox(width: 6),
+                          Expanded(flex: 3, child: _campoActivoValor(valorControllers[i],  rebuild)),
+                        ],
+                      ),
+                    );
+                  }),
+                ),
+              ),
+
+              // Fila TOTAL
+              Container(
+                margin: const EdgeInsets.fromLTRB(12, 4, 12, 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: ConstantColors.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ConstantColors.warning.withOpacity(0.5), width: 1.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('VALOR TOTAL',
+                        style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 14)),
+                    Text('\$${totalValor.toStringAsFixed(2)}',
+                        style: TextStyle(color: ConstantColors.warning, fontWeight: FontWeight.w900, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _colHeader(String txt, {bool right = false}) {
+    return Text(txt,
+        textAlign: right ? TextAlign.right : TextAlign.left,
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: ConstantColors.textDarkGrey, letterSpacing: 0.3));
+  }
+
+  Widget _campoActivoTexto(TextEditingController ctrl, String hint, VoidCallback onChanged) {
+    return TextFormField(
+      controller: ctrl,
+      onChanged: (_) => onChanged(),
+      style: TextStyle(color: ConstantColors.textDark, fontSize: 12),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey.withOpacity(0.6)),
+        filled: true,
+        fillColor: ConstantColors.grey100,
+        isDense: true,
+        border:        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ConstantColors.borderLight)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ConstantColors.borderLight)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: const Color(0xFF3B82F6), width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      ),
+    );
+  }
+
+  Widget _campoActivoValor(TextEditingController ctrl, VoidCallback onChanged) {
+    return TextFormField(
+      controller: ctrl,
+      onChanged: (_) => onChanged(),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+      textAlign: TextAlign.right,
+      style: TextStyle(color: ConstantColors.textDark, fontSize: 12, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        hintText: '0.00',
+        hintStyle: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey.withOpacity(0.5)),
+        filled: true,
+        fillColor: ConstantColors.backgroundYellowLight,
+        isDense: true,
+        border:        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ConstantColors.borderYellow)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ConstantColors.borderYellow)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ConstantColors.warning, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      ),
+    );
+  }
+
+  Widget _buildResumenProductos({
+    required int llenos,
+    required double totalCostoCompras,
+    required double totalVentasMes,
+    required double totalInventario,
+    required int minimo,
+  }) {
+    final completo = llenos >= minimo;
+    return Container(
+      margin: const EdgeInsets.only(top: 4, bottom: 8),
+      decoration: BoxDecoration(
+        color: completo ? ConstantColors.success.withOpacity(0.07) : ConstantColors.error.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: completo ? ConstantColors.success.withOpacity(0.4) : ConstantColors.error.withOpacity(0.35),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          // Barra de estado de productos llenados
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: completo ? ConstantColors.success.withOpacity(0.12) : ConstantColors.error.withOpacity(0.09),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(15), topRight: Radius.circular(15)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  completo ? Icons.check_circle_rounded : Icons.warning_rounded,
+                  color: completo ? ConstantColors.success : ConstantColors.error,
+                  size: 20,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    completo
+                        ? 'Todos los productos completados ($llenos/$minimo)'
+                        : 'Faltan productos por completar ($llenos/$minimo)',
+                    style: TextStyle(
+                      color: completo ? ConstantColors.success : ConstantColors.error,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Totales
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              children: [
+                Row(children: [
+                  Expanded(child: _totalItem('Costo total compras', '\$${totalCostoCompras.toStringAsFixed(2)}', ConstantColors.warning)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _totalItem('Ventas al mes',        '\$${totalVentasMes.toStringAsFixed(2)}',    ConstantColors.success)),
+                ]),
+                const SizedBox(height: 10),
+                _totalItem('Inventario total', '\$${totalInventario.toStringAsFixed(2)}', const Color(0xFF3B82F6)),
+              ],
+            ),
+          ),
+          if (!completo)
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 14),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: ConstantColors.error, size: 16),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Complete los $minimo productos para poder continuar',
+                      style: TextStyle(color: ConstantColors.error, fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _totalItem(String label, String valor, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+          const SizedBox(height: 3),
+          Text(valor, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _seccionTituloDestacado(String titulo, String subtitulo) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: ConstantColors.warning.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ConstantColors.warning.withOpacity(0.4)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo, style: TextStyle(color: ConstantColors.textDark, fontSize: 15, fontWeight: FontWeight.w800)),
+                Text(subtitulo, style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildComercioProductoCard(int idx) {
+    final n = idx + 1;
+    final nombre    = _comNombreCtrl[idx];
+    final costo     = _comCostoCtrl[idx];
+    final precio    = _comPrecioCtrl[idx];
+    final tipoUnid  = _comTipoUnidadCtrl[idx];
+    final cantidad  = _comCantidadCtrl[idx];
+    final unidExist = _comUnidExistCtrl[idx];
+
+    double _d(String s) => _toDouble(s);
+    double costoUnitVal()    => _d(costo.text);
+    double precioVentaVal()  => _d(precio.text);
+    double cantidadVal()     => _d(cantidad.text);
+    double unidExistVal()    => _d(unidExist.text);
+    // margen = costo / precio de unidad
+    double margenUtil() {
+      final p = precioVentaVal();
+      if (p <= 0) return 0;
+      return (costoUnitVal() / p) * 100;
+    }
+    double costoTotalCompra() => costoUnitVal() * cantidadVal();
+    double ventaMes()         => precioVentaVal() * cantidadVal();
+    double inventario()       => unidExistVal() * costoUnitVal();
+
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        void rebuild() {
+          setLocal(() {});
+          setState(() {});
+        }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ConstantColors.borderLight),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Encabezado
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.10),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                  border: Border(bottom: BorderSide(color: const Color(0xFF3B82F6).withOpacity(0.3))),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.shopping_cart_rounded, color: const Color(0xFF3B82F6), size: 20),
+                    const SizedBox(width: 8),
+                    Text('Producto $n', style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nombre
+                    _campo(controller: nombre, label: 'Nombre del producto', icon: Icons.label_rounded),
+                    const SizedBox(height: 6),
+                    // Costo y precio
+                    Row(children: [
+                      Expanded(child: _campoNumCom(costo,   'Costo por unidad',       Icons.price_change_outlined, rebuild)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _campoNumCom(precio,  'Precio de venta x unidad', Icons.sell_rounded,          rebuild)),
+                    ]),
+                    const SizedBox(height: 6),
+                    // Tipo unidad y cantidad vendida
+                    Row(children: [
+                      Expanded(child: _campo(controller: tipoUnid, label: 'Tipo de unidad', icon: Icons.straighten_rounded)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _campoNumCom(cantidad, 'Cantidad vendida al mes', Icons.shopping_bag_rounded, rebuild)),
+                    ]),
+                    const SizedBox(height: 6),
+                    // Unidades existentes
+                    _campoNumCom(unidExist, 'Unidades existentes (inventario)', Icons.inventory_rounded, rebuild),
+                    const SizedBox(height: 12),
+                    // Resultados calculados — Fila 1
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.grey100,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: ConstantColors.borderLight),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(children: [
+                            Expanded(child: _resultadoCom('Margen utilidad', '${margenUtil().toStringAsFixed(1)}%', ConstantColors.success)),
+                            const SizedBox(width: 8),
+                            Expanded(child: _resultadoCom('Costo total compra', '\$${costoTotalCompra().toStringAsFixed(2)}', ConstantColors.warning)),
+                          ]),
+                          const SizedBox(height: 8),
+                          Row(children: [
+                            Expanded(child: _resultadoCom('Venta mes', '\$${ventaMes().toStringAsFixed(2)}', const Color(0xFF3B82F6))),
+                            const SizedBox(width: 8),
+                            Expanded(child: _resultadoCom('Inventario', '\$${inventario().toStringAsFixed(2)}', ConstantColors.textDark)),
+                          ]),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _campoNumCom(TextEditingController ctrl, String label, IconData icon, VoidCallback onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextFormField(
+        controller: ctrl,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+        onChanged: (_) => onChanged(),
+        style: TextStyle(color: ConstantColors.textDark, fontSize: 14),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: const Color(0xFF3B82F6), size: 20),
+          filled: true,
+          fillColor: ConstantColors.grey100,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: ConstantColors.borderLight)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: ConstantColors.borderLight)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide(color: const Color(0xFF3B82F6), width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _resultadoCom(String label, String valor, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 10, color: ConstantColors.textDarkGrey)),
+          const SizedBox(height: 2),
+          Text(valor, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color)),
         ],
       ),
     );
@@ -2556,6 +3330,24 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
     if (_paso == _Paso.empresaNegocio) {
       if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
+
+      // Validar mínimo 5 productos de Producción
+      if (_tipoServProduccion) {
+        final llenosProd = List.generate(_kProdCount, (i) => _prodNameCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
+        if (llenosProd < _kProdCount) {
+          _mostrarError('Debe completar los $_kProdCount productos de Producción antes de continuar (faltan ${_kProdCount - llenosProd}).');
+          return;
+        }
+      }
+
+      // Validar mínimo 5 productos de Comercio
+      if (_tipoComercio) {
+        final llenosCom = List.generate(_kComProdCount, (i) => _comNombreCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
+        if (llenosCom < _kComProdCount) {
+          _mostrarError('Debe completar los $_kComProdCount productos Comercializados antes de continuar (faltan ${_kComProdCount - llenosCom}).');
+          return;
+        }
+      }
     }
     _irSiguientePaso();
   }
@@ -2717,57 +3509,265 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Producto (producción) ─────────────────────────────────
   Widget _buildProductoCard(int idx) {
-    final prodIndex = idx + 1;
-    final nombreCtrl = _prodNameCtrl[idx];
-    final mats = _prodMatCtrl[idx];
-    final mano = _prodManoCtrl[idx];
-    final empa = _prodEmpaqueCtrl[idx];
-    final otros = _prodOtrosCtrl[idx];
-    final unidadesProd = _prodUnidadesProdCtrl[idx];
-    final precio = _prodPrecioCtrl[idx];
-    final unidadesVend = _prodUnidadesVendCtrl[idx];
+    final n          = idx + 1;
+    final nombre     = _prodNameCtrl[idx];
+    final matsNom    = _prodMatNomCtrl[idx];  // nombres de materias 1-7
+    final mats       = _prodMatCtrl[idx];     // valores/costos de materias 1-7
+    final mano       = _prodManoCtrl[idx];    // total mano de obra
+    final empaque    = _prodEmpaqueCtrl[idx]; // empaques
+    final otros      = _prodOtrosCtrl[idx];   // otros costos indirectos
+    final unidProd   = _prodUnidadesProdCtrl[idx]; // (2) unidades producidas
+    final precioB    = _prodPrecioCtrl[idx];       // B. precio unitario
+    final unidVendC  = _prodUnidadesVendCtrl[idx]; // C. unidades vendidas mes
+    final unidVerifD = _prodUnidExistCtrl[idx];    // D. unidades verificadas
 
-    double sumMaterials() => mats.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
-    double parse(String s) => _toDouble(s);
-    double costoTotal() => sumMaterials() + parse(mano.text) + parse(empa.text) + parse(otros.text);
-    double costoUnitario() {
-      final up = _toDouble(unidadesProd.text);
-      return up > 0 ? costoTotal() / up : 0.0;
-    }
-    double ventasMensuales() => _toDouble(precio.text) * _toDouble(unidadesVend.text);
-    double costoVentas() => costoUnitario() * _toDouble(unidadesVend.text);
+    // ── Fórmulas (igual que Excel) ─────────────────────────────
+    double totalMateria()  => mats.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+    double costoTotal()    => totalMateria() + _toDouble(mano.text) + _toDouble(empaque.text) + _toDouble(otros.text);
+    double costoUnitario() => _toDouble(unidProd.text) * costoTotal(); // A = (2) × (1)
+    double ventasMensuales()  => _toDouble(precioB.text) * _toDouble(unidVendC.text);   // B × C
+    double costoDeVentas()    => costoUnitario() * _toDouble(unidVendC.text);            // A × C
+    double inventarios()      => costoUnitario() * _toDouble(unidVerifD.text);           // A × D
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Producto $prodIndex', style: TextStyle(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            _campo(controller: nombreCtrl, label: 'Nombre producto', icon: Icons.inventory_2_rounded),
-            const SizedBox(height: 6),
-            Text('Materia prima (ingrese costo por mes/unidad)', style: TextStyle(fontSize: 13, color: ConstantColors.textDarkGrey)),
-            const SizedBox(height: 6),
-            for (int m = 0; m < _kMatCount; m++) _diaCampo('Material ${m+1}', mats[m], Icons.precision_manufacturing_rounded),
-            const SizedBox(height: 6),
-            Row(children: [Expanded(child: _campo(controller: mano, label: 'Mano de obra', icon: Icons.handyman_rounded)), const SizedBox(width: 8), Expanded(child: _campo(controller: empa, label: 'Empaques', icon: Icons.inventory_2_rounded))]),
-            const SizedBox(height: 8),
-            _campo(controller: otros, label: 'Otros costos indirectos', icon: Icons.more_horiz_rounded),
-            const SizedBox(height: 8),
-            Text('Resultados', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            Row(children: [Expanded(child: Text('Total materia: ' + sumMaterials().toStringAsFixed(2))), Expanded(child: Text('Costo total: ' + costoTotal().toStringAsFixed(2)))]),
-            const SizedBox(height: 6),
-            Row(children: [Expanded(child: _campo(controller: unidadesProd, label: 'Unidades producidas', icon: Icons.production_quantity_limits_rounded)), const SizedBox(width: 8), Expanded(child: Text('Costo unitario: ' + costoUnitario().toStringAsFixed(4)))]),
-            const SizedBox(height: 6),
-            Row(children: [Expanded(child: _campo(controller: precio, label: 'Precio unitario', icon: Icons.attach_money_rounded)), const SizedBox(width: 8), Expanded(child: _campo(controller: unidadesVend, label: 'Unidades vendidas (mes)', icon: Icons.store_rounded))]),
-            const SizedBox(height: 6),
-            Row(children: [Expanded(child: Text('Ventas mensuales: ' + ventasMensuales().toStringAsFixed(2))), Expanded(child: Text('Costo de ventas: ' + costoVentas().toStringAsFixed(2)))]),
-          ],
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        void rebuild() { setLocal(() {}); setState(() {}); }
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ConstantColors.borderLight),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 8, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Encabezado ──────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: ConstantColors.warning.withOpacity(0.12),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                  border: Border(bottom: BorderSide(color: ConstantColors.warning.withOpacity(0.35))),
+                ),
+                child: Row(children: [
+                  Icon(Icons.precision_manufacturing_rounded, color: ConstantColors.warning, size: 22),
+                  const SizedBox(width: 10),
+                  Text('PRODUCTO $n',
+                      style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
+                ]),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nombre
+                    _campo(controller: nombre, label: 'Nombre del producto', icon: Icons.inventory_2_rounded),
+
+                    // ── Materias primas 1-7 (nombre + valor) ─────
+                    _subTituloProd('Materias primas', Icons.grain_rounded),
+                    const SizedBox(height: 6),
+                    for (int m = 0; m < _kMatCount; m++) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Número de materia
+                          Container(
+                            margin: const EdgeInsets.only(top: 14, right: 8),
+                            width: 22,
+                            height: 22,
+                            decoration: BoxDecoration(
+                              color: ConstantColors.warning.withOpacity(0.15),
+                              shape: BoxShape.circle,
+                              border: Border.all(color: ConstantColors.warning.withOpacity(0.5)),
+                            ),
+                            child: Center(
+                              child: Text('${m + 1}',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ConstantColors.warning)),
+                            ),
+                          ),
+                          // Nombre de la materia
+                          Expanded(
+                            flex: 5,
+                            child: _campoTextoMat(matsNom[m], 'Nombre materia ${m + 1}', rebuild),
+                          ),
+                          const SizedBox(width: 8),
+                          // Valor/costo
+                          Expanded(
+                            flex: 3,
+                            child: _campoNumProd(mats[m], 'Valor \$', Icons.attach_money_rounded, rebuild),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Total Materia Prima calculado
+                    _filaCalculada('Total Materia Prima', totalMateria(), ConstantColors.warning.withOpacity(0.85)),
+                    const SizedBox(height: 10),
+
+                    // ── Costos adicionales ───────────────────────
+                    _subTituloProd('Costos adicionales', Icons.attach_money_rounded),
+                    const SizedBox(height: 6),
+                    _campoNumProd(mano,    'Total Mano de Obra',       Icons.handyman_rounded,         rebuild),
+                    _campoNumProd(empaque, 'Empaques',                 Icons.inventory_2_rounded,       rebuild),
+                    _campoNumProd(otros,   'Otros costos indirectos',  Icons.more_horiz_rounded,        rebuild),
+
+                    // Costo Total (1)
+                    _filaCalculada('Costo Total  (1)', costoTotal(), ConstantColors.warning.withOpacity(0.85)),
+                    const SizedBox(height: 10),
+
+                    // ── Producción y precio ──────────────────────
+                    _subTituloProd('Producción y precio', Icons.sell_rounded),
+                    const SizedBox(height: 6),
+                    _campoNumProd(unidProd,  'Unidades producidas  (2)', Icons.production_quantity_limits_rounded, rebuild),
+
+                    // A. Costo unitario = (1)/(2)
+                    _filaCalculadaDestacada('A.  Costo unitario  (2×1)', costoUnitario()),
+                    const SizedBox(height: 8),
+
+                    _campoNumProd(precioB,   'B.  Precio unitario',      Icons.sell_rounded,              rebuild),
+                    _campoNumProd(unidVendC, 'C.  Unidades vendidas mes', Icons.shopping_bag_rounded,      rebuild),
+                    _campoNumProd(unidVerifD,'D.  Unidades verificadas',  Icons.verified_rounded,          rebuild),
+                    const SizedBox(height: 10),
+
+                    // ── Resultados finales ───────────────────────
+                    _subTituloProd('Resultados', Icons.bar_chart_rounded),
+                    const SizedBox(height: 8),
+                    Row(children: [
+                      Expanded(child: _resultadoProd('Ventas mensuales\n(B × C)',  '\$${ventasMensuales().toStringAsFixed(2)}', ConstantColors.success)),
+                      const SizedBox(width: 8),
+                      Expanded(child: _resultadoProd('Costo de ventas\n(A × C)',   '\$${costoDeVentas().toStringAsFixed(2)}',   ConstantColors.warning)),
+                    ]),
+                    const SizedBox(height: 8),
+                    _resultadoProd('Inventarios  (A × D)', '\$${inventarios().toStringAsFixed(2)}', const Color(0xFF3B82F6)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Helpers visuales para producción ────────────────────────
+
+  Widget _subTituloProd(String texto, IconData icono) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 4),
+      child: Row(children: [
+        Icon(icono, size: 15, color: ConstantColors.warning),
+        const SizedBox(width: 6),
+        Text(texto, style: TextStyle(color: ConstantColors.textDark, fontSize: 13, fontWeight: FontWeight.w700)),
+      ]),
+    );
+  }
+
+  Widget _filaCalculada(String label, double valor, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.10),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.45)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: ConstantColors.textDark, fontSize: 13, fontWeight: FontWeight.w600)),
+          Text('\$${valor.toStringAsFixed(2)}',
+              style: TextStyle(color: color, fontSize: 15, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
+  Widget _filaCalculadaDestacada(String label, double valor) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: ConstantColors.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ConstantColors.error.withOpacity(0.5), width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: ConstantColors.textDark, fontSize: 13, fontWeight: FontWeight.w700)),
+          Text('\$${valor.toStringAsFixed(4)}',
+              style: TextStyle(color: ConstantColors.error, fontSize: 15, fontWeight: FontWeight.w800)),
+        ],
+      ),
+    );
+  }
+
+  Widget _campoTextoMat(TextEditingController ctrl, String label, VoidCallback onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: ctrl,
+        onChanged: (_) => onChanged(),
+        style: TextStyle(color: ConstantColors.textDark, fontSize: 13),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey),
+          prefixIcon: Icon(Icons.grain_rounded, color: ConstantColors.textDarkGrey, size: 17),
+          filled: true,
+          fillColor: ConstantColors.grey100,
+          border:        OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ConstantColors.borderLight)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ConstantColors.borderLight)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ConstantColors.warning, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
+      ),
+    );
+  }
+
+  Widget _campoNumProd(TextEditingController ctrl, String label, IconData icon, VoidCallback onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: ctrl,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+        onChanged: (_) => onChanged(),
+        style: TextStyle(color: ConstantColors.textDark, fontSize: 14),
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: ConstantColors.warning, size: 19),
+          filled: true,
+          fillColor: ConstantColors.grey100,
+          border:        OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ConstantColors.borderLight)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ConstantColors.borderLight)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: ConstantColors.warning, width: 1.5)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _resultadoProd(String label, String valor, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey, height: 1.3)),
+          const SizedBox(height: 4),
+          Text(valor, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+        ],
       ),
     );
   }
@@ -2813,18 +3813,19 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   Widget _dropdownAcuerdo() {
     final opciones = [
-      ('ninguno', 'Ninguno'),
-      ('nueva_cita_campo', 'Nueva cita en campo'),
+      ('',                   'Ninguno'),
+      ('nueva_cita_campo',   'Nueva cita en campo'),
       ('nueva_cita_oficina', 'Nueva cita en oficina'),
-      ('recolectar_documentacion', 'Recolectar documentación'),
-      ('levantamiento_campo', 'Levantamiento en campo'),
+      ('reprogramacion',     'Reprogramación'),
+      ('seguimiento',        'Recolectar documentación'),
+      ('otro',               'Levantamiento / Otro'),
     ];
     return DropdownButtonFormField<String>(
       value: _acuerdo,
       items: opciones
           .map((o) => DropdownMenuItem(value: o.$1, child: Text(o.$2)))
           .toList(),
-      onChanged: (v) => setState(() => _acuerdo = v ?? 'ninguno'),
+      onChanged: (v) => setState(() => _acuerdo = v ?? ''),
       dropdownColor: ConstantColors.grey100,
       style: TextStyle(color: ConstantColors.textDark, fontSize: 14),
       decoration: InputDecoration(

@@ -9,7 +9,7 @@ header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$API_BUILD = '2026-04-14b';
+$API_BUILD = '2026-04-27g';
 $GLOBALS['phase'] = 'BOOT';
 
 // ── Helpers JSON y UUID ──────────────────────────────────────
@@ -62,7 +62,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
-mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+
+// ── Migración de ENUMs ────────────────────────────────────────────────────────
+// Corre ANTES de begin_transaction(). PHP 8.1+ activa mysqli_report STRICT por
+// defecto, así que usamos try/catch (@ no suprime excepciones de mysqli).
+// Paso 1: limpiar filas con valores antiguos que ya no estarán en el ENUM.
+// Paso 2: ampliar el ENUM para aceptar los 5 valores válidos.
+$_ev = "'nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'";
+$_ed = "ENUM($_ev)";
+// Limpiar filas con valores inválidos antes de ampliar el ENUM (tablas nullable)
+try { $conn->query("UPDATE encuesta_comercial  SET acuerdo_logrado=NULL WHERE acuerdo_logrado  IS NOT NULL AND acuerdo_logrado  NOT IN ($_ev)"); } catch (\Throwable $e) {}
+try { $conn->query("UPDATE encuesta_crediticia SET acuerdo_logrado=NULL WHERE acuerdo_logrado  IS NOT NULL AND acuerdo_logrado  NOT IN ($_ev)"); } catch (\Throwable $e) {}
+// Ampliar ENUM de las tablas nullable
+try { $conn->query("ALTER TABLE encuesta_comercial  MODIFY COLUMN acuerdo_logrado $_ed NULL"); } catch (\Throwable $e) {}
+try { $conn->query("ALTER TABLE encuesta_crediticia MODIFY COLUMN acuerdo_logrado $_ed NULL"); } catch (\Throwable $e) {}
+// acuerdo_visita: convertir tipo_acuerdo a VARCHAR(30) para evitar conflictos de ENUM
+// (VARCHAR acepta cualquier valor, es idempotente correrlo varias veces)
+try { $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo VARCHAR(30) NOT NULL"); } catch (\Throwable $e) {}
 
 // ── Leer parámetros ──────────────────────────────────────────
 $usuario_id      = trim($_POST['usuario_id']   ?? '');
@@ -94,7 +110,7 @@ if ($origen_prospecto !== null) {
     if (!in_array($origen_prospecto, $origen_ok, true)) $origen_prospecto = null;
 }
 
-// Validar actividad
+// Validar actividad (debe coincidir con ENUM de cliente_prospecto.actividad)
 $acts_ok = ['negocio_propio','empleado_privado','empleado_publico','profesional'];
 if ($actividad !== null && !in_array($actividad, $acts_ok, true)) $actividad = null;
 
@@ -135,7 +151,8 @@ $busca_td           = (int)($_POST['que_busca_tarjeta_debito']  ?? 0);
 $busca_tc           = (int)($_POST['que_busca_tarjeta_credito'] ?? 0);
 $fecha_venc_cdp     = strOrNull($_POST['fecha_vencimiento_cdp'] ?? '');
 $interes_trabajar   = intOrNull($_POST['interes_trabajar_institucion'] ?? null);
-$acuerdo            = strOrNull($_POST['acuerdo_logrado'] ?? '') ?? 'ninguno';
+$_acuerdo_raw       = strOrNull($_POST['acuerdo_logrado'] ?? '');
+$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro']) ? $_acuerdo_raw : null;
 $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
@@ -163,23 +180,60 @@ $otros_ingresos       = floatOrNull($_POST['otros_ingresos'] ?? '');
 $gastos_familiares    = floatOrNull($_POST['gastos_familiares'] ?? '');
 
 // Normalize/validate acuerdo: accept frontend variants and map to DB enum values
-$incoming_acuerdo = $acuerdo;
-$acuerdo_map = [
-    // common mobile values -> map to DB-supported enum
-    'documentos_pendientes' => 'otro',
-    'recolectar_documentacion' => 'otro',
-    'levantamiento' => 'otro',
-    'levantamiento_campo' => 'otro',
-];
-$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','ninguno'];
-if (in_array($incoming_acuerdo, $db_acuerdos_allowed, true)) {
-    $acuerdo = $incoming_acuerdo;
-} elseif (isset($acuerdo_map[$incoming_acuerdo])) {
-    $acuerdo = $acuerdo_map[$incoming_acuerdo];
-} else {
-    $acuerdo = 'ninguno';
+// Use the raw incoming value so we can map human-friendly labels sent by the app
+$incoming_acuerdo = $_acuerdo_raw;
+// helper to normalize a human label into a token-like form
+function normalize_token(string $s): string {
+    $s = mb_strtolower(trim($s));
+    // replace common separators with underscore
+    $s = str_replace([' ', '-', '/', '\\'], '_', $s);
+    // remove accents (basic mapping)
+    $s = strtr($s, "ÀÁÂÃÄÅàáâãäåÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÑñÇç",
+                       "AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOoooooUUUUuuuuNnCc");
+    // keep only a-z0-9 and underscore
+    $s = preg_replace('/[^a-z0-9_]/u', '', $s);
+    return $s;
 }
-$tipos_ok = ['prospecto_nuevo','visita_frio','evaluacion','recuperacion','documentos_pendientes','post_venta','nueva_cita_campo','nueva_cita_oficina','levantamiento'];
+
+$acuerdo_map = [
+    // valores del frontend → valor DB ENUM válido
+    'nueva_cita_campo'            => 'nueva_cita_campo',
+    'nueva_cita_oficina'          => 'nueva_cita_oficina',
+    'reprogramacion'              => 'reprogramacion',
+    'seguimiento'                 => 'seguimiento',
+    'otro'                        => 'otro',
+    // variantes antiguas / alias
+    'recolectar_documentacion'    => 'seguimiento',
+    'recoleccion_documentacion'   => 'seguimiento',
+    'recoleccionar_documentacion' => 'seguimiento',
+    'documentos_pendientes'       => 'seguimiento',
+    'levantamiento'               => 'otro',
+    'levantamiento_campo'         => 'otro',
+    // "Ninguno" → null (no registrar acuerdo)
+    'ninguno'                     => null,
+];
+$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+
+$incoming_tok = null;
+// $acuerdo ya fue asignado arriba; aquí lo sobreescribimos con el mapeo normalizado
+$acuerdo = null;   // por defecto: sin acuerdo
+if ($incoming_acuerdo !== null) {
+    $tok = normalize_token($incoming_acuerdo);
+    $incoming_tok = $tok;
+    if (array_key_exists($tok, $acuerdo_map)) {
+        $acuerdo = $acuerdo_map[$tok];           // puede ser null si es 'ninguno'
+    } elseif (in_array($tok, $db_acuerdos_allowed, true)) {
+        $acuerdo = $tok;
+    }
+    // si no se reconoce Y tiene contenido → 'otro' como último recurso
+    if ($acuerdo === null && $tok !== '' && $tok !== 'ninguno') {
+        $acuerdo = 'otro';
+    }
+}
+
+// Validar tipo_tarea contra ENUM real de tarea.tipo_tarea
+$tipos_ok = ['prospecto_nuevo','visita_frio','evaluacion','recuperacion',
+             'documentos_pendientes','post_venta','nueva_cita_campo','nueva_cita_oficina','levantamiento'];
 if (!in_array($tipo_tarea, $tipos_ok)) $tipo_tarea = 'prospecto_nuevo';
 
 // ── Validaciones básicas ─────────────────────────────────────
@@ -563,7 +617,7 @@ try {
         $st->close();
 
         // ── 5. Acuerdo de visita + tarea de seguimiento ─────
-        if ($acuerdo !== 'ninguno' && $fecha_acuerdo !== null) {
+        if ($acuerdo !== null && $fecha_acuerdo !== null) {
             $GLOBALS['phase'] = 'ACUERDO';
 
             // Registrar acuerdo
@@ -583,13 +637,17 @@ try {
             $st->close();
 
             // Crear una NUEVA tarea programada para el seguimiento
-            // Usar $incoming_acuerdo (valor original del app) para detectar el tipo,
-            // ya que $acuerdo puede estar normalizado a 'otro' por el mapa de DB.
-            $tipo_followup = null;
-            if ($incoming_acuerdo === 'nueva_cita_campo') $tipo_followup = 'nueva_cita_campo';
-            elseif ($incoming_acuerdo === 'nueva_cita_oficina') $tipo_followup = 'nueva_cita_oficina';
-            elseif ($incoming_acuerdo === 'recolectar_documentacion') $tipo_followup = 'documentos_pendientes';
-            elseif ($incoming_acuerdo === 'levantamiento_campo') $tipo_followup = 'levantamiento';
+            // Mapear acuerdo → tipo_tarea válido (ENUM: prospecto_nuevo, visita_frio,
+            //   evaluacion, recuperacion, documentos_pendientes, post_venta,
+            //   nueva_cita_campo, nueva_cita_oficina, levantamiento)
+            $tipo_followup_map = [
+                'nueva_cita_campo'   => 'visita_frio',
+                'nueva_cita_oficina' => 'evaluacion',
+                'reprogramacion'     => 'evaluacion',
+                'seguimiento'        => 'evaluacion',
+                'otro'               => 'evaluacion',
+            ];
+            $tipo_followup = $acuerdo !== null ? ($tipo_followup_map[$acuerdo] ?? 'evaluacion') : null;
 
             if ($tipo_followup !== null) {
                 $GLOBALS['phase'] = 'TAREA_FOLLOWUP';
@@ -637,10 +695,18 @@ try {
     }
     $phase = $GLOBALS['phase'] ?? 'UNKNOWN';
     error_log('[guardar_cliente_encuesta][phase=' . $phase . '] ' . $e);
+    // Attach debug info about acuerdo to help diagnose ENUM truncation
+    $dbg_resp = [
+        'incoming_raw' => $_acuerdo_raw ?? null,
+        'incoming_tok' => $incoming_tok ?? null,
+        'mapped'       => $acuerdo ?? null,
+    ];
+    error_log('[guardar_cliente_encuesta][acuerdo_debug] ' . json_encode($dbg_resp, JSON_UNESCAPED_UNICODE));
     respond_json(200, [
         'status'  => 'error',
         'message' => 'Error del servidor [' . $phase . ']: ' . substr($e->getMessage(), 0, 200),
         'phase'   => $phase,
+        'acuerdo_debug' => $dbg_resp,
     ]);
 } finally {
     if (isset($conn)) { try { $conn->close(); } catch (\Throwable $_) {} }
