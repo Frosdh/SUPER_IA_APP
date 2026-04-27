@@ -202,7 +202,7 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
                           Text(
                             'Recibirás un código de 6 dígitos válido por 10 minutos.',
                             style: TextStyle(
-                              color: ConstantColors.textGrey,
+                              color: Colors.white.withOpacity(0.85),
                               fontSize: 13,
                               height: 1.4,
                             ),
@@ -337,7 +337,7 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
                             child: Text(
                               'Si el correo está registrado como asesor activo, recibirás el código. Revisa también tu carpeta de spam.',
                               style: TextStyle(
-                                color: ConstantColors.textGrey,
+                                color: Colors.white.withOpacity(0.85),
                                 fontSize: 12.5,
                                 height: 1.45,
                               ),

@@ -453,11 +453,11 @@ class _SignInPageState extends State<SignInPage> {
                                         child: Text(
                                           '¿Olvidaste tu contraseña?',
                                           style: TextStyle(
-                                            color: ConstantColors.primaryBlue,
+                                            color: Colors.white,
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
                                             decoration: TextDecoration.underline,
-                                            decorationColor: ConstantColors.primaryBlue,
+                                            decorationColor: Colors.white,
                                           ),
                                         ),
                                       ),
