@@ -22,6 +22,7 @@ enum _Paso {
 
 class NuevaEncuestaScreen extends StatefulWidget {
   final String tipoTarea;
+  final bool incluirEmpresa;
 
   /// Datos para prellenar el formulario (paso 1). Útil cuando se abre la
   /// encuesta desde la agenda de tareas tras consultar por cédula.
@@ -40,6 +41,7 @@ class NuevaEncuestaScreen extends StatefulWidget {
   const NuevaEncuestaScreen({
     Key? key,
     this.tipoTarea = 'prospecto_nuevo',
+    this.incluirEmpresa = true,
     this.initialData,
     this.tareaIdEdicion,
   }) : super(key: key);
@@ -169,12 +171,75 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _diaVie = true;
   bool _diaSab = false;
   bool _diaDom = false;
-  int _pctContado = 80; // % contado (crédito = 100 - contado)
+  int _pctContado = 80;   // % contado (crédito = 100 - contado)
+  int _pctEfectivo = 70;  // % cobrado en efectivo (resto = tarjeta/transferencia)
+
+  // ── Vehículos (tabla) ────────────────────────────────────
+  static const int _kVehCount = 5;
+  late final List<TextEditingController> _vehNegDescCtrl  = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehNegMarcaCtrl = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehNegModCtrl   = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehNegAnioCtrl  = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehNegValCtrl   = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehHogDescCtrl  = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehHogMarcaCtrl = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehHogModCtrl   = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehHogAnioCtrl  = List.generate(_kVehCount, (_) => TextEditingController());
+  late final List<TextEditingController> _vehHogValCtrl   = List.generate(_kVehCount, (_) => TextEditingController());
+
+  // ── Inmuebles (tabla) ────────────────────────────────────
+  static const int _kInmCount = 5;
+  late final List<TextEditingController> _inmNegDescCtrl  = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmNegAreaCtrl  = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmNegUbicCtrl  = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmNegValCtrl   = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmHogDescCtrl  = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmHogAreaCtrl  = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmHogUbicCtrl  = List.generate(_kInmCount, (_) => TextEditingController());
+  late final List<TextEditingController> _inmHogValCtrl   = List.generate(_kInmCount, (_) => TextEditingController());
+
+  // ── Otras Deudas (tabla) ──────────────────────────────────
+  static const int _kDeudasCount = 6;
+  late final List<TextEditingController> _deudaAcreedorCtrl =
+      List.generate(_kDeudasCount, (_) => TextEditingController());
+  late final List<TextEditingController> _deudaDestinoCtrl =
+      List.generate(_kDeudasCount, (_) => TextEditingController());
+  late final List<TextEditingController> _deudaMontoIniCtrl =
+      List.generate(_kDeudasCount, (_) => TextEditingController());
+  late final List<TextEditingController> _deudaSaldoActCtrl =
+      List.generate(_kDeudasCount, (_) => TextEditingController());
+  late final List<TextEditingController> _deudaPagoMesCtrl =
+      List.generate(_kDeudasCount, (_) => TextEditingController());
+
+  // ── Gastos del negocio (desglosados) ──────────────────────
+  final _gNegSueldosCtrl     = TextEditingController();
+  final _gNegArriendoCtrl    = TextEditingController();
+  final _gNegServBasCtrl     = TextEditingController();
+  final _gNegTransporteCtrl  = TextEditingController();
+  final _gNegMantCtrl        = TextEditingController();
+  final _gNegOtrosCtrl       = TextEditingController();
+  final _gNegImprevistosCtrl = TextEditingController();
+
+  // ── Otros ingresos (desglosados) ─────────────────────────
+  final _oIngConyugeCtrl   = TextEditingController();
+  final _oIngArriendosCtrl = TextEditingController();
+  final _oIngPensionesCtrl = TextEditingController();
+  final _oIngOtrosCtrl     = TextEditingController();
+
+  // ── Gastos familiares (desglosados) ──────────────────────
+  final _gFamAlimCtrl        = TextEditingController();
+  final _gFamArriendoCtrl    = TextEditingController();
+  final _gFamServBasCtrl     = TextEditingController();
+  final _gFamEducCtrl        = TextEditingController();
+  final _gFamSaludCtrl       = TextEditingController();
+  final _gFamOtrosCtrl       = TextEditingController();
+  final _gFamImprevistosCtrl = TextEditingController();
+
   final _recuperacionCreditoCtrl = TextEditingController();
   final _costosVentasCtrl = TextEditingController();
-  final _gastosNegocioCtrl = TextEditingController();
-  final _otrosIngresosCtrl = TextEditingController();
-  final _gastosFamiliaresCtrl = TextEditingController();
+  final _gastosNegocioCtrl = TextEditingController();   // total calculado (retrocompat)
+  final _otrosIngresosCtrl = TextEditingController();   // total calculado (retrocompat)
+  final _gastosFamiliaresCtrl = TextEditingController(); // total calculado (retrocompat)
 
   // ── Paso 2: Productos actuales ───────────────────────────────
   bool _mantieneAhorro = false;
@@ -186,8 +251,23 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   DateTime? _fechaVencInv;
   bool? _tieneOpsCred;
   final _instCredCtrl = TextEditingController();
-  bool? _mantieneProdFin;
-  final _instProdFinCtrl = TextEditingController();
+  // Nueva funcionalidad: propuesta antes del vencimiento
+  bool? _propuestaPrevVenc;
+  DateTime? _fechaPrevVencInv;
+  final _propuestaInvCtrl = TextEditingController();
+
+  // Bancos para cuentas ahorro/corriente
+  final _bancoAhorroCtrl = TextEditingController();
+  final _bancoCorrienteCtrl = TextEditingController();
+
+  // Instituciones (picker)
+  List<String> _instituciones = [];
+  bool _institucionesCargadas = false;
+  String? _instAhorroSeleccionada;
+  String? _instCorrSeleccionada;
+
+  // Si el cliente quiere conocer servicios desde este paso
+  bool? _interesConocerServicios;
 
   // ── Paso 3: Interés en productos ────────────────────────────
   bool? _interesConocer;
@@ -229,6 +309,12 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     super.initState();
     _obtenerGPS();
     _aplicarInitialData();
+    _cargarInstituciones();
+    // Si la pantalla se abre en modo "levantamiento" saltamos la pregunta
+    // inicial (¿Desea ser encuestado?) y vamos directo a los datos.
+    if (widget.tipoTarea == 'levantamiento') {
+      _paso = _Paso.datosCliente;
+    }
     if (widget.modoEdicion) {
       _cargandoEdicion = true;
       // Saltar el paso "inicial" (Sí/No encuestado) porque ya viene
@@ -237,6 +323,67 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _esProspectoNuevo = false;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _cargarEncuestaEnEdicion();
+      });
+    }
+  }
+
+  Future<void> _cargarInstituciones() async {
+    try {
+      final resp = await http.get(
+        Uri.parse('${Constants.apiBaseUrl}/api_cooperativas.php'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      ).timeout(const Duration(seconds: 10));
+
+      if (!mounted) return;
+
+      final decoded = json.decode(resp.body);
+      if (decoded is Map) {
+        final data = Map<String, dynamic>.from(decoded);
+        final status = data['status']?.toString();
+
+        List<String> inst = [];
+
+        if (status == 'success' && data['data'] is List) {
+          final list = data['data'] as List;
+          inst = list
+              .map((e) => e is Map ? (e['nombre']?.toString() ?? '') : '')
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toSet()
+              .toList();
+          inst.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        }
+
+        if (inst.isEmpty && status == 'ok' && data['instituciones'] is List) {
+          inst = (data['instituciones'] as List)
+              .map((e) => e.toString().trim())
+              .where((s) => s.isNotEmpty)
+              .toSet()
+              .toList();
+          inst.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        }
+
+        setState(() {
+          _instituciones = inst;
+          _institucionesCargadas = true;
+          // si ya había texto en controllers (modo edición), ajustar selección
+          if (_bancoAhorroCtrl.text.trim().isNotEmpty) {
+            final t = _bancoAhorroCtrl.text.trim();
+            _instAhorroSeleccionada = _instituciones.contains(t) ? t : 'otra';
+          }
+          if (_bancoCorrienteCtrl.text.trim().isNotEmpty) {
+            final t = _bancoCorrienteCtrl.text.trim();
+            _instCorrSeleccionada = _instituciones.contains(t) ? t : 'otra';
+          }
+        });
+        return;
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      setState(() {
+        _instituciones = [];
+        _institucionesCargadas = true;
       });
     }
   }
@@ -429,11 +576,86 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       if (_i(n['dia_lv']) == 1) { _diaLun = _diaMar = _diaMie = _diaJue = _diaVie = true; }
       final pct = n['pct_contado'];
       if (pct != null) _pctContado = _i(pct);
+      final pctEf = n['pct_efectivo'];
+      if (pctEf != null) _pctEfectivo = _i(pctEf);
       _recuperacionCreditoCtrl.text = _d(n['recuperacion_credito']).toStringAsFixed(2);
       _costosVentasCtrl.text        = _d(n['costos_ventas']).toStringAsFixed(2);
       _gastosNegocioCtrl.text       = _d(n['gastos_negocio']).toStringAsFixed(2);
       _otrosIngresosCtrl.text       = _d(n['otros_ingresos']).toStringAsFixed(2);
       _gastosFamiliaresCtrl.text    = _d(n['gastos_familiares']).toStringAsFixed(2);
+      // Gastos negocio desglosados
+      _gNegSueldosCtrl.text     = _d(n['g_neg_sueldos']).toStringAsFixed(2);
+      _gNegArriendoCtrl.text    = _d(n['g_neg_arriendo']).toStringAsFixed(2);
+      _gNegServBasCtrl.text     = _d(n['g_neg_serv_bas']).toStringAsFixed(2);
+      _gNegTransporteCtrl.text  = _d(n['g_neg_transporte']).toStringAsFixed(2);
+      _gNegMantCtrl.text        = _d(n['g_neg_mantenimiento']).toStringAsFixed(2);
+      _gNegOtrosCtrl.text       = _d(n['g_neg_otros']).toStringAsFixed(2);
+      _gNegImprevistosCtrl.text = _d(n['g_neg_imprevistos']).toStringAsFixed(2);
+      // Otros ingresos desglosados
+      _oIngConyugeCtrl.text   = _d(n['o_ing_conyuge']).toStringAsFixed(2);
+      _oIngArriendosCtrl.text = _d(n['o_ing_arriendos']).toStringAsFixed(2);
+      _oIngPensionesCtrl.text = _d(n['o_ing_pensiones']).toStringAsFixed(2);
+      _oIngOtrosCtrl.text     = _d(n['o_ing_otros']).toStringAsFixed(2);
+      // Gastos familiares desglosados
+      _gFamAlimCtrl.text        = _d(n['g_fam_alim']).toStringAsFixed(2);
+      _gFamArriendoCtrl.text    = _d(n['g_fam_arriendo']).toStringAsFixed(2);
+      _gFamServBasCtrl.text     = _d(n['g_fam_serv_bas']).toStringAsFixed(2);
+      _gFamEducCtrl.text        = _d(n['g_fam_educacion']).toStringAsFixed(2);
+      _gFamSaludCtrl.text       = _d(n['g_fam_salud']).toStringAsFixed(2);
+      _gFamOtrosCtrl.text       = _d(n['g_fam_otros']).toStringAsFixed(2);
+      _gFamImprevistosCtrl.text = _d(n['g_fam_imprevistos']).toStringAsFixed(2);
+      // Vehículos
+      void _cargarVehiculos(dynamic raw, List<TextEditingController> desc,
+          List<TextEditingController> marca, List<TextEditingController> mod,
+          List<TextEditingController> anio, List<TextEditingController> val) {
+        if (raw == null) return;
+        try {
+          final list = json.decode(raw.toString()) as List<dynamic>;
+          for (int i = 0; i < list.length && i < _kVehCount; i++) {
+            final v = Map<String, dynamic>.from(list[i] as Map);
+            desc[i].text  = (v['descripcion'] ?? '').toString();
+            marca[i].text = (v['marca']       ?? '').toString();
+            mod[i].text   = (v['modelo']      ?? '').toString();
+            anio[i].text  = (v['anio']        ?? '').toString();
+            val[i].text   = (v['valor']       ?? '').toString();
+          }
+        } catch (_) {}
+      }
+      _cargarVehiculos(n['vehiculos_negocio_json'], _vehNegDescCtrl, _vehNegMarcaCtrl, _vehNegModCtrl, _vehNegAnioCtrl, _vehNegValCtrl);
+      _cargarVehiculos(n['vehiculos_hogar_json'],   _vehHogDescCtrl, _vehHogMarcaCtrl, _vehHogModCtrl, _vehHogAnioCtrl, _vehHogValCtrl);
+      // Inmuebles
+      void _cargarInmuebles(dynamic raw, List<TextEditingController> desc,
+          List<TextEditingController> area, List<TextEditingController> ubic,
+          List<TextEditingController> val) {
+        if (raw == null) return;
+        try {
+          final list = json.decode(raw.toString()) as List<dynamic>;
+          for (int i = 0; i < list.length && i < _kInmCount; i++) {
+            final v = Map<String, dynamic>.from(list[i] as Map);
+            desc[i].text = (v['descripcion'] ?? '').toString();
+            area[i].text = (v['area']        ?? '').toString();
+            ubic[i].text = (v['ubicacion']   ?? '').toString();
+            val[i].text  = (v['valor']       ?? '').toString();
+          }
+        } catch (_) {}
+      }
+      _cargarInmuebles(n['inmuebles_negocio_json'], _inmNegDescCtrl, _inmNegAreaCtrl, _inmNegUbicCtrl, _inmNegValCtrl);
+      _cargarInmuebles(n['inmuebles_hogar_json'],   _inmHogDescCtrl, _inmHogAreaCtrl, _inmHogUbicCtrl, _inmHogValCtrl);
+      // Otras deudas
+      final deudasRaw = n['otras_deudas_json'];
+      if (deudasRaw != null) {
+        try {
+          final dl = json.decode(deudasRaw.toString()) as List<dynamic>;
+          for (int i = 0; i < dl.length && i < _kDeudasCount; i++) {
+            final d = Map<String, dynamic>.from(dl[i] as Map);
+            _deudaAcreedorCtrl[i].text = (d['acreedor'] ?? '').toString();
+            _deudaDestinoCtrl[i].text  = (d['destino']  ?? '').toString();
+            _deudaMontoIniCtrl[i].text = (d['monto_inicial']  ?? '').toString();
+            _deudaSaldoActCtrl[i].text = (d['saldo_actual']   ?? '').toString();
+            _deudaPagoMesCtrl[i].text  = (d['pago_mes']       ?? '').toString();
+          }
+        } catch (_) {}
+      }
 
       // Cargar productos de Producción (si aplica)
       final prodRaw = n['productos_json'];
@@ -508,6 +730,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _fechaVencInv      = _fecha(_s(e['fecha_vencimiento_inversion']));
       _tieneOpsCred      = _ib(e['tiene_operaciones_crediticias']);
       _instCredCtrl.text = _s(e['institucion_credito']);
+      _propuestaPrevVenc = _ib(e['propuesta_prev_vencimiento']);
+      _fechaPrevVencInv  = _fecha(_s(e['fecha_previa_vencimiento']));
+      _propuestaInvCtrl.text = _s(e['propuesta_inversion']);
+      _bancoAhorroCtrl.text = _s(e['banco_ahorro']);
+      _bancoCorrienteCtrl.text = _s(e['banco_corriente']);
+      if (_institucionesCargadas) {
+        final ah = _bancoAhorroCtrl.text.trim();
+        _instAhorroSeleccionada = ah.isEmpty ? null : (_instituciones.contains(ah) ? ah : 'otra');
+        final cc = _bancoCorrienteCtrl.text.trim();
+        _instCorrSeleccionada = cc.isEmpty ? null : (_instituciones.contains(cc) ? cc : 'otra');
+      }
+      _interesConocerServicios = _ib(e['interes_conocer_servicios']);
       _interesConocer    = _ib(e['interes_conocer_productos']);
       _interesCC     = _i(e['interes_cc'])        == 1;
       _interesAhorro = _i(e['interes_ahorro'])    == 1;
@@ -654,11 +888,52 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     for (final c in _actHogModeloCtrl) c.dispose();
     for (final c in _actHogSerieCtrl)  c.dispose();
     for (final c in _actHogValorCtrl)  c.dispose();
+    // Vehículos
+    for (final c in _vehNegDescCtrl)  c.dispose(); for (final c in _vehNegMarcaCtrl) c.dispose();
+    for (final c in _vehNegModCtrl)   c.dispose(); for (final c in _vehNegAnioCtrl)  c.dispose();
+    for (final c in _vehNegValCtrl)   c.dispose();
+    for (final c in _vehHogDescCtrl)  c.dispose(); for (final c in _vehHogMarcaCtrl) c.dispose();
+    for (final c in _vehHogModCtrl)   c.dispose(); for (final c in _vehHogAnioCtrl)  c.dispose();
+    for (final c in _vehHogValCtrl)   c.dispose();
+    // Inmuebles
+    for (final c in _inmNegDescCtrl)  c.dispose(); for (final c in _inmNegAreaCtrl)  c.dispose();
+    for (final c in _inmNegUbicCtrl)  c.dispose(); for (final c in _inmNegValCtrl)   c.dispose();
+    for (final c in _inmHogDescCtrl)  c.dispose(); for (final c in _inmHogAreaCtrl)  c.dispose();
+    for (final c in _inmHogUbicCtrl)  c.dispose(); for (final c in _inmHogValCtrl)   c.dispose();
+    // Otras deudas
+    for (final c in _deudaAcreedorCtrl) c.dispose();
+    for (final c in _deudaDestinoCtrl)  c.dispose();
+    for (final c in _deudaMontoIniCtrl) c.dispose();
+    for (final c in _deudaSaldoActCtrl) c.dispose();
+    for (final c in _deudaPagoMesCtrl)  c.dispose();
+    // Gastos negocio desglosados
+    _gNegSueldosCtrl.dispose();
+    _gNegArriendoCtrl.dispose();
+    _gNegServBasCtrl.dispose();
+    _gNegTransporteCtrl.dispose();
+    _gNegMantCtrl.dispose();
+    _gNegOtrosCtrl.dispose();
+    _gNegImprevistosCtrl.dispose();
+    // Otros ingresos desglosados
+    _oIngConyugeCtrl.dispose();
+    _oIngArriendosCtrl.dispose();
+    _oIngPensionesCtrl.dispose();
+    _oIngOtrosCtrl.dispose();
+    // Gastos familiares desglosados
+    _gFamAlimCtrl.dispose();
+    _gFamArriendoCtrl.dispose();
+    _gFamServBasCtrl.dispose();
+    _gFamEducCtrl.dispose();
+    _gFamSaludCtrl.dispose();
+    _gFamOtrosCtrl.dispose();
+    _gFamImprevistosCtrl.dispose();
     _instInvCtrl.dispose();
     _valorInvCtrl.dispose();
     _plazoInvCtrl.dispose();
     _instCredCtrl.dispose();
-    _instProdFinCtrl.dispose();
+    _propuestaInvCtrl.dispose();
+    _bancoAhorroCtrl.dispose();
+    _bancoCorrienteCtrl.dispose();
     _razonOtrosCtrl.dispose();
     _obsCtrl.dispose();
     super.dispose();
@@ -1080,9 +1355,71 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'dias_atencion_dom': _tieneEmpresa ? (_diaDom ? '1' : '0') : '0',
       'dias_atencion_lv': _tieneEmpresa ? ((_diaLun||_diaMar||_diaMie||_diaJue||_diaVie) ? '1' : '0') : '0',
       'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
-      'gastos_negocio':       _tieneEmpresa ? _gastosNegocioCtrl.text.trim() : '',
-      'otros_ingresos':       _tieneEmpresa ? _otrosIngresosCtrl.text.trim() : '',
-      'gastos_familiares':    _tieneEmpresa ? _gastosFamiliaresCtrl.text.trim() : '',
+      'pct_efectivo':         _tieneEmpresa ? _pctEfectivo.toString() : '',
+      // Gastos negocio desglosados
+      'g_neg_sueldos':        _tieneEmpresa ? _gNegSueldosCtrl.text.trim() : '',
+      'g_neg_arriendo':       _tieneEmpresa ? _gNegArriendoCtrl.text.trim() : '',
+      'g_neg_serv_bas':       _tieneEmpresa ? _gNegServBasCtrl.text.trim() : '',
+      'g_neg_transporte':     _tieneEmpresa ? _gNegTransporteCtrl.text.trim() : '',
+      'g_neg_mantenimiento':  _tieneEmpresa ? _gNegMantCtrl.text.trim() : '',
+      'g_neg_otros':          _tieneEmpresa ? _gNegOtrosCtrl.text.trim() : '',
+      'g_neg_imprevistos':    _tieneEmpresa ? _gNegImprevistosCtrl.text.trim() : '',
+      // Otros ingresos desglosados
+      'o_ing_conyuge':        _tieneEmpresa ? _oIngConyugeCtrl.text.trim() : '',
+      'o_ing_arriendos':      _tieneEmpresa ? _oIngArriendosCtrl.text.trim() : '',
+      'o_ing_pensiones':      _tieneEmpresa ? _oIngPensionesCtrl.text.trim() : '',
+      'o_ing_otros':          _tieneEmpresa ? _oIngOtrosCtrl.text.trim() : '',
+      // Gastos familiares desglosados
+      'g_fam_alim':           _tieneEmpresa ? _gFamAlimCtrl.text.trim() : '',
+      'g_fam_arriendo':       _tieneEmpresa ? _gFamArriendoCtrl.text.trim() : '',
+      'g_fam_serv_bas':       _tieneEmpresa ? _gFamServBasCtrl.text.trim() : '',
+      'g_fam_educacion':      _tieneEmpresa ? _gFamEducCtrl.text.trim() : '',
+      'g_fam_salud':          _tieneEmpresa ? _gFamSaludCtrl.text.trim() : '',
+      'g_fam_otros':          _tieneEmpresa ? _gFamOtrosCtrl.text.trim() : '',
+      'g_fam_imprevistos':    _tieneEmpresa ? _gFamImprevistosCtrl.text.trim() : '',
+      // Totales calculados (retrocompat)
+      'gastos_negocio': _tieneEmpresa ? (() {
+        final t = _td(_gNegSueldosCtrl) + _td(_gNegArriendoCtrl) + _td(_gNegServBasCtrl) +
+            _td(_gNegTransporteCtrl) + _td(_gNegMantCtrl) + _td(_gNegOtrosCtrl) + _td(_gNegImprevistosCtrl);
+        return t > 0 ? t.toStringAsFixed(2) : _gastosNegocioCtrl.text.trim();
+      })() : '',
+      'otros_ingresos': _tieneEmpresa ? (() {
+        final t = _td(_oIngConyugeCtrl) + _td(_oIngArriendosCtrl) + _td(_oIngPensionesCtrl) + _td(_oIngOtrosCtrl);
+        return t > 0 ? t.toStringAsFixed(2) : _otrosIngresosCtrl.text.trim();
+      })() : '',
+      'gastos_familiares': _tieneEmpresa ? (() {
+        final t = _td(_gFamAlimCtrl) + _td(_gFamArriendoCtrl) + _td(_gFamServBasCtrl) +
+            _td(_gFamEducCtrl) + _td(_gFamSaludCtrl) + _td(_gFamOtrosCtrl) + _td(_gFamImprevistosCtrl);
+        return t > 0 ? t.toStringAsFixed(2) : _gastosFamiliaresCtrl.text.trim();
+      })() : '',
+      // Vehículos
+      'vehiculos_negocio_json': json.encode(List.generate(_kVehCount, (i) => {
+        'descripcion': _vehNegDescCtrl[i].text.trim(), 'marca': _vehNegMarcaCtrl[i].text.trim(),
+        'modelo': _vehNegModCtrl[i].text.trim(), 'anio': _vehNegAnioCtrl[i].text.trim(),
+        'valor': _vehNegValCtrl[i].text.trim(),
+      })),
+      'vehiculos_hogar_json': json.encode(List.generate(_kVehCount, (i) => {
+        'descripcion': _vehHogDescCtrl[i].text.trim(), 'marca': _vehHogMarcaCtrl[i].text.trim(),
+        'modelo': _vehHogModCtrl[i].text.trim(), 'anio': _vehHogAnioCtrl[i].text.trim(),
+        'valor': _vehHogValCtrl[i].text.trim(),
+      })),
+      // Inmuebles
+      'inmuebles_negocio_json': json.encode(List.generate(_kInmCount, (i) => {
+        'descripcion': _inmNegDescCtrl[i].text.trim(), 'area': _inmNegAreaCtrl[i].text.trim(),
+        'ubicacion': _inmNegUbicCtrl[i].text.trim(), 'valor': _inmNegValCtrl[i].text.trim(),
+      })),
+      'inmuebles_hogar_json': json.encode(List.generate(_kInmCount, (i) => {
+        'descripcion': _inmHogDescCtrl[i].text.trim(), 'area': _inmHogAreaCtrl[i].text.trim(),
+        'ubicacion': _inmHogUbicCtrl[i].text.trim(), 'valor': _inmHogValCtrl[i].text.trim(),
+      })),
+      // Otras deudas
+      'otras_deudas_json': json.encode(List.generate(_kDeudasCount, (i) => {
+        'acreedor':      _deudaAcreedorCtrl[i].text.trim(),
+        'destino':       _deudaDestinoCtrl[i].text.trim(),
+        'monto_inicial': _deudaMontoIniCtrl[i].text.trim(),
+        'saldo_actual':  _deudaSaldoActCtrl[i].text.trim(),
+        'pago_mes':      _deudaPagoMesCtrl[i].text.trim(),
+      })),
       // GPS
       'latitud_inicio': (_latInicio ?? 0).toString(),
       'longitud_inicio': (_lngInicio ?? 0).toString(),
@@ -1094,20 +1431,24 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       body.addAll({
         'mantiene_cuenta_ahorro': _mantieneAhorro ? '1' : '0',
         'mantiene_cuenta_corriente': _mantieneCorriente ? '1' : '0',
+        'banco_ahorro': _bancoAhorroCtrl.text.trim(),
+        'banco_corriente': _bancoCorrienteCtrl.text.trim(),
         'tiene_inversiones':
-            _tieneInversiones == null ? '' : (_tieneInversiones! ? '1' : '0'),
+          _tieneInversiones == null ? '' : (_tieneInversiones! ? '1' : '0'),
         'institucion_inversiones': _instInvCtrl.text.trim(),
         'valor_inversion': _valorInvCtrl.text.trim(),
         'plazo_inversion': _plazoInvCtrl.text.trim(),
         'fecha_vencimiento_inversion': _fechaVencInv != null
-            ? '${_fechaVencInv!.year}-${_fechaVencInv!.month.toString().padLeft(2, '0')}-${_fechaVencInv!.day.toString().padLeft(2, '0')}'
-            : '',
+          ? '${_fechaVencInv!.year}-${_fechaVencInv!.month.toString().padLeft(2, '0')}-${_fechaVencInv!.day.toString().padLeft(2, '0')}'
+          : '',
+        'propuesta_prev_vencimiento': _propuestaPrevVenc == null ? '' : (_propuestaPrevVenc! ? '1' : '0'),
+        'fecha_previa_vencimiento': _fechaPrevVencInv != null
+          ? '${_fechaPrevVencInv!.year}-${_fechaPrevVencInv!.month.toString().padLeft(2, '0')}-${_fechaPrevVencInv!.day.toString().padLeft(2, '0')}'
+          : '',
+        'propuesta_inversion': _propuestaInvCtrl.text.trim(),
         'tiene_operaciones_crediticias':
-            _tieneOpsCred == null ? '' : (_tieneOpsCred! ? '1' : '0'),
+          _tieneOpsCred == null ? '' : (_tieneOpsCred! ? '1' : '0'),
         'institucion_credito': _instCredCtrl.text.trim(),
-        'mantiene_producto_financiero':
-            _mantieneProdFin == null ? '' : (_mantieneProdFin! ? '1' : '0'),
-        'institucion_producto_financiero': _instProdFinCtrl.text.trim(),
         'interes_conocer_productos':
             _interesConocer == null ? '' : (_interesConocer! ? '1' : '0'),
         'nivel_interes':
@@ -1117,6 +1458,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         'interes_cc': _interesCC ? '1' : '0',
         'interes_ahorro': _interesAhorro ? '1' : '0',
         'interes_inversion': _interesInv ? '1' : '0',
+        'interes_conocer_servicios': _interesConocerServicios == null ? '' : (_interesConocerServicios! ? '1' : '0'),
+        'crear_tarea_prev_venc': (_propuestaPrevVenc == true && _fechaAcuerdo != null) ? '1' : '0',
         'interes_credito': _interesCred ? '1' : '0',
         'razon_ya_trabaja_institucion': _razonYaTrabaja ? '1' : '0',
         'razon_desconfia_servicios': _razonDesconfia ? '1' : '0',
@@ -1524,7 +1867,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   List<_Paso> get _pasosActivos {
     return [
       _Paso.datosCliente,
-      if (_tieneEmpresa) _Paso.empresaNegocio,
+      if (_tieneEmpresa && widget.incluirEmpresa) _Paso.empresaNegocio,
       _Paso.productosActuales,
       _Paso.interesProductos,
       _Paso.busqueda,
@@ -1867,6 +2210,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     return Column(
       children: [
         const SizedBox(height: 20),
+        const SizedBox(height: 20),
         Container(
           width: 80,
           height: 80,
@@ -2144,11 +2488,27 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                   _diaSab = false;
                   _diaDom = false;
                   _pctContado = 80;
+                  _pctEfectivo = 70;
                   _recuperacionCreditoCtrl.clear();
                   _costosVentasCtrl.clear();
                   _gastosNegocioCtrl.clear();
                   _otrosIngresosCtrl.clear();
                   _gastosFamiliaresCtrl.clear();
+                  for (int i = 0; i < _kDeudasCount; i++) {
+                    _deudaAcreedorCtrl[i].clear();
+                    _deudaDestinoCtrl[i].clear();
+                    _deudaMontoIniCtrl[i].clear();
+                    _deudaSaldoActCtrl[i].clear();
+                    _deudaPagoMesCtrl[i].clear();
+                  }
+                  _gNegSueldosCtrl.clear(); _gNegArriendoCtrl.clear();
+                  _gNegServBasCtrl.clear(); _gNegTransporteCtrl.clear();
+                  _gNegMantCtrl.clear(); _gNegOtrosCtrl.clear(); _gNegImprevistosCtrl.clear();
+                  _oIngConyugeCtrl.clear(); _oIngArriendosCtrl.clear();
+                  _oIngPensionesCtrl.clear(); _oIngOtrosCtrl.clear();
+                  _gFamAlimCtrl.clear(); _gFamArriendoCtrl.clear();
+                  _gFamServBasCtrl.clear(); _gFamEducCtrl.clear();
+                  _gFamSaludCtrl.clear(); _gFamOtrosCtrl.clear(); _gFamImprevistosCtrl.clear();
                 }
               });
             },
@@ -2267,6 +2627,34 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     return double.tryParse(t) ?? 0.0;
   }
 
+  /// Shortcut: _toDouble de un TextEditingController
+  double _td(TextEditingController c) => _toDouble(c.text);
+
+  // ── Computed: cuotas desde otras deudas ─────────────────
+  double get _cuotasNegocioDeudas => List.generate(_kDeudasCount, (i) {
+    final dest = _deudaDestinoCtrl[i].text.trim().toLowerCase();
+    if (dest.contains('negoc') || dest.contains('empr')) {
+      return _toDouble(_deudaPagoMesCtrl[i].text);
+    }
+    return 0.0;
+  }).fold(0.0, (a, b) => a + b);
+
+  double get _cuotasFamiliaresDeudas => List.generate(_kDeudasCount, (i) {
+    final dest = _deudaDestinoCtrl[i].text.trim().toLowerCase();
+    final acreedor = _deudaAcreedorCtrl[i].text.trim();
+    if (acreedor.isEmpty) return 0.0;
+    if (!dest.contains('negoc') && !dest.contains('empr')) {
+      return _toDouble(_deudaPagoMesCtrl[i].text);
+    }
+    return 0.0;
+  }).fold(0.0, (a, b) => a + b);
+
+  double get _totalPagoMesDeudas => List.generate(_kDeudasCount,
+      (i) => _toDouble(_deudaPagoMesCtrl[i].text)).fold(0.0, (a, b) => a + b);
+
+  double get _totalSaldoDeudas => List.generate(_kDeudasCount,
+      (i) => _toDouble(_deudaSaldoActCtrl[i].text)).fold(0.0, (a, b) => a + b);
+
   Widget _dropdownMesSimple(String label, String? value, ValueChanged<String?> onChanged) {
     const meses = <String, String>{
       'enero': 'Enero',
@@ -2370,51 +2758,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ],
           ),
 
-          const SizedBox(height: 18),
-          _seccionTitulo('Flujo de ingresos y gastos (mensual)'),
-          const SizedBox(height: 4),
-          _campo(
-            controller: _costosVentasCtrl,
-            label: 'Costos de ventas (aprox.)',
-            icon: Icons.receipt_long_rounded,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            validator: (v) {
-              if (!_tieneEmpresa) return null;
-              if (v == null || v.trim().isEmpty) return 'Requerido';
-              return null;
-            },
-          ),
-          const SizedBox(height: 10),
-          _campo(
-            controller: _gastosNegocioCtrl,
-            label: 'Gastos del negocio (aprox.)',
-            icon: Icons.store_rounded,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-            validator: (v) {
-              if (!_tieneEmpresa) return null;
-              if (v == null || v.trim().isEmpty) return 'Requerido';
-              return null;
-            },
-          ),
-          const SizedBox(height: 10),
-          _campo(
-            controller: _otrosIngresosCtrl,
-            label: 'Otros ingresos (aprox.)',
-            icon: Icons.add_circle_outline_rounded,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-          ),
-          const SizedBox(height: 10),
-          _campo(
-            controller: _gastosFamiliaresCtrl,
-            label: 'Gastos familiares (aprox.)',
-            icon: Icons.family_restroom_rounded,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
-          ),
-
           const SizedBox(height: 14),
           Container(
             padding: const EdgeInsets.all(14),
@@ -2435,6 +2778,63 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ),
           ),
 
+          // ─── Forma de cobro ────────────────────────────────────
+          const SizedBox(height: 22),
+          _seccionTitulo('Forma de cobro'),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: ConstantColors.borderLight),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Icon(Icons.payments_rounded, size: 18, color: ConstantColors.primaryBlue),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('¿Qué % cobra en efectivo?',
+                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5))),
+                  const SizedBox(width: 8),
+                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(6)),
+                      child: Text('💵 $_pctEfectivo% efectivo',
+                          style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(6)),
+                      child: Text('💳 ${100 - _pctEfectivo}% digital',
+                          style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                    ),
+                  ]),
+                ]),
+                Slider(
+                  value: _pctEfectivo.toDouble(),
+                  min: 0, max: 100, divisions: 20,
+                  activeColor: Colors.green.shade600,
+                  label: '$_pctEfectivo%',
+                  onChanged: (v) => setState(() => _pctEfectivo = v.round()),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('0% efectivo\n(todo digital)', textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                    Text('50/50', style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                    Text('100% efectivo\n(todo en cash)', textAlign: TextAlign.center,
+                        style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
           // ── Productos según tipo de empresa ─────────────────────
           if (_tipoServProduccion) ...[
             const SizedBox(height: 24),
@@ -2444,22 +2844,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             _buildResumenProductos(
               llenos: List.generate(_kProdCount, (i) => _prodNameCtrl[i].text.trim().isNotEmpty).where((v) => v).length,
               totalCostoCompras: List.generate(_kProdCount, (i) {
-                // Costo de ventas = costoUnitario × C (unidades vendidas)
-                final mat    = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
-                final ct     = mat + _toDouble(_prodManoCtrl[i].text) + _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
-                final up     = _toDouble(_prodUnidadesProdCtrl[i].text);
-                final cu     = up * ct;                                    // A = (2)×(1)
+                final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+                final ct  = mat + _toDouble(_prodManoCtrl[i].text) + _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
+                final cu  = _toDouble(_prodUnidadesProdCtrl[i].text) * ct;
                 return cu * _toDouble(_prodUnidadesVendCtrl[i].text);
               }).fold(0.0, (a, b) => a + b),
               totalVentasMes: List.generate(_kProdCount, (i) =>
-                _toDouble(_prodPrecioCtrl[i].text) * _toDouble(_prodUnidadesVendCtrl[i].text)
-              ).fold(0.0, (a, b) => a + b),
+                _toDouble(_prodPrecioCtrl[i].text) * _toDouble(_prodUnidadesVendCtrl[i].text))
+                .fold(0.0, (a, b) => a + b),
               totalInventario: List.generate(_kProdCount, (i) {
-                // Inventarios = costoUnitario × D (unidades verificadas)
                 final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
                 final ct  = mat + _toDouble(_prodManoCtrl[i].text) + _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
-                final up  = _toDouble(_prodUnidadesProdCtrl[i].text);
-                final cu  = up * ct;                                       // A = (2)×(1)
+                final cu  = _toDouble(_prodUnidadesProdCtrl[i].text) * ct;
                 return cu * _toDouble(_prodUnidExistCtrl[i].text);
               }).fold(0.0, (a, b) => a + b),
               minimo: _kProdCount,
@@ -2490,9 +2886,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             serieControllers:  _actNegSerieCtrl,
             valorControllers:  _actNegValorCtrl,
           ),
+          const SizedBox(height: 16),
+          _buildVehiculos(titulo: '🚗 Vehículos del Negocio',
+            descCtrl: _vehNegDescCtrl, marcaCtrl: _vehNegMarcaCtrl,
+            modCtrl: _vehNegModCtrl, anioCtrl: _vehNegAnioCtrl, valCtrl: _vehNegValCtrl),
+          const SizedBox(height: 16),
+          _buildInmuebles(titulo: '🏭 Inmuebles del Negocio',
+            descCtrl: _inmNegDescCtrl, areaCtrl: _inmNegAreaCtrl,
+            ubicCtrl: _inmNegUbicCtrl, valCtrl: _inmNegValCtrl),
 
           // ── Activos Fijos del Hogar ────────────────────────────
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
           _buildActivosFijos(
             titulo: '🏠 Activos Fijos del Hogar',
             descControllers:   _actHogDescCtrl,
@@ -2501,6 +2905,208 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             serieControllers:  _actHogSerieCtrl,
             valorControllers:  _actHogValorCtrl,
           ),
+          const SizedBox(height: 16),
+          _buildVehiculos(titulo: '🚙 Vehículos del Hogar',
+            descCtrl: _vehHogDescCtrl, marcaCtrl: _vehHogMarcaCtrl,
+            modCtrl: _vehHogModCtrl, anioCtrl: _vehHogAnioCtrl, valCtrl: _vehHogValCtrl),
+          const SizedBox(height: 16),
+          _buildInmuebles(titulo: '🏠 Inmuebles del Hogar',
+            descCtrl: _inmHogDescCtrl, areaCtrl: _inmHogAreaCtrl,
+            ubicCtrl: _inmHogUbicCtrl, valCtrl: _inmHogValCtrl),
+
+          // ─── Gastos del negocio (desglosados) ────────────────────
+          const SizedBox(height: 22),
+          _seccionTitulo('(-) Gastos del Negocio (mensual)'),
+          const SizedBox(height: 6),
+          StatefulBuilder(builder: (ctx, setLocal) {
+            final totalGN = _td(_gNegSueldosCtrl) + _td(_gNegArriendoCtrl) + _td(_gNegServBasCtrl) +
+                _cuotasNegocioDeudas + _td(_gNegTransporteCtrl) + _td(_gNegMantCtrl) +
+                _td(_gNegOtrosCtrl) + _td(_gNegImprevistosCtrl);
+            void reb() { setLocal(() {}); setState(() {}); }
+            Widget gCampo(TextEditingController c, String lbl, IconData ic) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _campo(controller: c, label: lbl, icon: ic,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                onChanged: (_) => reb(),
+              ),
+            );
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ConstantColors.borderLight),
+              ),
+              child: Column(children: [
+                gCampo(_gNegSueldosCtrl,     'Sueldos (total trabajadores)', Icons.people_rounded),
+                gCampo(_gNegArriendoCtrl,    'Arriendo local/bodega', Icons.store_mall_directory_rounded),
+                gCampo(_gNegServBasCtrl,     'Servicios básicos (agua, luz, internet)', Icons.electrical_services_rounded),
+                // Cuotas préstamos negocio: auto desde otras deudas
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade400),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.account_balance_rounded, size: 18, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Cuotas préstamos negocio',
+                        style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w600, fontSize: 13))),
+                    Text('\$${_cuotasNegocioDeudas.toStringAsFixed(2)}',
+                        style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 14)),
+                  ]),
+                ),
+                gCampo(_gNegTransporteCtrl,  'Transporte / flete', Icons.local_shipping_rounded),
+                gCampo(_gNegMantCtrl,        'Mantenimiento equipos', Icons.build_rounded),
+                gCampo(_gNegOtrosCtrl,       'Otros gastos del negocio', Icons.more_horiz_rounded),
+                gCampo(_gNegImprevistosCtrl, 'Imprevistos', Icons.warning_amber_rounded),
+                // Total
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.red.shade300),
+                  ),
+                  child: Row(children: [
+                    Expanded(child: Text('TOTAL GASTOS NEGOCIO',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.red.shade800))),
+                    Text('\$${totalGN.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.red.shade800)),
+                  ]),
+                ),
+              ]),
+            );
+          }),
+
+          // ─── (+) Otros ingresos (desglosados) ────────────────────
+          const SizedBox(height: 22),
+          _seccionTitulo('(+) Otros Ingresos (mensual)'),
+          const SizedBox(height: 6),
+          StatefulBuilder(builder: (ctx, setLocal) {
+            void reb() { setLocal(() {}); setState(() {}); }
+            Widget oCampo(TextEditingController c, String lbl, IconData ic) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _campo(controller: c, label: lbl, icon: ic,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                onChanged: (_) => reb(),
+              ),
+            );
+            final totalOI = _td(_oIngConyugeCtrl) + _td(_oIngArriendosCtrl) +
+                _td(_oIngPensionesCtrl) + _td(_oIngOtrosCtrl);
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ConstantColors.borderLight),
+              ),
+              child: Column(children: [
+                oCampo(_oIngConyugeCtrl,   'Cónyuge (empleo o negocio adicional)', Icons.people_alt_rounded),
+                oCampo(_oIngArriendosCtrl, 'Arriendos recibidos', Icons.home_work_rounded),
+                oCampo(_oIngPensionesCtrl, 'Pensiones', Icons.elderly_rounded),
+                oCampo(_oIngOtrosCtrl,     'Otros ingresos', Icons.add_circle_outline_rounded),
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.blue.shade300),
+                  ),
+                  child: Row(children: [
+                    Expanded(child: Text('TOTAL OTROS INGRESOS',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.blue.shade800))),
+                    Text('\$${totalOI.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.blue.shade800)),
+                  ]),
+                ),
+              ]),
+            );
+          }),
+
+          // ─── (-) Gastos familiares (desglosados) ──────────────────
+          const SizedBox(height: 22),
+          _seccionTitulo('(-) Gastos Familiares (mensual)'),
+          const SizedBox(height: 6),
+          StatefulBuilder(builder: (ctx, setLocal) {
+            void reb() { setLocal(() {}); setState(() {}); }
+            Widget fCampo(TextEditingController c, String lbl, IconData ic) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _campo(controller: c, label: lbl, icon: ic,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+                onChanged: (_) => reb(),
+              ),
+            );
+            final totalGF = _td(_gFamAlimCtrl) + _td(_gFamArriendoCtrl) + _td(_gFamServBasCtrl) +
+                _cuotasFamiliaresDeudas + _td(_gFamEducCtrl) + _td(_gFamSaludCtrl) +
+                _td(_gFamOtrosCtrl) + _td(_gFamImprevistosCtrl);
+            return Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: ConstantColors.borderLight),
+              ),
+              child: Column(children: [
+                fCampo(_gFamAlimCtrl,        'Alimentación', Icons.restaurant_rounded),
+                fCampo(_gFamArriendoCtrl,    'Arriendo familiar', Icons.home_rounded),
+                fCampo(_gFamServBasCtrl,     'Servicios básicos hogar', Icons.bolt_rounded),
+                // Cuotas familiares: auto desde otras deudas
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade400),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.credit_card_rounded, size: 18, color: Colors.amber.shade800),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text('Cuotas préstamos familiares',
+                        style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w600, fontSize: 13))),
+                    Text('\$${_cuotasFamiliaresDeudas.toStringAsFixed(2)}',
+                        style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w800, fontSize: 14)),
+                  ]),
+                ),
+                fCampo(_gFamEducCtrl,        'Educación', Icons.school_rounded),
+                fCampo(_gFamSaludCtrl,       'Salud', Icons.health_and_safety_rounded),
+                fCampo(_gFamOtrosCtrl,       'Otros gastos familiares', Icons.more_horiz_rounded),
+                fCampo(_gFamImprevistosCtrl, 'Imprevistos', Icons.warning_amber_rounded),
+                Container(
+                  margin: const EdgeInsets.only(top: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.orange.shade300),
+                  ),
+                  child: Row(children: [
+                    Expanded(child: Text('TOTAL GASTOS FAMILIARES',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.orange.shade800))),
+                    Text('\$${totalGF.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Colors.orange.shade800)),
+                  ]),
+                ),
+              ]),
+            );
+          }),
+
+          // ─── Otras Deudas (tabla) ─────────────────────────────────
+          const SizedBox(height: 22),
+          _buildOtrasDeudas(),
+
+          // ── Flujo de Ingresos y Gastos (resumen) ───────────────
+          const SizedBox(height: 28),
+          _buildFlujoResumen(),
         ],
       ),
     );
@@ -2527,6 +3133,497 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         valor[i].text  = s(a['valor_comercial']);
       }
     } catch (_) {}
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  VEHÍCULOS
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildVehiculos({
+    required String titulo,
+    required List<TextEditingController> descCtrl,
+    required List<TextEditingController> marcaCtrl,
+    required List<TextEditingController> modCtrl,
+    required List<TextEditingController> anioCtrl,
+    required List<TextEditingController> valCtrl,
+  }) {
+    return StatefulBuilder(builder: (context, setLocal) {
+      void rebuild() { setLocal(() {}); setState(() {}); }
+      final totalVal = valCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ConstantColors.borderLight),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.teal.shade50,
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+              border: Border(bottom: BorderSide(color: Colors.teal.shade200)),
+            ),
+            child: Row(children: [
+              Icon(Icons.directions_car_rounded, color: Colors.teal.shade700, size: 20),
+              const SizedBox(width: 10),
+              Text(titulo, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+            ]),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            color: ConstantColors.grey100,
+            child: Row(children: [
+              Expanded(flex: 4, child: _colHeader('VEHÍCULO')),
+              const SizedBox(width: 4),
+              Expanded(flex: 3, child: _colHeader('MARCA')),
+              const SizedBox(width: 4),
+              Expanded(flex: 3, child: _colHeader('MODELO')),
+              const SizedBox(width: 4),
+              Expanded(flex: 2, child: _colHeader('AÑO')),
+              const SizedBox(width: 4),
+              Expanded(flex: 3, child: _colHeader('VALOR \$', right: true)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+            child: Column(children: List.generate(_kVehCount, (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 4, child: _campoActivoTexto(descCtrl[i],  'Tipo/Desc.', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _campoActivoTexto(marcaCtrl[i], 'Marca', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _campoActivoTexto(modCtrl[i],   'Modelo', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 2, child: _campoActivoTexto(anioCtrl[i],  'Año', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _campoActivoNum(valCtrl[i], '\$', rebuild)),
+              ]),
+            ))),
+          ),
+          Container(
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: Colors.teal.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.teal.shade300),
+            ),
+            child: Row(children: [
+              Expanded(child: Text('TOTAL VEHÍCULOS',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.teal.shade800))),
+              Text('\$${totalVal.toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.teal.shade800)),
+            ]),
+          ),
+        ]),
+      );
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  INMUEBLES
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildInmuebles({
+    required String titulo,
+    required List<TextEditingController> descCtrl,
+    required List<TextEditingController> areaCtrl,
+    required List<TextEditingController> ubicCtrl,
+    required List<TextEditingController> valCtrl,
+  }) {
+    return StatefulBuilder(builder: (context, setLocal) {
+      void rebuild() { setLocal(() {}); setState(() {}); }
+      final totalVal = valCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ConstantColors.borderLight),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.brown.shade50,
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+              border: Border(bottom: BorderSide(color: Colors.brown.shade200)),
+            ),
+            child: Row(children: [
+              Icon(Icons.home_work_rounded, color: Colors.brown.shade700, size: 20),
+              const SizedBox(width: 10),
+              Text(titulo, style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+            ]),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+            color: ConstantColors.grey100,
+            child: Row(children: [
+              Expanded(flex: 4, child: _colHeader('INMUEBLE')),
+              const SizedBox(width: 4),
+              Expanded(flex: 3, child: _colHeader('ÁREA (m²)')),
+              const SizedBox(width: 4),
+              Expanded(flex: 4, child: _colHeader('UBICACIÓN')),
+              const SizedBox(width: 4),
+              Expanded(flex: 3, child: _colHeader('VALOR \$', right: true)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+            child: Column(children: List.generate(_kInmCount, (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Expanded(flex: 4, child: _campoActivoTexto(descCtrl[i], 'Tipo', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _campoActivoNum(areaCtrl[i], '', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 4, child: _campoActivoTexto(ubicCtrl[i], 'Sector/Ciudad', rebuild)),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _campoActivoNum(valCtrl[i], '\$', rebuild)),
+              ]),
+            ))),
+          ),
+          Container(
+            margin: const EdgeInsets.all(10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+            decoration: BoxDecoration(
+              color: Colors.brown.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.brown.shade300),
+            ),
+            child: Row(children: [
+              Expanded(child: Text('TOTAL INMUEBLES',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: Colors.brown.shade800))),
+              Text('\$${totalVal.toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.brown.shade800)),
+            ]),
+          ),
+        ]),
+      );
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  OTRAS DEUDAS
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildOtrasDeudas() {
+    return StatefulBuilder(builder: (context, setLocal) {
+      void rebuild() { setLocal(() {}); setState(() {}); }
+
+      final totalSaldo  = _totalSaldoDeudas;
+      final totalPago   = _totalPagoMesDeudas;
+
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ConstantColors.borderLight),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Encabezado
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                border: Border(bottom: BorderSide(color: Colors.red.shade200)),
+              ),
+              child: Row(children: [
+                Icon(Icons.account_balance_wallet_rounded, color: Colors.red.shade700, size: 20),
+                const SizedBox(width: 10),
+                Text('💳 Otras Deudas',
+                    style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+              ]),
+            ),
+            // Cabecera de columnas
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              color: ConstantColors.grey100,
+              child: Row(children: [
+                Expanded(flex: 4, child: _colHeader('ACREEDOR')),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _colHeader('DESTINO')),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _colHeader('MONTO INI.')),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _colHeader('SALDO ACT.')),
+                const SizedBox(width: 4),
+                Expanded(flex: 3, child: _colHeader('PAGO MES', right: true)),
+              ]),
+            ),
+            // Filas
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+              child: Column(
+                children: List.generate(_kDeudasCount, (i) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(flex: 4, child: _campoActivoTexto(_deudaAcreedorCtrl[i], 'Acreedor', rebuild)),
+                        const SizedBox(width: 4),
+                        Expanded(flex: 3, child: _campoActivoTexto(_deudaDestinoCtrl[i], 'Destino', rebuild)),
+                        const SizedBox(width: 4),
+                        Expanded(flex: 3, child: _campoActivoNum(_deudaMontoIniCtrl[i], '\$', rebuild)),
+                        const SizedBox(width: 4),
+                        Expanded(flex: 3, child: _campoActivoNum(_deudaSaldoActCtrl[i], '\$', rebuild)),
+                        const SizedBox(width: 4),
+                        Expanded(flex: 3, child: _campoActivoNum(_deudaPagoMesCtrl[i], '\$', rebuild)),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+            ),
+            // Totales
+            Container(
+              margin: const EdgeInsets.all(10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade400),
+              ),
+              child: Row(children: [
+                Expanded(child: Text('TOTALES',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.amber.shade900))),
+                const SizedBox(width: 8),
+                Text('Saldo: \$${totalSaldo.toStringAsFixed(2)}',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Colors.red.shade700)),
+                const SizedBox(width: 12),
+                Text('Pago/mes: \$${totalPago.toStringAsFixed(2)}',
+                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.red.shade800)),
+              ]),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  FLUJO DE INGRESOS Y GASTOS (resumen visual)
+  // ─────────────────────────────────────────────────────────────
+  Widget _buildFlujoResumen() {
+    // ── BASE: comportamiento semanal × 4 = mensual ──────────────
+    // Esta es la fuente principal de ventas y compras (lo que el quiz pregunta)
+    final ventasSemana =
+        _toDouble(_ventaLunCtrl.text) + _toDouble(_ventaMarCtrl.text) +
+        _toDouble(_ventaMieCtrl.text) + _toDouble(_ventaJueCtrl.text) +
+        _toDouble(_ventaVieCtrl.text) + _toDouble(_ventaSabCtrl.text) +
+        _toDouble(_ventaDomCtrl.text);
+    final compraSemana =
+        _toDouble(_compraLunCtrl.text) + _toDouble(_compraMarCtrl.text) +
+        _toDouble(_compraMieCtrl.text) + _toDouble(_compraJueCtrl.text) +
+        _toDouble(_compraVieCtrl.text) + _toDouble(_compraSabCtrl.text) +
+        _toDouble(_compraDomCtrl.text);
+
+    final ventasMensuales = ventasSemana * 4;
+    final comprasMensuales = compraSemana * 4;
+
+    // ── Ventas desde productos (para desglose, si están llenos) ──
+    final ventasProd = _tipoServProduccion
+        ? List.generate(_kProdCount, (i) =>
+            _toDouble(_prodPrecioCtrl[i].text) * _toDouble(_prodUnidadesVendCtrl[i].text))
+            .fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final ventasCom = _tipoComercio
+        ? List.generate(_kComProdCount, (i) =>
+            _toDouble(_comPrecioCtrl[i].text) * _toDouble(_comCantidadCtrl[i].text))
+            .fold(0.0, (a, b) => a + b)
+        : 0.0;
+
+    // Ventas totales: prioridad al comportamiento diario × 4
+    // (si hay productos los mostramos como desglose pero no overrideamos)
+    final ventasTotal = ventasMensuales > 0 ? ventasMensuales : (ventasProd + ventasCom);
+
+    final ventasEfectivo      = ventasTotal * (_pctEfectivo / 100);
+    final ventasTransferencia = ventasTotal * ((100 - _pctEfectivo) / 100);
+    final ventasContado       = ventasTotal * (_pctContado / 100);
+
+    // ── Costos de ventas = compras mensuales (comportamiento × 4) ──
+    // Para producción: costo unitario = costoTotal / unidadesProducidas (no multiplicado)
+    final costosVentasProdDetalle = _tipoServProduccion
+        ? List.generate(_kProdCount, (i) {
+            final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+            final ct  = mat + _toDouble(_prodManoCtrl[i].text) +
+                        _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
+            final up  = _toDouble(_prodUnidadesProdCtrl[i].text);
+            // costo unitario = costo total del lote / unidades producidas
+            final cu  = up > 0 ? ct / up : ct;
+            return cu * _toDouble(_prodUnidadesVendCtrl[i].text);
+          }).fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final costosVentasComDetalle = _tipoComercio
+        ? List.generate(_kComProdCount, (i) =>
+            _toDouble(_comCantidadCtrl[i].text) * _toDouble(_comCostoCtrl[i].text))
+            .fold(0.0, (a, b) => a + b)
+        : 0.0;
+
+    // Costos: usar compras × 4 como base; si hay productos con datos, usar esos
+    final costosProductos = costosVentasProdDetalle + costosVentasComDetalle;
+    final costosVentas = comprasMensuales > 0
+        ? comprasMensuales
+        : (costosProductos > 0 ? costosProductos : 0.0);
+
+    final utilidadBruta = ventasContado - costosVentas;
+
+    final gastoNegTotal = _td(_gNegSueldosCtrl) + _td(_gNegArriendoCtrl) + _td(_gNegServBasCtrl) +
+        _cuotasNegocioDeudas + _td(_gNegTransporteCtrl) + _td(_gNegMantCtrl) +
+        _td(_gNegOtrosCtrl) + _td(_gNegImprevistosCtrl);
+
+    final ingresosNetosNegocio = utilidadBruta - gastoNegTotal;
+
+    final otrosIngresos = _td(_oIngConyugeCtrl) + _td(_oIngArriendosCtrl) +
+        _td(_oIngPensionesCtrl) + _td(_oIngOtrosCtrl);
+
+    final gastoFamTotal = _td(_gFamAlimCtrl) + _td(_gFamArriendoCtrl) + _td(_gFamServBasCtrl) +
+        _cuotasFamiliaresDeudas + _td(_gFamEducCtrl) + _td(_gFamSaludCtrl) +
+        _td(_gFamOtrosCtrl) + _td(_gFamImprevistosCtrl);
+
+    final saldoDisponible = ingresosNetosNegocio + otrosIngresos - gastoFamTotal;
+    final colorSaldo = saldoDisponible >= 0 ? Colors.green.shade700 : Colors.red.shade700;
+
+    Widget fila(String label, double valor, {bool bold = false, Color? color, bool separador = false}) {
+      final c = color ?? (bold ? ConstantColors.textDark : ConstantColors.textDarkGrey);
+      return Column(children: [
+        if (separador) Divider(height: 12, color: ConstantColors.borderLight),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(children: [
+            Expanded(child: Text(label,
+                style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: c))),
+            Text('\$${valor.toStringAsFixed(2)}',
+                style: TextStyle(fontSize: 13.5, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: c)),
+          ]),
+        ),
+      ]);
+    }
+
+    Widget subFila(String label, double valor, {Color? color}) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 16, bottom: 3),
+        child: Row(children: [
+          Icon(Icons.arrow_right_rounded, size: 16, color: color ?? ConstantColors.textDarkGrey),
+          const SizedBox(width: 4),
+          Expanded(child: Text(label,
+              style: TextStyle(fontSize: 12, color: color ?? ConstantColors.textDarkGrey))),
+          Text('\$${valor.toStringAsFixed(2)}',
+              style: TextStyle(fontSize: 12, color: color ?? ConstantColors.textDarkGrey,
+                  fontWeight: FontWeight.w600)),
+        ]),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ConstantColors.borderLight),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1E3A5F),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.bar_chart_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              const Text('FLUJO DE INGRESOS Y GASTOS',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14,
+                      letterSpacing: 0.5)),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Ventas
+                fila('VENTAS DE CONTADO (${_pctContado}%)', ventasContado, bold: true),
+                if (_tipoServProduccion || _tipoComercio) ...[
+                  if (_tipoServProduccion) subFila('Empresa Producción', ventasProd),
+                  if (_tipoComercio) subFila('Empresa Comercio', ventasCom),
+                ] else ...[
+                  subFila('Ventas mensuales (sem×4)', ventasMensuales),
+                ],
+                subFila('  💵 Efectivo ($_pctEfectivo%)', ventasEfectivo, color: Colors.green.shade700),
+                subFila('  💳 Tarjeta/Transf. (${100-_pctEfectivo}%)', ventasTransferencia, color: Colors.blue.shade600),
+                fila('(-) COSTOS DE VENTAS', costosVentas),
+                fila('(=) UTILIDAD BRUTA', utilidadBruta, bold: true,
+                    color: utilidadBruta >= 0 ? Colors.green.shade800 : Colors.red.shade700,
+                    separador: true),
+
+                const SizedBox(height: 4),
+                fila('(-) GASTOS DEL NEGOCIO', gastoNegTotal),
+                subFila('Sueldos', _td(_gNegSueldosCtrl)),
+                subFila('Arriendo', _td(_gNegArriendoCtrl)),
+                subFila('Servicios básicos', _td(_gNegServBasCtrl)),
+                subFila('Cuotas préstamos negocio', _cuotasNegocioDeudas,
+                    color: Colors.amber.shade800),
+                subFila('Transporte', _td(_gNegTransporteCtrl)),
+                subFila('Mantenimiento', _td(_gNegMantCtrl)),
+                subFila('Otros gastos negocio', _td(_gNegOtrosCtrl)),
+                subFila('Imprevistos', _td(_gNegImprevistosCtrl)),
+
+                fila('(=) INGRESOS NETOS DEL NEGOCIO', ingresosNetosNegocio, bold: true,
+                    color: ingresosNetosNegocio >= 0 ? Colors.green.shade800 : Colors.red.shade700,
+                    separador: true),
+
+                const SizedBox(height: 4),
+                fila('(+) OTROS INGRESOS', otrosIngresos),
+                subFila('Cónyuge', _td(_oIngConyugeCtrl)),
+                subFila('Arriendos', _td(_oIngArriendosCtrl)),
+                subFila('Pensiones', _td(_oIngPensionesCtrl)),
+                subFila('Otros', _td(_oIngOtrosCtrl)),
+
+                const SizedBox(height: 4),
+                fila('(-) GASTOS FAMILIARES', gastoFamTotal, separador: true),
+                subFila('Alimentación', _td(_gFamAlimCtrl)),
+                subFila('Arriendo familiar', _td(_gFamArriendoCtrl)),
+                subFila('Servicios básicos', _td(_gFamServBasCtrl)),
+                subFila('Cuotas préstamos familiares', _cuotasFamiliaresDeudas,
+                    color: Colors.amber.shade800),
+                subFila('Educación', _td(_gFamEducCtrl)),
+                subFila('Salud', _td(_gFamSaludCtrl)),
+                subFila('Otros gastos familiares', _td(_gFamOtrosCtrl)),
+                subFila('Imprevistos', _td(_gFamImprevistosCtrl)),
+
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: saldoDisponible >= 0 ? Colors.green.shade50 : Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: saldoDisponible >= 0 ? Colors.green.shade400 : Colors.red.shade400),
+                  ),
+                  child: Row(children: [
+                    Icon(saldoDisponible >= 0 ? Icons.check_circle_rounded : Icons.warning_rounded,
+                        color: colorSaldo, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text('(=) SALDO DISPONIBLE',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: colorSaldo))),
+                    Text('\$${saldoDisponible.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: colorSaldo)),
+                  ]),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildActivosFijos({
@@ -2659,6 +3756,30 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: ConstantColors.borderLight)),
         focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: const Color(0xFF3B82F6), width: 1.5)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      ),
+    );
+  }
+
+  Widget _campoActivoNum(TextEditingController ctrl, String prefix, VoidCallback onChanged) {
+    return TextFormField(
+      controller: ctrl,
+      onChanged: (_) => onChanged(),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d.,]'))],
+      textAlign: TextAlign.right,
+      style: TextStyle(color: ConstantColors.textDark, fontSize: 12, fontWeight: FontWeight.w600),
+      decoration: InputDecoration(
+        prefixText: prefix,
+        prefixStyle: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey),
+        hintText: '0.00',
+        hintStyle: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey.withOpacity(0.5)),
+        filled: true,
+        fillColor: Colors.amber.shade50,
+        isDense: true,
+        border:        OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.amber.shade300)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.amber.shade300)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.amber.shade600, width: 1.5)),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
       ),
     );
   }
@@ -2980,102 +4101,142 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _seccionTitulo('¿Qué cuentas mantiene?'),
-        _checkboxItem(
+        _largeChoiceCard(
           label: 'Cuenta de Ahorros',
           value: _mantieneAhorro,
-          onChanged: (v) => setState(() => _mantieneAhorro = v ?? false),
+          color: const Color(0xFF10B981),
+          leadingIcon: Icons.savings_rounded,
+          onTap: () => setState(() => _mantieneAhorro = !_mantieneAhorro),
         ),
-        _checkboxItem(
+        // Mostrar picker/entrada de institución inmediatamente debajo
+        if (_mantieneAhorro) ...[
+          const SizedBox(height: 8),
+          if (!_institucionesCargadas) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(children: [
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: ConstantColors.primaryViolet)),
+                const SizedBox(width: 10),
+                Text('Cargando instituciones…', style: TextStyle(fontSize: 12, color: ConstantColors.textGrey)),
+              ]),
+            ),
+          ] else ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              decoration: BoxDecoration(
+                color: ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: ConstantColors.borderLight),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _instAhorroSeleccionada,
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  style: TextStyle(color: ConstantColors.textDark, fontSize: 13),
+                  hint: Text('Seleccionar institución (ahorro)', style: TextStyle(fontSize: 13, color: ConstantColors.textGrey)),
+                  items: [
+                    ..._instituciones.map((nombre) => DropdownMenuItem<String>(value: nombre, child: Text(nombre, style: TextStyle(color: ConstantColors.textDark)))),
+                    DropdownMenuItem<String>(value: 'otra', child: Text('Otra', style: TextStyle(color: ConstantColors.textDark))),
+                  ],
+                  onChanged: (v) {
+                    setState(() {
+                      _instAhorroSeleccionada = v;
+                      if (v == null) {
+                        _bancoAhorroCtrl.text = '';
+                      } else if (v == 'otra') {
+                        _bancoAhorroCtrl.text = '';
+                      } else {
+                        _bancoAhorroCtrl.text = v;
+                      }
+                    });
+                  },
+                ),
+              ),
+            ),
+            if (_instAhorroSeleccionada == 'otra' || _instituciones.isEmpty) ...[
+              _campo(controller: _bancoAhorroCtrl, label: 'Institución (ahorro)', icon: Icons.account_balance_rounded),
+            ],
+          ],
+        ],
+
+        _largeChoiceCard(
           label: 'Cuenta Corriente',
           value: _mantieneCorriente,
-          onChanged: (v) => setState(() => _mantieneCorriente = v ?? false),
+          color: const Color(0xFF3B82F6),
+          leadingIcon: Icons.account_balance_rounded,
+          onTap: () => setState(() => _mantieneCorriente = !_mantieneCorriente),
         ),
-        const SizedBox(height: 20),
-        _seccionTitulo('¿Tiene inversiones?'),
-        _preguntaSiNo(
-          value: _tieneInversiones,
-          onChanged: (v) => setState(() => _tieneInversiones = v),
-        ),
-        if (_tieneInversiones == true) ...[
-          const SizedBox(height: 10),
-          _campo(
-              controller: _instInvCtrl,
-              label: 'Institución donde invierte',
-              icon: Icons.account_balance_rounded),
-          _campo(
-              controller: _valorInvCtrl,
-              label: 'Valor de la inversión (\$)',
-              icon: Icons.attach_money_rounded,
-              keyboardType: TextInputType.number),
-          _campo(
-              controller: _plazoInvCtrl,
-              label: 'Plazo',
-              icon: Icons.schedule_rounded),
-          _fieldFecha(
-            label: 'Fecha de vencimiento',
-            fecha: _fechaVencInv,
-            onPick: () =>
-                _seleccionarFecha((d) => setState(() => _fechaVencInv = d)),
-          ),
+        // Mostrar picker/entrada de institución inmediatamente debajo
+        if (_mantieneCorriente) ...[
+          const SizedBox(height: 8),
+          if (!_institucionesCargadas) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(children: [
+                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: ConstantColors.primaryViolet)),
+                const SizedBox(width: 10),
+                Text('Cargando instituciones…', style: TextStyle(fontSize: 12, color: ConstantColors.textGrey)),
+              ]),
+            ),
+          ] else ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+              decoration: BoxDecoration(
+                color: ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: ConstantColors.borderLight),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: _instCorrSeleccionada,
+                  isExpanded: true,
+                  dropdownColor: Colors.white,
+                  style: TextStyle(color: ConstantColors.textDark, fontSize: 13),
+                  hint: Text('Seleccionar institución (corriente)', style: TextStyle(fontSize: 13, color: ConstantColors.textGrey)),
+                  items: [
+                    ..._instituciones.map((nombre) => DropdownMenuItem<String>(value: nombre, child: Text(nombre, style: TextStyle(color: ConstantColors.textDark)))),
+                    DropdownMenuItem<String>(value: 'otra', child: Text('Otra', style: TextStyle(color: ConstantColors.textDark))),
+                  ],
+                  onChanged: (v) {
+                    setState(() {
+                      _instCorrSeleccionada = v;
+                      if (v == null) {
+                        _bancoCorrienteCtrl.text = '';
+                      } else if (v == 'otra') {
+                        _bancoCorrienteCtrl.text = '';
+                      } else {
+                        _bancoCorrienteCtrl.text = v;
+                      }
+                    });
+                  },
+                ),
+              ),
+            ),
+            if (_instCorrSeleccionada == 'otra' || _instituciones.isEmpty) ...[
+              _campo(controller: _bancoCorrienteCtrl, label: 'Institución (corriente)', icon: Icons.account_balance_rounded),
+            ],
+          ],
         ],
-        const SizedBox(height: 20),
-        _seccionTitulo('¿Tiene operaciones crediticias?'),
-        _preguntaSiNo(
-          value: _tieneOpsCred,
-          onChanged: (v) => setState(() => _tieneOpsCred = v),
-        ),
-        if (_tieneOpsCred == true) ...[
-          const SizedBox(height: 10),
-          _campo(
-              controller: _instCredCtrl,
-              label: '¿En qué institución?',
-              icon: Icons.account_balance_rounded),
-        ],
-        const SizedBox(height: 20),
-        _seccionTitulo('¿Mantiene actualmente algún\nproducto financiero?'),
-        _preguntaSiNo(
-          value: _mantieneProdFin,
-          onChanged: (v) => setState(() => _mantieneProdFin = v),
-        ),
-        if (_mantieneProdFin == true) ...[
-          const SizedBox(height: 10),
-          _campo(
-              controller: _instProdFinCtrl,
-              label: '¿Con qué institución?',
-              icon: Icons.account_balance_rounded),
-        ],
-      ],
-    );
-  }
 
-  // ── PASO 3: Interés en productos ─────────────────────────────
-
-  Widget _buildPasoInteresProductos() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _seccionTitulo(
-            '¿Le interesaría conocer nuestros\nproductos o servicios?'),
+        // Mostrar interés en productos/servicios inmediatamente después
+        _seccionTitulo('¿Le interesaría conocer nuestros\nproductos o servicios?'),
         _preguntaSiNo(
           value: _interesConocer,
           onChanged: (v) {
-            // Si ya se completó al menos una ficha, no permitir cambiar a "No".
             if (v == false && (_fichaCC || _fichaAhorro || _fichaInv || _fichaCred)) {
               _mostrarError('No puedes desmarcar el interés porque ya completaste una ficha de producto.');
               setState(() => _interesConocer = true);
               return;
             }
-
             setState(() {
               _interesConocer = v;
               if (v == false) {
-                // Limpiar selecciones de interés
-                _interesCC =
-                    _interesAhorro = _interesInv = _interesCred = false;
+                _interesCC = _interesAhorro = _interesInv = _interesCred = false;
               } else {
-                // Limpiar razones
-                _razonYaTrabaja =
-                    _razonDesconfia = _razonAGusto = _razonMalaExp = false;
+                _razonYaTrabaja = _razonDesconfia = _razonAGusto = _razonMalaExp = false;
                 _razonOtrosCtrl.clear();
               }
             });
@@ -3132,8 +4293,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.credito),
           ),
-        ],
-        if (_interesConocer == false) ...[
+        ] else ...[
           const SizedBox(height: 16),
           _seccionTitulo('¿Cuál es la razón?'),
           _checkboxItem(
@@ -3163,18 +4323,82 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             icon: Icons.edit_rounded,
             maxLines: 2,
           ),
-          const SizedBox(height: 20),
-          // Terminal: botón Finalizar Tarea
-          _botonFinalizar(
-            label: widget.modoEdicion ? 'Guardar cambios' : 'Finalizar Tarea',
-            sublabel: widget.modoEdicion
-                ? 'Se actualizará la encuesta como sin interés'
-                : 'Se guardará la encuesta como sin interés',
-            onTap: () => _guardarEncuesta(fueEncuestado: true),
-          ),
         ],
+        const SizedBox(height: 20),
+        _seccionTitulo('¿Tiene inversiones?'),
+        _preguntaSiNo(
+          value: _tieneInversiones,
+          onChanged: (v) => setState(() => _tieneInversiones = v),
+        ),
+        if (_tieneInversiones == true) ...[
+          const SizedBox(height: 10),
+          _campo(
+              controller: _instInvCtrl,
+              label: 'Institución donde invierte',
+              icon: Icons.account_balance_rounded),
+          _campo(
+              controller: _valorInvCtrl,
+              label: 'Valor de la inversión (\$)',
+              icon: Icons.attach_money_rounded,
+              keyboardType: TextInputType.number),
+          _campo(
+              controller: _plazoInvCtrl,
+              label: 'Plazo',
+              icon: Icons.schedule_rounded),
+          _fieldFecha(
+            label: 'Fecha de vencimiento',
+            fecha: _fechaVencInv,
+            onPick: () =>
+                _seleccionarFecha((d) => setState(() => _fechaVencInv = d)),
+          ),
+          const SizedBox(height: 12),
+          _seccionTitulo('¿Le interesaría que le hagamos una propuesta previo al vencimiento?'),
+          _preguntaSiNo(
+            value: _propuestaPrevVenc,
+            onChanged: (v) => setState(() => _propuestaPrevVenc = v),
+          ),
+          if (_propuestaPrevVenc == true) ...[
+            const SizedBox(height: 8),
+            // Fecha y hora para crear la tarea/propuesta
+            _fieldFecha(
+              label: 'Fecha de la propuesta (tarea)',
+              fecha: _fechaAcuerdo,
+              onPick: () => _seleccionarFecha((d) => setState(() {
+                _fechaAcuerdo = d;
+                // al elegir fecha asumimos que se quiere agendar una cita en campo
+                _acuerdo = 'nueva_cita_campo';
+              })),
+            ),
+            const SizedBox(height: 8),
+            _fieldHora(),
+            const SizedBox(height: 8),
+            _campo(
+              controller: _propuestaInvCtrl,
+              label: 'Propuesta de inversión (resumen)',
+              icon: Icons.note_alt_rounded,
+              maxLines: 3,
+            ),
+          ],
+        ],
+        const SizedBox(height: 20),
       ],
     );
+  }
+
+  void _interesConocerServicesSetter(bool? v) {
+    // Mantener sincronía con el paso de interés global para reutilizar lógica
+    _interesConocerServicios = v;
+    if (v == true) {
+      _interesConocer = true;
+    }
+  }
+
+  // ── PASO 3: Interés en productos ─────────────────────────────
+
+  Widget _buildPasoInteresProductos() {
+    // Eliminado: ahora la sección de interés en productos se muestra
+    // inline justo después de inversiones para evitar pasos adicionales.
+    return const SizedBox.shrink();
   }
 
   // ── PASO 4: Búsqueda y acuerdo ───────────────────────────────
@@ -3417,6 +4641,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     int maxLines = 1,
     String? Function(String?)? validator,
     bool readOnly = false,
+    void Function(String)? onChanged,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -3427,6 +4652,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         maxLines: maxLines,
         validator: validator,
         readOnly: readOnly,
+        onChanged: onChanged,
         enableInteractiveSelection: !readOnly,
         style: TextStyle(
           color: readOnly ? ConstantColors.textDarkGrey : ConstantColors.textDark,
@@ -4108,6 +5334,61 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                       ? ConstantColors.textDark
                       : ConstantColors.textDarkGrey,
                   fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Large selectable card used for prominent choices (cuentas) ──
+  Widget _largeChoiceCard({
+    required String label,
+    required bool value,
+    required VoidCallback onTap,
+    IconData? leadingIcon,
+    Color? color,
+  }) {
+    final bg = value ? (color ?? ConstantColors.warning).withOpacity(0.12) : Colors.transparent;
+    final border = value ? (color ?? ConstantColors.warning).withOpacity(0.5) : ConstantColors.borderLight;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: border),
+          boxShadow: value
+              ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: value ? (color ?? ConstantColors.warning) : ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                value ? Icons.check : (leadingIcon ?? Icons.account_balance_rounded),
+                color: value ? Colors.white : ConstantColors.textDarkGrey,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: value ? ConstantColors.textDark : ConstantColors.textDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

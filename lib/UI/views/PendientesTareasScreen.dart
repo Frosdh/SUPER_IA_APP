@@ -206,6 +206,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         builder: (_) => NuevaEncuestaScreen(
           tipoTarea: tipo,
           tareaIdEdicion: tareaId,
+          incluirEmpresa: false,
         ),
       ),
     );
@@ -275,7 +276,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
       if (tareaId.isEmpty) return;
       final result = await Navigator.of(context).push<bool?>(
         MaterialPageRoute(
-          builder: (_) => NuevaEncuestaScreen(tareaIdEdicion: tareaId),
+          builder: (_) => NuevaEncuestaScreen(tareaIdEdicion: tareaId, incluirEmpresa: false),
         ),
       );
       // Si se guardaron cambios, recargar la lista

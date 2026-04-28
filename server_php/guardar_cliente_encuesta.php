@@ -173,11 +173,40 @@ $dia_sab            = (int)($_POST['dias_atencion_sab'] ?? 0);
 $dia_dom            = (int)($_POST['dias_atencion_dom'] ?? 0);
 $pct_contado        = intOrNull($_POST['pct_contado'] ?? null);
 $pct_credito        = intOrNull($_POST['pct_credito'] ?? null);
+$pct_efectivo       = intOrNull($_POST['pct_efectivo'] ?? null);
 $recuperacion_credito = floatOrNull($_POST['recuperacion_credito'] ?? '');
 $costos_ventas        = floatOrNull($_POST['costos_ventas'] ?? '');
 $gastos_negocio       = floatOrNull($_POST['gastos_negocio'] ?? '');
 $otros_ingresos       = floatOrNull($_POST['otros_ingresos'] ?? '');
 $gastos_familiares    = floatOrNull($_POST['gastos_familiares'] ?? '');
+// Gastos negocio desglosados
+$g_neg_sueldos       = floatOrNull($_POST['g_neg_sueldos']       ?? '');
+$g_neg_arriendo      = floatOrNull($_POST['g_neg_arriendo']      ?? '');
+$g_neg_serv_bas      = floatOrNull($_POST['g_neg_serv_bas']      ?? '');
+$g_neg_transporte    = floatOrNull($_POST['g_neg_transporte']    ?? '');
+$g_neg_mantenimiento = floatOrNull($_POST['g_neg_mantenimiento'] ?? '');
+$g_neg_otros         = floatOrNull($_POST['g_neg_otros']         ?? '');
+$g_neg_imprevistos   = floatOrNull($_POST['g_neg_imprevistos']   ?? '');
+// Otros ingresos desglosados
+$o_ing_conyuge    = floatOrNull($_POST['o_ing_conyuge']   ?? '');
+$o_ing_arriendos  = floatOrNull($_POST['o_ing_arriendos'] ?? '');
+$o_ing_pensiones  = floatOrNull($_POST['o_ing_pensiones'] ?? '');
+$o_ing_otros      = floatOrNull($_POST['o_ing_otros']     ?? '');
+// Gastos familiares desglosados
+$g_fam_alim        = floatOrNull($_POST['g_fam_alim']        ?? '');
+$g_fam_arriendo    = floatOrNull($_POST['g_fam_arriendo']    ?? '');
+$g_fam_serv_bas    = floatOrNull($_POST['g_fam_serv_bas']    ?? '');
+$g_fam_educacion   = floatOrNull($_POST['g_fam_educacion']   ?? '');
+$g_fam_salud       = floatOrNull($_POST['g_fam_salud']       ?? '');
+$g_fam_otros       = floatOrNull($_POST['g_fam_otros']       ?? '');
+$g_fam_imprevistos = floatOrNull($_POST['g_fam_imprevistos'] ?? '');
+// Vehículos e inmuebles (JSON)
+$vehiculos_negocio_json  = $_POST['vehiculos_negocio_json']  ?? null;
+$vehiculos_hogar_json    = $_POST['vehiculos_hogar_json']    ?? null;
+$inmuebles_negocio_json  = $_POST['inmuebles_negocio_json']  ?? null;
+$inmuebles_hogar_json    = $_POST['inmuebles_hogar_json']    ?? null;
+// Otras deudas (JSON)
+$otras_deudas_json = $_POST['otras_deudas_json'] ?? null;
 
 // Normalize/validate acuerdo: accept frontend variants and map to DB enum values
 // Use the raw incoming value so we can map human-friendly labels sent by the app
@@ -374,28 +403,52 @@ try {
         // Asegurar tabla
         $conn->query(
             "CREATE TABLE IF NOT EXISTS encuesta_negocio (
-                id                 CHAR(36)   NOT NULL PRIMARY KEY,
-                tarea_id           CHAR(36)   NOT NULL,
-                venta_lv           DECIMAL(12,2) DEFAULT NULL,
-                venta_sabado       DECIMAL(12,2) DEFAULT NULL,
-                venta_domingo      DECIMAL(12,2) DEFAULT NULL,
-                mes_alta_venta     VARCHAR(20) DEFAULT NULL,
-                mes_baja_venta     VARCHAR(20) DEFAULT NULL,
-                compra_lv          DECIMAL(12,2) DEFAULT NULL,
-                compra_sabado      DECIMAL(12,2) DEFAULT NULL,
-                compra_domingo     DECIMAL(12,2) DEFAULT NULL,
-                mes_alta_compra    VARCHAR(20) DEFAULT NULL,
-                dia_lv             TINYINT(1)  NOT NULL DEFAULT 0,
-                dia_sab            TINYINT(1)  NOT NULL DEFAULT 0,
-                dia_dom            TINYINT(1)  NOT NULL DEFAULT 0,
-                pct_contado        INT DEFAULT NULL,
-                pct_credito        INT DEFAULT NULL,
+                id                   CHAR(36)      NOT NULL PRIMARY KEY,
+                tarea_id             CHAR(36)      NOT NULL,
+                venta_lv             DECIMAL(12,2) DEFAULT NULL,
+                venta_sabado         DECIMAL(12,2) DEFAULT NULL,
+                venta_domingo        DECIMAL(12,2) DEFAULT NULL,
+                mes_alta_venta       VARCHAR(20)   DEFAULT NULL,
+                mes_baja_venta       VARCHAR(20)   DEFAULT NULL,
+                compra_lv            DECIMAL(12,2) DEFAULT NULL,
+                compra_sabado        DECIMAL(12,2) DEFAULT NULL,
+                compra_domingo       DECIMAL(12,2) DEFAULT NULL,
+                mes_alta_compra      VARCHAR(20)   DEFAULT NULL,
+                dia_lv               TINYINT(1)    NOT NULL DEFAULT 0,
+                dia_sab              TINYINT(1)    NOT NULL DEFAULT 0,
+                dia_dom              TINYINT(1)    NOT NULL DEFAULT 0,
+                pct_contado          INT           DEFAULT NULL,
+                pct_credito          INT           DEFAULT NULL,
+                pct_efectivo         INT           DEFAULT NULL,
                 recuperacion_credito DECIMAL(12,2) DEFAULT NULL,
                 costos_ventas        DECIMAL(12,2) DEFAULT NULL,
                 gastos_negocio       DECIMAL(12,2) DEFAULT NULL,
                 otros_ingresos       DECIMAL(12,2) DEFAULT NULL,
                 gastos_familiares    DECIMAL(12,2) DEFAULT NULL,
-                created_at         DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                g_neg_sueldos        DECIMAL(12,2) DEFAULT NULL,
+                g_neg_arriendo       DECIMAL(12,2) DEFAULT NULL,
+                g_neg_serv_bas       DECIMAL(12,2) DEFAULT NULL,
+                g_neg_transporte     DECIMAL(12,2) DEFAULT NULL,
+                g_neg_mantenimiento  DECIMAL(12,2) DEFAULT NULL,
+                g_neg_otros          DECIMAL(12,2) DEFAULT NULL,
+                g_neg_imprevistos    DECIMAL(12,2) DEFAULT NULL,
+                o_ing_conyuge        DECIMAL(12,2) DEFAULT NULL,
+                o_ing_arriendos      DECIMAL(12,2) DEFAULT NULL,
+                o_ing_pensiones      DECIMAL(12,2) DEFAULT NULL,
+                o_ing_otros          DECIMAL(12,2) DEFAULT NULL,
+                g_fam_alim           DECIMAL(12,2) DEFAULT NULL,
+                g_fam_arriendo       DECIMAL(12,2) DEFAULT NULL,
+                g_fam_serv_bas       DECIMAL(12,2) DEFAULT NULL,
+                g_fam_educacion      DECIMAL(12,2) DEFAULT NULL,
+                g_fam_salud          DECIMAL(12,2) DEFAULT NULL,
+                g_fam_otros          DECIMAL(12,2) DEFAULT NULL,
+                g_fam_imprevistos    DECIMAL(12,2) DEFAULT NULL,
+                otras_deudas_json       LONGTEXT      DEFAULT NULL,
+                vehiculos_negocio_json  LONGTEXT      DEFAULT NULL,
+                vehiculos_hogar_json    LONGTEXT      DEFAULT NULL,
+                inmuebles_negocio_json  LONGTEXT      DEFAULT NULL,
+                inmuebles_hogar_json    LONGTEXT      DEFAULT NULL,
+                created_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 KEY idx_en_tarea (tarea_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
@@ -407,35 +460,55 @@ try {
               venta_lv, venta_sabado, venta_domingo, mes_alta_venta, mes_baja_venta,
               compra_lv, compra_sabado, compra_domingo, mes_alta_compra,
               dia_lv, dia_sab, dia_dom,
-              pct_contado, pct_credito,
-              recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+              pct_contado, pct_credito, pct_efectivo,
+              recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares,
+              g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
+              o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
+              g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
+              otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
         );
 
         // Normalizar null -> 0 para evitar warnings en bind_param numérico
-        $venta_lv_n = $venta_lv ?? 0.0;
+        $venta_lv_n  = $venta_lv  ?? 0.0;
         $venta_sab_n = $venta_sabado ?? 0.0;
         $venta_dom_n = $venta_domingo ?? 0.0;
-        $compra_lv_n = $compra_lv ?? 0.0;
+        $compra_lv_n  = $compra_lv  ?? 0.0;
         $compra_sab_n = $compra_sabado ?? 0.0;
         $compra_dom_n = $compra_domingo ?? 0.0;
-        $pct_cont_n = $pct_contado ?? 0;
-        $pct_cred_n = $pct_credito ?? 0;
-        $recup_n = $recuperacion_credito ?? 0.0;
-        $costos_n = $costos_ventas ?? 0.0;
-        $gastos_n = $gastos_negocio ?? 0.0;
-        $otros_n = $otros_ingresos ?? 0.0;
-        $gfam_n = $gastos_familiares ?? 0.0;
+        $pct_cont_n  = $pct_contado  ?? 0;
+        $pct_cred_n  = $pct_credito  ?? 0;
+        $pct_efec_n  = $pct_efectivo ?? 70;
+        $recup_n  = $recuperacion_credito ?? 0.0;
+        $costos_n = $costos_ventas        ?? 0.0;
+        $gastos_n = $gastos_negocio       ?? 0.0;
+        $otros_n  = $otros_ingresos       ?? 0.0;
+        $gfam_n   = $gastos_familiares    ?? 0.0;
+        $gns_n = $g_neg_sueldos      ?? 0.0; $gna_n = $g_neg_arriendo    ?? 0.0;
+        $gnb_n = $g_neg_serv_bas     ?? 0.0; $gnt_n = $g_neg_transporte  ?? 0.0;
+        $gnm_n = $g_neg_mantenimiento?? 0.0; $gno_n = $g_neg_otros       ?? 0.0;
+        $gni_n = $g_neg_imprevistos  ?? 0.0;
+        $oic_n = $o_ing_conyuge   ?? 0.0; $oia_n = $o_ing_arriendos ?? 0.0;
+        $oip_n = $o_ing_pensiones ?? 0.0; $oio_n = $o_ing_otros     ?? 0.0;
+        $gfa_n = $g_fam_alim      ?? 0.0; $gfar_n = $g_fam_arriendo  ?? 0.0;
+        $gfb_n = $g_fam_serv_bas  ?? 0.0; $gfe_n  = $g_fam_educacion ?? 0.0;
+        $gfs_n = $g_fam_salud     ?? 0.0; $gfo_n  = $g_fam_otros     ?? 0.0;
+        $gfi_n = $g_fam_imprevistos ?? 0.0;
 
-        // types: ss ddd ss ddd s iiiii ddddd
+        // types: ss ddd ss ddd s iii iii d dddd ddddddd dddd ddddddd s ssss = 45
         $stN->bind_param(
-            'ssdddssdddsiiiiiddddd',
+            'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
             $negocio_id, $tarea_id,
             $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
             $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
             $dia_lv, $dia_sab, $dia_dom,
-            $pct_cont_n, $pct_cred_n,
-            $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n
+            $pct_cont_n, $pct_cred_n, $pct_efec_n,
+            $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n,
+            $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
+            $oic_n, $oia_n, $oip_n, $oio_n,
+            $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
+            $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json,
+            $inmuebles_negocio_json, $inmuebles_hogar_json
         );
         $stN->execute();
         $stN->close();

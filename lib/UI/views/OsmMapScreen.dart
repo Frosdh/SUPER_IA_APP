@@ -624,223 +624,151 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   void _mostrarPerfilConductor() {
     final data = _conductorData;
     if (data == null || !mounted) return;
-
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-        decoration: BoxDecoration(
-          color: ConstantColors.backgroundCard,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
-          border: Border.all(color: ConstantColors.borderColor),
-          boxShadow: [
-            BoxShadow(
+      builder: (_) {
+        return Container(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+          decoration: BoxDecoration(
+            color: ConstantColors.backgroundCard,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border.all(color: ConstantColors.borderColor),
+            boxShadow: [
+              BoxShadow(
                 color: Colors.black.withOpacity(0.45),
                 blurRadius: 24,
-                offset: const Offset(0, -6)),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Handle
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: ConstantColors.borderColor,
-                borderRadius: BorderRadius.circular(2),
+                offset: const Offset(0, -6),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Avatar grande + badge de calificación
-            Stack(
-              alignment: Alignment.bottomRight,
-              children: [
-                CircleAvatar(
-                  radius: 44,
-                  backgroundColor:
-                      ConstantColors.primaryViolet.withOpacity(0.2),
-                  child: Text(
-                    data['inicial'] ?? 'C',
-                    style: TextStyle(
-                      color: ConstantColors.primaryViolet,
-                      fontSize: 38,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: ConstantColors.borderColor,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.amber,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                        color: ConstantColors.backgroundCard, width: 2),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.star_rounded,
-                          color: Colors.white, size: 11),
-                      const SizedBox(width: 2),
-                      Text(
-                        '${data['calificacion']}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-
-            // Nombre
-            Text(
-              data['nombre'] ?? 'Conductor',
-              style: TextStyle(
-                color: ConstantColors.textWhite,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${data['viajes']} viajes completados',
-              style: TextStyle(color: ConstantColors.textGrey, fontSize: 13),
-            ),
-            const SizedBox(height: 24),
-
-            // Tarjeta del vehículo
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: ConstantColors.backgroundDark,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: ConstantColors.borderColor),
-              ),
-              child: Row(
+              const SizedBox(height: 24),
+              Stack(
+                alignment: Alignment.bottomRight,
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: ConstantColors.primaryViolet.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.directions_car_filled_rounded,
-                      color: ConstantColors.primaryViolet,
-                      size: 26,
+                  CircleAvatar(
+                    radius: 44,
+                    backgroundColor: ConstantColors.primaryViolet.withOpacity(0.2),
+                    child: Text(
+                      data['inicial'] ?? 'C',
+                      style: TextStyle(
+                        color: ConstantColors.primaryViolet,
+                        fontSize: 38,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.amber,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: ConstantColors.backgroundCard, width: 2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          data['auto'] ?? 'Vehículo',
-                          style: TextStyle(
-                            color: ConstantColors.textWhite,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${data['color']}',
-                          style: TextStyle(
-                              color: ConstantColors.textGrey, fontSize: 12),
-                        ),
+                        const Icon(Icons.star_rounded, color: Colors.white, size: 11),
+                        const SizedBox(width: 2),
+                        Text('${data["calificacion"]}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800)),
                       ],
                     ),
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.primaryViolet.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: ConstantColors.primaryViolet.withOpacity(0.3)),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(data['nombre'] ?? 'Conductor', style: TextStyle(color: ConstantColors.textWhite, fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('${data["viajes"]} viajes completados', style: TextStyle(color: ConstantColors.textGrey, fontSize: 13)),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: ConstantColors.backgroundDark,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: ConstantColors.borderColor),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: ConstantColors.primaryViolet.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.directions_car_filled_rounded, color: ConstantColors.primaryViolet, size: 26),
                     ),
-                    child: Text(
-                      data['placa'] ?? '',
-                      style: TextStyle(
-                        color: ConstantColors.primaryViolet,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
-                        letterSpacing: 1.2,
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(data['auto'] ?? 'Vehículo', style: TextStyle(color: ConstantColors.textWhite, fontSize: 15, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 3),
+                          Text('${data['color']}', style: TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+                        ],
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ETA chip
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.green.withOpacity(0.25)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.access_time_rounded,
-                      color: Colors.greenAccent, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    '¡Conductor en camino! Llegará en aprox. ${data['eta_min']} min',
-                    style: const TextStyle(
-                      color: Colors.greenAccent,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.primaryViolet.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: ConstantColors.primaryViolet.withOpacity(0.3)),
+                      ),
+                      child: Text(data['placa'] ?? '', style: TextStyle(color: ConstantColors.primaryViolet, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 1.2)),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // Botón cerrar
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ConstantColors.primaryViolet,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: const Text(
-                  'Entendido',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.green.withOpacity(0.25)),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.access_time_rounded, color: Colors.greenAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text('¡Conductor en camino! Llegará en aprox. ${data["eta_min"]} min', style: const TextStyle(color: Colors.greenAccent, fontSize: 13, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ConstantColors.primaryViolet,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: const Text('Entendido', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2960,267 +2888,305 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             if (_estadoViaje == EstadoViaje.ninguno)
               Positioned(
                 right: 16,
-                bottom: currentPanelHeight + 72,
-                child: GestureDetector(
-                  onTap: () async {
-                    final res = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const AgendaRecuperacionScreen(),
+                bottom: currentPanelHeight + 220, // elevar conjunto de botones
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Metas por cumplir
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const MetasDiariasScreen()),
                       ),
-                    );
-
-                    if (!mounted) return;
-                    if (res is! Map) return;
-
-                    double? parseDouble(dynamic v) {
-                      if (v == null) return null;
-                      if (v is num) return v.toDouble();
-                      return double.tryParse(v.toString());
-                    }
-
-                    final lat = parseDouble(res['destino_lat']);
-                    final lng = parseDouble(res['destino_lng']);
-                    final nombre = (res['destino_nombre']?.toString() ?? '').trim();
-
-                    if (lat == null || lng == null) return;
-                    if (lat == 0.0 && lng == 0.0) return;
-
-                    final destino = LatLng(lat, lng);
-                    FocusScope.of(context).unfocus();
-                    setState(() {
-                      _destino = destino;
-                      _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
-                      _paradasIntermedias = [];
-                      _agregandoParada = false;
-                      _sugerencias = [];
-                      _mostrandoSugerencias = false;
-                      _mostrandoRecientes = false;
-                      _ajustandoRecogida = false;
-                      _actualizandoRecogida = false;
-                      _seleccionandoDestinoMapa = false;
-                      _actualizandoDestinoMapa = false;
-                      _searchController.text = _destinoNombre;
-                      _calculandoRuta = true;
-                      _mostrandoPanel = true;
-                      _rutaInfo = null;
-                      _rutaPuntos = [];
-                    });
-
-                    _mapController.move(destino, 14.0);
-                    _calcularRuta(destino);
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.backgroundCard,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: ConstantColors.borderColor),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        margin: EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: ConstantColors.backgroundCard,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: ConstantColors.borderColor),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.loop_rounded,
-                            color: ConstantColors.warning, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'Agenda de recuperación',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.track_changes_rounded,
+                                color: ConstantColors.primaryViolet, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Metas por cumplir',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+
+                    // Lista tareas
+                    GestureDetector(
+                      onTap: () async {
+                        final res = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const PendientesTareasScreen(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        if (res is! Map) return;
+
+                        double? parseDouble(dynamic v) {
+                          if (v == null) return null;
+                          if (v is num) return v.toDouble();
+                          return double.tryParse(v.toString());
+                        }
+
+                        final lat = parseDouble(res['destino_lat']);
+                        final lng = parseDouble(res['destino_lng']);
+                        final nombre = (res['destino_nombre']?.toString() ?? '').trim();
+                        if (lat == null || lng == null) return;
+                        if (lat == 0.0 && lng == 0.0) return;
+                        final destino = LatLng(lat, lng);
+                        FocusScope.of(context).unfocus();
+                        setState(() {
+                          _destino = destino;
+                          _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
+                          _paradasIntermedias = [];
+                          _agregandoParada = false;
+                          _sugerencias = [];
+                          _mostrandoSugerencias = false;
+                          _mostrandoRecientes = false;
+                          _ajustandoRecogida = false;
+                          _actualizandoRecogida = false;
+                          _seleccionandoDestinoMapa = false;
+                          _actualizandoDestinoMapa = false;
+                          _searchController.text = _destinoNombre;
+                          _calculandoRuta = true;
+                          _mostrandoPanel = true;
+                          _rutaInfo = null;
+                          _rutaPuntos = [];
+                        });
+                        _mapController.move(destino, 14.0);
+                        _calcularRuta(destino);
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        margin: EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: ConstantColors.backgroundCard,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: ConstantColors.borderColor),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.event_note_rounded,
+                                color: ConstantColors.primaryBlue, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Lista tareas',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Agenda de tareas
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const NuevaEncuestaScreen(
+                              tipoTarea: 'prospecto_nuevo', incluirEmpresa: false),
+                        ),
+                      ),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        margin: EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              ConstantColors.warning,
+                              ConstantColors.primaryBlue
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color: ConstantColors.warning.withOpacity(0.35),
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.assignment_rounded,
+                                color: Colors.white, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Agenda de tareas',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Agenda de recuperación
+                    GestureDetector(
+                      onTap: () async {
+                        final res = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AgendaRecuperacionScreen(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        if (res is! Map) return;
+
+                        double? parseDouble(dynamic v) {
+                          if (v == null) return null;
+                          if (v is num) return v.toDouble();
+                          return double.tryParse(v.toString());
+                        }
+
+                        final lat = parseDouble(res['destino_lat']);
+                        final lng = parseDouble(res['destino_lng']);
+                        final nombre = (res['destino_nombre']?.toString() ?? '').trim();
+                        if (lat == null || lng == null) return;
+                        if (lat == 0.0 && lng == 0.0) return;
+                        final destino = LatLng(lat, lng);
+                        FocusScope.of(context).unfocus();
+                        setState(() {
+                          _destino = destino;
+                          _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
+                          _paradasIntermedias = [];
+                          _agregandoParada = false;
+                          _sugerencias = [];
+                          _mostrandoSugerencias = false;
+                          _mostrandoRecientes = false;
+                          _ajustandoRecogida = false;
+                          _actualizandoRecogida = false;
+                          _seleccionandoDestinoMapa = false;
+                          _actualizandoDestinoMapa = false;
+                          _searchController.text = _destinoNombre;
+                          _calculandoRuta = true;
+                          _mostrandoPanel = true;
+                          _rutaInfo = null;
+                          _rutaPuntos = [];
+                        });
+                        _mapController.move(destino, 14.0);
+                        _calcularRuta(destino);
+                      },
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        margin: EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: ConstantColors.backgroundCard,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: ConstantColors.borderColor),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.loop_rounded,
+                                color: ConstantColors.warning, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Agenda de recuperación',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                      // Levantamiento empresa removed from this Column
+                  ],
                 ),
               ),
 
-            if (_estadoViaje == EstadoViaje.ninguno)
-              Positioned(
-                right: 16,
-                bottom: currentPanelHeight + 128,
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const NuevaEncuestaScreen(
-                          tipoTarea: 'prospecto_nuevo'),
+              // Levantamiento empresa (separate button)
+              if (_estadoViaje == EstadoViaje.ninguno)
+                Positioned(
+                  right: 16,
+                  bottom: currentPanelHeight + 72,
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NuevaEncuestaScreen(
+                            tipoTarea: 'levantamiento_empresa', incluirEmpresa: true),
+                      ),
                     ),
-                  ),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          ConstantColors.warning,
-                          ConstantColors.primaryBlue
+                    child: Container(
+                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: ConstantColors.primaryBlue,
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [
+                          BoxShadow(
+                            color: ConstantColors.primaryBlue.withOpacity(0.28),
+                            blurRadius: 8,
+                            offset: Offset(0, 4),
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: ConstantColors.warning.withOpacity(0.35),
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.assignment_rounded,
-                            color: Colors.white, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'Agenda de tareas',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            if (_estadoViaje == EstadoViaje.ninguno)
-              Positioned(
-                right: 16,
-                bottom: currentPanelHeight + 184,
-                child: GestureDetector(
-                  onTap: () async {
-                    final res = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const PendientesTareasScreen(),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.business_center_rounded,
+                              color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Levantamiento empresa',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700),
+                          ),
+                        ],
                       ),
-                    );
-
-                    if (!mounted) return;
-                    if (res is! Map) return;
-
-                    double? parseDouble(dynamic v) {
-                      if (v == null) return null;
-                      if (v is num) return v.toDouble();
-                      return double.tryParse(v.toString());
-                    }
-
-                    final lat = parseDouble(res['destino_lat']);
-                    final lng = parseDouble(res['destino_lng']);
-                    final nombre = (res['destino_nombre']?.toString() ?? '').trim();
-
-                    if (lat == null || lng == null) return;
-                    if (lat == 0.0 && lng == 0.0) return;
-
-                    final destino = LatLng(lat, lng);
-                    FocusScope.of(context).unfocus();
-                    setState(() {
-                      _destino = destino;
-                      _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
-                      _paradasIntermedias = [];
-                      _agregandoParada = false;
-                      _sugerencias = [];
-                      _mostrandoSugerencias = false;
-                      _mostrandoRecientes = false;
-                      _ajustandoRecogida = false;
-                      _actualizandoRecogida = false;
-                      _seleccionandoDestinoMapa = false;
-                      _actualizandoDestinoMapa = false;
-                      _searchController.text = _destinoNombre;
-                      _calculandoRuta = true;
-                      _mostrandoPanel = true;
-                      _rutaInfo = null;
-                      _rutaPuntos = [];
-                    });
-
-                    _mapController.move(destino, 14.0);
-                    _calcularRuta(destino);
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.backgroundCard,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: ConstantColors.borderColor),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.event_note_rounded,
-                            color: ConstantColors.primaryBlue, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'Lista tareas',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ],
                     ),
                   ),
                 ),
-              ),
 
-            if (_estadoViaje == EstadoViaje.ninguno)
-              Positioned(
-                right: 16,
-                bottom: currentPanelHeight + 240,
-                child: GestureDetector(
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const MetasDiariasScreen()),
-                  ),
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.backgroundCard,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: ConstantColors.borderColor),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.25),
-                          blurRadius: 8,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.track_changes_rounded,
-                          color: ConstantColors.primaryViolet, size: 18),
-                        SizedBox(width: 8),
-                        Text(
-                          'Metas por cumplir',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-            // (Añadir parada eliminado)
+              // (Añadir parada eliminado)
 
             // ── BOTÓN SHARE TRIP (Durante viaje activo) ───────────────
             if (_estadoViaje == EstadoViaje.conductorAsignado ||
