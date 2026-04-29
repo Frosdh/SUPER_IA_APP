@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1246,33 +1248,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
 
     // Validaciones específicas de empresa
-    if (_tieneEmpresa) {
-      if (!_tipoServProduccion && !_tipoComercio) {
-        setState(() => _guardando = false);
-        _mostrarError('Seleccione el tipo de empresa (Servicio/Producción o Comercio)');
-        return;
-      }
-      if (_tipoServProduccion) {
-        // Validar nombres de los 5 productos de producción (mínimo 5)
-        for (int i = 0; i < 5; i++) {
-          if (_prodNameCtrl[i].text.trim().isEmpty) {
+      if (_tieneEmpresa) {
+        // Si el prospecto tiene empresa: guardar con solo el nombre_empresa.
+        // El tipo de empresa, productos y datos financieros se completan
+        // posteriormente en la sección "Levantar Empresa".
+        // → No se requiere tipo ni productos aquí.
+      } else {
+        // Si NO tiene empresa, requerimos nombres mínimos de productos según tipo
+        if (!_tipoServProduccion && !_tipoComercio) {
+          setState(() => _guardando = false);
+          _mostrarError('Seleccione el tipo de empresa (Servicio/Producción o Comercio)');
+          return;
+        }
+        if (_tipoServProduccion) {
+          final filled = List.generate(5, (i) => _prodNameCtrl[i].text.trim()).where((s) => s.isNotEmpty).length;
+          if (filled < 5) {
             setState(() => _guardando = false);
-            _mostrarError('Ingrese el nombre del Producto de Producción ${i + 1} (mínimo 5)');
+            _mostrarError('Ingrese los nombres de los 5 productos de producción. Faltan ' + (5 - filled).toString() + '.');
             return;
           }
         }
-      }
-      if (_tipoComercio) {
-        // Validar nombres de los 5 productos de comercio (mínimo 5)
-        for (int i = 0; i < 5; i++) {
-          if (_comNombreCtrl[i].text.trim().isEmpty) {
-            setState(() => _guardando = false);
-            _mostrarError('Ingrese el nombre del Producto Comercializado ${i + 1} (mínimo 5)');
-            return;
+        if (_tipoComercio) {
+          for (int i = 0; i < 5; i++) {
+            if (_comNombreCtrl[i].text.trim().isEmpty) {
+              setState(() => _guardando = false);
+              _mostrarError('Ingrese el nombre del Producto Comercializado ${i + 1} (mínimo 5)');
+              return;
+            }
           }
         }
       }
-    }
 
     // Computar promedios/valores por día para compatibilidad y envío
     final double _vLun = _toDouble(_ventaLunCtrl.text);
@@ -1869,7 +1874,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _Paso.datosCliente,
       if (_tieneEmpresa && widget.incluirEmpresa) _Paso.empresaNegocio,
       _Paso.productosActuales,
-      _Paso.interesProductos,
       _Paso.busqueda,
     ];
   }
@@ -2202,6 +2206,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       case _Paso.busqueda:
         return _buildPasoBusqueda();
     }
+  }
+
+  // ── PASO 3: Interés en productos (placeholder, se muestra inline en Productos)
+  Widget _buildPasoInteresProductos() {
+    return const SizedBox.shrink();
   }
 
   // ── PASO 0: Pregunta inicial ─────────────────────────────────
@@ -4221,7 +4230,65 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           ],
         ],
 
-        // Mostrar interés en productos/servicios inmediatamente después
+
+        const SizedBox(height: 20),
+        _seccionTitulo('¿Tiene inversiones?'),
+        _preguntaSiNo(
+          value: _tieneInversiones,
+          onChanged: (v) => setState(() => _tieneInversiones = v),
+        ),
+        if (_tieneInversiones == true) ...[
+          const SizedBox(height: 10),
+          _campo(
+              controller: _instInvCtrl,
+              label: 'Institución donde invierte',
+              icon: Icons.account_balance_rounded),
+          _campo(
+              controller: _valorInvCtrl,
+              label: 'Valor de la inversión (\$)',
+              icon: Icons.attach_money_rounded,
+              keyboardType: TextInputType.number),
+          _campo(
+              controller: _plazoInvCtrl,
+              label: 'Plazo',
+              icon: Icons.schedule_rounded),
+          _fieldFecha(
+            label: 'Fecha de vencimiento',
+            fecha: _fechaVencInv,
+            onPick: () =>
+                _seleccionarFecha((d) => setState(() => _fechaVencInv = d)),
+          ),
+          const SizedBox(height: 12),
+          _seccionTitulo('¿Le interesaría que le hagamos una propuesta previo al vencimiento?'),
+          _preguntaSiNo(
+            value: _propuestaPrevVenc,
+            onChanged: (v) => setState(() => _propuestaPrevVenc = v),
+          ),
+          if (_propuestaPrevVenc == true) ...[
+            const SizedBox(height: 8),
+            // Fecha y hora para crear la tarea/propuesta
+            _fieldFecha(
+              label: 'Fecha de la propuesta (tarea)',
+              fecha: _fechaAcuerdo,
+              onPick: () => _seleccionarFecha((d) => setState(() {
+                _fechaAcuerdo = d;
+                // al elegir fecha asumimos que se quiere agendar una cita en campo
+                _acuerdo = 'nueva_cita_campo';
+              })),
+            ),
+            const SizedBox(height: 8),
+            _fieldHora(),
+            const SizedBox(height: 8),
+            _campo(
+              controller: _propuestaInvCtrl,
+              label: 'Propuesta de inversión (resumen)',
+              icon: Icons.note_alt_rounded,
+              maxLines: 3,
+            ),
+          ],
+        ],
+
+        // Mostrar interés en productos/servicios (movido al final del paso)
         _seccionTitulo('¿Le interesaría conocer nuestros\nproductos o servicios?'),
         _preguntaSiNo(
           value: _interesConocer,
@@ -4323,96 +4390,22 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             icon: Icons.edit_rounded,
             maxLines: 2,
           ),
-        ],
-        const SizedBox(height: 20),
-        _seccionTitulo('¿Tiene inversiones?'),
-        _preguntaSiNo(
-          value: _tieneInversiones,
-          onChanged: (v) => setState(() => _tieneInversiones = v),
-        ),
-        if (_tieneInversiones == true) ...[
-          const SizedBox(height: 10),
-          _campo(
-              controller: _instInvCtrl,
-              label: 'Institución donde invierte',
-              icon: Icons.account_balance_rounded),
-          _campo(
-              controller: _valorInvCtrl,
-              label: 'Valor de la inversión (\$)',
-              icon: Icons.attach_money_rounded,
-              keyboardType: TextInputType.number),
-          _campo(
-              controller: _plazoInvCtrl,
-              label: 'Plazo',
-              icon: Icons.schedule_rounded),
-          _fieldFecha(
-            label: 'Fecha de vencimiento',
-            fecha: _fechaVencInv,
-            onPick: () =>
-                _seleccionarFecha((d) => setState(() => _fechaVencInv = d)),
-          ),
-          const SizedBox(height: 12),
-          _seccionTitulo('¿Le interesaría que le hagamos una propuesta previo al vencimiento?'),
-          _preguntaSiNo(
-            value: _propuestaPrevVenc,
-            onChanged: (v) => setState(() => _propuestaPrevVenc = v),
-          ),
-          if (_propuestaPrevVenc == true) ...[
-            const SizedBox(height: 8),
-            // Fecha y hora para crear la tarea/propuesta
-            _fieldFecha(
-              label: 'Fecha de la propuesta (tarea)',
-              fecha: _fechaAcuerdo,
-              onPick: () => _seleccionarFecha((d) => setState(() {
-                _fechaAcuerdo = d;
-                // al elegir fecha asumimos que se quiere agendar una cita en campo
-                _acuerdo = 'nueva_cita_campo';
-              })),
-            ),
-            const SizedBox(height: 8),
-            _fieldHora(),
-            const SizedBox(height: 8),
-            _campo(
-              controller: _propuestaInvCtrl,
-              label: 'Propuesta de inversión (resumen)',
-              icon: Icons.note_alt_rounded,
-              maxLines: 3,
-            ),
-          ],
+
         ],
         const SizedBox(height: 20),
       ],
     );
   }
-
-  void _interesConocerServicesSetter(bool? v) {
-    // Mantener sincronía con el paso de interés global para reutilizar lógica
-    _interesConocerServicios = v;
-    if (v == true) {
-      _interesConocer = true;
-    }
-  }
-
-  // ── PASO 3: Interés en productos ─────────────────────────────
-
-  Widget _buildPasoInteresProductos() {
-    // Eliminado: ahora la sección de interés en productos se muestra
-    // inline justo después de inversiones para evitar pasos adicionales.
-    return const SizedBox.shrink();
-  }
-
   // ── PASO 4: Búsqueda y acuerdo ───────────────────────────────
 
   Widget _buildPasoBusqueda() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _seccionTitulo('¿Le interesaría trabajar con\nnuestra institución?'),
-        _preguntaSiNo(
-          value: _interesTrabajar,
-          onChanged: (v) => setState(() => _interesTrabajar = v),
-        ),
-        const SizedBox(height: 20),
+        // Pregunta de interés eliminada por petición del usuario.
+        const SizedBox(height: 8),
+        // Espacio antes de la siguiente sección.
+        const SizedBox(height: 12),
         _seccionTitulo('¿Qué busca de una institución\nfinanciera?'),
         _checkboxItem(
             label: 'Agilidad',
@@ -4442,15 +4435,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Tarjeta crédito',
             value: _buscaTC,
             onChanged: (v) => setState(() => _buscaTC = v ?? false)),
-        const SizedBox(height: 20),
-        _seccionTitulo('¿Tiene un CDP?'),
-        _fieldFecha(
-          label: 'Fecha de vencimiento del CDP',
-          fecha: _fechaVencCDP,
-          onPick: () =>
-              _seleccionarFecha((d) => setState(() => _fechaVencCDP = d)),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
         _seccionTitulo('Acuerdo Logrado'),
         _dropdownAcuerdo(),
         if (_acuerdo != 'ninguno') ...[
@@ -4555,21 +4540,25 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (_paso == _Paso.empresaNegocio) {
       if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
 
-      // Validar mínimo 5 productos de Producción
-      if (_tipoServProduccion) {
-        final llenosProd = List.generate(_kProdCount, (i) => _prodNameCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
-        if (llenosProd < _kProdCount) {
-          _mostrarError('Debe completar los $_kProdCount productos de Producción antes de continuar (faltan ${_kProdCount - llenosProd}).');
-          return;
+      // Solo validar productos si NO tiene empresa registrada.
+      // Si tiene empresa, tipo y productos se completan en "Levantar Empresa".
+      if (!_tieneEmpresa) {
+        // Validar mínimo 5 productos de Producción
+        if (_tipoServProduccion) {
+          final llenosProd = List.generate(_kProdCount, (i) => _prodNameCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
+          if (llenosProd < _kProdCount) {
+            _mostrarError('Debe completar los $_kProdCount productos de Producción antes de continuar (faltan ${_kProdCount - llenosProd}).');
+            return;
+          }
         }
-      }
 
-      // Validar mínimo 5 productos de Comercio
-      if (_tipoComercio) {
-        final llenosCom = List.generate(_kComProdCount, (i) => _comNombreCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
-        if (llenosCom < _kComProdCount) {
-          _mostrarError('Debe completar los $_kComProdCount productos Comercializados antes de continuar (faltan ${_kComProdCount - llenosCom}).');
-          return;
+        // Validar mínimo 5 productos de Comercio
+        if (_tipoComercio) {
+          final llenosCom = List.generate(_kComProdCount, (i) => _comNombreCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
+          if (llenosCom < _kComProdCount) {
+            _mostrarError('Debe completar los $_kComProdCount productos Comercializados antes de continuar (faltan ${_kComProdCount - llenosCom}).');
+            return;
+          }
         }
       }
     }

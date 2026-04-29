@@ -411,6 +411,38 @@ try {
             $des   = s('doc_estados_cuenta'); $ddec = s('doc_declaraciones');  $dmat = s('doc_matricula');
             $dfot  = s('doc_foto_negocio');   $dsc  = s('doc_solicitud_credito'); $dfc = s('doc_foto_cliente');
 
+            // Normalizar flags y días: aceptar variantes truthy y evitar cadena vacía
+            $truthy = function($v) {
+                if ($v === null) return '0';
+                $v = trim((string)$v);
+                $vl = strtolower($v);
+                return in_array($vl, ['1','true','on','yes','y','si','s'], true) ? '1' : '0';
+            };
+            $req   = $truthy($req);
+            $tiemp = $truthy($tiemp);
+            $dlv   = $truthy($dlv);
+            $dsb   = $truthy($dsb);
+            $ddm   = $truthy($ddm);
+
+            // Normalizar documentos a '0'|'1'
+            $dc   = $truthy($dc);
+            $dpl  = $truthy($dpl);
+            $drr  = $truthy($drr);
+            $des  = $truthy($des);
+            $ddec = $truthy($ddec);
+            $dmat = $truthy($dmat);
+            $dfot = $truthy($dfot);
+            $dsc  = $truthy($dsc);
+            $dfc  = $truthy($dfc);
+
+            // DEBUG: registrar POST entrante y valores normalizados (temporal)
+            try {
+                error_log('[DEBUG][ficha_credito] POST: ' . json_encode($_POST, JSON_UNESCAPED_UNICODE));
+                error_log('[DEBUG][ficha_credito] normalized dias: dlv=' . $dlv . ' dsb=' . $dsb . ' ddm=' . $ddm);
+            } catch (\Throwable $_) {
+                // no bloquear en caso de error de logging
+            }
+
             // 44 parámetros
             $st = $conn->prepare("
                 INSERT INTO ficha_credito (

@@ -157,6 +157,11 @@ $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
 
+// Propuesta previa al vencimiento / propuesta inversion
+$propuesta_inversion = strOrNull($_POST['propuesta_inversion'] ?? '');
+$fecha_previa_venc   = strOrNull($_POST['fecha_previa_vencimiento'] ?? '');
+$crear_tarea_prev_venc = (int)($_POST['crear_tarea_prev_venc'] ?? 0);
+
 // Empresa / Negocio (levantamiento suave)
 $tiene_empresa_post = (int)($_POST['tiene_empresa'] ?? 0);
 $venta_lv           = floatOrNull($_POST['venta_lv'] ?? '');
@@ -453,6 +458,47 @@ try {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
         );
 
+        // ── Migración: agregar columnas que pueden faltar en tablas pre-existentes ──
+        // (CREATE TABLE IF NOT EXISTS no altera una tabla ya creada)
+        $cols_faltantes = [
+            "pct_efectivo"         => "ALTER TABLE encuesta_negocio ADD COLUMN pct_efectivo INT DEFAULT NULL AFTER pct_credito",
+            "recuperacion_credito" => "ALTER TABLE encuesta_negocio ADD COLUMN recuperacion_credito DECIMAL(12,2) DEFAULT NULL",
+            "costos_ventas"        => "ALTER TABLE encuesta_negocio ADD COLUMN costos_ventas DECIMAL(12,2) DEFAULT NULL",
+            "gastos_negocio"       => "ALTER TABLE encuesta_negocio ADD COLUMN gastos_negocio DECIMAL(12,2) DEFAULT NULL",
+            "otros_ingresos"       => "ALTER TABLE encuesta_negocio ADD COLUMN otros_ingresos DECIMAL(12,2) DEFAULT NULL",
+            "gastos_familiares"    => "ALTER TABLE encuesta_negocio ADD COLUMN gastos_familiares DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_sueldos"        => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_sueldos DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_arriendo"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_arriendo DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_serv_bas"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_serv_bas DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_transporte"     => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_transporte DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_mantenimiento"  => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_mantenimiento DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_otros DECIMAL(12,2) DEFAULT NULL",
+            "g_neg_imprevistos"    => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_imprevistos DECIMAL(12,2) DEFAULT NULL",
+            "o_ing_conyuge"        => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_conyuge DECIMAL(12,2) DEFAULT NULL",
+            "o_ing_arriendos"      => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_arriendos DECIMAL(12,2) DEFAULT NULL",
+            "o_ing_pensiones"      => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_pensiones DECIMAL(12,2) DEFAULT NULL",
+            "o_ing_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_otros DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_alim"           => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_alim DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_arriendo"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_arriendo DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_serv_bas"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_serv_bas DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_educacion"      => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_educacion DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_salud"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_salud DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_otros DECIMAL(12,2) DEFAULT NULL",
+            "g_fam_imprevistos"    => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_imprevistos DECIMAL(12,2) DEFAULT NULL",
+            "otras_deudas_json"       => "ALTER TABLE encuesta_negocio ADD COLUMN otras_deudas_json LONGTEXT DEFAULT NULL",
+            "vehiculos_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_negocio_json LONGTEXT DEFAULT NULL",
+            "vehiculos_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_hogar_json LONGTEXT DEFAULT NULL",
+            "inmuebles_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_negocio_json LONGTEXT DEFAULT NULL",
+            "inmuebles_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_hogar_json LONGTEXT DEFAULT NULL",
+        ];
+        foreach ($cols_faltantes as $col => $sql) {
+            // Verificar si ya existe antes de intentar agregar (evita warning innecesario)
+            $chk = $conn->query("SHOW COLUMNS FROM encuesta_negocio LIKE '$col'");
+            if ($chk && $chk->num_rows === 0) {
+                try { $conn->query($sql); } catch (\Throwable $_) {}
+            }
+        }
+
         $negocio_id = genUUID();
         $stN = $conn->prepare(
             "INSERT INTO encuesta_negocio
@@ -637,7 +683,8 @@ try {
 
         $enc_id  = genUUID();
         $f_nuevo = $fecha_acuerdo;  // fecha_nuevo_contacto
-        $int_pro = null;            // interes_propuesta_previa
+        // interes_propuesta_previa: crear tarea propuesta previa al vencimiento
+        $int_pro = $crear_tarea_prev_venc ? 1 : 0;
 
         // 28 params correctos:
         // ss ii i s d ss i s i s i s iiii iiii s ssss
@@ -744,6 +791,31 @@ try {
                 );
                 $st->execute();
                 $st->close();
+            }
+        }
+
+        // ── Crear tarea de propuesta previa al vencimiento (propuesta de inversión)
+        if ($crear_tarea_prev_venc && $fecha_previa_venc !== null) {
+            try {
+                $GLOBALS['phase'] = 'TAREA_PROPUESTA';
+                $tarea_prop_id = genUUID();
+                $tipo_prop = 'nueva_cita_oficina';
+                $est_prop = 'programada';
+                $obs_prop = trim('Propuesta previa al vencimiento: ' . ($propuesta_inversion ?? ''));
+
+                $stp = $conn->prepare(
+                    "INSERT INTO tarea
+                     (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado, fecha_programada, hora_programada, observaciones)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                );
+                if ($stp) {
+                    $hora_prop = '';
+                    $stp->bind_param('ssssssss', $tarea_prop_id, $asesor_id, $cliente_id, $tipo_prop, $est_prop, $fecha_previa_venc, $hora_prop, $obs_prop);
+                    $stp->execute();
+                    $stp->close();
+                }
+            } catch (\Throwable $_) {
+                // No bloquear flujo principal por fallo en crear tarea propuesta
             }
         }
     }
