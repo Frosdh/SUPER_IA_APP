@@ -304,17 +304,135 @@ $tarea_followup_tipo = null;
 $tarea_followup_fecha = null;
 $tarea_followup_hora  = null;
 
+// ── DDL fuera de la transacción (DDL causa commit implícito en MySQL) ──────────
+// Ejecutar ANTES de begin_transaction() para no interrumpir la transacción.
+$negocio_id   = null;   // se asignará a UUID en el bloque de empresa
+$negocio_err  = null;   // captura errores del INSERT de encuesta_negocio
+
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN origen_prospecto VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+
+// Pre-crear la tabla encuesta_negocio (si no existe) y migrar columnas faltantes.
+// Aquí, FUERA de la transacción, para que el CREATE TABLE/ALTER TABLE no hagan
+// commit implícito en medio del INSERT de tarea/encuesta.
+if ($tiene_empresa_post === 1) {
+    try {
+        $conn->query(
+            "CREATE TABLE IF NOT EXISTS encuesta_negocio (
+                id                   CHAR(36)      NOT NULL PRIMARY KEY,
+                tarea_id             CHAR(36)      NOT NULL,
+                venta_lv             DECIMAL(12,2) DEFAULT NULL,
+                venta_sabado         DECIMAL(12,2) DEFAULT NULL,
+                venta_domingo        DECIMAL(12,2) DEFAULT NULL,
+                mes_alta_venta       VARCHAR(20)   DEFAULT NULL,
+                mes_baja_venta       VARCHAR(20)   DEFAULT NULL,
+                compra_lv            DECIMAL(12,2) DEFAULT NULL,
+                compra_sabado        DECIMAL(12,2) DEFAULT NULL,
+                compra_domingo       DECIMAL(12,2) DEFAULT NULL,
+                mes_alta_compra      VARCHAR(20)   DEFAULT NULL,
+                dia_lv               TINYINT(1)    NOT NULL DEFAULT 0,
+                dia_sab              TINYINT(1)    NOT NULL DEFAULT 0,
+                dia_dom              TINYINT(1)    NOT NULL DEFAULT 0,
+                pct_contado          INT           DEFAULT NULL,
+                pct_credito          INT           DEFAULT NULL,
+                pct_efectivo         INT           DEFAULT NULL,
+                recuperacion_credito DECIMAL(12,2) DEFAULT NULL,
+                costos_ventas        DECIMAL(12,2) DEFAULT NULL,
+                gastos_negocio       DECIMAL(12,2) DEFAULT NULL,
+                otros_ingresos       DECIMAL(12,2) DEFAULT NULL,
+                gastos_familiares    DECIMAL(12,2) DEFAULT NULL,
+                g_neg_sueldos        DECIMAL(12,2) DEFAULT NULL,
+                g_neg_arriendo       DECIMAL(12,2) DEFAULT NULL,
+                g_neg_serv_bas       DECIMAL(12,2) DEFAULT NULL,
+                g_neg_transporte     DECIMAL(12,2) DEFAULT NULL,
+                g_neg_mantenimiento  DECIMAL(12,2) DEFAULT NULL,
+                g_neg_otros          DECIMAL(12,2) DEFAULT NULL,
+                g_neg_imprevistos    DECIMAL(12,2) DEFAULT NULL,
+                o_ing_conyuge        DECIMAL(12,2) DEFAULT NULL,
+                o_ing_arriendos      DECIMAL(12,2) DEFAULT NULL,
+                o_ing_pensiones      DECIMAL(12,2) DEFAULT NULL,
+                o_ing_otros          DECIMAL(12,2) DEFAULT NULL,
+                g_fam_alim           DECIMAL(12,2) DEFAULT NULL,
+                g_fam_arriendo       DECIMAL(12,2) DEFAULT NULL,
+                g_fam_serv_bas       DECIMAL(12,2) DEFAULT NULL,
+                g_fam_educacion      DECIMAL(12,2) DEFAULT NULL,
+                g_fam_salud          DECIMAL(12,2) DEFAULT NULL,
+                g_fam_otros          DECIMAL(12,2) DEFAULT NULL,
+                g_fam_imprevistos    DECIMAL(12,2) DEFAULT NULL,
+                otras_deudas_json       LONGTEXT      DEFAULT NULL,
+                vehiculos_negocio_json  LONGTEXT      DEFAULT NULL,
+                vehiculos_hogar_json    LONGTEXT      DEFAULT NULL,
+                inmuebles_negocio_json  LONGTEXT      DEFAULT NULL,
+                inmuebles_hogar_json    LONGTEXT      DEFAULT NULL,
+                created_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                KEY idx_en_tarea (tarea_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+        );
+    } catch (\Throwable $_) {}
+
+    // Migración: agregar columnas que pueden faltar en tablas pre-existentes
+    $cols_faltantes = [
+        "pct_efectivo"         => "ALTER TABLE encuesta_negocio ADD COLUMN pct_efectivo INT DEFAULT NULL AFTER pct_credito",
+        "recuperacion_credito" => "ALTER TABLE encuesta_negocio ADD COLUMN recuperacion_credito DECIMAL(12,2) DEFAULT NULL",
+        "costos_ventas"        => "ALTER TABLE encuesta_negocio ADD COLUMN costos_ventas DECIMAL(12,2) DEFAULT NULL",
+        "gastos_negocio"       => "ALTER TABLE encuesta_negocio ADD COLUMN gastos_negocio DECIMAL(12,2) DEFAULT NULL",
+        "otros_ingresos"       => "ALTER TABLE encuesta_negocio ADD COLUMN otros_ingresos DECIMAL(12,2) DEFAULT NULL",
+        "gastos_familiares"    => "ALTER TABLE encuesta_negocio ADD COLUMN gastos_familiares DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_sueldos"        => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_sueldos DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_arriendo"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_arriendo DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_serv_bas"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_serv_bas DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_transporte"     => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_transporte DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_mantenimiento"  => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_mantenimiento DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_otros DECIMAL(12,2) DEFAULT NULL",
+        "g_neg_imprevistos"    => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_imprevistos DECIMAL(12,2) DEFAULT NULL",
+        "o_ing_conyuge"        => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_conyuge DECIMAL(12,2) DEFAULT NULL",
+        "o_ing_arriendos"      => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_arriendos DECIMAL(12,2) DEFAULT NULL",
+        "o_ing_pensiones"      => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_pensiones DECIMAL(12,2) DEFAULT NULL",
+        "o_ing_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_otros DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_alim"           => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_alim DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_arriendo"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_arriendo DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_serv_bas"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_serv_bas DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_educacion"      => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_educacion DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_salud"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_salud DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_otros DECIMAL(12,2) DEFAULT NULL",
+        "g_fam_imprevistos"    => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_imprevistos DECIMAL(12,2) DEFAULT NULL",
+        "otras_deudas_json"       => "ALTER TABLE encuesta_negocio ADD COLUMN otras_deudas_json LONGTEXT DEFAULT NULL",
+        "vehiculos_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_negocio_json LONGTEXT DEFAULT NULL",
+        "vehiculos_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_hogar_json LONGTEXT DEFAULT NULL",
+        "inmuebles_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_negocio_json LONGTEXT DEFAULT NULL",
+        "inmuebles_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_hogar_json LONGTEXT DEFAULT NULL",
+    ];
+    foreach ($cols_faltantes as $col => $sql) {
+        $chk = $conn->query("SHOW COLUMNS FROM encuesta_negocio LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) {
+            try { $conn->query($sql); } catch (\Throwable $_) {}
+        }
+    }
+}
+
+// Pre-crear tabla alerta_modificacion para evitar DDL dentro de la transacción
+try {
+    $conn->query("CREATE TABLE IF NOT EXISTS alerta_modificacion (
+        id               CHAR(36)     NOT NULL PRIMARY KEY,
+        tarea_id         CHAR(36)     NOT NULL,
+        asesor_id        CHAR(36)     NOT NULL,
+        supervisor_id    CHAR(36)     DEFAULT NULL,
+        campo_modificado VARCHAR(120) DEFAULT 'visita_cliente',
+        valor_anterior   TEXT         DEFAULT NULL,
+        valor_nuevo      TEXT         DEFAULT NULL,
+        vista_supervisor TINYINT(1)   NOT NULL DEFAULT 0,
+        vista_at         DATETIME     DEFAULT NULL,
+        created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_am_asesor (asesor_id),
+        KEY idx_am_supervisor (supervisor_id),
+        KEY idx_am_no_vista (vista_supervisor)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+} catch (\Throwable $_) {}
+// ────────────────────────────────────────────────────────────────────────────
+
 try {
     // ── 1. Resolver asesor_id ────────────────────────────────
     $GLOBALS['phase'] = 'ASESOR_RESOLVE';
     $asesor_id = null;
-
-    // Asegurar columna para origen de prospecto
-    try {
-        $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN origen_prospecto VARCHAR(20) DEFAULT NULL");
-    } catch (\Throwable $e) {
-        // ignorar si ya existe
-    }
 
     if ($asesor_id_in !== '') {
         $st = $conn->prepare('SELECT id FROM asesor WHERE id = ? LIMIT 1');
@@ -422,184 +540,82 @@ try {
     $st->close();
 
     // ── 3c. Guardar levantamiento Empresa/Negocio (si aplica) ──
+    // Nota: CREATE TABLE / ALTER TABLE se corrieron ANTES de begin_transaction()
+    // para evitar que el DDL cause un commit implícito en MySQL y rompa la tx.
     if ($tiene_empresa_post === 1) {
         $GLOBALS['phase'] = 'NEGOCIO';
-        // Asegurar tabla
-        $conn->query(
-            "CREATE TABLE IF NOT EXISTS encuesta_negocio (
-                id                   CHAR(36)      NOT NULL PRIMARY KEY,
-                tarea_id             CHAR(36)      NOT NULL,
-                venta_lv             DECIMAL(12,2) DEFAULT NULL,
-                venta_sabado         DECIMAL(12,2) DEFAULT NULL,
-                venta_domingo        DECIMAL(12,2) DEFAULT NULL,
-                mes_alta_venta       VARCHAR(20)   DEFAULT NULL,
-                mes_baja_venta       VARCHAR(20)   DEFAULT NULL,
-                compra_lv            DECIMAL(12,2) DEFAULT NULL,
-                compra_sabado        DECIMAL(12,2) DEFAULT NULL,
-                compra_domingo       DECIMAL(12,2) DEFAULT NULL,
-                mes_alta_compra      VARCHAR(20)   DEFAULT NULL,
-                dia_lv               TINYINT(1)    NOT NULL DEFAULT 0,
-                dia_sab              TINYINT(1)    NOT NULL DEFAULT 0,
-                dia_dom              TINYINT(1)    NOT NULL DEFAULT 0,
-                pct_contado          INT           DEFAULT NULL,
-                pct_credito          INT           DEFAULT NULL,
-                pct_efectivo         INT           DEFAULT NULL,
-                recuperacion_credito DECIMAL(12,2) DEFAULT NULL,
-                costos_ventas        DECIMAL(12,2) DEFAULT NULL,
-                gastos_negocio       DECIMAL(12,2) DEFAULT NULL,
-                otros_ingresos       DECIMAL(12,2) DEFAULT NULL,
-                gastos_familiares    DECIMAL(12,2) DEFAULT NULL,
-                g_neg_sueldos        DECIMAL(12,2) DEFAULT NULL,
-                g_neg_arriendo       DECIMAL(12,2) DEFAULT NULL,
-                g_neg_serv_bas       DECIMAL(12,2) DEFAULT NULL,
-                g_neg_transporte     DECIMAL(12,2) DEFAULT NULL,
-                g_neg_mantenimiento  DECIMAL(12,2) DEFAULT NULL,
-                g_neg_otros          DECIMAL(12,2) DEFAULT NULL,
-                g_neg_imprevistos    DECIMAL(12,2) DEFAULT NULL,
-                o_ing_conyuge        DECIMAL(12,2) DEFAULT NULL,
-                o_ing_arriendos      DECIMAL(12,2) DEFAULT NULL,
-                o_ing_pensiones      DECIMAL(12,2) DEFAULT NULL,
-                o_ing_otros          DECIMAL(12,2) DEFAULT NULL,
-                g_fam_alim           DECIMAL(12,2) DEFAULT NULL,
-                g_fam_arriendo       DECIMAL(12,2) DEFAULT NULL,
-                g_fam_serv_bas       DECIMAL(12,2) DEFAULT NULL,
-                g_fam_educacion      DECIMAL(12,2) DEFAULT NULL,
-                g_fam_salud          DECIMAL(12,2) DEFAULT NULL,
-                g_fam_otros          DECIMAL(12,2) DEFAULT NULL,
-                g_fam_imprevistos    DECIMAL(12,2) DEFAULT NULL,
-                otras_deudas_json       LONGTEXT      DEFAULT NULL,
-                vehiculos_negocio_json  LONGTEXT      DEFAULT NULL,
-                vehiculos_hogar_json    LONGTEXT      DEFAULT NULL,
-                inmuebles_negocio_json  LONGTEXT      DEFAULT NULL,
-                inmuebles_hogar_json    LONGTEXT      DEFAULT NULL,
-                created_at              DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                KEY idx_en_tarea (tarea_id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-        );
+        try {
+            $negocio_id = genUUID();
+            $stN = $conn->prepare(
+                "INSERT INTO encuesta_negocio
+                 (id, tarea_id,
+                  venta_lv, venta_sabado, venta_domingo, mes_alta_venta, mes_baja_venta,
+                  compra_lv, compra_sabado, compra_domingo, mes_alta_compra,
+                  dia_lv, dia_sab, dia_dom,
+                  pct_contado, pct_credito, pct_efectivo,
+                  recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares,
+                  g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
+                  o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
+                  g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
+                  otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+            );
 
-        // ── Migración: agregar columnas que pueden faltar en tablas pre-existentes ──
-        // (CREATE TABLE IF NOT EXISTS no altera una tabla ya creada)
-        $cols_faltantes = [
-            "pct_efectivo"         => "ALTER TABLE encuesta_negocio ADD COLUMN pct_efectivo INT DEFAULT NULL AFTER pct_credito",
-            "recuperacion_credito" => "ALTER TABLE encuesta_negocio ADD COLUMN recuperacion_credito DECIMAL(12,2) DEFAULT NULL",
-            "costos_ventas"        => "ALTER TABLE encuesta_negocio ADD COLUMN costos_ventas DECIMAL(12,2) DEFAULT NULL",
-            "gastos_negocio"       => "ALTER TABLE encuesta_negocio ADD COLUMN gastos_negocio DECIMAL(12,2) DEFAULT NULL",
-            "otros_ingresos"       => "ALTER TABLE encuesta_negocio ADD COLUMN otros_ingresos DECIMAL(12,2) DEFAULT NULL",
-            "gastos_familiares"    => "ALTER TABLE encuesta_negocio ADD COLUMN gastos_familiares DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_sueldos"        => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_sueldos DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_arriendo"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_arriendo DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_serv_bas"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_serv_bas DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_transporte"     => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_transporte DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_mantenimiento"  => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_mantenimiento DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_otros DECIMAL(12,2) DEFAULT NULL",
-            "g_neg_imprevistos"    => "ALTER TABLE encuesta_negocio ADD COLUMN g_neg_imprevistos DECIMAL(12,2) DEFAULT NULL",
-            "o_ing_conyuge"        => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_conyuge DECIMAL(12,2) DEFAULT NULL",
-            "o_ing_arriendos"      => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_arriendos DECIMAL(12,2) DEFAULT NULL",
-            "o_ing_pensiones"      => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_pensiones DECIMAL(12,2) DEFAULT NULL",
-            "o_ing_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN o_ing_otros DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_alim"           => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_alim DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_arriendo"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_arriendo DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_serv_bas"       => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_serv_bas DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_educacion"      => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_educacion DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_salud"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_salud DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_otros"          => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_otros DECIMAL(12,2) DEFAULT NULL",
-            "g_fam_imprevistos"    => "ALTER TABLE encuesta_negocio ADD COLUMN g_fam_imprevistos DECIMAL(12,2) DEFAULT NULL",
-            "otras_deudas_json"       => "ALTER TABLE encuesta_negocio ADD COLUMN otras_deudas_json LONGTEXT DEFAULT NULL",
-            "vehiculos_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_negocio_json LONGTEXT DEFAULT NULL",
-            "vehiculos_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_hogar_json LONGTEXT DEFAULT NULL",
-            "inmuebles_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_negocio_json LONGTEXT DEFAULT NULL",
-            "inmuebles_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_hogar_json LONGTEXT DEFAULT NULL",
-        ];
-        foreach ($cols_faltantes as $col => $sql) {
-            // Verificar si ya existe antes de intentar agregar (evita warning innecesario)
-            $chk = $conn->query("SHOW COLUMNS FROM encuesta_negocio LIKE '$col'");
-            if ($chk && $chk->num_rows === 0) {
-                try { $conn->query($sql); } catch (\Throwable $_) {}
-            }
+            // Normalizar null -> 0 para evitar warnings en bind_param numérico
+            $venta_lv_n  = $venta_lv  ?? 0.0;
+            $venta_sab_n = $venta_sabado ?? 0.0;
+            $venta_dom_n = $venta_domingo ?? 0.0;
+            $compra_lv_n  = $compra_lv  ?? 0.0;
+            $compra_sab_n = $compra_sabado ?? 0.0;
+            $compra_dom_n = $compra_domingo ?? 0.0;
+            $pct_cont_n  = $pct_contado  ?? 0;
+            $pct_cred_n  = $pct_credito  ?? 0;
+            $pct_efec_n  = $pct_efectivo ?? 70;
+            $recup_n  = $recuperacion_credito ?? 0.0;
+            $costos_n = $costos_ventas        ?? 0.0;
+            $gastos_n = $gastos_negocio       ?? 0.0;
+            $otros_n  = $otros_ingresos       ?? 0.0;
+            $gfam_n   = $gastos_familiares    ?? 0.0;
+            $gns_n = $g_neg_sueldos      ?? 0.0; $gna_n = $g_neg_arriendo    ?? 0.0;
+            $gnb_n = $g_neg_serv_bas     ?? 0.0; $gnt_n = $g_neg_transporte  ?? 0.0;
+            $gnm_n = $g_neg_mantenimiento?? 0.0; $gno_n = $g_neg_otros       ?? 0.0;
+            $gni_n = $g_neg_imprevistos  ?? 0.0;
+            $oic_n = $o_ing_conyuge   ?? 0.0; $oia_n = $o_ing_arriendos ?? 0.0;
+            $oip_n = $o_ing_pensiones ?? 0.0; $oio_n = $o_ing_otros     ?? 0.0;
+            $gfa_n = $g_fam_alim      ?? 0.0; $gfar_n = $g_fam_arriendo  ?? 0.0;
+            $gfb_n = $g_fam_serv_bas  ?? 0.0; $gfe_n  = $g_fam_educacion ?? 0.0;
+            $gfs_n = $g_fam_salud     ?? 0.0; $gfo_n  = $g_fam_otros     ?? 0.0;
+            $gfi_n = $g_fam_imprevistos ?? 0.0;
+
+            // types: 45 params — ss ddd ss ddd s iii iii d dddd ddddddd dddd ddddddd s ssss
+            $stN->bind_param(
+                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
+                $negocio_id, $tarea_id,
+                $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
+                $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
+                $dia_lv, $dia_sab, $dia_dom,
+                $pct_cont_n, $pct_cred_n, $pct_efec_n,
+                $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n,
+                $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
+                $oic_n, $oia_n, $oip_n, $oio_n,
+                $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
+                $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json,
+                $inmuebles_negocio_json, $inmuebles_hogar_json
+            );
+            $stN->execute();
+            $stN->close();
+        } catch (\Throwable $eN) {
+            // Capturar el error para incluirlo en la respuesta (no bloquea el flujo)
+            $negocio_id  = null;
+            $negocio_err = substr($eN->getMessage(), 0, 300);
+            error_log('[guardar_encuesta][NEGOCIO] ERROR: ' . $eN->getMessage() . ' | phase=' . ($GLOBALS['phase'] ?? '?'));
         }
-
-        $negocio_id = genUUID();
-        $stN = $conn->prepare(
-            "INSERT INTO encuesta_negocio
-             (id, tarea_id,
-              venta_lv, venta_sabado, venta_domingo, mes_alta_venta, mes_baja_venta,
-              compra_lv, compra_sabado, compra_domingo, mes_alta_compra,
-              dia_lv, dia_sab, dia_dom,
-              pct_contado, pct_credito, pct_efectivo,
-              recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares,
-              g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
-              o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
-              g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
-              otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-        );
-
-        // Normalizar null -> 0 para evitar warnings en bind_param numérico
-        $venta_lv_n  = $venta_lv  ?? 0.0;
-        $venta_sab_n = $venta_sabado ?? 0.0;
-        $venta_dom_n = $venta_domingo ?? 0.0;
-        $compra_lv_n  = $compra_lv  ?? 0.0;
-        $compra_sab_n = $compra_sabado ?? 0.0;
-        $compra_dom_n = $compra_domingo ?? 0.0;
-        $pct_cont_n  = $pct_contado  ?? 0;
-        $pct_cred_n  = $pct_credito  ?? 0;
-        $pct_efec_n  = $pct_efectivo ?? 70;
-        $recup_n  = $recuperacion_credito ?? 0.0;
-        $costos_n = $costos_ventas        ?? 0.0;
-        $gastos_n = $gastos_negocio       ?? 0.0;
-        $otros_n  = $otros_ingresos       ?? 0.0;
-        $gfam_n   = $gastos_familiares    ?? 0.0;
-        $gns_n = $g_neg_sueldos      ?? 0.0; $gna_n = $g_neg_arriendo    ?? 0.0;
-        $gnb_n = $g_neg_serv_bas     ?? 0.0; $gnt_n = $g_neg_transporte  ?? 0.0;
-        $gnm_n = $g_neg_mantenimiento?? 0.0; $gno_n = $g_neg_otros       ?? 0.0;
-        $gni_n = $g_neg_imprevistos  ?? 0.0;
-        $oic_n = $o_ing_conyuge   ?? 0.0; $oia_n = $o_ing_arriendos ?? 0.0;
-        $oip_n = $o_ing_pensiones ?? 0.0; $oio_n = $o_ing_otros     ?? 0.0;
-        $gfa_n = $g_fam_alim      ?? 0.0; $gfar_n = $g_fam_arriendo  ?? 0.0;
-        $gfb_n = $g_fam_serv_bas  ?? 0.0; $gfe_n  = $g_fam_educacion ?? 0.0;
-        $gfs_n = $g_fam_salud     ?? 0.0; $gfo_n  = $g_fam_otros     ?? 0.0;
-        $gfi_n = $g_fam_imprevistos ?? 0.0;
-
-        // types: ss ddd ss ddd s iii iii d dddd ddddddd dddd ddddddd s ssss = 45
-        $stN->bind_param(
-            'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
-            $negocio_id, $tarea_id,
-            $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
-            $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
-            $dia_lv, $dia_sab, $dia_dom,
-            $pct_cont_n, $pct_cred_n, $pct_efec_n,
-            $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n,
-            $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
-            $oic_n, $oia_n, $oip_n, $oio_n,
-            $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
-            $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json,
-            $inmuebles_negocio_json, $inmuebles_hogar_json
-        );
-        $stN->execute();
-        $stN->close();
     }
 
     // ── 3b. Alerta de modificación (solo si el cliente ya existía) ──
     if ($es_cliente_existente && $asesor_id !== null) {
         try {
-            // Asegurar tabla
-            $conn->query("
-                CREATE TABLE IF NOT EXISTS alerta_modificacion (
-                    id               CHAR(36)     NOT NULL PRIMARY KEY,
-                    tarea_id         CHAR(36)     NOT NULL,
-                    asesor_id        CHAR(36)     NOT NULL,
-                    supervisor_id    CHAR(36)     DEFAULT NULL,
-                    campo_modificado VARCHAR(120) DEFAULT 'visita_cliente',
-                    valor_anterior   TEXT         DEFAULT NULL,
-                    valor_nuevo      TEXT         DEFAULT NULL,
-                    vista_supervisor TINYINT(1)   NOT NULL DEFAULT 0,
-                    vista_at         DATETIME     DEFAULT NULL,
-                    created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    KEY idx_am_asesor (asesor_id),
-                    KEY idx_am_supervisor (supervisor_id),
-                    KEY idx_am_no_vista (vista_supervisor)
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
-            ");
+            // Tabla ya creada antes de begin_transaction() — solo insertar alerta
 
             // Obtener supervisor_id del asesor
             $sup_id = null;
@@ -861,6 +877,51 @@ try {
         }
     }
 
+    // ── Si es levantamiento: actualizar credito_proceso.estado_credito ──────────
+    // Registra que el levantamiento de empresa quedó completo, permitiendo que
+    // el supervisor apruebe el crédito desde el panel web.
+    if ($tipo_tarea === 'levantamiento' && $tiene_empresa_post === 1 && $cliente_id) {
+        $GLOBALS['phase'] = 'CREDITO_LEVANTAMIENTO';
+        try {
+            // Verificar si ya existe un proceso de crédito para este cliente
+            $stcr = $conn->prepare(
+                "SELECT id FROM credito_proceso WHERE cliente_prospecto_id = ? ORDER BY created_at DESC LIMIT 1"
+            );
+            $stcr->bind_param('s', $cliente_id);
+            $stcr->execute();
+            $rcr = $stcr->get_result()->fetch_assoc();
+            $stcr->close();
+
+            if ($rcr) {
+                // Actualizar estado a 'levantamiento' si estaba en etapa anterior
+                $upd = $conn->prepare(
+                    "UPDATE credito_proceso
+                     SET estado_credito = 'levantamiento',
+                         fecha_levantamiento = CURDATE(),
+                         updated_at = NOW()
+                     WHERE id = ?
+                       AND estado_credito IN ('prospectado','entrevista_venta')"
+                );
+                $upd->bind_param('s', $rcr['id']);
+                $upd->execute();
+                $upd->close();
+            } else {
+                // No existe proceso aún: crear uno en estado 'levantamiento'
+                $nuevo_cp_id = genUUID();
+                $ins = $conn->prepare(
+                    "INSERT INTO credito_proceso
+                     (id, cliente_prospecto_id, asesor_id, estado_credito, fecha_levantamiento, created_at)
+                     VALUES (?, ?, ?, 'levantamiento', CURDATE(), NOW())"
+                );
+                $ins->bind_param('sss', $nuevo_cp_id, $cliente_id, $asesor_id);
+                $ins->execute();
+                $ins->close();
+            }
+        } catch (\Throwable $_) {
+            // No bloquear el flujo principal si falla este paso opcional
+        }
+    }
+
     $conn->commit();
     $GLOBALS['phase'] = 'DONE';
 
@@ -869,6 +930,10 @@ try {
         'message'    => $fue_encuestado ? 'Encuesta guardada correctamente' : 'Tarea registrada (sin encuesta)',
         'tarea_id'   => $tarea_id,
         'cliente_id' => $cliente_id,
+        'encuesta_negocio_id' => $negocio_id,
+        // Debug: ayuda a diagnosticar si tiene_empresa llega correctamente desde Flutter
+        'dbg_tiene_empresa' => $tiene_empresa_post,
+        'dbg_negocio_err'   => $negocio_err ?? null,
         // Tarea 1: seguimiento del acuerdo logrado al final de la encuesta
         'tarea_followup_id'    => $tarea_followup_id,
         'tarea_followup_tipo'  => $tarea_followup_tipo,

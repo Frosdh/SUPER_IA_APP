@@ -293,6 +293,28 @@ try {
         $stI->close();
     }
 
+    // Marcar la tarea como completada y registrar fecha/hora de realización
+    try {
+        $fecha_hoy = date('Y-m-d');
+        $hora_hoy  = date('H:i:s');
+        $tarea_qid = $conn->real_escape_string($tarea_id);
+        $conn->query("UPDATE tarea SET estado = 'completada', fecha_realizada = '{$fecha_hoy}', hora_realizada = '{$hora_hoy}' WHERE id = '{$tarea_qid}'");
+    } catch (\Throwable $_) {
+        // no bloquear si la actualización falla
+    }
+
+    // Intentar marcar en cliente_prospecto que ya se levantó empresa (columna opcional `levanto_empresa`)
+    try {
+        $cliente_q = $conn->real_escape_string($cliente_id);
+        $conn->query("UPDATE cliente_prospecto SET levanto_empresa = 1 WHERE id = '{$cliente_q}'");
+        // También limpiar estado 'pendiente' para reflejar que el levantamiento se completó
+        try {
+            $conn->query("UPDATE cliente_prospecto SET estado = 'prospecto' WHERE id = '{$cliente_q}' AND estado = 'pendiente'");
+        } catch (\Throwable $_) {}
+    } catch (\Throwable $_) {
+        // ignorar si la columna no existe
+    }
+
     $conn->commit();
     respond_json(200, ['status'=>'success','message'=>'Encuesta negocio guardada','encuesta_negocio_id'=>$enc_id,'tarea_id'=>$tarea_id,'cliente_id'=>$cliente_id]);
     exit;

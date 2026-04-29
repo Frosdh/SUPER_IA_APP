@@ -251,6 +251,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                              revision_observaciones = ?
                          WHERE id = ? AND producto_tipo = ? AND estado_revision = 'pendiente'"
                     );
+                    // Antes de actualizar a 'aprobada', verificar reglas especiales para crédito
+                    if ($accion === 'aprobar' && $tipoPost === 'credito') {
+                        try {
+                            $stF = $pdo->prepare('SELECT fc.tiene_empresa, fp.cliente_cedula FROM ficha_credito fc JOIN ficha_producto fp ON fc.ficha_id = fp.id WHERE fp.id = ? LIMIT 1');
+                            $stF->execute([$idFicha]);
+                            $finfo = $stF->fetch(PDO::FETCH_ASSOC) ?: null;
+                            if ($finfo && !empty($finfo['tiene_empresa']) && (int)$finfo['tiene_empresa'] === 1) {
+                                // buscar cliente_prospecto.id por cédula
+                                $clienteId = null;
+                                if (!empty($finfo['cliente_cedula'])) {
+                                    $stC = $pdo->prepare('SELECT id FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
+                                    $stC->execute([ (string)$finfo['cliente_cedula'] ]);
+                                    $clienteId = $stC->fetchColumn() ?: null;
+                                }
+                                $tieneEncuestaNeg = false;
+                                if ($clienteId !== null) {
+                                    $stEN = $pdo->prepare('SELECT 1 FROM encuesta_negocio en JOIN tarea t ON en.tarea_id = t.id WHERE t.cliente_prospecto_id = ? LIMIT 1');
+                                    $stEN->execute([$clienteId]);
+                                    if ($stEN->fetchColumn()) $tieneEncuestaNeg = true;
+                                }
+                                if (!$tieneEncuestaNeg) {
+                                    throw new Exception('No se puede aprobar: falta levantamiento de empresa completo. Complete "Levantamiento de empresa" antes de aprobar créditos cuando el prospecto tiene empresa.');
+                                }
+                            }
+                        } catch (Throwable $eCheck) {
+                            throw $eCheck; // bubble up to outer catch to set mensaje_error
+                        }
+                    }
+
                     $stUp->execute([$nuevoEstado, (string)$user_id, $obs, $idFicha, $tipoPost]);
 
                     if ($stUp->rowCount() > 0) {

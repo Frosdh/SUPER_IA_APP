@@ -100,6 +100,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _tieneEmpresa = false;
   final _empresaCtrl = TextEditingController();
   final _formKeyCliente = GlobalKey<FormState>();
+  String? _clienteId;
 
   // ── Paso Empresa/Negocio (solo si _tieneEmpresa = true) ─────
   final _formKeyNegocio = GlobalKey<FormState>();
@@ -817,6 +818,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _empresaCtrl.text = ne;
       _tieneEmpresa = true;
     }
+    final cid = _s(d['id']);
+    if (cid.isNotEmpty) _clienteId = cid;
 
     final tieneRuc  = _i(d['tiene_ruc'])  == 1;
     final tieneRise = _i(d['tiene_rise']) == 1;
@@ -1274,6 +1277,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'usuario_id': usuarioId,
       if (asesorId.isNotEmpty) 'asesor_id': asesorId,
       'tipo_tarea': widget.tipoTarea,
+      if (_clienteId != null && _clienteId!.isNotEmpty) 'cliente_id': _clienteId!,
       'fue_encuestado': fueEncuestado ? '1' : '0',
       'origen_prospecto': _origenProspecto ?? '',
       if (widget.modoEdicion) 'tarea_id': widget.tareaIdEdicion ?? '',
@@ -1608,50 +1612,56 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _mostrarDialogoModificacionOk();
         } else {
           // ── Cerrar segmento de ruta actual e iniciar el siguiente ──
-          final tareaId = data['tarea_id']?.toString() ?? '';
+          final tareaId   = data['tarea_id']?.toString() ?? '';
+          final clienteId = data['cliente_id']?.toString() ?? '';
           _cerrarYNuevoSegmento(tareaId: tareaId);
 
-          // Mapa completo de etiquetas para todos los tipos de tarea
-          String _labelTipo(String tipo) {
-            const labels = <String, String>{
-              'nueva_cita_campo':    'Nueva cita en campo',
-              'nueva_cita_oficina':  'Nueva cita en oficina',
-              'documentos_pendientes': 'Recolectar documentación',
-              'levantamiento':       'Levantamiento de empresa',
-              'visita_frio':         'Visita en frío',
-              'evaluacion':          'Evaluación',
-              'prospecto_nuevo':     'Prospecto nuevo',
-              'recuperacion':        'Recuperación',
-              'post_venta':          'Post venta',
-              'represtamo':          'Représ tamo',
-              'seguimiento':         'Seguimiento',
-            };
-            return labels[tipo] ?? tipo.replaceAll('_', ' ');
+          // ── Si es levantamiento de empresa → dialog especial con "Aprobar Crédito" ──
+          if (widget.tipoTarea == 'levantamiento') {
+            _mostrarDialogoLevantamientoOk(clienteId: clienteId);
+          } else {
+            // Mapa completo de etiquetas para todos los tipos de tarea
+            String _labelTipo(String tipo) {
+              const labels = <String, String>{
+                'nueva_cita_campo':      'Nueva cita en campo',
+                'nueva_cita_oficina':    'Nueva cita en oficina',
+                'documentos_pendientes': 'Recolectar documentación',
+                'levantamiento':         'Levantamiento de empresa',
+                'visita_frio':           'Visita en frío',
+                'evaluacion':            'Evaluación',
+                'prospecto_nuevo':       'Prospecto nuevo',
+                'recuperacion':          'Recuperación',
+                'post_venta':            'Post venta',
+                'represtamo':            'Représ tamo',
+                'seguimiento':           'Seguimiento',
+              };
+              return labels[tipo] ?? tipo.replaceAll('_', ' ');
+            }
+
+            String _descTarea(Map data, String idKey, String tipoKey, String fechaKey, String horaKey) {
+              final id = data[idKey]?.toString() ?? '';
+              if (id.isEmpty) return '';
+              final tipo  = data[tipoKey]?.toString()  ?? '';
+              final fecha = data[fechaKey]?.toString() ?? '';
+              final hora  = data[horaKey]?.toString()  ?? '';
+              final fh = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
+              return '• ${_labelTipo(tipo)}${fh.isNotEmpty ? ' ($fh)' : ''}';
+            }
+
+            final lineas = <String>[
+              _descTarea(data, 'tarea_followup_id',  'tarea_followup_tipo',  'tarea_followup_fecha',  'tarea_followup_hora'),
+              _descTarea(data, 'tarea_inversion_id', 'tarea_inversion_tipo', 'tarea_inversion_fecha', 'tarea_inversion_hora'),
+            ].where((l) => l.isNotEmpty).toList();
+
+            final String? seguimientoTexto = lineas.isEmpty
+                ? null
+                : 'Tareas programadas:\n${lineas.join('\n')}';
+
+            _mostrarDialogoFinalizado(
+              fueEncuestado:   fueEncuestado,
+              seguimientoTexto: seguimientoTexto,
+            );
           }
-
-          String _descTarea(Map data, String idKey, String tipoKey, String fechaKey, String horaKey) {
-            final id = data[idKey]?.toString() ?? '';
-            if (id.isEmpty) return '';
-            final tipo = data[tipoKey]?.toString() ?? '';
-            final fecha = data[fechaKey]?.toString() ?? '';
-            final hora = data[horaKey]?.toString() ?? '';
-            final fh = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
-            return '• ${_labelTipo(tipo)}${fh.isNotEmpty ? ' ($fh)' : ''}';
-          }
-
-          final lineas = <String>[
-            _descTarea(data, 'tarea_followup_id',   'tarea_followup_tipo',   'tarea_followup_fecha',   'tarea_followup_hora'),
-            _descTarea(data, 'tarea_inversion_id',  'tarea_inversion_tipo',  'tarea_inversion_fecha',  'tarea_inversion_hora'),
-          ].where((l) => l.isNotEmpty).toList();
-
-          final String? seguimientoTexto = lineas.isEmpty
-              ? null
-              : 'Tareas programadas:\n${lineas.join('\n')}';
-
-          _mostrarDialogoFinalizado(
-            fueEncuestado: fueEncuestado,
-            seguimientoTexto: seguimientoTexto,
-          );
         }
       } else {
         _mostrarError(data['message']?.toString() ?? 'Error al guardar');
@@ -1699,6 +1709,77 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     } catch (e) {
       debugPrint('⚠️ Error al gestionar segmento de ruta: $e');
     }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  //  Dialog POST-LEVANTAMIENTO: levantamiento guardado + aprobar crédito
+  // ─────────────────────────────────────────────────────────────
+  void _mostrarDialogoLevantamientoOk({required String clienteId}) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Dialog(
+        backgroundColor: ConstantColors.backgroundCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // ── Icono ──
+              Container(
+                width: 68,
+                height: 68,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: ConstantColors.primaryGradient,
+                ),
+                child: const Icon(
+                  Icons.business_center_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Levantamiento Guardado',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Los datos de la empresa fueron registrados correctamente.',
+                style: TextStyle(color: ConstantColors.textGrey, fontSize: 14),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              // ── Botón Volver ──
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).pop(true);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ConstantColors.primaryViolet,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  child: const Text('Volver',
+                      style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Diálogo que se muestra cuando una edición de encuesta se guardó
@@ -1865,12 +1946,16 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Navegación entre pasos ───────────────────────────────────
 
   List<_Paso> get _pasosActivos {
-    return [
-      _Paso.datosCliente,
-      if (_tieneEmpresa && widget.incluirEmpresa) _Paso.empresaNegocio,
-      _Paso.productosActuales,
-      _Paso.busqueda,
-    ];
+    // Si la encuesta se abrió en modo "levantamiento" solo mostramos
+    // los pasos mínimos: datos del prospecto y (opcional) empresa/negocio.
+    // No debe aparecer "Situación Financiera" ni "Acuerdo y Cierre".
+    final pasos = <_Paso>[_Paso.datosCliente];
+    if (_tieneEmpresa && widget.incluirEmpresa) pasos.add(_Paso.empresaNegocio);
+    if (widget.tipoTarea != 'levantamiento') {
+      pasos.add(_Paso.productosActuales);
+      pasos.add(_Paso.busqueda);
+    }
+    return pasos;
   }
 
   void _irSiguientePaso() {
@@ -4504,7 +4589,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 ],
               ),
               child: ElevatedButton(
-                onPressed: _avanzarPaso,
+                onPressed: () async {
+                  if (_paso == _Paso.empresaNegocio && widget.tipoTarea == 'levantamiento') {
+                    if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
+                    await _guardarEncuesta(fueEncuestado: true);
+                  } else {
+                    _avanzarPaso();
+                  }
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.transparent,
                   shadowColor: Colors.transparent,
@@ -4513,7 +4605,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                       borderRadius: BorderRadius.circular(14)),
                 ),
                 child: Text(
-                  _paso == _Paso.productosActuales ? 'Continuar' : 'Siguiente',
+                  _paso == _Paso.productosActuales
+                      ? 'Continuar'
+                      : (_paso == _Paso.empresaNegocio && widget.tipoTarea == 'levantamiento'
+                          ? 'Finalizar'
+                          : 'Siguiente'),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,

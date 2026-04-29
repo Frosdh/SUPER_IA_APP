@@ -23,31 +23,65 @@ if ($nombre_empresa === '') {
 
 try {
     $q = "%" . $nombre_empresa . "%";
-    $st = $conn->prepare("SELECT id, nombre, cedula, telefono, telefono2 AS celular, nombre_empresa, ciudad, direccion, estado FROM cliente_prospecto WHERE nombre_empresa LIKE ? LIMIT ?");
+    $st = $conn->prepare(
+        "SELECT id, nombre, cedula, telefono, telefono2 AS celular, email,
+                nombre_empresa, ciudad, direccion, estado
+         FROM cliente_prospecto
+         WHERE nombre_empresa LIKE ?
+         LIMIT ?"
+    );
     $st->bind_param('si', $q, $limit);
     $st->execute();
     $res = $st->get_result();
     $items = [];
+
+    // Verificar si encuesta_negocio ya existe en la BD
+    $encNegRes    = $conn->query("SHOW TABLES LIKE 'encuesta_negocio'");
+    $encNegExiste = ($encNegRes !== false && $encNegRes->num_rows > 0);
+
     while ($r = $res->fetch_assoc()) {
         $cliente = $r;
-        // buscar la ultima tarea asociada (si existe)
+
+        // ── Última tarea ──────────────────────────────────────────────────────────
         $tarea = null;
-        $stt = $conn->prepare("SELECT id, tipo_tarea, estado, fecha_programada, hora_programada FROM tarea WHERE cliente_prospecto_id = ? ORDER BY fecha_programada DESC LIMIT 1");
+        $stt = $conn->prepare(
+            "SELECT id, tipo_tarea, estado, fecha_programada, hora_programada
+             FROM tarea
+             WHERE cliente_prospecto_id = ?
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1"
+        );
         $stt->bind_param('s', $r['id']);
         $stt->execute();
         $rt = $stt->get_result()->fetch_assoc();
         $stt->close();
-        if ($rt) {
-            $tarea = $rt;
-            // buscar encuesta_negocio por tarea_id
-            $sten = $conn->prepare("SELECT * FROM encuesta_negocio WHERE tarea_id = ? LIMIT 1");
-            $sten->bind_param('s', $rt['id']);
-            $sten->execute();
-            $ren = $sten->get_result()->fetch_assoc();
-            $sten->close();
-            if ($ren) $cliente['encuesta_negocio'] = $ren;
-        }
+        if ($rt) $tarea = $rt;
         $cliente['ultima_tarea'] = $tarea;
+
+        // ── Buscar encuesta_negocio en CUALQUIER tarea del cliente ────────────────
+        // No solo en la última: las tareas de seguimiento con fecha futura
+        // aparecerían como "más recientes" y ocultarían el levantamiento completado.
+        if ($encNegExiste) {
+            try {
+                $sten = $conn->prepare(
+                    "SELECT en.id AS en_id
+                     FROM encuesta_negocio en
+                     INNER JOIN tarea t ON t.id = en.tarea_id
+                     WHERE t.cliente_prospecto_id = ?
+                     ORDER BY t.created_at DESC
+                     LIMIT 1"
+                );
+                $sten->bind_param('s', $r['id']);
+                $sten->execute();
+                $ren = $sten->get_result()->fetch_assoc();
+                $sten->close();
+                // Solo necesitamos saber si existe (para el badge de la UI)
+                if ($ren) $cliente['encuesta_negocio'] = ['id' => $ren['en_id']];
+            } catch (\Throwable $_) {
+                // No bloquear si la tabla existe pero hay otro problema
+            }
+        }
+
         $items[] = $cliente;
     }
     $st->close();
@@ -56,5 +90,4 @@ try {
 } catch (\Throwable $e) {
     respond_json(200, ['status'=>'error','message'=>'Error interno: '.substr($e->getMessage(),0,200)]);
 }
-
 ?>
