@@ -34,16 +34,18 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
   String _tipoLabel(String tipo) {
     switch (tipo) {
-      case 'nueva_cita_campo':
-        return 'Nueva cita en campo';
-      case 'nueva_cita_oficina':
-        return 'Nueva cita en oficina';
-      case 'documentos_pendientes':
-        return 'Recolectar documentación';
-      case 'levantamiento':
-        return 'Levantamiento';
-      default:
-        return tipo.replaceAll('_', ' ');
+      case 'prospecto_nuevo':       return 'Prospecto nuevo';
+      case 'visita_frio':           return 'Visita en frío';
+      case 'evaluacion':            return 'Evaluación';
+      case 'recuperacion':          return 'Recuperación';
+      case 'post_venta':            return 'Post venta';
+      case 'represtamo':            return 'Représ tamo';
+      case 'nueva_cita_campo':      return 'Nueva cita en campo';
+      case 'nueva_cita_oficina':    return 'Nueva cita en oficina';
+      case 'documentos_pendientes': return 'Recolectar documentación';
+      case 'levantamiento':         return 'Levantamiento de empresa';
+      case 'seguimiento':           return 'Seguimiento';
+      default:                      return tipo.replaceAll('_', ' ');
     }
   }
 

@@ -80,6 +80,25 @@ try { $conn->query("ALTER TABLE encuesta_crediticia MODIFY COLUMN acuerdo_lograd
 // (VARCHAR acepta cualquier valor, es idempotente correrlo varias veces)
 try { $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo VARCHAR(30) NOT NULL"); } catch (\Throwable $e) {}
 
+// ── Migración ENUM tarea.tipo_tarea ──────────────────────────────────────────
+// Ampliar el ENUM para soportar los tipos de seguimiento que genera la encuesta.
+// Se hace FUERA de la transacción; ALTER TABLE es DDL y no es transaccional.
+try {
+    $conn->query("ALTER TABLE tarea MODIFY COLUMN tipo_tarea ENUM(
+        'prospecto_nuevo',
+        'visita_frio',
+        'evaluacion',
+        'recuperacion',
+        'post_venta',
+        'represtamo',
+        'documentos_pendientes',
+        'nueva_cita_campo',
+        'nueva_cita_oficina',
+        'levantamiento',
+        'seguimiento'
+    ) NOT NULL DEFAULT 'prospecto_nuevo'");
+} catch (\Throwable $e) { /* silencioso si ya existe o no hay permisos DDL */ }
+
 // ── Leer parámetros ──────────────────────────────────────────
 $usuario_id      = trim($_POST['usuario_id']   ?? '');
 $asesor_id_in    = trim($_POST['asesor_id']    ?? '');
@@ -756,28 +775,34 @@ try {
             $st->execute();
             $st->close();
 
-            // Crear una NUEVA tarea programada para el seguimiento
-            // Mapear acuerdo → tipo_tarea válido (ENUM: prospecto_nuevo, visita_frio,
-            //   evaluacion, recuperacion, documentos_pendientes, post_venta,
-            //   nueva_cita_campo, nueva_cita_oficina, levantamiento)
+            // Crear TAREA 1: seguimiento según acuerdo logrado al final de la encuesta
+            // Mapa acuerdo → tipo_tarea (ENUM ya ampliado en migración)
             $tipo_followup_map = [
-                'nueva_cita_campo'   => 'visita_frio',
-                'nueva_cita_oficina' => 'evaluacion',
-                'reprogramacion'     => 'evaluacion',
-                'seguimiento'        => 'evaluacion',
+                'nueva_cita_campo'   => 'nueva_cita_campo',    // visita en campo
+                'nueva_cita_oficina' => 'nueva_cita_oficina',  // visita en oficina
+                'reprogramacion'     => 'evaluacion',           // reagendar = evaluación
+                'seguimiento'        => 'documentos_pendientes',// seguimiento = recolectar docs
                 'otro'               => 'evaluacion',
             ];
             $tipo_followup = $acuerdo !== null ? ($tipo_followup_map[$acuerdo] ?? 'evaluacion') : null;
 
             if ($tipo_followup !== null) {
                 $GLOBALS['phase'] = 'TAREA_FOLLOWUP';
-                $tarea_followup_id   = genUUID();
-                $tarea_followup_tipo = $tipo_followup;
+                $tarea_followup_id    = genUUID();
+                $tarea_followup_tipo  = $tipo_followup;
                 $tarea_followup_fecha = $fecha_acuerdo;
                 $tarea_followup_hora  = $hora_acuerdo;
 
                 $est_follow = 'programada';
-                $obs_follow = trim('Seguimiento: ' . str_replace('_', ' ', $acuerdo));
+                // Etiqueta legible en observaciones
+                $acuerdo_labels = [
+                    'nueva_cita_campo'   => 'Nueva cita en campo',
+                    'nueva_cita_oficina' => 'Nueva cita en oficina',
+                    'reprogramacion'     => 'Reprogramación',
+                    'seguimiento'        => 'Recolectar documentación',
+                    'otro'               => 'Seguimiento',
+                ];
+                $obs_follow = trim(($acuerdo_labels[$acuerdo] ?? ucfirst(str_replace('_', ' ', $acuerdo))));
 
                 $st = $conn->prepare(
                     "INSERT INTO tarea
@@ -794,28 +819,44 @@ try {
             }
         }
 
-        // ── Crear tarea de propuesta previa al vencimiento (propuesta de inversión)
+        // ── Crear TAREA 2: propuesta de inversión previa al vencimiento ──────────
+        // Se crea cuando el prospecto muestra interés en una inversión y se agenda
+        // una visita previa al vencimiento de su CDP/inversión actual.
+        // Independiente del acuerdo logrado (pueden existir las DOS tareas a la vez).
+        $tarea_prop_id    = null;
+        $tarea_prop_tipo  = null;
+        $tarea_prop_fecha = null;
+        $tarea_prop_hora  = null;
+
         if ($crear_tarea_prev_venc && $fecha_previa_venc !== null) {
             try {
                 $GLOBALS['phase'] = 'TAREA_PROPUESTA';
-                $tarea_prop_id = genUUID();
-                $tipo_prop = 'nueva_cita_oficina';
-                $est_prop = 'programada';
-                $obs_prop = trim('Propuesta previa al vencimiento: ' . ($propuesta_inversion ?? ''));
+                $tarea_prop_id   = genUUID();
+                $tarea_prop_tipo = 'nueva_cita_oficina';  // propuesta de inversión = cita oficina
+                $est_prop        = 'programada';
+                $obs_prop        = trim('Propuesta de inversión previa al vencimiento' .
+                                    ($propuesta_inversion ? ': ' . $propuesta_inversion : ''));
+                $hora_venc       = '';   // hora opcional: vacía si no se captura
+                $tarea_prop_fecha = $fecha_previa_venc;
+                $tarea_prop_hora  = $hora_venc;
 
                 $stp = $conn->prepare(
                     "INSERT INTO tarea
-                     (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado, fecha_programada, hora_programada, observaciones)
+                     (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+                      fecha_programada, hora_programada, observaciones)
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 );
                 if ($stp) {
-                    $hora_prop = '';
-                    $stp->bind_param('ssssssss', $tarea_prop_id, $asesor_id, $cliente_id, $tipo_prop, $est_prop, $fecha_previa_venc, $hora_prop, $obs_prop);
+                    $stp->bind_param('ssssssss',
+                        $tarea_prop_id, $asesor_id, $cliente_id, $tarea_prop_tipo,
+                        $est_prop, $tarea_prop_fecha, $tarea_prop_hora, $obs_prop
+                    );
                     $stp->execute();
                     $stp->close();
                 }
             } catch (\Throwable $_) {
-                // No bloquear flujo principal por fallo en crear tarea propuesta
+                // No bloquear flujo principal
+                $tarea_prop_id = null;
             }
         }
     }
@@ -828,10 +869,16 @@ try {
         'message'    => $fue_encuestado ? 'Encuesta guardada correctamente' : 'Tarea registrada (sin encuesta)',
         'tarea_id'   => $tarea_id,
         'cliente_id' => $cliente_id,
-        'tarea_followup_id'   => $tarea_followup_id,
-        'tarea_followup_tipo' => $tarea_followup_tipo,
-        'tarea_followup_fecha'=> $tarea_followup_fecha,
-        'tarea_followup_hora' => $tarea_followup_hora,
+        // Tarea 1: seguimiento del acuerdo logrado al final de la encuesta
+        'tarea_followup_id'    => $tarea_followup_id,
+        'tarea_followup_tipo'  => $tarea_followup_tipo,
+        'tarea_followup_fecha' => $tarea_followup_fecha,
+        'tarea_followup_hora'  => $tarea_followup_hora,
+        // Tarea 2: propuesta de inversión previa al vencimiento
+        'tarea_inversion_id'    => $tarea_prop_id,
+        'tarea_inversion_tipo'  => $tarea_prop_tipo,
+        'tarea_inversion_fecha' => $tarea_prop_fecha,
+        'tarea_inversion_hora'  => $tarea_prop_hora,
     ]);
 
 } catch (\Throwable $e) {

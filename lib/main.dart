@@ -18,6 +18,7 @@ import 'package:super_ia/UI/views/DriverHomeScreen.dart';
 import 'package:super_ia/UI/views/DriverLoginScreen.dart';
 import 'package:super_ia/UI/views/ProfileScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
+import 'package:super_ia/UI/views/LevantarEmpresaScreen.dart';
 import 'package:super_ia/UI/views/RecuperarPasswordScreen.dart';
 import 'package:super_ia/UI/views/VerificarOtpScreen.dart';
 import 'package:super_ia/UI/views/NuevaPasswordScreen.dart';
@@ -148,6 +149,7 @@ class MyApp extends StatelessWidget {
             final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
             return NuevaEncuestaScreen(tipoTarea: args?['tipoTarea'] ?? 'prospecto_nuevo');
           },
+          LevantarEmpresaScreen.route: (context) => const LevantarEmpresaScreen(),
         },
         home: SplashScreen(),
       ),

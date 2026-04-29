@@ -20,6 +20,7 @@ import 'package:super_ia/UI/views/ChatScreen.dart';
 import 'package:super_ia/UI/views/MetasDiariasScreen.dart';
 import 'package:super_ia/UI/views/AgendaRecuperacionScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
+import 'package:super_ia/UI/views/LevantarEmpresaScreen.dart';
 import 'package:super_ia/UI/views/PendientesTareasScreen.dart';
 import 'package:super_ia/UI/views/WelcomeScreen.dart';
 import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
@@ -3141,7 +3142,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                 ),
               ),
 
-              // Levantamiento empresa (separate button)
+              // Levantamiento empresa: abre búsqueda por nombre de empresa
               if (_estadoViaje == EstadoViaje.ninguno)
                 Positioned(
                   right: 16,
@@ -3150,8 +3151,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const NuevaEncuestaScreen(
-                            tipoTarea: 'levantamiento_empresa', incluirEmpresa: true),
+                        builder: (_) => const LevantarEmpresaScreen(),
                       ),
                     ),
                     child: Container(

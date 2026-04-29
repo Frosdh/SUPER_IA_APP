@@ -1247,37 +1247,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       return;
     }
 
-    // Validaciones específicas de empresa
-      if (_tieneEmpresa) {
-        // Si el prospecto tiene empresa: guardar con solo el nombre_empresa.
-        // El tipo de empresa, productos y datos financieros se completan
-        // posteriormente en la sección "Levantar Empresa".
-        // → No se requiere tipo ni productos aquí.
-      } else {
-        // Si NO tiene empresa, requerimos nombres mínimos de productos según tipo
-        if (!_tipoServProduccion && !_tipoComercio) {
-          setState(() => _guardando = false);
-          _mostrarError('Seleccione el tipo de empresa (Servicio/Producción o Comercio)');
-          return;
-        }
-        if (_tipoServProduccion) {
-          final filled = List.generate(5, (i) => _prodNameCtrl[i].text.trim()).where((s) => s.isNotEmpty).length;
-          if (filled < 5) {
-            setState(() => _guardando = false);
-            _mostrarError('Ingrese los nombres de los 5 productos de producción. Faltan ' + (5 - filled).toString() + '.');
-            return;
-          }
-        }
-        if (_tipoComercio) {
-          for (int i = 0; i < 5; i++) {
-            if (_comNombreCtrl[i].text.trim().isEmpty) {
-              setState(() => _guardando = false);
-              _mostrarError('Ingrese el nombre del Producto Comercializado ${i + 1} (mínimo 5)');
-              return;
-            }
-          }
-        }
-      }
+    // La sección de empresa es completamente opcional:
+    // - Si tiene empresa: se guarda nombre_empresa, los detalles se completan en "Levantar Empresa".
+    // - Si no tiene empresa: se guarda la encuesta/tarea sin ningún dato de empresa.
+    // En ambos casos se puede guardar y se puede solicitar crédito.
 
     // Computar promedios/valores por día para compatibilidad y envío
     final double _vLun = _toDouble(_ventaLunCtrl.text);
@@ -1464,7 +1437,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         'interes_ahorro': _interesAhorro ? '1' : '0',
         'interes_inversion': _interesInv ? '1' : '0',
         'interes_conocer_servicios': _interesConocerServicios == null ? '' : (_interesConocerServicios! ? '1' : '0'),
-        'crear_tarea_prev_venc': (_propuestaPrevVenc == true && _fechaAcuerdo != null) ? '1' : '0',
+        // Crear tarea de propuesta de inversión previa al vencimiento:
+        // requiere que el usuario haya activado la propuesta Y que exista
+        // la fecha de la visita de inversión (_fechaPrevVencInv), no la fecha del acuerdo.
+        'crear_tarea_prev_venc': (_propuestaPrevVenc == true && _fechaPrevVencInv != null) ? '1' : '0',
         'interes_credito': _interesCred ? '1' : '0',
         'razon_ya_trabaja_institucion': _razonYaTrabaja ? '1' : '0',
         'razon_desconfia_servicios': _razonDesconfia ? '1' : '0',
@@ -1635,23 +1611,42 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           final tareaId = data['tarea_id']?.toString() ?? '';
           _cerrarYNuevoSegmento(tareaId: tareaId);
 
-          String? seguimientoTexto;
-          final followId = data['tarea_followup_id']?.toString() ?? '';
-          if (followId.isNotEmpty) {
-            final tipo = data['tarea_followup_tipo']?.toString() ?? '';
-            final fecha = data['tarea_followup_fecha']?.toString() ?? '';
-            final hora = data['tarea_followup_hora']?.toString() ?? '';
-
-            final tipoLabel = <String, String>{
-              'nueva_cita_campo': 'Nueva cita en campo',
-              'nueva_cita_oficina': 'Nueva cita en oficina',
+          // Mapa completo de etiquetas para todos los tipos de tarea
+          String _labelTipo(String tipo) {
+            const labels = <String, String>{
+              'nueva_cita_campo':    'Nueva cita en campo',
+              'nueva_cita_oficina':  'Nueva cita en oficina',
               'documentos_pendientes': 'Recolectar documentación',
-              'levantamiento': 'Levantamiento',
-            }[tipo] ?? tipo;
-
-            final fechaHora = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
-            seguimientoTexto = 'Se creó una nueva tarea: $tipoLabel${fechaHora.isNotEmpty ? ' ($fechaHora)' : ''}.';
+              'levantamiento':       'Levantamiento de empresa',
+              'visita_frio':         'Visita en frío',
+              'evaluacion':          'Evaluación',
+              'prospecto_nuevo':     'Prospecto nuevo',
+              'recuperacion':        'Recuperación',
+              'post_venta':          'Post venta',
+              'represtamo':          'Représ tamo',
+              'seguimiento':         'Seguimiento',
+            };
+            return labels[tipo] ?? tipo.replaceAll('_', ' ');
           }
+
+          String _descTarea(Map data, String idKey, String tipoKey, String fechaKey, String horaKey) {
+            final id = data[idKey]?.toString() ?? '';
+            if (id.isEmpty) return '';
+            final tipo = data[tipoKey]?.toString() ?? '';
+            final fecha = data[fechaKey]?.toString() ?? '';
+            final hora = data[horaKey]?.toString() ?? '';
+            final fh = [fecha, hora].where((e) => e.trim().isNotEmpty).join(' ');
+            return '• ${_labelTipo(tipo)}${fh.isNotEmpty ? ' ($fh)' : ''}';
+          }
+
+          final lineas = <String>[
+            _descTarea(data, 'tarea_followup_id',   'tarea_followup_tipo',   'tarea_followup_fecha',   'tarea_followup_hora'),
+            _descTarea(data, 'tarea_inversion_id',  'tarea_inversion_tipo',  'tarea_inversion_fecha',  'tarea_inversion_hora'),
+          ].where((l) => l.isNotEmpty).toList();
+
+          final String? seguimientoTexto = lineas.isEmpty
+              ? null
+              : 'Tareas programadas:\n${lineas.join('\n')}';
 
           _mostrarDialogoFinalizado(
             fueEncuestado: fueEncuestado,
@@ -4538,29 +4533,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       if (!(_formKeyCliente.currentState?.validate() ?? false)) return;
     }
     if (_paso == _Paso.empresaNegocio) {
+      // La empresa es completamente opcional. Solo validamos el formulario base
+      // (campos requeridos que tenga _formKeyNegocio). Tipo y productos son opcionales:
+      // se completan después en "Levantar Empresa" si aplica.
       if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
-
-      // Solo validar productos si NO tiene empresa registrada.
-      // Si tiene empresa, tipo y productos se completan en "Levantar Empresa".
-      if (!_tieneEmpresa) {
-        // Validar mínimo 5 productos de Producción
-        if (_tipoServProduccion) {
-          final llenosProd = List.generate(_kProdCount, (i) => _prodNameCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
-          if (llenosProd < _kProdCount) {
-            _mostrarError('Debe completar los $_kProdCount productos de Producción antes de continuar (faltan ${_kProdCount - llenosProd}).');
-            return;
-          }
-        }
-
-        // Validar mínimo 5 productos de Comercio
-        if (_tipoComercio) {
-          final llenosCom = List.generate(_kComProdCount, (i) => _comNombreCtrl[i].text.trim().isNotEmpty).where((v) => v).length;
-          if (llenosCom < _kComProdCount) {
-            _mostrarError('Debe completar los $_kComProdCount productos Comercializados antes de continuar (faltan ${_kComProdCount - llenosCom}).');
-            return;
-          }
-        }
-      }
     }
     _irSiguientePaso();
   }
