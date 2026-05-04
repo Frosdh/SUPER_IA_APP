@@ -834,29 +834,6 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <input type="hidden" name="fa_frecuencia" id="fa_frecuencia">
                                 <div class="fld fld-full" style="margin-bottom:12px;"><label>Objetivo del ahorro</label>
                                     <textarea name="fa_objetivo" rows="2" placeholder="Ej: ahorro para educaci&oacute;n, emergencias..."></textarea></div>
-                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Tiene ahorro en otra instituci&oacute;n?</div>
-                                                                <div class="yn-group" style="margin-bottom:12px;">
-                                    <label class="yn-opt"><input type="radio" name="fa_otra_inst" value="1"> S&iacute;</label>
-                                    <label class="yn-opt"><input type="radio" name="fa_otra_inst" value="0"> No</label>
-                                </div>
-                                <div id="fa-otra-inst-wrap" style="display:none;margin-bottom:12px;">
-                                    <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;En qu&eacute; instituci&oacute;n?</div>
-                                    <div class="inst-picker">
-                                        <span class="inst-chip" data-val="banco_pichincha" onclick="selInst(this,'fa_institucion')">Banco Pichincha</span>
-                                        <span class="inst-chip" data-val="banco_guayaquil" onclick="selInst(this,'fa_institucion')">Banco Guayaquil</span>
-                                        <span class="inst-chip" data-val="banco_pacifico" onclick="selInst(this,'fa_institucion')">Banco Pacifico</span>
-                                        <span class="inst-chip" data-val="banco_del_austro" onclick="selInst(this,'fa_institucion')">Banco del Austro</span>
-                                        <span class="inst-chip" data-val="produbanco" onclick="selInst(this,'fa_institucion')">Produbanco</span>
-                                        <span class="inst-chip" data-val="coop_jep" onclick="selInst(this,'fa_institucion')">Coop. JEP</span>
-                                        <span class="inst-chip" data-val="coop_29_de_octubre" onclick="selInst(this,'fa_institucion')">Coop. 29 de Octubre</span>
-                                        <span class="inst-chip" data-val="coop_jardin_azuayo" onclick="selInst(this,'fa_institucion')">Coop. Jardin Azuayo</span>
-                                        <span class="inst-chip" data-val="mutualista_pichincha" onclick="selInst(this,'fa_institucion')">Mutualista Pichincha</span>
-                                        <span class="inst-chip" data-val="otra" onclick="selInst(this,'fa_institucion')">Otra</span>
-                                    </div>
-                                    <input type="hidden" name="fa_institucion" id="fa_institucion">
-                                </div>
-                                <div class="fld fld-full" style="margin-bottom:14px;"><label>Observaciones</label>
-                                    <textarea name="fa_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
 
                                 <div class="ficha-sec-title"><i class="fas fa-list-check" style="color:#3b82f6;"></i> Documentos (Cuenta de Ahorros)</div>
                                 <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px;">Toca cada documento que el prospecto entreg&oacute;:</p>
@@ -1078,12 +1055,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             </div>
                             <div class="ficha-body">
                                 <div class="ficha-sec-title"><i class="fas fa-credit-score"></i> Evaluaci&oacute;n de Cr&eacute;dito</div>
-                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Requiere cr&eacute;dito?</div>
-                                                                <div class="yn-group" style="margin-bottom:12px;">
-                                    <label class="yn-opt"><input type="radio" name="fk_requiere_credito" value="1"> S&iacute;</label>
-                                    <label class="yn-opt"><input type="radio" name="fk_requiere_credito" value="0"> No</label>
-                                </div>
-                                <div id="fk-detalle-wrap" style="display:none;">
+                                <div id="fk-detalle-wrap">
                                     <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Destino del cr&eacute;dito</div>
                                     <div class="chip-grid" style="margin-bottom:10px;">
                                         <div class="chip" data-val="capital_trabajo" onclick="chipSingle(this,'fk_destino')"><i class="fas fa-briefcase"></i> Capital de trabajo</div>
@@ -1685,8 +1657,6 @@ document.addEventListener('change', function(e){
     var inp = e.target; if(!inp||inp.type!=='radio') return;
     var n=inp.name, v=inp.value;
     var pairs = {
-        'fk_requiere_credito':'fk-detalle-wrap',
-        'fa_otra_inst':'fa-otra-inst-wrap',
     };
     if(pairs[n]){ var w=document.getElementById(pairs[n]); if(w) w.style.display=v==='1'?'block':'none'; }
 });

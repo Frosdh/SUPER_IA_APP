@@ -111,14 +111,12 @@ try {
                 zona=COALESCE(NULLIF(?,'' ), zona),
                 actividad=COALESCE(NULLIF(?,'' ), actividad),
                 nombre_empresa=COALESCE(NULLIF(?,'' ), nombre_empresa),
-                tiene_ruc=?, tiene_rise=?,
-                ruc_numero=COALESCE(NULLIF(?,'' ), ruc_numero),
-                rise_numero=COALESCE(NULLIF(?,'' ), rise_numero)
+                tiene_ruc=?, tiene_rise=?
             WHERE cedula=?
         ")->execute([
             $nombre, $telefono, $celular, $email, $direccion,
             $ciudad, $zona, $actividad, $nombre_emp,
-            $tiene_ruc, $tiene_rise, $ruc_numero, $rise_numero,
+            $tiene_ruc, $tiene_rise,
             $cedula
         ]);
         $cliente_id = $existing;
@@ -127,13 +125,12 @@ try {
         $pdo->prepare("
             INSERT INTO cliente_prospecto
                 (id, cedula, nombre, telefono, telefono2, email, direccion,
-                 ciudad, zona, actividad, nombre_empresa, tiene_ruc, tiene_rise,
-                 ruc_numero, rise_numero, asesor_id, estado)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospecto')
+                 ciudad, zona, actividad, nombre_empresa, tiene_ruc, tiene_rise, asesor_id, estado)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospecto')
         ")->execute([
             $cliente_id, $cedula, $nombre, $telefono, $celular, $email,
             $direccion, $ciudad, $zona, $actividad, $nombre_emp,
-            $tiene_ruc, $tiene_rise, $ruc_numero, $rise_numero, $asesor_id
+            $tiene_ruc, $tiene_rise, $asesor_id
         ]);
     }
 } catch (PDOException $e) {
@@ -392,13 +389,13 @@ foreach ($productos as $prod) {
                                            $cedula, $nombre, $enc_id, $lat, $lng);
                 $pdo->prepare("
                     INSERT INTO ficha_credito
-                        (id, ficha_id, requiere_credito, destino_credito,
+                        (id, ficha_id, destino_credito,
                          monto_credito, plazo_credito_meses,
                          solicitante_nombre, solicitante_cedula, solicitante_celular)
-                    VALUES (?,?,?,?,?,?,?,?,?)
+                    VALUES (?,?,?,?,?,?,?,?)
                 ")->execute([
                     uuid4(), $fid,
-                    pb('fk_requiere_credito'), pn('fk_destino'),
+                    pn('fk_destino'),
                     pn('fk_monto'), pn('fk_plazo'),
                     $nombre, $cedula, $celular,
                 ]);
