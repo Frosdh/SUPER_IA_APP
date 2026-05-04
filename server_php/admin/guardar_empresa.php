@@ -68,6 +68,10 @@ try {
     $pdo->beginTransaction();
 
     // ========== PASO 1: Actualizar cliente_prospecto con datos básicos de empresa ==========
+    $actividad_value = trim($_POST['actividad'] ?? 'negocio_propio');
+    // Limitar a 20 caracteres para evitar truncamiento
+    $actividad_value = substr($actividad_value, 0, 20);
+    
     $st = $pdo->prepare(
         "UPDATE cliente_prospecto SET
             nombre_empresa = ?,
@@ -82,7 +86,7 @@ try {
     );
     $st->execute([
         trim($_POST['nombre_empresa'] ?? ''),
-        trim($_POST['actividad'] ?? 'negocio_propio'),
+        $actividad_value,
         $asesor_id ?: null,
         $ciudad_empresa,
         $zona_empresa,
