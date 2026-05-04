@@ -121,6 +121,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .fld textarea{resize:vertical;min-height:70px;}
 .fld.full{grid-column:1/-1;}
 
+/* Checkbox labels */
+.checkbox-label{display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;font-weight:600;color:var(--brand-navy-deep);padding:10px;background:#f8fafc;border:1.5px solid var(--brand-border);border-radius:10px;transition:.2s;user-select:none;}
+.checkbox-label input[type="checkbox"]{width:18px;height:18px;cursor:pointer;accent-color:var(--brand-yellow-deep);}
+.checkbox-label:hover{background:#eff6ff;border-color:var(--brand-yellow-deep);}
+.checkbox-label input[type="checkbox"]:checked ~ span{font-weight:700;color:var(--brand-navy-deep);}
+
 .sub-sec{margin-top:20px;padding-top:16px;border-top:1px dashed #e5e7eb;}
 .sub-sec h5{font-size:12px;text-transform:uppercase;color:var(--brand-navy);font-weight:800;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
 .sub-sec h5 i{color:var(--brand-yellow-deep);}
@@ -164,6 +170,59 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
     .form-card{padding:16px;}
     .fld-grid{grid-template-columns:1fr;}
 }
+
+/* ══ VENTAS/COMPRAS POR DÍA ══ */
+.day-block{margin-bottom:22px;}
+.day-block-title{font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+    color:#374151;margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+.day-row{display:flex;align-items:center;gap:12px;padding:6px 0;border-bottom:1px solid #f0f0f0;}
+.day-row:last-child{border-bottom:none;}
+.day-label{width:90px;font-size:.9rem;color:#374151;flex-shrink:0;}
+.day-input-wrap{flex:1;position:relative;}
+.day-input-wrap .day-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:.95rem;}
+.day-input-wrap input{width:100%;padding:8px 10px 8px 32px;border:1.5px solid var(--brand-border);
+    border-radius:8px;font-size:.95rem;background:#fff;}
+.day-input-wrap input:focus{outline:none;border-color:var(--brand-yellow);}
+
+/* ══ MES ALTO/BAJO ══ */
+.mes-row{display:flex;gap:12px;margin-top:14px;}
+.mes-row .fld{flex:1;}
+.mes-row select{width:100%;padding:9px 10px;border:1.5px solid var(--brand-border);
+    border-radius:8px;font-size:.9rem;}
+
+/* ══ DÍAS DE ATENCIÓN CHIPS ══ */
+.dias-chip-grid{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px;}
+.dia-chip{padding:8px 16px;border-radius:8px;border:2px solid var(--brand-border);
+    background:#fff;cursor:pointer;font-size:.88rem;font-weight:600;color:#374151;
+    display:flex;align-items:center;gap:5px;transition:all .15s;}
+.dia-chip.on{background:#3b82f6;border-color:#3b82f6;color:#fff;}
+.dia-chip .dc-check{display:none;}
+.dia-chip.on .dc-check{display:inline;}
+
+/* ══ RESUMEN RÁPIDO ══ */
+.resumen-box{background:#f9fafb;border:1px solid var(--brand-border);border-radius:10px;
+    padding:14px 18px;margin:16px 0;font-size:.9rem;}
+.resumen-box .rb-title{font-size:.78rem;font-weight:700;text-transform:uppercase;
+    letter-spacing:.05em;color:#6b7280;margin-bottom:8px;}
+.resumen-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.resumen-item{text-align:center;}
+.resumen-item .rv-label{font-size:.75rem;color:#6b7280;}
+.resumen-item .rv-val{font-size:1.1rem;font-weight:800;color:var(--brand-navy-deep);}
+
+/* ══ SLIDER COBRO ══ */
+.cobro-card{background:#fff;border:1.5px solid var(--brand-border);border-radius:12px;padding:16px 18px;margin-top:16px;}
+.cobro-badges{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.badge-ef{background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:20px;font-size:.82rem;font-weight:700;}
+.badge-dg{background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:20px;font-size:.82rem;font-weight:700;}
+.cobro-slider{width:100%;accent-color:#10b981;height:6px;cursor:pointer;}
+.cobro-labels{display:flex;justify-content:space-between;font-size:.72rem;color:#9ca3af;margin-top:4px;}
+
+/* ══ CREDITO ACTIVO (top of pane) ══ */
+.credito-top-card{background:#fffbeb;border:1.5px solid #fcd34d;border-radius:12px;
+    padding:16px 18px;margin-bottom:20px;}
+.credito-top-card h5{font-size:.9rem;font-weight:700;color:#92400e;margin-bottom:12px;
+    display:flex;align-items:center;gap:7px;}
+
 </style>
 </head>
 <body>
@@ -337,66 +396,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             ═══════════════════════════════════════ -->
             <div class="step-pane" data-pane="1">
                 <div class="form-card">
-                    <h3><i class="fas fa-chart-bar"></i>Comportamiento de ventas</h3>
-                    <p class="sub">Información sobre el flujo de ventas y compras de la empresa.</p>
-                    <div class="fld-grid">
-                        <div class="fld">
-                            <label>Día(s) de mayor venta</label>
-                            <select name="cv_dia_semana">
-                                <option value="">— Selecciona —</option>
-                                <?php foreach (['lunes','martes','miercoles','jueves','viernes','sabado','domingo'] as $d): ?>
-                                    <option value="<?= $d ?>"><?= ucfirst(str_replace(['miercoles','sabado'],['miércoles','sábado'],$d)) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="fld">
-                            <label>Calificación de ventas</label>
-                            <select name="cv_calificacion">
-                                <option value="">—</option>
-                                <option value="bueno">Bueno</option>
-                                <option value="regular">Regular</option>
-                                <option value="malo">Malo</option>
-                            </select>
-                        </div>
-                        <div class="fld">
-                            <label>Venta diaria promedio (USD)</label>
-                            <input type="number" step="0.01" min="0" name="cv_valor_venta"
-                                   placeholder="0.00">
-                        </div>
-                        <div class="fld">
-                            <label>Compra diaria promedio (USD)</label>
-                            <input type="number" step="0.01" min="0" name="cv_valor_compra"
-                                   placeholder="0.00">
-                        </div>
-                        <div class="fld">
-                            <label>Venta mensual promedio (USD)</label>
-                            <input type="number" step="0.01" min="0" name="cv_venta_promedio_mes"
-                                   placeholder="0.00">
-                        </div>
-                        <div class="fld">
-                            <label>Compra mensual promedio (USD)</label>
-                            <input type="number" step="0.01" min="0" name="cv_compra_promedio_mes"
-                                   placeholder="0.00">
-                        </div>
-                        <div class="fld">
-                            <label>% Ventas al contado</label>
-                            <input type="number" min="0" max="100" name="cv_porcentaje_contado"
-                                   value="100" placeholder="100">
-                        </div>
-                        <div class="fld">
-                            <label>% Ventas a crédito</label>
-                            <input type="number" min="0" max="100" name="cv_porcentaje_credito"
-                                   value="0" placeholder="0">
-                        </div>
-                        <div class="fld">
-                            <label>Días de atención por semana</label>
-                            <input type="number" min="0" max="7" name="cv_dias_atencion"
-                                   placeholder="Ej: 6">
-                        </div>
-                    </div>
+                    <h3><i class="fas fa-chart-bar"></i> Empresa / Negocio</h3>
+                    <p class="sub">Datos aproximados para entender el movimiento del negocio.</p>
 
-                    <div class="sub-sec">
-                        <h5><i class="fas fa-hand-holding-dollar"></i>Situación financiera actual</h5>
+                    <!-- ── CRÉDITO ACTIVO (al tope) ── -->
+                    <div class="credito-top-card">
+                        <h5><i class="fas fa-hand-holding-dollar"></i> Situación financiera actual</h5>
                         <div class="fld-grid">
                             <div class="fld">
                                 <label>¿Tiene crédito activo?</label>
@@ -426,8 +431,277 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             </div>
                         </div>
                     </div>
+
+                    <!-- ── VENTAS POR DÍA ── -->
+                    <div class="day-block">
+                        <div class="day-block-title"><i class="fas fa-arrow-trend-up" style="color:#d97706;"></i> Comportamiento de ventas (monto $ al día)</div>
+                                    <div class="day-row">
+                                        <span class="day-label">Lunes</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_lunes"
+                                                   id="vd-lunes" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Martes</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_martes"
+                                                   id="vd-martes" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Miércoles</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_miercoles"
+                                                   id="vd-miercoles" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Jueves</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_jueves"
+                                                   id="vd-jueves" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Viernes</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_viernes"
+                                                   id="vd-viernes" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Sábado</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_sabado"
+                                                   id="vd-sabado" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Domingo</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">📈</span>
+                                            <input type="number" step="0.01" min="0" name="venta_domingo"
+                                                   id="vd-domingo" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                        <!-- Mes alto / bajo -->
+                        <div class="mes-row">
+                            <div class="fld">
+                                <label style="font-size:.82rem;">Mes alto (venta)</label>
+                                <select name="mes_alto_venta">
+                                    <option value="">— Seleccione —</option>
+                                        <option value="enero">Enero</option>
+                                        <option value="febrero">Febrero</option>
+                                        <option value="marzo">Marzo</option>
+                                        <option value="abril">Abril</option>
+                                        <option value="mayo">Mayo</option>
+                                        <option value="junio">Junio</option>
+                                        <option value="julio">Julio</option>
+                                        <option value="agosto">Agosto</option>
+                                        <option value="septiembre">Septiembre</option>
+                                        <option value="octubre">Octubre</option>
+                                        <option value="noviembre">Noviembre</option>
+                                        <option value="diciembre">Diciembre</option>
+                                </select>
+                            </div>
+                            <div class="fld">
+                                <label style="font-size:.82rem;">Mes bajo (venta)</label>
+                                <select name="mes_bajo_venta">
+                                    <option value="">— Seleccione —</option>
+                                        <option value="enero">Enero</option>
+                                        <option value="febrero">Febrero</option>
+                                        <option value="marzo">Marzo</option>
+                                        <option value="abril">Abril</option>
+                                        <option value="mayo">Mayo</option>
+                                        <option value="junio">Junio</option>
+                                        <option value="julio">Julio</option>
+                                        <option value="agosto">Agosto</option>
+                                        <option value="septiembre">Septiembre</option>
+                                        <option value="octubre">Octubre</option>
+                                        <option value="noviembre">Noviembre</option>
+                                        <option value="diciembre">Diciembre</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── COMPRAS POR DÍA ── -->
+                    <div class="day-block">
+                        <div class="day-block-title"><i class="fas fa-cart-shopping" style="color:#d97706;"></i> Comportamiento de compras (monto $ al día)</div>
+                                    <div class="day-row">
+                                        <span class="day-label">Lunes</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_lunes"
+                                                   id="cd-lunes" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Martes</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_martes"
+                                                   id="cd-martes" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Miércoles</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_miercoles"
+                                                   id="cd-miercoles" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Jueves</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_jueves"
+                                                   id="cd-jueves" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Viernes</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_viernes"
+                                                   id="cd-viernes" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Sábado</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_sabado"
+                                                   id="cd-sabado" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                                    <div class="day-row">
+                                        <span class="day-label">Domingo</span>
+                                        <div class="day-input-wrap">
+                                            <span class="day-icon" style="color:#d97706;">🛒</span>
+                                            <input type="number" step="0.01" min="0" name="compra_domingo"
+                                                   id="cd-domingo" placeholder="0.00" oninput="calcResumen()">
+                                        </div>
+                                    </div>
+                        <!-- Mes alto compra -->
+                        <div class="mes-row">
+                            <div class="fld">
+                                <label style="font-size:.82rem;">Mes alto (compra)</label>
+                                <select name="mes_alto_compra">
+                                    <option value="">— Seleccione —</option>
+                                        <option value="enero">Enero</option>
+                                        <option value="febrero">Febrero</option>
+                                        <option value="marzo">Marzo</option>
+                                        <option value="abril">Abril</option>
+                                        <option value="mayo">Mayo</option>
+                                        <option value="junio">Junio</option>
+                                        <option value="julio">Julio</option>
+                                        <option value="agosto">Agosto</option>
+                                        <option value="septiembre">Septiembre</option>
+                                        <option value="octubre">Octubre</option>
+                                        <option value="noviembre">Noviembre</option>
+                                        <option value="diciembre">Diciembre</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── DÍAS DE ATENCIÓN ── -->
+                    <div class="day-block-title"><i class="fas fa-calendar-check" style="color:#3b82f6;"></i> Días de atención</div>
+                    <div class="dias-chip-grid">
+                                <div class="dia-chip" data-dia="lunes" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Lunes
+                                    <input type="checkbox" name="dia_atencion_lunes" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                                <div class="dia-chip" data-dia="martes" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Martes
+                                    <input type="checkbox" name="dia_atencion_martes" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                                <div class="dia-chip" data-dia="miercoles" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Miércoles
+                                    <input type="checkbox" name="dia_atencion_miercoles" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                                <div class="dia-chip" data-dia="jueves" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Jueves
+                                    <input type="checkbox" name="dia_atencion_jueves" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                                <div class="dia-chip" data-dia="viernes" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Viernes
+                                    <input type="checkbox" name="dia_atencion_viernes" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                                <div class="dia-chip" data-dia="sabado" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Sábado
+                                    <input type="checkbox" name="dia_atencion_sabado" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                                <div class="dia-chip" data-dia="domingo" onclick="toggleDia(this)">
+                                    <span class="dc-check">✓</span> Domingo
+                                    <input type="checkbox" name="dia_atencion_domingo" value="1" style="display:none;" class="dia-chk">
+                                </div>
+                    </div>
+
+                    <!-- ── RESUMEN RÁPIDO ── -->
+                    <div class="resumen-box">
+                        <div class="rb-title">Resumen rápido</div>
+                        <div class="resumen-grid">
+                            <div class="resumen-item">
+                                <div class="rv-label">Ventas semana</div>
+                                <div class="rv-val" id="rv-venta-sem">$ 0.00</div>
+                            </div>
+                            <div class="resumen-item">
+                                <div class="rv-label">Compras semana</div>
+                                <div class="rv-val" id="rv-compra-sem">$ 0.00</div>
+                            </div>
+                            <div class="resumen-item">
+                                <div class="rv-label">Ventas mes (×4.33)</div>
+                                <div class="rv-val" id="rv-venta-mes">$ 0.00</div>
+                            </div>
+                            <div class="resumen-item">
+                                <div class="rv-label">Compras mes (×4.33)</div>
+                                <div class="rv-val" id="rv-compra-mes">$ 0.00</div>
+                            </div>
+                        </div>
+                        <!-- hidden totals para guardar -->
+                        <input type="hidden" name="cv_venta_promedio_sem" id="hid-venta-sem">
+                        <input type="hidden" name="cv_compra_promedio_sem" id="hid-compra-sem">
+                        <input type="hidden" name="cv_venta_promedio_mes" id="hid-venta-mes">
+                        <input type="hidden" name="cv_compra_promedio_mes" id="hid-compra-mes">
+                    </div>
+
+                    <!-- ── FORMA DE COBRO ── -->
+                    <div class="day-block-title" style="margin-top:18px;"><i class="fas fa-wallet" style="color:#10b981;"></i> Forma de cobro</div>
+                    <div class="cobro-card">
+                        <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px;">
+                            <i class="fas fa-mobile-screen-button" style="color:#6b7280;font-size:1.4rem;"></i>
+                            <div style="flex:1;">
+                                <div style="font-size:.88rem;font-weight:600;color:#374151;margin-bottom:6px;">¿Qué % cobra en efectivo?</div>
+                                <div class="cobro-badges">
+                                    <span class="badge-ef" id="badge-ef">70% efectivo</span>
+                                    <span class="badge-dg" id="badge-dg">30% digital</span>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="range" min="0" max="100" value="70" class="cobro-slider"
+                               id="slider-cobro" oninput="updateCobro(this.value)">
+                        <div class="cobro-labels">
+                            <span>0% efectivo<br>(todo digital)</span>
+                            <span style="text-align:center;">50/50</span>
+                            <span style="text-align:right;">100% efectivo<br>(todo contado)</span>
+                        </div>
+                        <input type="hidden" name="cv_porcentaje_efectivo" id="hid-pct-ef" value="70">
+                        <input type="hidden" name="cv_porcentaje_digital"  id="hid-pct-dg" value="30">
+                    </div>
+
                 </div>
             </div>
+
 
             <!-- ══════════════════════════════════════
                  PASO 3 — PRODUCTOS COMERCIALIZADOS
@@ -451,6 +725,69 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             ═══════════════════════════════════════ -->
             <div class="step-pane" data-pane="3">
                 <div class="form-card">
+                    <h3><i class="fas fa-bank"></i>Productos financieros actuales</h3>
+                    <p class="sub">¿Qué productos o servicios financieros ya tiene la empresa?</p>
+                    
+                    <div class="fld-grid">
+                        <!-- Cuenta de ahorros -->
+                        <div class="fld">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="mantiene_cuenta_ahorros" value="1">
+                                <span>Mantiene cuenta de ahorros</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Cuenta corriente -->
+                        <div class="fld">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="mantiene_cuenta_corriente" value="1">
+                                <span>Mantiene cuenta corriente</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Tiene inversiones -->
+                        <div class="fld">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="tiene_inversiones" value="1">
+                                <span>Tiene inversiones / CDP</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Institución de inversiones -->
+                        <div class="fld" id="fld-institucion-inv" style="display:none;">
+                            <label>¿En qué institución?</label>
+                            <input type="text" name="institucion_inversiones" placeholder="Nombre del banco o institución">
+                        </div>
+                        
+                        <!-- Monto inversión -->
+                        <div class="fld" id="fld-monto-inv" style="display:none;">
+                            <label>Monto aproximado (USD)</label>
+                            <input type="number" step="0.01" min="0" name="valor_inversion" placeholder="0.00">
+                        </div>
+                        
+                        <!-- Plazo inversión -->
+                        <div class="fld" id="fld-plazo-inv" style="display:none;">
+                            <label>Plazo</label>
+                            <input type="text" name="plazo_inversion" placeholder="ej: 6 meses, 1 año">
+                        </div>
+                        
+                        <!-- Tiene crédito operaciones -->
+                        <div class="fld">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="tiene_operaciones_crediticias" value="1">
+                                <span>Tiene líneas de crédito activas</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Institución crédito -->
+                        <div class="fld" id="fld-institucion-cred" style="display:none;">
+                            <label>¿En qué institución?</label>
+                            <input type="text" name="institucion_credito" placeholder="Nombre del banco o institución">
+                        </div>
+                    </div>
+
+                    <hr style="margin:24px 0;border:none;border-top:1px solid var(--brand-border);">
+                    
                     <h3><i class="fas fa-handshake"></i>Cierre del levantamiento</h3>
                     <p class="sub">Indica el interés detectado y el siguiente paso con la empresa.</p>
                     <div class="fld-grid">
@@ -718,64 +1055,118 @@ document.getElementById('btn-prev').onclick = () => show(cur - 1);
 document.getElementById('btn-next').onclick = () => show(cur + 1);
 stepEls.forEach((s,idx) => s.addEventListener('click', () => show(idx)));
 
+/* ══ VENTAS/COMPRAS POR DÍA — cálculo automático ══ */
+var VDAY_IDS = ['lunes','martes','miercoles','jueves','viernes','sabado','domingo'];
+
+function calcResumen(){
+    var vSem = 0, cSem = 0;
+    VDAY_IDS.forEach(function(d){
+        var vi = document.getElementById('vd-'+d);
+        var ci = document.getElementById('cd-'+d);
+        vSem += vi ? (parseFloat(vi.value)||0) : 0;
+        cSem += ci ? (parseFloat(ci.value)||0) : 0;
+    });
+    var vMes = vSem * 4.33;
+    var cMes = cSem * 4.33;
+    var fmt = function(n){ return '$ ' + n.toFixed(2); };
+    document.getElementById('rv-venta-sem').textContent  = fmt(vSem);
+    document.getElementById('rv-compra-sem').textContent = fmt(cSem);
+    document.getElementById('rv-venta-mes').textContent  = fmt(vMes);
+    document.getElementById('rv-compra-mes').textContent = fmt(cMes);
+    document.getElementById('hid-venta-sem').value  = vSem.toFixed(2);
+    document.getElementById('hid-compra-sem').value = cSem.toFixed(2);
+    document.getElementById('hid-venta-mes').value  = vMes.toFixed(2);
+    document.getElementById('hid-compra-mes').value = cMes.toFixed(2);
+}
+
+/* ══ DÍAS DE ATENCIÓN — chip toggle ══ */
+function toggleDia(el){
+    el.classList.toggle('on');
+    var chk = el.querySelector('.dia-chk');
+    if(chk) chk.checked = el.classList.contains('on');
+}
+
+/* ══ COBRO SLIDER ══ */
+function updateCobro(val){
+    val = parseInt(val,10);
+    var dig = 100 - val;
+    document.getElementById('badge-ef').textContent = val + '% efectivo';
+    document.getElementById('badge-dg').textContent = dig + '% digital';
+    document.getElementById('hid-pct-ef').value = val;
+    document.getElementById('hid-pct-dg').value = dig;
+}
+
 /* ══════════════════════════════════════════════════════
    YN TOGGLE
 ══════════════════════════════════════════════════════ */
-document.querySelectorAll('.yn-group').forEach(g => {
-    g.querySelectorAll('.yn-opt').forEach(o => {
-        o.addEventListener('click', () => {
-            g.querySelectorAll('.yn-opt').forEach(x => x.classList.remove('checked'));
-            o.classList.add('checked');
-            o.querySelector('input').checked = true;
-        });
-    });
+document.addEventListener('click', function(e){
+    var o = e.target.closest('.yn-opt');
+    if(!o) return;
+    var g = o.closest('.yn-group');
+    if(!g) return;
+    g.querySelectorAll('.yn-opt').forEach(function(x){ x.classList.remove('checked'); });
+    o.classList.add('checked');
+    var inp = o.querySelector('input');
+    if(inp) inp.checked = true;
 });
 
 /* ══════════════════════════════════════════════════════
-   PRODUCTOS REPEATER
+   BÚSQUEDA DE PROSPECTO POR NOMBRE
 ══════════════════════════════════════════════════════ */
-const prodList = document.getElementById('prod-list');
-let prodIdx = 0;
-function addProducto() {
-    const i = prodIdx++;
-    const div = document.createElement('div');
-    div.className = 'prod-item';
-    div.innerHTML = `
-        <button type="button" class="del-prod" onclick="this.closest('.prod-item').remove()">× Quitar</button>
-        <div class="fld"><label>Nombre del producto / servicio</label>
-            <input type="text" name="prod[${i}][nombre]" placeholder="Ej: Arroz 50 kg" required></div>
-        <div class="fld"><label>Precio de venta (USD)</label>
-            <input type="number" step="0.01" min="0" name="prod[${i}][precio_venta]" placeholder="0.00"></div>
-        <div class="fld"><label>Costo unitario (USD)</label>
-            <input type="number" step="0.01" min="0" name="prod[${i}][costo]" placeholder="0.00"></div>
-        <div class="fld"><label>Unidades vendidas / mes</label>
-            <input type="number" min="0" name="prod[${i}][cantidad]" placeholder="0"></div>
-        <div class="fld"><label>% Margen aprox.</label>
-            <input type="number" step="0.1" min="0" max="100" name="prod[${i}][margen]" placeholder="0"></div>
-        <div class="fld"><label>Total ventas / mes (USD)</label>
-            <input type="number" step="0.01" min="0" name="prod[${i}][total_venta_mes]" placeholder="0.00"></div>
-        <div class="fld"><label>Inventario disponible</label>
-            <input type="number" min="0" name="prod[${i}][inventario]" placeholder="0"></div>
-        <div class="fld"><label>Compra promedio semanal (USD)</label>
-            <input type="number" step="0.01" min="0" name="prod[${i}][compra_sem]" placeholder="0.00"></div>
-    `;
-    prodList.appendChild(div);
-}
-document.getElementById('btn-add-prod').addEventListener('click', addProducto);
-addProducto(); // uno por defecto
+function esc(s){ var d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
+function fill(id,v){ var el=document.getElementById(id); if(el&&v) el.value=v; }
+function setVal(id,v){ var el=document.getElementById(id); if(el) el.value=v; }
 
-/* ══════════════════════════════════════════════════════
-   GEO
-══════════════════════════════════════════════════════ */
-if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-        p => {
-            document.getElementById('lat').value = p.coords.latitude;
-            document.getElementById('lng').value = p.coords.longitude;
-        },
-        () => {}, { timeout: 5000 }
-    );
+const btnBuscarLev  = document.getElementById('btn-buscar');
+const inpNombreLev  = document.getElementById('inp-nombre');
+const searchResLev  = document.getElementById('search-result');
+
+if(btnBuscarLev){
+    btnBuscarLev.addEventListener('click', buscarProspecto);
+    inpNombreLev.addEventListener('keydown', function(e){ if(e.key==='Enter') buscarProspecto(); });
 }
+
+async function buscarProspecto(){
+    var nom = inpNombreLev ? inpNombreLev.value.trim() : '';
+    if(nom.length < 2){ return; }
+    if(btnBuscarLev){ btnBuscarLev.disabled=true; btnBuscarLev.innerHTML='<i class="fas fa-spinner fa-spin"></i>'; }
+    try {
+        var fd = new FormData();
+        fd.append('nombre', nom);
+        var res = await fetch('../buscar_prospecto_por_nombre.php', {method:'POST', body:fd});
+        var data = await res.json();
+        if(data.status==='found' && data.resultados && data.resultados.length>0){
+            var html = '<div style="background:#fff;border:1px solid var(--brand-border);border-radius:10px;overflow:hidden;">';
+            data.resultados.forEach(function(p){
+                html += '<div class="prosp-result-row" onclick="seleccionarProspecto('+JSON.stringify(p)+')">'
+                    + '<strong>'+esc(p.nombre)+'</strong>'
+                    + (p.nombre_empresa ? ' &mdash; '+esc(p.nombre_empresa) : '')
+                    + ' <small style="color:#9ca3af;">'+esc(p.cedula)+'</small>'
+                    + '</div>';
+            });
+            html += '</div>';
+            if(searchResLev) searchResLev.innerHTML = html;
+        } else {
+            if(searchResLev) searchResLev.innerHTML = '<div style="padding:10px;color:#9ca3af;">Sin resultados</div>';
+        }
+    } catch(err){
+        if(searchResLev) searchResLev.innerHTML = '<div style="color:red;">Error de conexión</div>';
+    } finally {
+        if(btnBuscarLev){ btnBuscarLev.disabled=false; btnBuscarLev.innerHTML='<i class="fas fa-search"></i> Buscar'; }
+    }
+}
+
+function seleccionarProspecto(p){
+    fill('f-nombre_empresa',  p.nombre_empresa || '');
+    fill('f-nombre_propietario', p.nombre || '');
+    fill('f-cedula_ruc',      p.cedula || '');
+    fill('f-telefono',        p.telefono || '');
+    fill('f-email',           p.email || '');
+    fill('f-ciudad',          p.ciudad || '');
+    setVal('hid-cliente_id',  p.id || '');
+    if(searchResLev) searchResLev.innerHTML = '<div style="padding:8px 12px;background:#d1fae5;border-radius:8px;color:#065f46;font-size:.88rem;"><i class="fas fa-check-circle"></i> '+esc(p.nombre)+' seleccionado</div>';
+}
+
 </script>
 </body>
 </html>

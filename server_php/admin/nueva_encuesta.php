@@ -244,6 +244,15 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
     .prod-interest-grid{grid-template-columns:1fr 1fr;}
 }
 
+/* ══ BUSCA INSTITUCIÓN ══ */
+.busca-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:4px;}
+.busca-item{cursor:pointer;}
+.busca-item input[type="checkbox"]{display:none;}
+.busca-card{border:2px solid var(--brand-border);border-radius:12px;padding:14px 10px;text-align:center;font-size:12px;font-weight:700;color:#374151;transition:.2s;background:#fff;display:flex;flex-direction:column;align-items:center;gap:6px;}
+.busca-card:hover{border-color:var(--brand-navy);background:#f0f4ff;}
+.busca-icon{font-size:22px;}
+.busca-item input:checked + .busca-card{border-color:var(--brand-yellow-deep);background:linear-gradient(135deg,#fef9c3,#fde68a);color:var(--brand-navy-deep);}
+
 /* ══ FICHA PANELS ══ */
 .ficha-panel{
     background:#fff;
@@ -276,6 +285,33 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .ficha-sec-title:first-child{margin-top:0;}
 .fld-full{grid-column:1/-1;}
 
+
+/* ══ DOC CHECKLIST ══ */
+.doc-check-list{display:flex;flex-direction:column;gap:8px;margin:8px 0;}
+.doc-item{display:flex;align-items:center;gap:12px;padding:10px 14px;
+    border:1.5px solid var(--brand-border);border-radius:10px;cursor:pointer;
+    transition:all .15s;background:#fff;user-select:none;}
+.doc-item.checked{background:#eff6ff;border-color:#3b82f6;}
+.doc-item .di-icon{width:34px;height:34px;border-radius:8px;background:#f3f4f6;
+    display:flex;align-items:center;justify-content:center;font-size:.95rem;flex-shrink:0;color:#374151;}
+.doc-item.checked .di-icon{background:#dbeafe;color:#1d4ed8;}
+.doc-item .di-text{flex:1;}
+.doc-item .di-label{font-size:.88rem;font-weight:600;color:#1f2937;}
+.doc-item .di-sub{font-size:.75rem;color:#6b7280;}
+.doc-item .di-chk{width:22px;height:22px;border-radius:6px;border:2px solid #d1d5db;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.7rem;color:transparent;}
+.doc-item.checked .di-chk{background:#3b82f6;border-color:#3b82f6;color:#fff;}
+/* ══ INSTITUTION PICKER ══ */
+.inst-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px 0 12px;}
+.inst-chip{padding:5px 12px;border-radius:20px;border:1.5px solid var(--brand-border);
+    background:#fff;font-size:.8rem;cursor:pointer;transition:all .12s;}
+.inst-chip.sel{background:var(--brand-navy);border-color:var(--brand-navy);color:#fff;}
+/* ══ GARANTE / CÓNYUGE ══ */
+.subsec-divider{border:none;border-top:1.5px dashed var(--brand-border);margin:14px 0;}
+.subsec-title{font-size:.84rem;font-weight:700;color:#374151;margin:10px 0 8px;
+    display:flex;align-items:center;gap:6px;}
+.conyuge-wrap{background:#f9fafb;border:1px solid var(--brand-border);
+    border-radius:10px;padding:12px;margin-top:8px;}
 </style>
 </head>
 <body>
@@ -759,185 +795,428 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                         <div id="ficha-ahorro" class="ficha-panel" style="display:none;">
                             <div class="ficha-header">
                                 <div class="ficha-icon" style="background:#d1fae5;color:#065f46;"><i class="fas fa-piggy-bank"></i></div>
-                                <div>
-                                    <div class="ficha-title">Ficha: Cuenta de Ahorro</div>
-                                    <div class="ficha-sub">Completa los datos para la solicitud</div>
-                                </div>
+                                <div><div class="ficha-title">Ficha: Cuenta de Ahorro</div><div class="ficha-sub">Completa los datos para la solicitud</div></div>
                             </div>
                             <div class="ficha-body">
                                 <div class="ficha-sec-title"><i class="fas fa-user"></i> Datos del Titular</div>
-                                <div class="fld-grid" style="margin-bottom:14px;">
-                                    <div class="fld fld-full"><label>Nombre completo</label>
-                                        <input type="text" name="fa_nombre" id="fa-nombre" placeholder="Nombre del titular"></div>
-                                    <div class="fld"><label>Cédula</label>
-                                        <input type="text" name="fa_cedula" id="fa-cedula" placeholder="Cédula"></div>
-                                    <div class="fld"><label>Celular</label>
-                                        <input type="tel" name="fa_celular" id="fa-celular" placeholder="09XXXXXXXX"></div>
+                                <div class="fld-grid" style="margin-bottom:10px;">
+                                    <div class="fld fld-full"><label>Nombre completo</label><input type="text" name="fa_nombre" id="fa-nombre" placeholder="Nombre del titular"></div>
+                                    <div class="fld"><label>C&eacute;dula</label><input type="text" name="fa_cedula" id="fa-cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
+                                    <div class="fld"><label>Celular</label><input type="tel" name="fa_celular" id="fa-celular" placeholder="09XXXXXXXX"></div>
                                 </div>
-                                <div class="ficha-sec-title"><i class="fas fa-heart"></i> Estado civil</div>
-                                <div class="chip-grid" id="chips-estado-civil" style="margin-bottom:14px;">
-                                    <div class="chip" data-val="soltero" onclick="chipSingle(this,'fa_estado_civil')">Soltero/a</div>
-                                    <div class="chip" data-val="casado" onclick="chipSingle(this,'fa_estado_civil')">Casado/a</div>
-                                    <div class="chip" data-val="union_libre" onclick="chipSingle(this,'fa_estado_civil')">Unión libre</div>
-                                    <div class="chip" data-val="divorciado" onclick="chipSingle(this,'fa_estado_civil')">Divorciado/a</div>
-                                    <div class="chip" data-val="viudo" onclick="chipSingle(this,'fa_estado_civil')">Viudo/a</div>
+                                <div class="ficha-sec-title" style="margin-top:0;"><i class="fas fa-heart"></i> Estado civil</div>
+                                                                <div class="chip-grid" style="margin-bottom:10px;">
+                                    <div class="chip" data-val="soltero"     onclick="chipSingle(this,'fa_estado_civil')">Soltero/a</div>
+                                    <div class="chip" data-val="casado"      onclick="chipSingle(this,'fa_estado_civil')">Casado/a</div>
+                                    <div class="chip" data-val="union_libre" onclick="chipSingle(this,'fa_estado_civil')">Uni&oacute;n libre</div>
+                                    <div class="chip" data-val="divorciado"  onclick="chipSingle(this,'fa_estado_civil')">Divorciado/a</div>
                                 </div>
                                 <input type="hidden" name="fa_estado_civil" id="fa_estado_civil">
-                                <div class="ficha-sec-title"><i class="fas fa-piggy-bank"></i> Datos de Cuenta de Ahorro</div>
-                                <div class="chip-grid" id="chips-tipo-ahorro" style="margin-bottom:14px;">
-                                    <div class="chip" data-val="normal" onclick="chipSingle(this,'fa_tipo_ahorro')">Normal</div>
-                                    <div class="chip" data-val="programado" onclick="chipSingle(this,'fa_tipo_ahorro')" id="chip-ahorro-prog">Programado</div>
-                                    <div class="chip" data-val="infantil" onclick="chipSingle(this,'fa_tipo_ahorro')">Infantil</div>
-                                    <div class="chip" data-val="otro" onclick="chipSingle(this,'fa_tipo_ahorro')">Otro</div>
+
+                                <div class="ficha-sec-title"><i class="fas fa-piggy-bank"></i> Datos de Cuenta de Ahorros</div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Tipo de ahorro</div>
+                                <div class="chip-grid" style="margin-bottom:12px;">
+                                    <div class="chip" data-val="normal"     onclick="chipSingle(this,'fa_tipo_ahorro')">Normal</div>
+                                    <div class="chip" data-val="programado" onclick="chipSingle(this,'fa_tipo_ahorro')">Programado</div>
+                                    <div class="chip" data-val="infantil"   onclick="chipSingle(this,'fa_tipo_ahorro')">Infantil</div>
+                                    <div class="chip" data-val="otro"       onclick="chipSingle(this,'fa_tipo_ahorro')">Otro</div>
                                 </div>
                                 <input type="hidden" name="fa_tipo_ahorro" id="fa_tipo_ahorro">
-                                <div class="fld-grid">
-                                    <div class="fld"><label>Monto inicial estimado (USD)</label>
-                                        <input type="number" step="0.01" min="0" name="fa_monto_inicial" placeholder="0.00"></div>
-                                    <div class="fld" id="fa-frecuencia-wrap" style="display:none;"><label>Frecuencia de depósito</label>
-                                        <select name="fa_frecuencia">
-                                            <option value="">—</option>
-                                            <option value="diaria">Diaria</option>
-                                            <option value="semanal">Semanal</option>
-                                            <option value="mensual">Mensual</option>
-                                        </select>
+                                <div class="fld fld-full" style="margin-bottom:12px;"><label>Monto inicial estimado ($)</label>
+                                    <input type="number" step="0.01" min="0" name="fa_monto_inicial" placeholder="0.00"></div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Frecuencia de dep&oacute;sito</div>
+                                <div class="chip-grid" style="margin-bottom:12px;" id="fa-frecuencia-wrap">
+                                    <div class="chip" data-val="diaria"    onclick="chipSingle(this,'fa_frecuencia')">Diaria</div>
+                                    <div class="chip" data-val="semanal"   onclick="chipSingle(this,'fa_frecuencia')">Semanal</div>
+                                    <div class="chip" data-val="quincenal" onclick="chipSingle(this,'fa_frecuencia')">Quincenal</div>
+                                    <div class="chip" data-val="mensual"   onclick="chipSingle(this,'fa_frecuencia')">Mensual</div>
+                                </div>
+                                <input type="hidden" name="fa_frecuencia" id="fa_frecuencia">
+                                <div class="fld fld-full" style="margin-bottom:12px;"><label>Objetivo del ahorro</label>
+                                    <textarea name="fa_objetivo" rows="2" placeholder="Ej: ahorro para educaci&oacute;n, emergencias..."></textarea></div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Tiene ahorro en otra instituci&oacute;n?</div>
+                                                                <div class="yn-group" style="margin-bottom:12px;">
+                                    <label class="yn-opt"><input type="radio" name="fa_otra_inst" value="1"> S&iacute;</label>
+                                    <label class="yn-opt"><input type="radio" name="fa_otra_inst" value="0"> No</label>
+                                </div>
+                                <div id="fa-otra-inst-wrap" style="display:none;margin-bottom:12px;">
+                                    <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;En qu&eacute; instituci&oacute;n?</div>
+                                    <div class="inst-picker">
+                                        <span class="inst-chip" data-val="banco_pichincha" onclick="selInst(this,'fa_institucion')">Banco Pichincha</span>
+                                        <span class="inst-chip" data-val="banco_guayaquil" onclick="selInst(this,'fa_institucion')">Banco Guayaquil</span>
+                                        <span class="inst-chip" data-val="banco_pacifico" onclick="selInst(this,'fa_institucion')">Banco Pacifico</span>
+                                        <span class="inst-chip" data-val="banco_del_austro" onclick="selInst(this,'fa_institucion')">Banco del Austro</span>
+                                        <span class="inst-chip" data-val="produbanco" onclick="selInst(this,'fa_institucion')">Produbanco</span>
+                                        <span class="inst-chip" data-val="coop_jep" onclick="selInst(this,'fa_institucion')">Coop. JEP</span>
+                                        <span class="inst-chip" data-val="coop_29_de_octubre" onclick="selInst(this,'fa_institucion')">Coop. 29 de Octubre</span>
+                                        <span class="inst-chip" data-val="coop_jardin_azuayo" onclick="selInst(this,'fa_institucion')">Coop. Jardin Azuayo</span>
+                                        <span class="inst-chip" data-val="mutualista_pichincha" onclick="selInst(this,'fa_institucion')">Mutualista Pichincha</span>
+                                        <span class="inst-chip" data-val="otra" onclick="selInst(this,'fa_institucion')">Otra</span>
                                     </div>
-                                    <div class="fld"><label>Observaciones</label>
-                                        <textarea name="fa_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+                                    <input type="hidden" name="fa_institucion" id="fa_institucion">
+                                </div>
+                                <div class="fld fld-full" style="margin-bottom:14px;"><label>Observaciones</label>
+                                    <textarea name="fa_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+
+                                <div class="ficha-sec-title"><i class="fas fa-list-check" style="color:#3b82f6;"></i> Documentos (Cuenta de Ahorros)</div>
+                                <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px;">Toca cada documento que el prospecto entreg&oacute;:</p>
+                                <div class="doc-check-list">
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fa_doc_cedula">
+                                        <div class="di-icon"><i class="fas fa-id-card"></i></div>
+                                        <div class="di-text"><div class="di-label">C&eacute;dula de identidad</div><div class="di-sub">Original y copia</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fa_doc_cedula" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fa_doc_papeleta">
+                                        <div class="di-icon"><i class="fas fa-check-to-slot"></i></div>
+                                        <div class="di-text"><div class="di-label">Papeleta de votaci&oacute;n</div><div class="di-sub">Obligatoria (Ecuador)</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fa_doc_papeleta" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fa_doc_planilla">
+                                        <div class="di-icon"><i class="fas fa-file-invoice"></i></div>
+                                        <div class="di-text"><div class="di-label">Planilla de servicios b&aacute;sicos</div><div class="di-sub">Luz, agua o tel&eacute;fono</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fa_doc_planilla" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fa_doc_correo">
+                                        <div class="di-icon"><i class="fas fa-envelope"></i></div>
+                                        <div class="di-text"><div class="di-label">Correo electr&oacute;nico</div><div class="di-sub">Para notificaciones</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fa_doc_correo" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fa_doc_celular">
+                                        <div class="di-icon"><i class="fas fa-phone"></i></div>
+                                        <div class="di-text"><div class="di-label">N&uacute;mero de celular</div><div class="di-sub">Contacto del titular</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fa_doc_celular" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fa_doc_deposito">
+                                        <div class="di-icon"><i class="fas fa-dollar-sign"></i></div>
+                                        <div class="di-text"><div class="di-label">Dep&oacute;sito inicial</div><div class="di-sub">Seg&uacute;n entidad (ej. $5&ndash;$50)</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fa_doc_deposito" value="0" class="doc-hidden">
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ── FICHA: CUENTA CORRIENTE ── -->
                         <div id="ficha-corriente" class="ficha-panel" style="display:none;">
                             <div class="ficha-header">
                                 <div class="ficha-icon" style="background:#dbeafe;color:#1d4ed8;"><i class="fas fa-credit-card"></i></div>
-                                <div>
-                                    <div class="ficha-title">Ficha: Cuenta Corriente</div>
-                                    <div class="ficha-sub">Completa los datos para la solicitud</div>
-                                </div>
+                                <div><div class="ficha-title">Ficha: Cuenta Corriente</div><div class="ficha-sub">Completa los datos para la solicitud</div></div>
                             </div>
                             <div class="ficha-body">
-                                <div class="ficha-sec-title"><i class="fas fa-user"></i> Datos del Titular</div>
-                                <div class="fld-grid" style="margin-bottom:14px;">
-                                    <div class="fld fld-full"><label>Nombre completo</label>
-                                        <input type="text" name="fc_nombre" id="fc-nombre" placeholder="Nombre del titular"></div>
-                                    <div class="fld"><label>Cédula</label>
-                                        <input type="text" name="fc_cedula" id="fc-cedula" placeholder="Cédula"></div>
-                                    <div class="fld"><label>Celular</label>
-                                        <input type="tel" name="fc_celular" id="fc-celular" placeholder="09XXXXXXXX"></div>
-                                </div>
-                                <div class="ficha-sec-title"><i class="fas fa-heart"></i> Estado civil</div>
+                                <!-- Tipo de cuenta corriente -->
+                                <div class="ficha-sec-title" style="margin-top:0;"><i class="fas fa-building"></i> Tipo de cuenta</div>
                                 <div class="chip-grid" style="margin-bottom:14px;">
-                                    <div class="chip" data-val="soltero"    onclick="chipSingle(this,'fc_estado_civil')">Soltero/a</div>
-                                    <div class="chip" data-val="casado"     onclick="chipSingle(this,'fc_estado_civil')">Casado/a</div>
-                                    <div class="chip" data-val="union_libre" onclick="chipSingle(this,'fc_estado_civil')">Unión libre</div>
-                                    <div class="chip" data-val="divorciado" onclick="chipSingle(this,'fc_estado_civil')">Divorciado/a</div>
-                                    <div class="chip" data-val="viudo"      onclick="chipSingle(this,'fc_estado_civil')">Viudo/a</div>
+                                    <div class="chip" data-val="personal"   onclick="chipSingle(this,'fc_tipo_cc')">&#x1F464; Personal</div>
+                                    <div class="chip" data-val="empresarial" onclick="chipSingle(this,'fc_tipo_cc')">&#x1F3E2; Empresarial</div>
+                                </div>
+                                <input type="hidden" name="fc_tipo_cc" id="fc_tipo_cc">
+
+                                <div class="ficha-sec-title"><i class="fas fa-user"></i> Datos del Titular</div>
+                                <div class="fld-grid" style="margin-bottom:10px;">
+                                    <div class="fld fld-full"><label>Nombre completo</label><input type="text" name="fc_nombre" id="fc-nombre" placeholder="Nombre del titular"></div>
+                                    <div class="fld"><label>C&eacute;dula</label><input type="text" name="fc_cedula" id="fc-cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
+                                    <div class="fld"><label>Celular</label><input type="tel" name="fc_celular" id="fc-celular" placeholder="09XXXXXXXX"></div>
+                                </div>
+                                <div class="ficha-sec-title" style="margin-top:0;"><i class="fas fa-heart"></i> Estado civil</div>
+                                                                <div class="chip-grid" style="margin-bottom:10px;">
+                                    <div class="chip" data-val="soltero"     onclick="chipSingle(this,'fc_estado_civil')">Soltero/a</div>
+                                    <div class="chip" data-val="casado"      onclick="chipSingle(this,'fc_estado_civil')">Casado/a</div>
+                                    <div class="chip" data-val="union_libre" onclick="chipSingle(this,'fc_estado_civil')">Uni&oacute;n libre</div>
+                                    <div class="chip" data-val="divorciado"  onclick="chipSingle(this,'fc_estado_civil')">Divorciado/a</div>
                                 </div>
                                 <input type="hidden" name="fc_estado_civil" id="fc_estado_civil">
+
                                 <div class="ficha-sec-title"><i class="fas fa-credit-card"></i> Datos de Cuenta Corriente</div>
-                                <div class="chip-grid" style="margin-bottom:14px;">
-                                    <div class="chip" data-val="personal"   onclick="chipSingle(this,'fc_tipo')">Personal</div>
-                                    <div class="chip" data-val="empresarial" onclick="chipSingle(this,'fc_tipo')">Empresarial</div>
+                                <div class="fld fld-full" style="margin-bottom:10px;"><label>Prop&oacute;sito principal de la cuenta</label>
+                                    <textarea name="fc_proposito" rows="2" placeholder="Ej: pagos a proveedores, n&oacute;mina..."></textarea></div>
+                                <div class="fld-grid" style="margin-bottom:10px;">
+                                    <div class="fld"><label>Monto dep&oacute;sito mensual promedio ($)</label>
+                                        <input type="number" step="0.01" min="0" name="fc_monto_deposito" placeholder="0.00"></div>
+                                    <div class="fld"><label>Ingreso mensual estimado ($)</label>
+                                        <input type="number" step="0.01" min="0" name="fc_ingreso_mensual" placeholder="0.00"></div>
                                 </div>
-                                <input type="hidden" name="fc_tipo" id="fc_tipo">
-                                <div class="fld-grid">
-                                    <div class="fld"><label>Monto inicial estimado (USD)</label>
-                                        <input type="number" step="0.01" min="0" name="fc_monto_inicial" placeholder="0.00"></div>
-                                    <div class="fld"><label>Observaciones</label>
-                                        <textarea name="fc_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Usa cheques frecuentemente?</div>
+                                                                <div class="yn-group" style="margin-bottom:12px;">
+                                    <label class="yn-opt"><input type="radio" name="fc_usa_cheques" value="1"> S&iacute;</label>
+                                    <label class="yn-opt"><input type="radio" name="fc_usa_cheques" value="0"> No</label>
+                                </div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Requiere tarjeta de d&eacute;bito?</div>
+                                                                <div class="yn-group" style="margin-bottom:12px;">
+                                    <label class="yn-opt"><input type="radio" name="fc_requiere_td" value="1"> S&iacute;</label>
+                                    <label class="yn-opt"><input type="radio" name="fc_requiere_td" value="0"> No</label>
+                                </div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Tiene n&oacute;mina / sueldo fijo?</div>
+                                                                <div class="yn-group" style="margin-bottom:12px;">
+                                    <label class="yn-opt"><input type="radio" name="fc_tiene_nomina" value="1"> S&iacute;</label>
+                                    <label class="yn-opt"><input type="radio" name="fc_tiene_nomina" value="0"> No</label>
+                                </div>
+                                <div class="fld fld-full" style="margin-bottom:14px;"><label>Observaciones</label>
+                                    <textarea name="fc_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+
+                                <div class="ficha-sec-title"><i class="fas fa-list-check" style="color:#3b82f6;"></i> Documentos (Cuenta Corriente)</div>
+                                <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px;">Toca cada documento que el prospecto entreg&oacute;:</p>
+                                <div class="doc-check-list">
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fc_doc_cedula">
+                                        <div class="di-icon"><i class="fas fa-id-card"></i></div>
+                                        <div class="di-text"><div class="di-label">C&eacute;dula de identidad</div><div class="di-sub">Original y copia</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fc_doc_cedula" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fc_doc_papeleta">
+                                        <div class="di-icon"><i class="fas fa-check-to-slot"></i></div>
+                                        <div class="di-text"><div class="di-label">Papeleta de votaci&oacute;n</div><div class="di-sub">Obligatoria (Ecuador)</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fc_doc_papeleta" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fc_doc_planilla">
+                                        <div class="di-icon"><i class="fas fa-file-invoice"></i></div>
+                                        <div class="di-text"><div class="di-label">Planilla de servicios b&aacute;sicos</div><div class="di-sub">Luz, agua o tel&eacute;fono</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fc_doc_planilla" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fc_doc_correo">
+                                        <div class="di-icon"><i class="fas fa-envelope"></i></div>
+                                        <div class="di-text"><div class="di-label">Correo electr&oacute;nico</div><div class="di-sub">Para notificaciones</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fc_doc_correo" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fc_doc_celular">
+                                        <div class="di-icon"><i class="fas fa-phone"></i></div>
+                                        <div class="di-text"><div class="di-label">N&uacute;mero de celular</div><div class="di-sub">Contacto del titular</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fc_doc_celular" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fc_doc_deposito">
+                                        <div class="di-icon"><i class="fas fa-dollar-sign"></i></div>
+                                        <div class="di-text"><div class="di-label">Dep&oacute;sito inicial</div><div class="di-sub">Seg&uacute;n entidad</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fc_doc_deposito" value="0" class="doc-hidden">
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ── FICHA: INVERSIÓN ── -->
                         <div id="ficha-inversion" class="ficha-panel" style="display:none;">
                             <div class="ficha-header">
-                                <div class="ficha-icon" style="background:#ede9fe;color:#7c3aed;"><i class="fas fa-chart-line"></i></div>
-                                <div>
-                                    <div class="ficha-title">Ficha: Inversión / Depósito</div>
-                                    <div class="ficha-sub">Completa los datos para la solicitud</div>
-                                </div>
+                                <div class="ficha-icon" style="background:#ede9fe;color:#5b21b6;"><i class="fas fa-chart-line"></i></div>
+                                <div><div class="ficha-title">Ficha: Inversiones</div><div class="ficha-sub">Completa los datos para la solicitud</div></div>
                             </div>
                             <div class="ficha-body">
-                                <div class="ficha-sec-title"><i class="fas fa-tags"></i> Tipo de inversión</div>
-                                <div class="chip-grid" style="margin-bottom:14px;">
-                                    <div class="chip" data-val="dpf"       onclick="chipSingle(this,'fi_tipo')">DPF</div>
-                                    <div class="chip" data-val="acciones"  onclick="chipSingle(this,'fi_tipo')">Acciones</div>
-                                    <div class="chip" data-val="fondos"    onclick="chipSingle(this,'fi_tipo')">Fondos</div>
-                                    <div class="chip" data-val="otro"      onclick="chipSingle(this,'fi_tipo')">Otro</div>
+                                <div class="ficha-sec-title"><i class="fas fa-trending-up"></i> Datos de Inversi&oacute;n</div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Tipo de inversi&oacute;n</div>
+                                <div class="chip-grid" style="margin-bottom:12px;">
+                                    <div class="chip" data-val="dpf"      onclick="chipSingle(this,'fi_tipo')">DPF</div>
+                                    <div class="chip" data-val="acciones" onclick="chipSingle(this,'fi_tipo')">Acciones</div>
+                                    <div class="chip" data-val="otro"     onclick="chipSingle(this,'fi_tipo')">Otro</div>
                                 </div>
                                 <input type="hidden" name="fi_tipo" id="fi_tipo">
-                                <div class="fld-grid" style="margin-bottom:14px;">
-                                    <div class="fld"><label>Monto a invertir (USD)</label>
-                                        <input type="number" step="0.01" min="0" name="fi_monto" placeholder="0.00"></div>
-                                    <div class="fld"><label>Plazo deseado</label>
-                                        <input type="text" name="fi_plazo" placeholder="Ej: 6 meses, 1 año"></div>
+                                <div class="fld-grid" style="margin-bottom:12px;">
+                                    <div class="fld"><label>Monto a invertir ($)</label><input type="number" step="0.01" min="0" name="fi_monto" placeholder="0.00"></div>
+                                    <div class="fld"><label>Plazo deseado (meses)</label><input type="number" min="1" name="fi_plazo" placeholder="Ej: 12"></div>
                                 </div>
-                                <div class="ficha-sec-title"><i class="fas fa-bullseye"></i> Objetivo de inversión</div>
-                                <div class="chip-grid" style="margin-bottom:14px;">
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Objetivo de inversi&oacute;n</div>
+                                <div class="chip-grid" style="margin-bottom:12px;">
                                     <div class="chip" data-val="rendimiento_fijo" onclick="chipSingle(this,'fi_objetivo')">Rendimiento fijo</div>
-                                    <div class="chip" data-val="capitalizacion"   onclick="chipSingle(this,'fi_objetivo')">Capitalización</div>
+                                    <div class="chip" data-val="capitalizacion"   onclick="chipSingle(this,'fi_objetivo')">Capitalizaci&oacute;n</div>
                                     <div class="chip" data-val="crecimiento"      onclick="chipSingle(this,'fi_objetivo')">Crecimiento</div>
                                     <div class="chip" data-val="otro"             onclick="chipSingle(this,'fi_objetivo')">Otro</div>
                                 </div>
                                 <input type="hidden" name="fi_objetivo" id="fi_objetivo">
-                                <div class="fld-grid">
-                                    <div class="fld"><label>¿Inversiones en otra institución?</label>
-                                        <div class="yn-group">
-                                            <label class="yn-opt"><input type="radio" name="fi_otra_institucion" value="1"> Sí</label>
-                                            <label class="yn-opt"><input type="radio" name="fi_otra_institucion" value="0"> No</label>
-                                        </div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Acepta renovaci&oacute;n autom&aacute;tica?</div>
+                                                                <div class="yn-group" style="margin-bottom:12px;">
+                                    <label class="yn-opt"><input type="radio" name="fi_renovacion_automatica" value="1"> S&iacute;</label>
+                                    <label class="yn-opt"><input type="radio" name="fi_renovacion_automatica" value="0"> No</label>
+                                </div>
+                                <div class="fld fld-full" style="margin-bottom:14px;"><label>Observaciones</label>
+                                    <textarea name="fi_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+
+                                <div class="ficha-sec-title"><i class="fas fa-list-check" style="color:#3b82f6;"></i> Requisitos (Inversiones)</div>
+                                <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px;">Toca cada requisito que ya est&aacute; listo:</p>
+                                <div class="doc-check-list">
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fi_req_cuenta">
+                                        <div class="di-icon"><i class="fas fa-university"></i></div>
+                                        <div class="di-text"><div class="di-label">Cuenta activa</div><div class="di-sub">Debe tener cuenta en la entidad</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fi_req_cuenta" value="0" class="doc-hidden">
                                     </div>
-                                    <div class="fld"><label>¿Acepta renovación automática?</label>
-                                        <div class="yn-group">
-                                            <label class="yn-opt"><input type="radio" name="fi_renovacion_automatica" value="1"> Sí</label>
-                                            <label class="yn-opt"><input type="radio" name="fi_renovacion_automatica" value="0"> No</label>
-                                        </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fi_req_monto">
+                                        <div class="di-icon"><i class="fas fa-coins"></i></div>
+                                        <div class="di-text"><div class="di-label">Monto m&iacute;nimo</div><div class="di-sub">Ej. $100 / $500 / $1000</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fi_req_monto" value="0" class="doc-hidden">
                                     </div>
-                                    <div class="fld fld-full"><label>Observaciones</label>
-                                        <textarea name="fi_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fi_req_contrato">
+                                        <div class="di-icon"><i class="fas fa-file-signature"></i></div>
+                                        <div class="di-text"><div class="di-label">Contrato de inversi&oacute;n</div><div class="di-sub">Firmado</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fi_req_contrato" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fi_req_fondos">
+                                        <div class="di-icon"><i class="fas fa-shield-alt"></i></div>
+                                        <div class="di-text"><div class="di-label">Declaraci&oacute;n de origen de fondos</div><div class="di-sub">En algunos casos</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fi_req_fondos" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fi_req_kyc">
+                                        <div class="di-icon"><i class="fas fa-user-check"></i></div>
+                                        <div class="di-text"><div class="di-label">Actualizaci&oacute;n de datos (KYC)</div><div class="di-sub">Conoce a tu cliente</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fi_req_kyc" value="0" class="doc-hidden">
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- ── FICHA: CRÉDITO ── -->
                         <div id="ficha-credito" class="ficha-panel" style="display:none;">
                             <div class="ficha-header">
                                 <div class="ficha-icon" style="background:#fef3c7;color:#d97706;"><i class="fas fa-hand-holding-dollar"></i></div>
-                                <div>
-                                    <div class="ficha-title">Ficha: Evaluación de Crédito</div>
-                                    <div class="ficha-sub">Completa los datos para la solicitud</div>
-                                </div>
+                                <div><div class="ficha-title">Ficha: Evaluaci&oacute;n de Cr&eacute;dito</div><div class="ficha-sub">Completa los datos para la solicitud</div></div>
                             </div>
                             <div class="ficha-body">
-                                <div class="ficha-sec-title"><i class="fas fa-circle-question"></i> ¿Requiere crédito?</div>
-                                <div class="yn-group" style="max-width:200px;margin-bottom:14px;">
-                                    <label class="yn-opt"><input type="radio" name="fk_requiere_credito" value="1"> Sí</label>
+                                <div class="ficha-sec-title"><i class="fas fa-credit-score"></i> Evaluaci&oacute;n de Cr&eacute;dito</div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">&iquest;Requiere cr&eacute;dito?</div>
+                                                                <div class="yn-group" style="margin-bottom:12px;">
+                                    <label class="yn-opt"><input type="radio" name="fk_requiere_credito" value="1"> S&iacute;</label>
                                     <label class="yn-opt"><input type="radio" name="fk_requiere_credito" value="0"> No</label>
                                 </div>
-                                <div class="ficha-sec-title"><i class="fas fa-bullseye"></i> Destino del crédito</div>
-                                <div class="chip-grid" style="margin-bottom:14px;">
-                                    <div class="chip" data-val="capital_trabajo"    onclick="chipSingle(this,'fk_destino')"><i class="fas fa-briefcase"></i> Capital de trabajo</div>
-                                    <div class="chip" data-val="activos_fijos"      onclick="chipSingle(this,'fk_destino')"><i class="fas fa-boxes-stacked"></i> Activos fijos</div>
-                                    <div class="chip" data-val="pago_deudas"        onclick="chipSingle(this,'fk_destino')"><i class="fas fa-ban-smoking"></i> Pago de deudas</div>
-                                    <div class="chip" data-val="consolidacion"      onclick="chipSingle(this,'fk_destino')"><i class="fas fa-layer-group"></i> Consolidación de deudas</div>
-                                    <div class="chip" data-val="vehiculo"           onclick="chipSingle(this,'fk_destino')"><i class="fas fa-car"></i> Compra de vehículo</div>
-                                    <div class="chip" data-val="vivienda"           onclick="chipSingle(this,'fk_destino')"><i class="fas fa-house"></i> Compra de vivienda</div>
-                                    <div class="chip" data-val="remodelacion"       onclick="chipSingle(this,'fk_destino')"><i class="fas fa-hammer"></i> Arreglos de vivienda</div>
-                                    <div class="chip" data-val="educacion"          onclick="chipSingle(this,'fk_destino')"><i class="fas fa-graduation-cap"></i> Educación</div>
-                                    <div class="chip" data-val="viajes"             onclick="chipSingle(this,'fk_destino')"><i class="fas fa-plane"></i> Viajes</div>
-                                    <div class="chip" data-val="otros"              onclick="chipSingle(this,'fk_destino')"><i class="fas fa-ellipsis"></i> Otros</div>
+                                <div id="fk-detalle-wrap" style="display:none;">
+                                    <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Destino del cr&eacute;dito</div>
+                                    <div class="chip-grid" style="margin-bottom:10px;">
+                                        <div class="chip" data-val="capital_trabajo" onclick="chipSingle(this,'fk_destino')"><i class="fas fa-briefcase"></i> Capital de trabajo</div>
+                                        <div class="chip" data-val="activos_fijos"   onclick="chipSingle(this,'fk_destino')"><i class="fas fa-boxes-stacked"></i> Activos fijos</div>
+                                        <div class="chip" data-val="pago_deudas"     onclick="chipSingle(this,'fk_destino')"><i class="fas fa-ban"></i> Pago de deudas</div>
+                                        <div class="chip" data-val="consolidacion"   onclick="chipSingle(this,'fk_destino')"><i class="fas fa-layer-group"></i> Consolidaci&oacute;n</div>
+                                        <div class="chip" data-val="vehiculo"        onclick="chipSingle(this,'fk_destino')"><i class="fas fa-car"></i> Veh&iacute;culo</div>
+                                        <div class="chip" data-val="vivienda"        onclick="chipSingle(this,'fk_destino')"><i class="fas fa-house"></i> Vivienda</div>
+                                        <div class="chip" data-val="remodelacion"    onclick="chipSingle(this,'fk_destino')"><i class="fas fa-hammer"></i> Remodelaci&oacute;n</div>
+                                        <div class="chip" data-val="educacion"       onclick="chipSingle(this,'fk_destino')"><i class="fas fa-graduation-cap"></i> Educaci&oacute;n</div>
+                                        <div class="chip" data-val="viajes"          onclick="chipSingle(this,'fk_destino')"><i class="fas fa-plane"></i> Viajes</div>
+                                        <div class="chip" data-val="otros"           onclick="chipSingle(this,'fk_destino')"><i class="fas fa-ellipsis"></i> Otros</div>
+                                    </div>
+                                    <input type="hidden" name="fk_destino" id="fk_destino">
+                                    <div id="fk-otros-wrap" style="display:none;margin-bottom:10px;">
+                                        <div class="fld fld-full"><label>Especifique otro destino</label>
+                                            <input type="text" name="fk_destino_otros" placeholder="Detalle..."></div>
+                                    </div>
+                                    <div class="fld-grid" style="margin-bottom:14px;">
+                                        <div class="fld"><label>Monto aproximado ($)</label><input type="number" step="0.01" min="0" name="fk_monto" placeholder="0.00"></div>
+                                        <div class="fld"><label>Plazo (meses)</label><input type="number" min="1" name="fk_plazo" placeholder="Ej: 24"></div>
+                                    </div>
                                 </div>
-                                <input type="hidden" name="fk_destino" id="fk_destino">
-                                <div class="fld-grid">
-                                    <div class="fld"><label>Monto aproximado (USD)</label>
-                                        <input type="number" step="0.01" min="0" name="fk_monto" placeholder="0.00"></div>
-                                    <div class="fld"><label>Plazo (meses)</label>
-                                        <input type="number" min="1" name="fk_plazo" placeholder="Ej: 24"></div>
-                                    <div class="fld fld-full"><label>Observaciones</label>
-                                        <textarea name="fk_observaciones" rows="2" placeholder="Notas adicionales..."></textarea></div>
+
+                                <div class="ficha-sec-title"><i class="fas fa-people-group"></i> Datos del Solicitante y Garante</div>
+                                <div class="fld fld-full" style="margin-bottom:10px;"><label>Direcci&oacute;n levantada en sitio</label>
+                                    <textarea name="fk_direccion_sitio" rows="2" placeholder="Direcci&oacute;n del negocio / domicilio"></textarea></div>
+                                <hr class="subsec-divider">
+                                <div class="subsec-title"><i class="fas fa-user"></i> Solicitante (Deudor)</div>
+                                <div class="fld-grid" style="margin-bottom:8px;">
+                                    <div class="fld fld-full"><label>Nombre completo</label><input type="text" name="fk_sol_nombre" id="fk-sol-nombre" placeholder="Nombre del solicitante"></div>
+                                    <div class="fld"><label>C&eacute;dula</label><input type="text" name="fk_sol_cedula" id="fk-sol-cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
+                                    <div class="fld"><label>Celular</label><input type="tel" name="fk_sol_celular" placeholder="09XXXXXXXX"></div>
+                                </div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Estado civil del solicitante</div>
+                                                                <div class="chip-grid" style="margin-bottom:10px;">
+                                    <div class="chip" data-val="soltero"     onclick="chipSingle(this,'fk_sol_ec');toggleConyuge('fk')">Soltero/a</div>
+                                    <div class="chip" data-val="casado"      onclick="chipSingle(this,'fk_sol_ec');toggleConyuge('fk')">Casado/a</div>
+                                    <div class="chip" data-val="union_libre" onclick="chipSingle(this,'fk_sol_ec');toggleConyuge('fk')">Uni&oacute;n libre</div>
+                                    <div class="chip" data-val="divorciado"  onclick="chipSingle(this,'fk_sol_ec');toggleConyuge('fk')">Divorciado/a</div>
+                                </div>
+                                <input type="hidden" name="fk_sol_ec" id="fk_sol_ec">
+                                <div id="fk-conyuge-wrap" class="conyuge-wrap" style="display:none;margin-bottom:12px;">
+                                    <div class="subsec-title" style="margin-top:0;"><i class="fas fa-user-plus"></i> C&oacute;nyuge del solicitante</div>
+                                    <div class="fld fld-full" style="margin-bottom:8px;"><label>Nombre completo del c&oacute;nyuge</label>
+                                        <input type="text" name="fk_sol_conyuge_nombre" placeholder="Nombre del c&oacute;nyuge"></div>
+                                    <div class="fld-grid">
+                                        <div class="fld"><label>C&eacute;dula del c&oacute;nyuge</label><input type="text" name="fk_sol_conyuge_cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
+                                        <div class="fld"><label>Celular del c&oacute;nyuge</label><input type="tel" name="fk_sol_conyuge_celular" placeholder="09XXXXXXXX"></div>
+                                    </div>
+                                </div>
+                                <hr class="subsec-divider">
+                                <div class="subsec-title"><i class="fas fa-user-shield"></i> Garante (opcional)</div>
+                                <div class="fld-grid" style="margin-bottom:8px;">
+                                    <div class="fld fld-full"><label>Nombre completo del garante</label><input type="text" name="fk_gar_nombre" placeholder="Nombre del garante"></div>
+                                    <div class="fld"><label>C&eacute;dula</label><input type="text" name="fk_gar_cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
+                                    <div class="fld"><label>Celular</label><input type="tel" name="fk_gar_celular" placeholder="09XXXXXXXX"></div>
+                                </div>
+                                <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Estado civil del garante</div>
+                                                                <div class="chip-grid" style="margin-bottom:10px;">
+                                    <div class="chip" data-val="soltero"     onclick="chipSingle(this,'fk_gar_ec');toggleConyugeGar()">Soltero/a</div>
+                                    <div class="chip" data-val="casado"      onclick="chipSingle(this,'fk_gar_ec');toggleConyugeGar()">Casado/a</div>
+                                    <div class="chip" data-val="union_libre" onclick="chipSingle(this,'fk_gar_ec');toggleConyugeGar()">Uni&oacute;n libre</div>
+                                    <div class="chip" data-val="divorciado"  onclick="chipSingle(this,'fk_gar_ec');toggleConyugeGar()">Divorciado/a</div>
+                                </div>
+                                <input type="hidden" name="fk_gar_ec" id="fk_gar_ec">
+                                <div id="fk-conyuge-gar-wrap" class="conyuge-wrap" style="display:none;margin-bottom:12px;">
+                                    <div class="subsec-title" style="margin-top:0;"><i class="fas fa-user-plus"></i> C&oacute;nyuge del garante</div>
+                                    <div class="fld fld-full" style="margin-bottom:8px;"><label>Nombre completo del c&oacute;nyuge</label>
+                                        <input type="text" name="fk_gar_conyuge_nombre" placeholder="Nombre del c&oacute;nyuge"></div>
+                                    <div class="fld-grid">
+                                        <div class="fld"><label>C&eacute;dula del c&oacute;nyuge</label><input type="text" name="fk_gar_conyuge_cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
+                                        <div class="fld"><label>Celular del c&oacute;nyuge</label><input type="tel" name="fk_gar_conyuge_celular" placeholder="09XXXXXXXX"></div>
+                                    </div>
+                                </div>
+
+                                <div class="ficha-sec-title"><i class="fas fa-list-check" style="color:#3b82f6;"></i> Documentos para Cr&eacute;dito</div>
+                                <p style="font-size:.78rem;color:#6b7280;margin-bottom:10px;">Toca cada documento que el prospecto entreg&oacute;:</p>
+                                <div class="doc-check-list">
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_cedula">
+                                        <div class="di-icon"><i class="fas fa-id-card"></i></div>
+                                        <div class="di-text"><div class="di-label">C&eacute;dula de identidad</div><div class="di-sub">Deudor y c&oacute;nyuge</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_cedula" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_planilla">
+                                        <div class="di-icon"><i class="fas fa-file-invoice"></i></div>
+                                        <div class="di-text"><div class="di-label">Planilla de servicios</div><div class="di-sub">Agua, luz o tel&eacute;fono</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_planilla" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_ruc">
+                                        <div class="di-icon"><i class="fas fa-file-alt"></i></div>
+                                        <div class="di-text"><div class="di-label">RUC / RISE</div><div class="di-sub">Registro tributario</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_ruc" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_estados">
+                                        <div class="di-icon"><i class="fas fa-university"></i></div>
+                                        <div class="di-text"><div class="di-label">Estados de cuenta</div><div class="di-sub">&Uacute;ltimos 3 meses</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_estados" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_declaraciones">
+                                        <div class="di-icon"><i class="fas fa-clipboard-list"></i></div>
+                                        <div class="di-text"><div class="di-label">Declaraciones IVA / IR</div><div class="di-sub">&Uacute;ltimas declaraciones</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_declaraciones" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_matricula">
+                                        <div class="di-icon"><i class="fas fa-store"></i></div>
+                                        <div class="di-text"><div class="di-label">Matr&iacute;cula del negocio</div><div class="di-sub">Patente municipal</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_matricula" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_foto_negocio">
+                                        <div class="di-icon"><i class="fas fa-camera"></i></div>
+                                        <div class="di-text"><div class="di-label">Foto del negocio</div><div class="di-sub">Fachada y local</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_foto_negocio" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_solicitud">
+                                        <div class="di-icon"><i class="fas fa-file-contract"></i></div>
+                                        <div class="di-text"><div class="di-label">Solicitud de cr&eacute;dito</div><div class="di-sub">Formulario firmado</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_solicitud" value="0" class="doc-hidden">
+                                    </div>
+                                                                        <div class="doc-item" onclick="toggleDoc(this)" data-field="fk_doc_foto_cliente">
+                                        <div class="di-icon"><i class="fas fa-portrait"></i></div>
+                                        <div class="di-text"><div class="di-label">Foto del prospecto</div><div class="di-sub">Foto para expediente</div></div>
+                                        <div class="di-chk"><i class="fas fa-check"></i></div>
+                                        <input type="hidden" name="fk_doc_foto_cliente" value="0" class="doc-hidden">
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -976,6 +1255,66 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                 <div class="form-card">
                     <h3><i class="fas fa-handshake"></i>Acuerdo y cierre</h3>
                     <p class="sub">Indica el resultado de la visita y el próximo paso pactado con el prospecto.</p>
+
+                    <!-- ¿Qué busca de una institución? -->
+                    <div class="sub-sec" style="margin-bottom:20px;">
+                        <h5><i class="fas fa-magnifying-glass"></i>&iquest;Qu&eacute; busca de una instituci&oacute;n financiera?</h5>
+                        <p style="font-size:13px;color:var(--brand-gray);margin-bottom:14px;">
+                            Selecciona todo lo que el prospecto mencion&oacute; como importante:
+                        </p>
+                        <div class="busca-grid">
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_agilidad" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x26A1;</span>
+                                    <span>Agilidad</span>
+                                </div>
+                            </label>
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_cajeros" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x1F3E7;</span>
+                                    <span>Cajeros</span>
+                                </div>
+                            </label>
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_banca_online" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x1F4BB;</span>
+                                    <span>Banca en l&iacute;nea</span>
+                                </div>
+                            </label>
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_agencias" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x1F4CD;</span>
+                                    <span>Agencias en su sector</span>
+                                </div>
+                            </label>
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_credito_rapido" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x1F4B8;</span>
+                                    <span>Cr&eacute;dito r&aacute;pido</span>
+                                </div>
+                            </label>
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_tarjeta_debito" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x1F4B3;</span>
+                                    <span>Tarjeta d&eacute;bito</span>
+                                </div>
+                            </label>
+                            <label class="busca-item">
+                                <input type="checkbox" name="busca_tarjeta_credito" value="1">
+                                <div class="busca-card">
+                                    <span class="busca-icon">&#x2B50;</span>
+                                    <span>Tarjeta cr&eacute;dito</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="fld-grid">
                         <div class="fld full">
                             <label>Resultado / Acuerdo logrado *</label>
@@ -1317,6 +1656,41 @@ if(navigator.geolocation){
         function(){}, {timeout:5000}
     );
 }
+
+/* ══ DOC CHECKLIST ══ */
+function toggleDoc(el){
+    el.classList.toggle('checked');
+    var h = el.querySelector('.doc-hidden');
+    if(h) h.value = el.classList.contains('checked') ? '1':'0';
+}
+/* ══ INSTITUTION PICKER ══ */
+function selInst(el, hidId){
+    el.closest('.inst-picker').querySelectorAll('.inst-chip').forEach(function(x){ x.classList.remove('sel'); });
+    el.classList.add('sel');
+    var h = document.getElementById(hidId); if(h) h.value = el.dataset.val;
+}
+/* ══ CÓNYUGE VISIBILITY ══ */
+function toggleConyuge(prefix){
+    var val = (document.getElementById(prefix+'_sol_ec')||{}).value||'';
+    var w = document.getElementById(prefix+'-conyuge-wrap');
+    if(w) w.style.display = (val==='casado'||val==='union_libre') ? 'block':'none';
+}
+function toggleConyugeGar(){
+    var val = (document.getElementById('fk_gar_ec')||{}).value||'';
+    var w = document.getElementById('fk-conyuge-gar-wrap');
+    if(w) w.style.display = (val==='casado'||val==='union_libre') ? 'block':'none';
+}
+/* ══ RADIO CHANGE → show/hide panels ══ */
+document.addEventListener('change', function(e){
+    var inp = e.target; if(!inp||inp.type!=='radio') return;
+    var n=inp.name, v=inp.value;
+    var pairs = {
+        'fk_requiere_credito':'fk-detalle-wrap',
+        'fa_otra_inst':'fa-otra-inst-wrap',
+    };
+    if(pairs[n]){ var w=document.getElementById(pairs[n]); if(w) w.style.display=v==='1'?'block':'none'; }
+});
+
 </script>
 </body>
 </html>
