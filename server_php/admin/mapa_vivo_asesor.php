@@ -29,17 +29,29 @@ $currentPage = 'mapa_vivo';
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <style>
         :root {
-            --amarillo: #FBBF24;
-            --amarillo-hover: #F59E0B;
-            --azul-marino: #1e3a5f;
-            --azul-claro: #2c5aa0;
-            --gris: #6b7280;
-            --gris-claro: #e5e7eb;
-            --gris-muy-claro: #f3f4f6;
+            --brand-yellow:#ffdd00; --brand-yellow-deep:#f4c400;
+            --brand-navy:#123a6d;   --brand-navy-deep:#0a2748;
+            --brand-gray:#6b7280;   --brand-border:#d7e0ea;
+            --brand-bg:#f4f6f9;
+            /* aliases para compatibilidad */
+            --amarillo: #ffdd00; --amarillo-hover: #f4c400;
+            --azul-marino: #0a2748; --azul-claro: #123a6d;
+            --gris: #6b7280; --gris-claro: #e5e7eb; --gris-muy-claro: #f4f6f9;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--gris-muy-claro); display: flex; height: 100vh; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--brand-bg); display: flex; height: 100vh; }
+
+        /* ── Sidebar unificado ── */
+        .sidebar{width:230px;background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%);color:#fff;padding:20px 0;overflow-y:auto;position:fixed;height:100vh;left:0;top:0;z-index:100;}
+        .sidebar-brand{padding:0 20px 24px;font-size:18px;font-weight:800;border-bottom:1px solid rgba(255,221,0,.18);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+        .sidebar-brand i{color:var(--brand-yellow);}
+        .sidebar-section{padding:0 15px;margin-bottom:22px;}
+        .sidebar-section-title{font-size:11px;text-transform:uppercase;color:rgba(255,255,255,.5);letter-spacing:.6px;padding:0 10px;margin-bottom:10px;font-weight:700;}
+        .sidebar-link{display:flex;align-items:center;gap:12px;padding:11px 15px;margin-bottom:4px;border-radius:10px;color:rgba(255,255,255,.82);text-decoration:none;font-size:14px;border:1px solid transparent;transition:all .22s;position:relative;}
+        .sidebar-link:hover{background:rgba(255,221,0,.12);color:#fff;padding-left:20px;border-color:rgba(255,221,0,.15);}
+        .sidebar-link.active{background:linear-gradient(90deg,var(--brand-yellow),var(--brand-yellow-deep));color:var(--brand-navy-deep);font-weight:700;}
+        .badge-nav{background:#dc2626;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:auto;}
         
         .sidebar {
             width: 230px;
@@ -193,36 +205,7 @@ $currentPage = 'mapa_vivo';
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-map-location-dot"></i>
-        <span>Mi Mapa</span>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Navegación</div>
-        <a href="asesor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_asesor.php" class="sidebar-link active">
-            <i class="fas fa-map"></i> Mi Ubicación
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <a href="clientes.php" class="sidebar-link">
-            <i class="fas fa-briefcase"></i> Mis Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link">
-            <i class="fas fa-handshake"></i> Mis Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
-    </div>
-</div>
+<?php require __DIR__ . '/_sidebar_asesor.php'; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">

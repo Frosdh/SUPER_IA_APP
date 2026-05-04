@@ -616,7 +616,9 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
 </head>
 <body>
 
-<?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php'; else: ?>
+<?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php';
+elseif ($user_role === 'asesor'): $tareas_pendientes = $tareas_pendientes ?? 0; $alertas_pendientes = $alertas_pendientes ?? 0; require __DIR__ . '/_sidebar_asesor.php';
+else: ?>
 <!-- SIDEBAR -->
 <div class="sidebar">
     <div class="sidebar-brand">

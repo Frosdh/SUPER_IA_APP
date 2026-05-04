@@ -12,6 +12,10 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
     header('Location: mapa_familiar.php');
     exit;
 }
+if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
+    header('Location: asesor_index.php');
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -55,8 +59,26 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
         }
         .role-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 1.5rem;
+        }
+        @media (max-width: 1100px) {
+            .role-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 600px) {
+            .role-grid { grid-template-columns: 1fr; }
+        }
+        .role-card.asesor .icon-box {
+            background: linear-gradient(135deg, #0ea5e9, #06b6d4);
+            box-shadow: 0 10px 20px rgba(14, 165, 233, 0.3);
+        }
+        .role-card.asesor:hover {
+            border-color: #0ea5e9;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(14, 165, 233, 0.25);
+        }
+        .role-card.asesor:hover .btn-enter {
+            background: #0ea5e9;
+            color: white;
         }
         .role-card {
             background: rgba(30, 41, 59, 0.7);
@@ -152,6 +174,16 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
                 </div>
                 <h2>Supervisor</h2>
                 <p>Supervisión de operaciones, asesores y seguimiento de créditos.</p>
+                <div class="btn-enter">Ingresar</div>
+            </a>
+
+            <!-- ASESOR ROLE -->
+            <a href="login.php?role=asesor" class="role-card asesor">
+                <div class="icon-box">
+                    <i class="fas fa-briefcase"></i>
+                </div>
+                <h2>Asesor</h2>
+                <p>Gestión de clientes, tareas diarias, prospectos y seguimiento de créditos en campo.</p>
                 <div class="btn-enter">Ingresar</div>
             </a>
 
