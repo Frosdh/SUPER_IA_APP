@@ -222,7 +222,7 @@ try {
 $currentPage        = 'clientes';
 $alertas_pendientes = $alertas_pendientes ?? 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
-$is_supervisor_ui   = ($user_role === 'supervisor');
+$is_supervisor_ui   = ($user_role === 'supervisor' || $user_role === 'asesor');
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -441,38 +441,38 @@ else: ?>
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <?php if ($user_role === 'supervisor'): ?>
+        <?php if ($user_role === 'asesor'): ?>
+            <h2><i class="fas fa-address-book" style="color:var(--brand-yellow);"></i> Mis Clientes</h2>
+        <?php elseif ($user_role === 'supervisor'): ?>
             <h2><i class="fas fa-shield-halved me-2" style="color: var(--brand-yellow);"></i>Super_IA - Supervisor</h2>
         <?php else: ?>
-            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA 
-                <?php 
+            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA
+                <?php
                 if ($user_role === 'super_admin') echo '- SuperAdministrador';
                 elseif ($user_role === 'admin') echo '- Admin';
-                elseif ($user_role === 'supervisor') echo '- Supervisor';
-                else echo '- Asesor';
                 ?>
             </h2>
         <?php endif; ?>
         <div class="user-info">
-            <div>
+            <div style="text-align:right;">
                 <strong>
-                    <?php 
+                    <?php
                     if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_nombre']);
                     elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_nombre']);
                     elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_nombre']);
                     else echo htmlspecialchars($_SESSION['asesor_nombre']);
                     ?>
                 </strong><br>
-                <small>
-                    <?php 
-                    if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_rol']);
+                <small style="opacity:.75;">
+                    <?php
+                    if ($user_role === 'asesor') echo 'Asesor de campo';
+                    elseif ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_rol']);
                     elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_rol']);
                     elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_rol']);
-                    else echo htmlspecialchars($_SESSION['asesor_rol']);
                     ?>
                 </small>
             </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Salir</a>
         </div>
     </div>
     

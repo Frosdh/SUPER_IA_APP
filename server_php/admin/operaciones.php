@@ -498,7 +498,7 @@ $stats = [
 $currentPage        = 'operaciones';
 $alertas_pendientes = $alertas_pendientes ?? 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
-$is_supervisor_ui   = ($user_role === 'supervisor');
+$is_supervisor_ui   = ($user_role === 'supervisor' || $user_role === 'asesor');
 $page_title         = $tipo_info['titulo'];
 $table_title        = 'Solicitudes de ' . $tipo_info['label'];
 ?>
@@ -725,47 +725,37 @@ else: ?>
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2>
-            <?php if ($user_role === 'super_admin'): ?>
-                👑 Super_IA - SuperAdministrador
-            <?php elseif ($user_role === 'admin'): ?>
-                🎯 Super_IA - Admin
-            <?php elseif ($user_role === 'supervisor'): ?>
-                👔 Super_IA - Supervisor
-            <?php else: ?>
-                👤 Super_IA - Asesor
-            <?php endif; ?>
-        </h2>
+        <?php if ($user_role === 'asesor'): ?>
+            <h2><i class="fas fa-handshake" style="color:var(--brand-yellow);"></i> Mis Operaciones</h2>
+        <?php elseif ($user_role === 'supervisor'): ?>
+            <h2><i class="fas fa-shield-halved me-2" style="color:var(--brand-yellow);"></i>Super_IA - Supervisor</h2>
+        <?php else: ?>
+            <h2>
+                <?php if ($user_role === 'super_admin'): ?>👑 Super_IA - SuperAdministrador
+                <?php elseif ($user_role === 'admin'): ?>🎯 Super_IA - Admin
+                <?php endif; ?>
+            </h2>
+        <?php endif; ?>
         <div class="user-info">
-            <div>
+            <div style="text-align:right;">
                 <strong>
-                    <?php 
-                    if ($user_role === 'super_admin') {
-                        echo htmlspecialchars($_SESSION['super_admin_nombre']);
-                    } elseif ($user_role === 'admin') {
-                        echo htmlspecialchars($_SESSION['admin_nombre']);
-                    } elseif ($user_role === 'supervisor') {
-                        echo htmlspecialchars($_SESSION['supervisor_nombre']);
-                    } else {
-                        echo htmlspecialchars($_SESSION['asesor_nombre']);
-                    }
+                    <?php
+                    if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_nombre']);
+                    elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_nombre']);
+                    elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_nombre']);
+                    else echo htmlspecialchars($_SESSION['asesor_nombre']);
                     ?>
                 </strong><br>
-                <small>
-                    <?php 
-                    if ($user_role === 'super_admin') {
-                        echo htmlspecialchars($_SESSION['super_admin_rol']);
-                    } elseif ($user_role === 'admin') {
-                        echo htmlspecialchars($_SESSION['admin_rol']);
-                    } elseif ($user_role === 'supervisor') {
-                        echo htmlspecialchars($_SESSION['supervisor_rol']);
-                    } else {
-                        echo htmlspecialchars($_SESSION['asesor_rol']);
-                    }
+                <small style="opacity:.75;">
+                    <?php
+                    if ($user_role === 'asesor') echo 'Asesor de campo';
+                    elseif ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_rol']);
+                    elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_rol']);
+                    elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_rol']);
                     ?>
                 </small>
             </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt"></i> Salir</a>
         </div>
     </div>
     

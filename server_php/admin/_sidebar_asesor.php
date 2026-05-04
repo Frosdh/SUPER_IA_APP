@@ -51,6 +51,10 @@ $alertas_pendientes = $alertas_pendientes ?? 0;
            class="sidebar-link <?= ($currentPage === 'operaciones') ? 'active' : '' ?>">
             <i class="fas fa-handshake"></i> Mis Operaciones
         </a>
+        <a href="levantamiento_empresa.php"
+           class="sidebar-link <?= ($currentPage === 'empresa') ? 'active' : '' ?>">
+            <i class="fas fa-building"></i> Levant. Empresa
+        </a>
     </div>
 
     <!-- METAS -->
