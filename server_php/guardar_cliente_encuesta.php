@@ -9,7 +9,7 @@ header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$API_BUILD = '2026-04-27g';
+$API_BUILD = '2026-04-29b';
 $GLOBALS['phase'] = 'BOOT';
 
 // ── Helpers JSON y UUID ──────────────────────────────────────
@@ -100,10 +100,12 @@ try {
 } catch (\Throwable $e) { /* silencioso si ya existe o no hay permisos DDL */ }
 
 // ── Leer parámetros ──────────────────────────────────────────
-$usuario_id      = trim($_POST['usuario_id']   ?? '');
-$asesor_id_in    = trim($_POST['asesor_id']    ?? '');
-$tipo_tarea      = trim($_POST['tipo_tarea']   ?? 'prospecto_nuevo');
-$fue_encuestado  = (int)($_POST['fue_encuestado'] ?? 1);
+$usuario_id       = trim($_POST['usuario_id']   ?? '');
+$asesor_id_in     = trim($_POST['asesor_id']    ?? '');
+$tipo_tarea       = trim($_POST['tipo_tarea']   ?? 'prospecto_nuevo');
+$fue_encuestado   = (int)($_POST['fue_encuestado'] ?? 1);
+// ID del cliente existente enviado por Flutter (respaldo cuando cédula está vacía)
+$cliente_id_post  = trim($_POST['cliente_id']   ?? '');
 
 // Cliente
 $nombre          = trim($_POST['nombre']    ?? '');
@@ -465,9 +467,22 @@ try {
     $GLOBALS['phase'] = 'CLIENTE';
     $cliente_id = null;
 
+    // ── Buscar cliente existente por cédula (método principal) ──
     if ($cedula !== null) {
         $st = $conn->prepare('SELECT id FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
         $st->bind_param('s', $cedula);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        if ($row) $cliente_id = $row['id'];
+        $st->close();
+    }
+
+    // ── Respaldo: si cédula no encontró nada, usar el cliente_id enviado por Flutter ──
+    // Esto es crítico en levantamiento: el prospecto puede no tener cédula registrada
+    // pero Flutter siempre envía el ID del registro seleccionado en LevantarEmpresaScreen.
+    if ($cliente_id === null && $cliente_id_post !== '') {
+        $st = $conn->prepare('SELECT id FROM cliente_prospecto WHERE id = ? LIMIT 1');
+        $st->bind_param('s', $cliente_id_post);
         $st->execute();
         $row = $st->get_result()->fetch_assoc();
         if ($row) $cliente_id = $row['id'];
@@ -605,10 +620,10 @@ try {
             $stN->execute();
             $stN->close();
         } catch (\Throwable $eN) {
-            // Capturar el error para incluirlo en la respuesta (no bloquea el flujo)
-            $negocio_id  = null;
+            // Loguear y re-lanzar para que el outer catch haga rollback y devuelva error
             $negocio_err = substr($eN->getMessage(), 0, 300);
-            error_log('[guardar_encuesta][NEGOCIO] ERROR: ' . $eN->getMessage() . ' | phase=' . ($GLOBALS['phase'] ?? '?'));
+            error_log('[guardar_encuesta][NEGOCIO] ERROR: ' . $eN->getMessage() . ' | tiene_empresa_post=' . $tiene_empresa_post);
+            throw $eN;
         }
     }
 
@@ -931,9 +946,11 @@ try {
         'tarea_id'   => $tarea_id,
         'cliente_id' => $cliente_id,
         'encuesta_negocio_id' => $negocio_id,
-        // Debug: ayuda a diagnosticar si tiene_empresa llega correctamente desde Flutter
-        'dbg_tiene_empresa' => $tiene_empresa_post,
-        'dbg_negocio_err'   => $negocio_err ?? null,
+        // Debug: diagnóstico visible en logs de Flutter (>>> [ENC] body)
+        'dbg_tiene_empresa'  => $tiene_empresa_post,
+        'dbg_negocio_err'    => $negocio_err ?? null,
+        'dbg_cliente_id_post'=> $cliente_id_post,
+        'dbg_cedula'         => $cedula,
         // Tarea 1: seguimiento del acuerdo logrado al final de la encuesta
         'tarea_followup_id'    => $tarea_followup_id,
         'tarea_followup_tipo'  => $tarea_followup_tipo,

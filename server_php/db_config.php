@@ -25,7 +25,7 @@ if (!function_exists('http_response_code')) {
 $db_host     = "localhost";
 $db_name     = "corporat_base_super_ia";
 $db_user     = "corporat_coac_user";
-$db_password = 'zCD;^[1YN[AE8P6f';
+$db_password = '*6LuhePgy=9?Zy-&';
 
 $conn = null;
 
