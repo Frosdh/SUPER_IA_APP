@@ -1561,7 +1561,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     try {
       final endpoint = widget.modoEdicion
           ? 'actualizar_encuesta_completa.php'
-          : 'guardar_cliente_encuesta.php';
+          : (widget.tipoTarea == 'levantamiento'
+              ? 'admin/guardar_empresa.php'
+              : 'guardar_cliente_encuesta.php');
       final url = Uri.parse('${Constants.apiBaseUrl}/$endpoint');
       debugPrint(
         '>>> [ENC] POST $url usuario_id=$usuarioId asesor_id=${asesorId.isNotEmpty ? asesorId : '-'} fue_encuestado=${fueEncuestado ? 1 : 0} edicion=${widget.modoEdicion}',
@@ -1742,7 +1744,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ),
               const SizedBox(height: 18),
               const Text(
-                'Levantamiento Guardado',
+                'Levantamiento Completado',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,
@@ -1751,7 +1753,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ),
               const SizedBox(height: 10),
               Text(
-                'Los datos de la empresa fueron registrados correctamente.',
+                '✓ Levantamiento de empresa finalizado y guardado en la base de datos.',
                 style: TextStyle(color: ConstantColors.textGrey, fontSize: 14),
                 textAlign: TextAlign.center,
               ),

@@ -185,8 +185,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
         <div class="search-card">
             <h3><i class="fas fa-magnifying-glass"></i>Buscar empresa / prospecto</h3>
             <p class="sub">Escribe el nombre o la razón social de la empresa para cargar el prospecto correspondiente.</p>
-            <div class="search-row">
-                <input type="text" id="inp-nombre" placeholder="Nombre de la empresa o del prospecto…">
+            <div class="search-row" style="position:relative;">
+                <input type="text" id="inp-nombre" placeholder="Nombre de la empresa o del prospecto…" autocomplete="off">
+                <!-- Dropdown dinámico -->
+                <div id="empresa-dropdown" style="position:absolute;top:100%;left:0;right:70px;background:#fff;border:1px solid var(--brand-border);border-top:none;border-radius:0 0 8px 0;max-height:250px;overflow-y:auto;z-index:1000;display:none;box-shadow:0 4px 12px rgba(0,0,0,.1);">
+                    <div id="empresa-list"></div>
+                </div>
                 <button class="btn-search" id="btn-buscar" type="button">
                     <i class="fas fa-search"></i> Buscar
                 </button>
@@ -529,18 +533,86 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 
 <script>
 /* ══════════════════════════════════════════════════════
-   BÚSQUEDA POR NOMBRE
+   BÚSQUEDA POR NOMBRE CON DROPDOWN DINÁMICO
 ══════════════════════════════════════════════════════ */
-const btnBuscar  = document.getElementById('btn-buscar');
-const inpNombre  = document.getElementById('inp-nombre');
-const searchRes  = document.getElementById('search-result');
-const stepper    = document.getElementById('stepper');
-const formEmp    = document.getElementById('formEmpresa');
+const btnBuscar     = document.getElementById('btn-buscar');
+const inpNombre     = document.getElementById('inp-nombre');
+const searchRes     = document.getElementById('search-result');
+const stepper       = document.getElementById('stepper');
+const formEmp       = document.getElementById('formEmpresa');
+const dropdown      = document.getElementById('empresa-dropdown');
+const dropdownList  = document.getElementById('empresa-list');
 
-btnBuscar.addEventListener('click', buscarEmpresa);
-inpNombre.addEventListener('keydown', e => { if (e.key === 'Enter') buscarEmpresa(); });
+let searchTimeout;
 
-async function buscarEmpresa() {
+btnBuscar.addEventListener('click', buscarPorBoton);
+inpNombre.addEventListener('input', debounceSearch);
+inpNombre.addEventListener('focus', () => {
+    const val = inpNombre.value.trim();
+    if (val.length >= 2 && dropdownList.innerHTML) {
+        dropdown.style.display = 'block';
+    }
+});
+inpNombre.addEventListener('blur', () => {
+    setTimeout(() => {
+        dropdown.style.display = 'none';
+    }, 200);
+});
+
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    const q = inpNombre.value.trim();
+    if (q.length >= 2) {
+        searchTimeout = setTimeout(() => buscarEmpresaDinamico(q), 600);
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+async function buscarEmpresaDinamico(q) {
+    try {
+        const fd = new FormData();
+        fd.append('nombre', q);
+        fd.append('limit', 10);
+        const res = await fetch('../buscar_prospecto_por_nombre.php', { method:'POST', body:fd });
+        const data = await res.json();
+
+        if (data.resultados && data.resultados.length > 0) {
+            // Construir dropdown
+            dropdownList.innerHTML = '';
+            data.resultados.forEach(p => {
+                const item = document.createElement('div');
+                item.style.padding = '12px 14px';
+                item.style.borderBottom = '1px solid var(--brand-border)';
+                item.style.cursor = 'pointer';
+                item.style.transition = '.2s';
+                item.innerHTML = `
+                    <div style="font-weight:700;color:var(--brand-navy-deep);font-size:14px;">${escHtml(p.nombre_empresa || p.nombre || 'Sin nombre')}</div>
+                    <div style="font-size:12px;color:var(--brand-gray);margin-top:2px;">${escHtml(p.nombre || '')} • ${escHtml(p.cedula || '')} • ${escHtml(p.ciudad || '')}</div>
+                `;
+                item.addEventListener('mouseenter', () => {
+                    item.style.background = 'var(--brand-bg)';
+                });
+                item.addEventListener('mouseleave', () => {
+                    item.style.background = 'transparent';
+                });
+                item.addEventListener('click', () => {
+                    seleccionarProspecto(p);
+                });
+                dropdownList.appendChild(item);
+            });
+            dropdown.style.display = 'block';
+        } else {
+            dropdownList.innerHTML = '<div style="padding:12px 14px;color:var(--brand-gray);font-size:13px;"><i class="fas fa-inbox"></i> No hay resultados</div>';
+            dropdown.style.display = 'block';
+        }
+    } catch(err) {
+        console.error('Error en búsqueda:', err);
+        dropdown.style.display = 'none';
+    }
+}
+
+async function buscarPorBoton() {
     const q = inpNombre.value.trim();
     if (!q || q.length < 2) { alert('Ingresa al menos 2 caracteres para buscar.'); return; }
     btnBuscar.disabled = true;
@@ -576,6 +648,7 @@ async function buscarEmpresa() {
             html += '</ul>';
             searchRes.innerHTML = html;
             searchRes.style.display = 'block';
+            dropdown.style.display = 'none';
         }
     } catch (err) {
         searchRes.innerHTML = '<div class="alert alert-danger mt-2" style="font-size:13px;">Error al buscar. Inténtalo de nuevo.</div>';
