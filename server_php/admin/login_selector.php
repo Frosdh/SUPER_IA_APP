@@ -12,6 +12,10 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
     header('Location: mapa_familiar.php');
     exit;
 }
+if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === true) {
+    header('Location: asesor_index.php');
+    exit;
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -152,6 +156,16 @@ if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'
                 </div>
                 <h2>Supervisor</h2>
                 <p>Supervisión de operaciones, asesores y seguimiento de créditos.</p>
+                <div class="btn-enter">Ingresar</div>
+            </a>
+
+            <!-- ASESOR ROLE -->
+            <a href="login.php?role=asesor" class="role-card">
+                <div class="icon-box">
+                    <i class="fas fa-user-tie"></i>
+                </div>
+                <h2>Asesor</h2>
+                <p>Panel del asesor: tareas del día, encuestas y seguimiento de clientes.</p>
                 <div class="btn-enter">Ingresar</div>
             </a>
 
