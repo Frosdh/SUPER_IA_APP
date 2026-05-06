@@ -119,9 +119,21 @@ $ciudad          = strOrNull($_POST['ciudad']         ?? '');
 $actividad       = strOrNull($_POST['actividad']      ?? '');
 $tiene_ruc       = (int)($_POST['tiene_ruc']          ?? 0);
 $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
+$ruc_val         = strOrNull($_POST['ruc_val']        ?? '');
+$rise_val        = strOrNull($_POST['rise_val']       ?? '');
+$tipo_empresa    = strOrNull($_POST['tipo_empresa']    ?? '');
 $nombre_empresa  = strOrNull($_POST['nombre_empresa'] ?? '');
 
-// Origen del prospecto (solo aplica a prospecto nuevo; se almacena en cliente_prospecto)
+$regimen_tributario = strOrNull($_POST['regimen_tributario'] ?? '');
+$numero_ruc         = strOrNull($_POST['numero_ruc']         ?? '');
+$declara_iva        = intOrNull($_POST['declara_iva']        ?? null);
+$emite_facturas     = intOrNull($_POST['emite_facturas']     ?? null);
+$lleva_contabilidad = intOrNull($_POST['lleva_contabilidad'] ?? null);
+$paga_cuota_rise    = intOrNull($_POST['paga_cuota_rise']    ?? null);
+$emite_notas_venta  = intOrNull($_POST['emite_notas_venta']  ?? null);
+$conoce_limite_rise = intOrNull($_POST['conoce_limite_rise'] ?? null);
+
+// Origen del prospecto
 $origen_prospecto = strOrNull($_POST['origen_prospecto'] ?? '');
 if ($origen_prospecto !== null) {
     $origen_prospecto = strtolower($origen_prospecto);
@@ -171,10 +183,12 @@ $busca_tc           = (int)($_POST['que_busca_tarjeta_credito'] ?? 0);
 $fecha_venc_cdp     = strOrNull($_POST['fecha_vencimiento_cdp'] ?? '');
 $interes_trabajar   = intOrNull($_POST['interes_trabajar_institucion'] ?? null);
 $_acuerdo_raw       = strOrNull($_POST['acuerdo_logrado'] ?? '');
-$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro']) ? $_acuerdo_raw : null;
+$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas']) ? $_acuerdo_raw : null;
 $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
+$banco_ahorro       = strOrNull($_POST['banco_ahorro']    ?? '');
+$banco_corriente    = strOrNull($_POST['banco_corriente'] ?? '');
 
 // Propuesta previa al vencimiento / propuesta inversion
 $propuesta_inversion = strOrNull($_POST['propuesta_inversion'] ?? '');
@@ -254,7 +268,7 @@ $acuerdo_map = [
     'nueva_cita_oficina'          => 'nueva_cita_oficina',
     'reprogramacion'              => 'reprogramacion',
     'seguimiento'                 => 'seguimiento',
-    'otro'                        => 'otro',
+    'tasas_competitivas'          => 'tasas_competitivas',
     // variantes antiguas / alias
     'recolectar_documentacion'    => 'seguimiento',
     'recoleccion_documentacion'   => 'seguimiento',
@@ -265,7 +279,7 @@ $acuerdo_map = [
     // "Ninguno" → null (no registrar acuerdo)
     'ninguno'                     => null,
 ];
-$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro', 'tasas_competitivas'];
 
 $incoming_tok = null;
 // $acuerdo ya fue asignado arriba; aquí lo sobreescribimos con el mapeo normalizado
@@ -286,7 +300,7 @@ if ($incoming_acuerdo !== null) {
 
 // Validar tipo_tarea contra ENUM real de tarea.tipo_tarea
 $tipos_ok = ['prospecto_nuevo','visita_frio','evaluacion','recuperacion',
-             'documentos_pendientes','post_venta','nueva_cita_campo','nueva_cita_oficina','levantamiento'];
+             'documentos_pendientes','post_venta','nueva_cita_campo','nueva_cita_oficina','levantamiento', 'tasas_competitivas'];
 if (!in_array($tipo_tarea, $tipos_ok)) $tipo_tarea = 'prospecto_nuevo';
 
 // ── Validaciones básicas ─────────────────────────────────────
@@ -309,7 +323,17 @@ $tarea_followup_hora  = null;
 $negocio_id   = null;   // se asignará a UUID en el bloque de empresa
 $negocio_err  = null;   // captura errores del INSERT de encuesta_negocio
 
-try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN origen_prospecto VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN ruc_val VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN rise_val VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN tipo_empresa VARCHAR(50) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN regimen_tributario VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN numero_ruc VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN declara_iva TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN emite_facturas TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN lleva_contabilidad TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN paga_cuota_rise TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN emite_notas_venta TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN conoce_limite_rise TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
 
 // Pre-crear la tabla encuesta_negocio (si no existe) y migrar columnas faltantes.
 // Aquí, FUERA de la transacción, para que el CREATE TABLE/ALTER TABLE no hagan
@@ -409,6 +433,27 @@ if ($tiene_empresa_post === 1) {
     }
 }
 
+// Pre-crear columnas faltantes en encuesta_comercial para asegurar persistencia de checkboxes
+$cols_faltantes_comercial = [
+    "que_busca_agilidad" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_agilidad TINYINT(1) DEFAULT 0",
+    "que_busca_cajeros" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_cajeros TINYINT(1) DEFAULT 0",
+    "que_busca_banca_linea" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_banca_linea TINYINT(1) DEFAULT 0",
+    "que_busca_agencias" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_agencias TINYINT(1) DEFAULT 0",
+    "que_busca_credito_rapido" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_credito_rapido TINYINT(1) DEFAULT 0",
+    "que_busca_tarjeta_debito" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_tarjeta_debito TINYINT(1) DEFAULT 0",
+    "que_busca_tarjeta_credito" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_tarjeta_credito TINYINT(1) DEFAULT 0",
+    "interes_trabajar_institucion" => "ALTER TABLE encuesta_comercial ADD COLUMN interes_trabajar_institucion TINYINT(1) DEFAULT NULL",
+    "fecha_vencimiento_cdp" => "ALTER TABLE encuesta_comercial ADD COLUMN fecha_vencimiento_cdp DATE DEFAULT NULL",
+    "banco_ahorro" => "ALTER TABLE encuesta_comercial ADD COLUMN banco_ahorro VARCHAR(100) DEFAULT NULL",
+    "banco_corriente" => "ALTER TABLE encuesta_comercial ADD COLUMN banco_corriente VARCHAR(100) DEFAULT NULL",
+];
+foreach ($cols_faltantes_comercial as $col => $sql) {
+    $chk = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE '$col'");
+    if ($chk && $chk->num_rows === 0) {
+        try { $conn->query($sql); } catch (\Throwable $_) {}
+    }
+}
+
 // Pre-crear tabla alerta_modificacion para evitar DDL dentro de la transacción
 try {
     $conn->query("CREATE TABLE IF NOT EXISTS alerta_modificacion (
@@ -485,14 +530,19 @@ try {
         $st = $conn->prepare(
             "INSERT INTO cliente_prospecto
              (id, nombre, cedula, telefono, telefono2, email, direccion, ciudad,
-              actividad, nombre_empresa, tiene_ruc, tiene_rise, asesor_id,
-              latitud, longitud, origen_prospecto, estado)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
+              actividad, nombre_empresa, tiene_ruc, tiene_rise, ruc_val, rise_val, tipo_empresa,
+              regimen_tributario, numero_ruc, declara_iva, emite_facturas, lleva_contabilidad,
+              paga_cuota_rise, emite_notas_venta, conoce_limite_rise,
+              asesor_id, latitud, longitud, origen_prospecto, estado)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
         );
-        $st->bind_param('ssssssssssiisdds',
+        $st->bind_param('ssssssssssiisssssiiiiiiissdds',
             $cliente_id, $nombre_completo, $cedula, $telefono, $celular,
             $email_c, $direccion, $ciudad, $actividad, $nombre_empresa,
-            $tiene_ruc, $tiene_rise, $asesor_id, $lat_ini, $lng_ini, $origen_prospecto
+            $tiene_ruc, $tiene_rise, $ruc_val, $rise_val, $tipo_empresa,
+            $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
+            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,
+            $asesor_id, $lat_ini, $lng_ini, $origen_prospecto
         );
         $st->execute();
         $st->close();
@@ -501,13 +551,20 @@ try {
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
              SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=COALESCE(?, ciudad),
-                 actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, asesor_id=?,
-                 origen_prospecto=COALESCE(?, origen_prospecto)
+                 actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
+                 ruc_val=?, rise_val=?, tipo_empresa=?,
+                 regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
+                 paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?,
+                 asesor_id=?, origen_prospecto=COALESCE(?, origen_prospecto)
              WHERE id=?"
         );
-        $st->bind_param('ssssssssiisss',
+        $st->bind_param('ssssssssiissssssiiiiiiisss',
             $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
-            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $asesor_id, $origen_prospecto, $cliente_id
+            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise,
+            $ruc_val, $rise_val, $tipo_empresa,
+            $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
+            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,
+            $asesor_id, $origen_prospecto, $cliente_id
         );
         $st->execute();
         $st->close();
@@ -589,7 +646,7 @@ try {
 
             // types: 45 params — ss(2) ddd(3) ss(2) ddd(3) s(1) iiiiii(6) ddddd(5) ddddddd(7) dddd(4) ddddddd(7) sssss(5)
             $stN->bind_param(
-                'ssdddssdddsiiiiiiddddddddddddddddddddddsssss',
+                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -734,6 +791,18 @@ try {
         // 20:razon_ya(i) 21:razon_des(i) 22:razon_ag(i) 23:razon_mal(i)
         // 24:razon_otros(s)
         // 25:acuerdo(s) 26:fecha_ac(s) 27:hora_ac(s) 28:obs_final(s)
+        // Asegurar que el ENUM incluya 'tasas_competitivas'
+        try {
+            $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
+            if ($col && strpos($col['Type'], "'tasas_competitivas'") === false) {
+                $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NULL");
+            }
+            $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
+            if ($col2 && strpos($col2['Type'], "'tasas_competitivas'") === false) {
+                $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NOT NULL");
+            }
+        } catch (\Throwable $_) {}
+
         $st = $conn->prepare(
             "INSERT INTO encuesta_comercial
              (id, tarea_id,
@@ -746,16 +815,15 @@ try {
               interes_cc, interes_ahorro, interes_inversion, interes_credito,
               razon_ya_trabaja_institucion, razon_desconfia_servicios,
               razon_agusto_actual, razon_mala_experiencia, razon_otros,
-              acuerdo_logrado, fecha_acuerdo, hora_acuerdo, observaciones)
-             VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?)"
+              acuerdo_logrado, fecha_acuerdo, hora_acuerdo, observaciones,
+              que_busca_agilidad, que_busca_cajeros, que_busca_banca_linea,
+              que_busca_agencias, que_busca_credito_rapido, que_busca_tarjeta_debito,
+              que_busca_tarjeta_credito, interes_trabajar_institucion, fecha_vencimiento_cdp,
+              banco_ahorro, banco_corriente)
+             VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)"
         );
-        // Formato 28 params (CORRECTO):
-        // ss=enc_id,tarea_id  iii=mant_ahorro,mant_corriente,tiene_inv
-        // s=inst_inv  d=valor_inv  ss=plazo_inv,fecha_venc_inv
-        // i=int_pro  s=f_nuevo  i=tiene_ops_cred  s=inst_cred
-        // i=interes_conocer  s=nivel_interes  iiiiiiii=int_cc,ahorro,inv,cred,razon×4
-        // sssss=razon_otros,acuerdo,fecha_ac,hora_ac,obs_final
-        $st->bind_param('ssiiisdssisisisiiiiiiiisssss',
+        // Formato 39 params:
+        $st->bind_param('ssiiisdssisisisiiiiiiiisssssiiiiiiiiiss',
             $enc_id, $tarea_id,
             $mantiene_ahorro, $mantiene_corriente,
             $tiene_inversiones, $inst_inv, $valor_inv,
@@ -766,7 +834,11 @@ try {
             $interes_cc, $interes_ahorro, $interes_inv, $interes_cred,
             $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp,
             $razon_otros,
-            $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final
+            $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
+            $busca_agilidad, $busca_cajeros, $busca_banca,
+            $busca_agencias, $busca_credito, $busca_td,
+            $busca_tc, $interes_trabajar, $fecha_venc_cdp,
+            $banco_ahorro, $banco_corriente
         );
         $st->execute();
         $st->close();
@@ -798,6 +870,7 @@ try {
                 'nueva_cita_oficina' => 'nueva_cita_oficina',  // visita en oficina
                 'reprogramacion'     => 'evaluacion',           // reagendar = evaluación
                 'seguimiento'        => 'documentos_pendientes',// seguimiento = recolectar docs
+                'tasas_competitivas' => 'evaluacion',
                 'otro'               => 'evaluacion',
             ];
             $tipo_followup = $acuerdo !== null ? ($tipo_followup_map[$acuerdo] ?? 'evaluacion') : null;
@@ -816,6 +889,7 @@ try {
                     'nueva_cita_oficina' => 'Nueva cita en oficina',
                     'reprogramacion'     => 'Reprogramación',
                     'seguimiento'        => 'Recolectar documentación',
+                    'tasas_competitivas' => 'Tasas competitivas',
                     'otro'               => 'Seguimiento',
                 ];
                 $obs_follow = trim(($acuerdo_labels[$acuerdo] ?? ucfirst(str_replace('_', ' ', $acuerdo))));

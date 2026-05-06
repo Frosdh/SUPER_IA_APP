@@ -113,7 +113,18 @@ $ciudad          = strOrNull($_POST['ciudad']         ?? '');
 $actividad       = strOrNull($_POST['actividad']      ?? '');
 $tiene_ruc       = (int)($_POST['tiene_ruc']          ?? 0);
 $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
-$nombre_empresa  = strOrNull($_POST['nombre_empresa'] ?? '');
+$ruc_val         = strOrNull($_POST['ruc_val']        ?? '');
+$rise_val        = strOrNull($_POST['rise_val']       ?? '');
+$tipo_empresa    = strOrNull($_POST['tipo_empresa']    ?? '');
+$regimen_tributario = strOrNull($_POST['regimen_tributario'] ?? '');
+$numero_ruc         = strOrNull($_POST['numero_ruc']         ?? '');
+$declara_iva        = intOrNull($_POST['declara_iva']        ?? null);
+$emite_facturas     = intOrNull($_POST['emite_facturas']     ?? null);
+$lleva_contabilidad = intOrNull($_POST['lleva_contabilidad'] ?? null);
+$paga_cuota_rise    = intOrNull($_POST['paga_cuota_rise']    ?? null);
+$emite_notas_venta  = intOrNull($_POST['emite_notas_venta']  ?? null);
+$conoce_limite_rise = intOrNull($_POST['conoce_limite_rise'] ?? null);
+
 $origen_prospecto = strOrNull($_POST['origen_prospecto'] ?? '');
 if ($origen_prospecto !== null) {
     $origen_prospecto = strtolower($origen_prospecto);
@@ -166,6 +177,8 @@ $acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_of
 $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
+$banco_ahorro       = strOrNull($_POST['banco_ahorro']    ?? '');
+$banco_corriente    = strOrNull($_POST['banco_corriente'] ?? '');
 
 // Empresa / Negocio
 $tiene_empresa_post = (int)($_POST['tiene_empresa'] ?? 0);
@@ -235,9 +248,10 @@ $acuerdo_map = [
     'nueva_cita_oficina' => 'nueva_cita_oficina',
     'reprogramacion' => 'reprogramacion',
     'seguimiento' => 'seguimiento',
+    'tasas_competitivas' => 'tasas_competitivas',
     'otro' => 'otro',
 ];
-$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro', 'tasas_competitivas'];
 $mapped = null;
 $incoming_tok = null;
 if ($incoming_acuerdo !== null) {
@@ -412,16 +426,33 @@ try {
     }
     $GLOBALS['phase'] = 'UPDATE_CLIENTE';
     if ($cliente_id !== '') {
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN ruc_val VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN rise_val VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN tipo_empresa VARCHAR(50) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN regimen_tributario VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN numero_ruc VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN declara_iva TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN emite_facturas TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN lleva_contabilidad TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN paga_cuota_rise TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN emite_notas_venta TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
+        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN conoce_limite_rise TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
              SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=COALESCE(?, ciudad),
                  actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
-                 origen_prospecto=COALESCE(?, origen_prospecto)
+                 origen_prospecto=COALESCE(?, origen_prospecto),
+                 ruc_val=?, rise_val=?, tipo_empresa=?,
+                 regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
+                 paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?
              WHERE id=?"
         );
-        $st->bind_param('ssssssssiiss',
+        $st->bind_param('ssssssssiississsiiiiiiis',
             $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
-            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $origen_prospecto, $cliente_id
+            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $origen_prospecto,
+            $ruc_val, $rise_val, $tipo_empresa,
+            $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
+            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise, $cliente_id
         );
         $st->execute();
         $st->close();
@@ -522,6 +553,27 @@ try {
             @$conn->query("ALTER TABLE encuesta_negocio ADD COLUMN IF NOT EXISTS $colDef");
         }
 
+        // Pre-crear columnas faltantes en encuesta_comercial para asegurar persistencia de checkboxes
+        $cols_faltantes_comercial = [
+            "que_busca_agilidad" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_agilidad TINYINT(1) DEFAULT 0",
+            "que_busca_cajeros" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_cajeros TINYINT(1) DEFAULT 0",
+            "que_busca_banca_linea" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_banca_linea TINYINT(1) DEFAULT 0",
+            "que_busca_agencias" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_agencias TINYINT(1) DEFAULT 0",
+            "que_busca_credito_rapido" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_credito_rapido TINYINT(1) DEFAULT 0",
+            "que_busca_tarjeta_debito" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_tarjeta_debito TINYINT(1) DEFAULT 0",
+            "que_busca_tarjeta_credito" => "ALTER TABLE encuesta_comercial ADD COLUMN que_busca_tarjeta_credito TINYINT(1) DEFAULT 0",
+            "interes_trabajar_institucion" => "ALTER TABLE encuesta_comercial ADD COLUMN interes_trabajar_institucion TINYINT(1) DEFAULT NULL",
+            "fecha_vencimiento_cdp" => "ALTER TABLE encuesta_comercial ADD COLUMN fecha_vencimiento_cdp DATE DEFAULT NULL",
+            "banco_ahorro" => "ALTER TABLE encuesta_comercial ADD COLUMN banco_ahorro VARCHAR(100) DEFAULT NULL",
+            "banco_corriente" => "ALTER TABLE encuesta_comercial ADD COLUMN banco_corriente VARCHAR(100) DEFAULT NULL",
+        ];
+        foreach ($cols_faltantes_comercial as $col => $sql) {
+            $chk = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE '$col'");
+            if ($chk && $chk->num_rows === 0) {
+                try { $conn->query($sql); } catch (\Throwable $_) {}
+            }
+        }
+
         // Normalizar null → 0
         $venta_lv_n   = $venta_lv      ?? 0.0;
         $venta_sab_n  = $venta_sabado  ?? 0.0;
@@ -609,7 +661,7 @@ try {
             );
             // types: ss(2) ddd(3) ss(2) ddd(3) s(1) iiiiii(6) 23d's 5s's = 45
             $stN->bind_param(
-                'ssdddssdddsiiiiiiddddddddddddddddddddddsssss',
+                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -677,13 +729,15 @@ try {
                      interes_cc=?, interes_ahorro=?, interes_inversion=?, interes_credito=?,
                      razon_ya_trabaja_institucion=?, razon_desconfia_servicios=?,
                      razon_agusto_actual=?, razon_mala_experiencia=?, razon_otros=?,
-                     acuerdo_logrado=?, fecha_acuerdo=?, hora_acuerdo=?, observaciones=?
+                     acuerdo_logrado=?, fecha_acuerdo=?, hora_acuerdo=?, observaciones=?,
+                     que_busca_agilidad=?, que_busca_cajeros=?, que_busca_banca_linea=?,
+                     que_busca_agencias=?, que_busca_credito_rapido=?, que_busca_tarjeta_debito=?,
+                     que_busca_tarjeta_credito=?, interes_trabajar_institucion=?, fecha_vencimiento_cdp=?,
+                     banco_ahorro=?, banco_corriente=?
                  WHERE tarea_id = ?"
             );
-            // 26 cols + tarea_id = 27 params
-            // ii isdss isis is iiii iiii s ssss s
             $st->bind_param(
-                'iiisdssisisisiiiiiiiisssss' . 's',
+                'iiisdssisisisiiiiiiiisssssiiiiiiiiiss',
                 $mantiene_ahorro, $mantiene_corriente,
                 $tiene_inversiones, $inst_inv, $valor_inv,
                 $plazo_inv, $fecha_venc_inv,
@@ -694,6 +748,10 @@ try {
                 $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp,
                 $razon_otros,
                 $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
+                $busca_agilidad, $busca_cajeros, $busca_banca,
+                $busca_agencias, $busca_credito, $busca_td,
+                $busca_tc, $interes_trabajar, $fecha_venc_cdp,
+                $banco_ahorro, $banco_corriente,
                 $tarea_id
             );
             // Ensure DB ENUMs include expected values (avoid Data truncated errors).
@@ -701,12 +759,12 @@ try {
             // $acuerdo is not present in the column definition (prevents Data truncated errors).
             try {
                 $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
-                if ($col && strpos($col['Type'], "'otro'") === false) {
-                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NULL");
+                if ($col && strpos($col['Type'], "'tasas_competitivas'") === false) {
+                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NULL");
                 }
                 $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
-                if ($col2 && strpos($col2['Type'], "'otro'") === false) {
-                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NOT NULL");
+                if ($col2 && strpos($col2['Type'], "'tasas_competitivas'") === false) {
+                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NOT NULL");
                 }
 
                 // Defensive: if the $acuerdo token is not present in the encuesta_comercial enum,
@@ -748,10 +806,14 @@ try {
                   interes_cc, interes_ahorro, interes_inversion, interes_credito,
                   razon_ya_trabaja_institucion, razon_desconfia_servicios,
                   razon_agusto_actual, razon_mala_experiencia, razon_otros,
-                  acuerdo_logrado, fecha_acuerdo, hora_acuerdo, observaciones)
-                 VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?)"
+                  acuerdo_logrado, fecha_acuerdo, hora_acuerdo, observaciones,
+                  que_busca_agilidad, que_busca_cajeros, que_busca_banca_linea,
+                  que_busca_agencias, que_busca_credito_rapido, que_busca_tarjeta_debito,
+                  que_busca_tarjeta_credito, interes_trabajar_institucion, fecha_vencimiento_cdp,
+                  banco_ahorro, banco_corriente)
+                 VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)"
             );
-            $st->bind_param('ssiiisdssisisisiiiiiiiisssss',
+            $st->bind_param('ssiiisdssisisisiiiiiiiisssssiiiiiiiiiss',
                 $enc_id, $tarea_id,
                 $mantiene_ahorro, $mantiene_corriente,
                 $tiene_inversiones, $inst_inv, $valor_inv,
@@ -762,19 +824,23 @@ try {
                 $interes_cc, $interes_ahorro, $interes_inv, $interes_cred,
                 $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp,
                 $razon_otros,
-                $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final
+                $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
+                $busca_agilidad, $busca_cajeros, $busca_banca,
+                $busca_agencias, $busca_credito, $busca_td,
+                $busca_tc, $interes_trabajar, $fecha_venc_cdp,
+                $banco_ahorro, $banco_corriente
             );
             // Ensure DB ENUMs include expected values (avoid Data truncated errors).
             // If ALTER fails or lacks privileges, FALLBACK the value to 'otro' when the current
             // $acuerdo is not present in the column definition (prevents Data truncated errors).
             try {
                 $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
-                if ($col && strpos($col['Type'], "'otro'") === false) {
-                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NULL");
+                if ($col && strpos($col['Type'], "'tasas_competitivas'") === false) {
+                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NULL");
                 }
                 $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
-                if ($col2 && strpos($col2['Type'], "'otro'") === false) {
-                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro') NOT NULL");
+                if ($col2 && strpos($col2['Type'], "'tasas_competitivas'") === false) {
+                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NOT NULL");
                 }
 
                 // Defensive: if the $acuerdo token is not present in the encuesta_comercial enum,

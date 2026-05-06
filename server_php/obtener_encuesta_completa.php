@@ -46,6 +46,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 require_once __DIR__ . '/db_config.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+// ── Migración de esquema (Idempotente) ───────────────────────
+try {
+    // cliente_prospecto
+    $cols_cp = [
+        "ruc_val"            => "ALTER TABLE cliente_prospecto ADD COLUMN ruc_val VARCHAR(20) DEFAULT NULL",
+        "rise_val"           => "ALTER TABLE cliente_prospecto ADD COLUMN rise_val VARCHAR(20) DEFAULT NULL",
+        "tipo_empresa"       => "ALTER TABLE cliente_prospecto ADD COLUMN tipo_empresa VARCHAR(50) DEFAULT NULL",
+        "regimen_tributario" => "ALTER TABLE cliente_prospecto ADD COLUMN regimen_tributario VARCHAR(20) DEFAULT NULL",
+        "numero_ruc"         => "ALTER TABLE cliente_prospecto ADD COLUMN numero_ruc VARCHAR(20) DEFAULT NULL",
+        "declara_iva"        => "ALTER TABLE cliente_prospecto ADD COLUMN declara_iva TINYINT(1) DEFAULT NULL",
+        "emite_facturas"     => "ALTER TABLE cliente_prospecto ADD COLUMN emite_facturas TINYINT(1) DEFAULT NULL",
+        "lleva_contabilidad" => "ALTER TABLE cliente_prospecto ADD COLUMN lleva_contabilidad TINYINT(1) DEFAULT NULL",
+        "paga_cuota_rise"    => "ALTER TABLE cliente_prospecto ADD COLUMN paga_cuota_rise TINYINT(1) DEFAULT NULL",
+        "emite_notas_venta"  => "ALTER TABLE cliente_prospecto ADD COLUMN emite_notas_venta TINYINT(1) DEFAULT NULL",
+        "conoce_limite_rise" => "ALTER TABLE cliente_prospecto ADD COLUMN conoce_limite_rise TINYINT(1) DEFAULT NULL",
+        "origen_prospecto"   => "ALTER TABLE cliente_prospecto ADD COLUMN origen_prospecto VARCHAR(20) DEFAULT NULL"
+    ];
+    foreach ($cols_cp as $col => $sql) {
+        $chk = $conn->query("SHOW COLUMNS FROM cliente_prospecto LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) $conn->query($sql);
+    }
+    // encuesta_comercial
+    $cols_ec = [
+        "banco_ahorro"    => "ALTER TABLE encuesta_comercial ADD COLUMN banco_ahorro VARCHAR(100) DEFAULT NULL",
+        "banco_corriente" => "ALTER TABLE encuesta_comercial ADD COLUMN banco_corriente VARCHAR(100) DEFAULT NULL"
+    ];
+    foreach ($cols_ec as $col => $sql) {
+        $chk = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) $conn->query($sql);
+    }
+} catch (\Throwable $eMig) {
+    error_log('[obtener_encuesta_completa] Error en migración: ' . $eMig->getMessage());
+}
+
 $tarea_id   = trim($_POST['tarea_id']   ?? '');
 $usuario_id = trim($_POST['usuario_id'] ?? '');
 $asesor_id  = trim($_POST['asesor_id']  ?? '');
@@ -85,6 +119,17 @@ try {
             cp.nombre_empresa             AS cp_nombre_empresa,
             cp.tiene_ruc                  AS cp_tiene_ruc,
             cp.tiene_rise                 AS cp_tiene_rise,
+            cp.ruc_val                    AS cp_ruc_val,
+            cp.rise_val                   AS cp_rise_val,
+            cp.tipo_empresa               AS cp_tipo_empresa,
+            cp.regimen_tributario         AS cp_regimen_tributario,
+            cp.numero_ruc                 AS cp_numero_ruc,
+            cp.declara_iva                AS cp_declara_iva,
+            cp.emite_facturas             AS cp_emite_facturas,
+            cp.lleva_contabilidad         AS cp_lleva_contabilidad,
+            cp.paga_cuota_rise            AS cp_paga_cuota_rise,
+            cp.emite_notas_venta          AS cp_emite_notas_venta,
+            cp.conoce_limite_rise         AS cp_conoce_limite_rise,
             cp.origen_prospecto           AS cp_origen_prospecto,
             cp.estado                     AS cp_estado,
             cp.latitud                    AS cp_latitud,
@@ -125,6 +170,17 @@ try {
         'nombre_empresa'   => (string)($row['cp_nombre_empresa']   ?? ''),
         'tiene_ruc'        => (int)   ($row['cp_tiene_ruc']        ?? 0),
         'tiene_rise'       => (int)   ($row['cp_tiene_rise']       ?? 0),
+        'ruc_val'          => (string)($row['cp_ruc_val']         ?? ''),
+        'rise_val'         => (string)($row['cp_rise_val']        ?? ''),
+        'tipo_empresa'     => (string)($row['cp_tipo_empresa']    ?? ''),
+        'regimen_tributario' => (string)($row['cp_regimen_tributario'] ?? ''),
+        'numero_ruc'       => (string)($row['cp_numero_ruc']       ?? ''),
+        'declara_iva'      => isset($row['cp_declara_iva']) ? (int)$row['cp_declara_iva'] : null,
+        'emite_facturas'   => isset($row['cp_emite_facturas']) ? (int)$row['cp_emite_facturas'] : null,
+        'lleva_contabilidad' => isset($row['cp_lleva_contabilidad']) ? (int)$row['cp_lleva_contabilidad'] : null,
+        'paga_cuota_rise'  => isset($row['cp_paga_cuota_rise']) ? (int)$row['cp_paga_cuota_rise'] : null,
+        'emite_notas_venta' => isset($row['cp_emite_notas_venta']) ? (int)$row['cp_emite_notas_venta'] : null,
+        'conoce_limite_rise' => isset($row['cp_conoce_limite_rise']) ? (int)$row['cp_conoce_limite_rise'] : null,
         'origen_prospecto' => (string)($row['cp_origen_prospecto'] ?? ''),
         'estado'           => (string)($row['cp_estado']           ?? ''),
         'latitud'          => $row['cp_latitud']  !== null ? (float)$row['cp_latitud']  : null,
@@ -185,6 +241,17 @@ try {
                 'fecha_acuerdo'                 => (string)($r['fecha_acuerdo']              ?? ''),
                 'hora_acuerdo'                  => (string)($r['hora_acuerdo']               ?? ''),
                 'observaciones'                 => (string)($r['observaciones']              ?? ''),
+                'que_busca_agilidad'            => (int)($r['que_busca_agilidad']            ?? 0),
+                'que_busca_cajeros'             => (int)($r['que_busca_cajeros']             ?? 0),
+                'que_busca_banca_linea'         => (int)($r['que_busca_banca_linea']         ?? 0),
+                'que_busca_agencias'            => (int)($r['que_busca_agencias']            ?? 0),
+                'que_busca_credito_rapido'      => (int)($r['que_busca_credito_rapido']      ?? 0),
+                'que_busca_tarjeta_debito'      => (int)($r['que_busca_tarjeta_debito']      ?? 0),
+                'que_busca_tarjeta_credito'     => (int)($r['que_busca_tarjeta_credito']     ?? 0),
+                'interes_trabajar_institucion'  => isset($r['interes_trabajar_institucion']) && $r['interes_trabajar_institucion'] !== null ? (int)$r['interes_trabajar_institucion'] : null,
+                'fecha_vencimiento_cdp'         => (string)($r['fecha_vencimiento_cdp']      ?? ''),
+                'banco_ahorro'                  => (string)($r['banco_ahorro']               ?? ''),
+                'banco_corriente'               => (string)($r['banco_corriente']            ?? ''),
             ];
         }
     } catch (\Throwable $eEc) {

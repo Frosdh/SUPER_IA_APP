@@ -59,9 +59,22 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   _Paso _paso = _Paso.inicial;
   bool _guardando = false;
 
+  /// Mientras es false se muestra un placeholder liviano para que la
+  /// animación de navegación no sufra jank al construir el árbol pesado.
+  bool _listo = false;
+
+  /// Notificador que dispara SOLO el rebuild del widget FlujoResumen.
+  /// Reemplaza el setState(() {}) que antes se llamaba desde todos los
+  /// reb()/rebuild() dentro de _buildPasoEmpresaNegocio() — eliminando
+  /// el rebuild masivo del árbol completo en cada keystroke.
+  final _flujoVersion = ValueNotifier<int>(0);
+
   // ── Modo edición ─────────────────────────────────────────────
   bool _cargandoEdicion = false;
   String? _errorEdicion;
+  
+  // Transición entre pasos pesados
+  bool _cargandoTransicion = false;
 
   // Prospecto nuevo vs existente (determinado por búsqueda de cédula)
   bool? _esProspectoNuevo;
@@ -173,6 +186,32 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _diaDom = false;
   int _pctContado = 80;   // % contado (crédito = 100 - contado)
   int _pctEfectivo = 70;  // % cobrado en efectivo (resto = tarjeta/transferencia)
+
+  // ── Sub-pasos de empresaNegocio ──────────────────────────────
+  // 0=Ventas/Compras 1=Productos 2=ActivosNeg 3=ActivosHog 4=GastosIngresos 5=Resumen
+  int _subPasoEmpresa = 0;
+
+  List<int> get _subPasosEmpresaActivos {
+    final p = <int>[0]; // siempre: ventas/compras
+    if (_tipoServProduccion || _tipoComercio) p.add(1); // productos
+    p.addAll([2, 3, 4, 5]); // activos neg, activos hog, gastos, resumen
+    return p;
+  }
+
+  bool get _esUltimoSubPasoEmpresa {
+    final a = _subPasosEmpresaActivos;
+    return a.indexOf(_subPasoEmpresa) == a.length - 1;
+  }
+  bool get _esPrimerSubPasoEmpresa => _subPasosEmpresaActivos.indexOf(_subPasoEmpresa) == 0;
+
+  static const _subPasoTitulos = <int, String>{
+    0: '📊 Ventas y Compras',
+    1: '🏭 Productos',
+    2: '🏢 Activos del Negocio',
+    3: '🏠 Activos del Hogar',
+    4: '💰 Gastos e Ingresos',
+    5: '📈 Resumen Financiero',
+  };
 
   // ── Vehículos (tabla) ────────────────────────────────────
   static const int _kVehCount = 5;
@@ -325,6 +364,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         _cargarEncuestaEnEdicion();
       });
     }
+    // Diferir la construcción del árbol pesado al siguiente frame para que
+    // la animación de navegación no sufra jank.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _listo = true);
+    });
   }
 
   Future<void> _cargarInstituciones() async {
@@ -518,13 +562,23 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
       final tieneRuc = _i(cliente['tiene_ruc']) == 1;
       final tieneRise = _i(cliente['tiene_rise']) == 1;
-      if (tieneRuc) {
+      final regTrib = _s(cliente['regimen_tributario']);
+      if (regTrib.isNotEmpty) {
+        _regimenTributario = regTrib;
+      } else if (tieneRuc) {
         _regimenTributario = 'ruc';
       } else if (tieneRise) {
         _regimenTributario = 'rise';
       } else {
         _regimenTributario = 'no_registrado';
       }
+      _numeroRucCtrl.text = _s(cliente['numero_ruc']);
+      _declaraIva = _ib(cliente['declara_iva']);
+      _emiteFacturas = _ib(cliente['emite_facturas']);
+      _llevaContabilidad = _ib(cliente['lleva_contabilidad']);
+      _pagaCuotaRise = _ib(cliente['paga_cuota_rise']);
+      _emiteNotasVenta = _ib(cliente['emite_notas_venta']);
+      _conoceLimiteRise = _ib(cliente['conoce_limite_rise']);
 
       final op = _s(cliente['origen_prospecto']);
       if (op.isNotEmpty) _origenProspecto = op;
@@ -749,8 +803,20 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _razonAGusto    = _i(e['razon_agusto_actual'])          == 1;
       _razonMalaExp   = _i(e['razon_mala_experiencia'])       == 1;
       _razonOtrosCtrl.text = _s(e['razon_otros']);
+      
+      // Checkboxes "Qué busca" e "Interés en trabajar"
+      _buscaAgilidad  = _i(e['que_busca_agilidad']) == 1;
+      _buscaCajeros   = _i(e['que_busca_cajeros']) == 1;
+      _buscaBanca     = _i(e['que_busca_banca_linea']) == 1;
+      _buscaAgencias  = _i(e['que_busca_agencias']) == 1;
+      _buscaCreditoR  = _i(e['que_busca_credito_rapido']) == 1;
+      _buscaTD        = _i(e['que_busca_tarjeta_debito']) == 1;
+      _buscaTC        = _i(e['que_busca_tarjeta_credito']) == 1;
+      _interesTrabajar = _ib(e['interes_trabajar_institucion']);
+      _fechaVencCDP   = _fecha(_s(e['fecha_vencimiento_cdp']));
+
       final ac = _s(e['acuerdo_logrado']);
-      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas'];
       if (ac.isNotEmpty && _validAcuerdos.contains(ac)) _acuerdo = ac;
       _fechaAcuerdo = _fecha(_s(e['fecha_acuerdo']));
       _horaAcuerdo  = _hora (_s(e['hora_acuerdo']));
@@ -935,6 +1001,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _bancoCorrienteCtrl.dispose();
     _razonOtrosCtrl.dispose();
     _obsCtrl.dispose();
+    _flujoVersion.dispose();
     super.dispose();
   }
 
@@ -1181,8 +1248,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   Future<void> _obtenerGPS() async {
     try {
+      // Intentar con la última posición conocida primero (instantáneo)
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() {
+          _latInicio = last.latitude;
+          _lngInicio = last.longitude;
+        });
+      }
+      // Luego actualizar con posición fresca en segundo plano (sin bloquear UI)
       final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+        desiredAccuracy: LocationAccuracy.medium,
       ).timeout(const Duration(seconds: 10));
       if (mounted) {
         setState(() {
@@ -1949,15 +2025,38 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     return pasos;
   }
 
+  Future<void> _cambiarPasoConTransicion(VoidCallback changeState) async {
+    setState(() => _cargandoTransicion = true);
+    await Future.delayed(const Duration(milliseconds: 150));
+    changeState();
+    if (mounted) setState(() => _cargandoTransicion = false);
+  }
+
   void _irSiguientePaso() {
     if (_paso == _Paso.inicial) {
-      setState(() => _paso = _Paso.datosCliente);
+      _cambiarPasoConTransicion(() => setState(() => _paso = _Paso.datosCliente));
       return;
     }
+    
+    // Dentro de empresaNegocio: avanzar entre sub-pasos
+    if (_paso == _Paso.empresaNegocio && !_esUltimoSubPasoEmpresa) {
+      final activos = _subPasosEmpresaActivos;
+      final idx = activos.indexOf(_subPasoEmpresa);
+      _cambiarPasoConTransicion(() => setState(() => _subPasoEmpresa = activos[idx + 1]));
+      return;
+    }
+
     final pasos = _pasosActivos;
     final idx = pasos.indexOf(_paso);
     if (idx >= 0 && idx < pasos.length - 1) {
-      setState(() => _paso = pasos[idx + 1]);
+      final next = pasos[idx + 1];
+      _cambiarPasoConTransicion(() {
+        setState(() {
+          // Resetear sub-paso al entrar a empresaNegocio
+          if (next == _Paso.empresaNegocio) _subPasoEmpresa = 0;
+          _paso = next;
+        });
+      });
     }
   }
 
@@ -1966,10 +2065,27 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       Navigator.pop(context);
       return;
     }
+    // Dentro de empresaNegocio: retroceder entre sub-pasos
+    if (_paso == _Paso.empresaNegocio && !_esPrimerSubPasoEmpresa) {
+      final activos = _subPasosEmpresaActivos;
+      final idx = activos.indexOf(_subPasoEmpresa);
+      _cambiarPasoConTransicion(() => setState(() => _subPasoEmpresa = activos[idx - 1]));
+      return;
+    }
     final pasos = _pasosActivos;
     final idx = pasos.indexOf(_paso);
     if (idx > 0) {
-      setState(() => _paso = pasos[idx - 1]);
+      final prev = pasos[idx - 1];
+      _cambiarPasoConTransicion(() {
+        setState(() {
+          if (prev == _Paso.empresaNegocio) {
+            // Si retrocedemos a empresaNegocio, ir al último sub-paso disponible
+            final activos = _subPasosEmpresaActivos;
+            _subPasoEmpresa = activos.last;
+          }
+          _paso = prev;
+        });
+      });
     } else {
       Navigator.pop(context);
     }
@@ -2263,20 +2379,47 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Contenido por paso ───────────────────────────────────────
 
   Widget _buildContenidoPaso() {
+    // Primer frame: placeholder liviano para que la animación de navegación
+    // sea fluida. El árbol pesado se construye en el siguiente frame.
+    if (!_listo || _cargandoTransicion) {
+      return const SizedBox(
+        height: 320,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(strokeWidth: 2.5),
+              SizedBox(height: 16),
+              Text('Cargando sección...', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final Widget contenido;
     switch (_paso) {
       case _Paso.inicial:
-        return _buildPasoInicial();
+        contenido = _buildPasoInicial();
+        break;
       case _Paso.datosCliente:
-        return _buildPasoDatosCliente();
+        contenido = _buildPasoDatosCliente();
+        break;
       case _Paso.empresaNegocio:
-        return _buildPasoEmpresaNegocio();
+        contenido = _buildPasoEmpresaNegocio();
+        break;
       case _Paso.productosActuales:
-        return _buildPasoProductosActuales();
+        contenido = _buildPasoProductosActuales();
+        break;
       case _Paso.interesProductos:
-        return _buildPasoInteresProductos();
+        contenido = _buildPasoInteresProductos();
+        break;
       case _Paso.busqueda:
-        return _buildPasoBusqueda();
+        contenido = _buildPasoBusqueda();
+        break;
     }
+    // RepaintBoundary aísla los repaints del paso actual del resto del árbol
+    return RepaintBoundary(child: contenido);
   }
 
   // ── PASO 3: Interés en productos (placeholder, se muestra inline en Productos)
@@ -2764,6 +2907,68 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
+  Widget _buildSubPasoIndicador() {
+    final activos = _subPasosEmpresaActivos;
+    final total = activos.length;
+    final actualIdx = activos.indexOf(_subPasoEmpresa);
+    if (total <= 1) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: ConstantColors.primaryNavyLight.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ConstantColors.primaryNavyLight),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.business_center_rounded, size: 18, color: ConstantColors.primaryBlue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _subPasoTitulos[_subPasoEmpresa] ?? '',
+                  style: TextStyle(
+                    color: ConstantColors.primaryBlue,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(
+                'Paso ${actualIdx + 1}/$total',
+                style: TextStyle(
+                  color: ConstantColors.textDarkGrey,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: List.generate(total, (i) {
+              final isPast = i <= actualIdx;
+              return Expanded(
+                child: Container(
+                  height: 4,
+                  margin: EdgeInsets.only(right: i < total - 1 ? 4 : 0),
+                  decoration: BoxDecoration(
+                    color: isPast ? ConstantColors.primaryBlue : Colors.white,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPasoEmpresaNegocio() {
     // Si por alguna razón entran aquí sin empresa, saltar
     if (!_tieneEmpresa) {
@@ -2781,13 +2986,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _seccionTitulo('Empresa / Negocio'),
-          Text(
-            'Datos aproximados para entender el movimiento del negocio (sin ser un interrogatorio).',
-            style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13),
-          ),
-          const SizedBox(height: 16),
+          _buildSubPasoIndicador(),
 
+          if (_subPasoEmpresa == 0) ...[
           _seccionTitulo('Comportamiento de ventas (monto \$ al día)'),
           const SizedBox(height: 6),
           // Mostrar un campo por día, de arriba hacia abajo
@@ -2811,18 +3012,23 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
           const SizedBox(height: 14),
           _seccionTitulo('Días de atención'),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilterChip(label: const Text('Lunes'), selected: _diaLun, onSelected: (v) => setState(() => _diaLun = v)),
-              FilterChip(label: const Text('Martes'), selected: _diaMar, onSelected: (v) => setState(() => _diaMar = v)),
-              FilterChip(label: const Text('Miércoles'), selected: _diaMie, onSelected: (v) => setState(() => _diaMie = v)),
-              FilterChip(label: const Text('Jueves'), selected: _diaJue, onSelected: (v) => setState(() => _diaJue = v)),
-              FilterChip(label: const Text('Viernes'), selected: _diaVie, onSelected: (v) => setState(() => _diaVie = v)),
-              FilterChip(label: const Text('Sábado'), selected: _diaSab, onSelected: (v) => setState(() => _diaSab = v)),
-              FilterChip(label: const Text('Domingo'), selected: _diaDom, onSelected: (v) => setState(() => _diaDom = v)),
-            ],
+          // StatefulBuilder aísla el rebuild de chips al seleccionar días
+          StatefulBuilder(
+            builder: (ctx, setDias) {
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  FilterChip(label: const Text('Lunes'), selected: _diaLun, onSelected: (v) => setDias(() => _diaLun = v)),
+                  FilterChip(label: const Text('Martes'), selected: _diaMar, onSelected: (v) => setDias(() => _diaMar = v)),
+                  FilterChip(label: const Text('Miércoles'), selected: _diaMie, onSelected: (v) => setDias(() => _diaMie = v)),
+                  FilterChip(label: const Text('Jueves'), selected: _diaJue, onSelected: (v) => setDias(() => _diaJue = v)),
+                  FilterChip(label: const Text('Viernes'), selected: _diaVie, onSelected: (v) => setDias(() => _diaVie = v)),
+                  FilterChip(label: const Text('Sábado'), selected: _diaSab, onSelected: (v) => setDias(() => _diaSab = v)),
+                  FilterChip(label: const Text('Domingo'), selected: _diaDom, onSelected: (v) => setDias(() => _diaDom = v)),
+                ],
+              );
+            },
           ),
 
           const SizedBox(height: 14),
@@ -2910,7 +3116,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             },
           ),
 
+          ],
+
           // ── Productos según tipo de empresa ─────────────────────
+          if (_subPasoEmpresa == 1) ...[
           if (_tipoServProduccion) ...[
             const SizedBox(height: 24),
             _seccionTituloDestacado('🏭 Productos de Producción', 'Ingrese mínimo 5 productos'),
@@ -2951,7 +3160,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ),
           ],
 
+          ],
+
           // ── Activos Fijos del Negocio ──────────────────────────
+          if (_subPasoEmpresa == 2) ...[
           const SizedBox(height: 28),
           _buildActivosFijos(
             titulo: '🏢 Activos Fijos del Negocio',
@@ -2970,7 +3182,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             descCtrl: _inmNegDescCtrl, areaCtrl: _inmNegAreaCtrl,
             ubicCtrl: _inmNegUbicCtrl, valCtrl: _inmNegValCtrl),
 
+          ],
+
           // ── Activos Fijos del Hogar ────────────────────────────
+          if (_subPasoEmpresa == 3) ...[
           const SizedBox(height: 28),
           _buildActivosFijos(
             titulo: '🏠 Activos Fijos del Hogar',
@@ -2989,7 +3204,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             descCtrl: _inmHogDescCtrl, areaCtrl: _inmHogAreaCtrl,
             ubicCtrl: _inmHogUbicCtrl, valCtrl: _inmHogValCtrl),
 
+          ],
+
           // ─── Gastos del negocio (desglosados) ────────────────────
+          if (_subPasoEmpresa == 4) ...[
           const SizedBox(height: 22),
           _seccionTitulo('(-) Gastos del Negocio (mensual)'),
           const SizedBox(height: 6),
@@ -2997,7 +3215,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             final totalGN = _td(_gNegSueldosCtrl) + _td(_gNegArriendoCtrl) + _td(_gNegServBasCtrl) +
                 _cuotasNegocioDeudas + _td(_gNegTransporteCtrl) + _td(_gNegMantCtrl) +
                 _td(_gNegOtrosCtrl) + _td(_gNegImprevistosCtrl);
-            void reb() { setLocal(() {}); setState(() {}); }
+            void reb() { setLocal(() {}); _flujoVersion.value++; }
             Widget gCampo(TextEditingController c, String lbl, IconData ic) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: _campo(controller: c, label: lbl, icon: ic,
@@ -3064,7 +3282,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _seccionTitulo('(+) Otros Ingresos (mensual)'),
           const SizedBox(height: 6),
           StatefulBuilder(builder: (ctx, setLocal) {
-            void reb() { setLocal(() {}); setState(() {}); }
+            void reb() { setLocal(() {}); _flujoVersion.value++; }
             Widget oCampo(TextEditingController c, String lbl, IconData ic) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: _campo(controller: c, label: lbl, icon: ic,
@@ -3111,7 +3329,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _seccionTitulo('(-) Gastos Familiares (mensual)'),
           const SizedBox(height: 6),
           StatefulBuilder(builder: (ctx, setLocal) {
-            void reb() { setLocal(() {}); setState(() {}); }
+            void reb() { setLocal(() {}); _flujoVersion.value++; }
             Widget fCampo(TextEditingController c, String lbl, IconData ic) => Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: _campo(controller: c, label: lbl, icon: ic,
@@ -3179,9 +3397,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(height: 22),
           _buildOtrasDeudas(),
 
+          ],
+
           // ── Flujo de Ingresos y Gastos (resumen) ───────────────
+          if (_subPasoEmpresa == 5) ...[
+          // ValueListenableBuilder: se reconstruye solo cuando algún campo
+          // de gastos/ingresos llama _flujoVersion.value++ — no el árbol completo.
           const SizedBox(height: 28),
-          _buildFlujoResumen(),
+          ValueListenableBuilder<int>(
+            valueListenable: _flujoVersion,
+            builder: (_, __, ___) => _buildFlujoResumen(),
+          ),
+          ],
         ],
       ),
     );
@@ -3222,7 +3449,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     required List<TextEditingController> valCtrl,
   }) {
     return StatefulBuilder(builder: (context, setLocal) {
-      void rebuild() { setLocal(() {}); setState(() {}); }
+      void rebuild() { setLocal(() {}); _flujoVersion.value++; }
       final totalVal = valCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
       return Container(
         decoration: BoxDecoration(
@@ -3308,7 +3535,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     required List<TextEditingController> valCtrl,
   }) {
     return StatefulBuilder(builder: (context, setLocal) {
-      void rebuild() { setLocal(() {}); setState(() {}); }
+      void rebuild() { setLocal(() {}); _flujoVersion.value++; }
       final totalVal = valCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
       return Container(
         decoration: BoxDecoration(
@@ -3384,7 +3611,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ─────────────────────────────────────────────────────────────
   Widget _buildOtrasDeudas() {
     return StatefulBuilder(builder: (context, setLocal) {
-      void rebuild() { setLocal(() {}); setState(() {}); }
+      void rebuild() { setLocal(() {}); _flujoVersion.value++; }
 
       final totalSaldo  = _totalSaldoDeudas;
       final totalPago   = _totalPagoMesDeudas;
@@ -3700,7 +3927,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       ),
     );
   }
-
+  
   Widget _buildActivosFijos({
     required String titulo,
     required List<TextEditingController> descControllers,
@@ -3711,7 +3938,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   }) {
     return StatefulBuilder(
       builder: (context, setLocal) {
-        void rebuild() { setLocal(() {}); setState(() {}); }
+        void rebuild() { setLocal(() {}); _flujoVersion.value++; }
 
         final totalValor = valorControllers.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
 
@@ -4036,10 +4263,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     return StatefulBuilder(
       builder: (context, setLocal) {
-        void rebuild() {
-          setLocal(() {});
-          setState(() {});
-        }
+        void rebuild() { setLocal(() {}); _flujoVersion.value++; }
 
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
@@ -4576,7 +4800,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ),
               child: ElevatedButton(
                 onPressed: () async {
-                  if (_paso == _Paso.empresaNegocio && widget.tipoTarea == 'levantamiento') {
+                  if (_paso == _Paso.empresaNegocio && widget.tipoTarea == 'levantamiento' && _esUltimoSubPasoEmpresa) {
                     if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
                     await _guardarEncuesta(fueEncuestado: true);
                   } else {
@@ -4593,7 +4817,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 child: Text(
                   _paso == _Paso.productosActuales
                       ? 'Continuar'
-                      : (_paso == _Paso.empresaNegocio && widget.tipoTarea == 'levantamiento'
+                      : (_paso == _Paso.empresaNegocio && widget.tipoTarea == 'levantamiento' && _esUltimoSubPasoEmpresa
                           ? 'Finalizar'
                           : 'Siguiente'),
                   style: const TextStyle(
@@ -4614,12 +4838,23 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (_paso == _Paso.datosCliente) {
       if (!(_formKeyCliente.currentState?.validate() ?? false)) return;
     }
+
+    // Dentro de empresaNegocio: avanzar entre sub-pasos
     if (_paso == _Paso.empresaNegocio) {
-      // La empresa es completamente opcional. Solo validamos el formulario base
-      // (campos requeridos que tenga _formKeyNegocio). Tipo y productos son opcionales:
-      // se completan después en "Levantar Empresa" si aplica.
+      if (!_esUltimoSubPasoEmpresa) {
+        final activos = _subPasosEmpresaActivos;
+        final idx = activos.indexOf(_subPasoEmpresa);
+        setState(() => _subPasoEmpresa = activos[idx + 1]);
+        return;
+      }
+      // Último sub-paso: guardar (levantamiento) o avanzar paso principal
+      if (widget.tipoTarea == 'levantamiento') {
+        _guardarEncuesta(fueEncuestado: true);
+        return;
+      }
       if (!(_formKeyNegocio.currentState?.validate() ?? false)) return;
     }
+
     _irSiguientePaso();
   }
 
@@ -4807,7 +5042,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     return StatefulBuilder(
       builder: (context, setLocal) {
-        void rebuild() { setLocal(() {}); setState(() {}); }
+        void rebuild() { setLocal(() {}); _flujoVersion.value++; }
 
         return Container(
           margin: const EdgeInsets.only(bottom: 20),
@@ -5094,6 +5329,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       ('nueva_cita_oficina', 'Nueva cita en oficina'),
       ('reprogramacion',     'Reprogramación'),
       ('seguimiento',        'Recolectar documentación'),
+      ('tasas_competitivas', 'Tasas competitivas'),
       ('otro',               'Levantamiento / Otro'),
     ];
     return DropdownButtonFormField<String>(
