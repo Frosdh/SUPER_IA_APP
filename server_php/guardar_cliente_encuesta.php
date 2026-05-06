@@ -97,7 +97,41 @@ try {
         'levantamiento',
         'seguimiento'
     ) NOT NULL DEFAULT 'prospecto_nuevo'");
-} catch (\Throwable $e) { /* silencioso si ya existe o no hay permisos DDL */ }
+} catch (\Throwable $e) { /* silencioso */ }
+// Asegurar que el ENUM de tarea incluye nueva_cita_inversion
+try {
+    $colTarea = $conn->query("SHOW COLUMNS FROM tarea LIKE 'tipo_tarea'")->fetch_assoc();
+    if ($colTarea && strpos($colTarea['Type'], "'nueva_cita_inversion'") === false) {
+        $conn->query("ALTER TABLE tarea MODIFY COLUMN tipo_tarea ENUM(
+            'prospecto_nuevo','visita_frio','evaluacion','recuperacion',
+            'post_venta','represtamo','documentos_pendientes',
+            'nueva_cita_campo','nueva_cita_oficina','nueva_cita_inversion',
+            'levantamiento','seguimiento'
+        ) NOT NULL DEFAULT 'prospecto_nuevo'");
+    }
+} catch (\Throwable $e) { /* silencioso */ }
+
+// ── Migración segura de columnas en cliente_prospecto ────────
+$cols_cp_guardar = [
+    'ruc_val'            => "VARCHAR(20) DEFAULT NULL",
+    'rise_val'           => "VARCHAR(20) DEFAULT NULL",
+    'tipo_empresa'       => "VARCHAR(50) DEFAULT NULL",
+    'regimen_tributario' => "VARCHAR(20) DEFAULT NULL",
+    'numero_ruc'         => "VARCHAR(20) DEFAULT NULL",
+    'nombre_empresa'     => "VARCHAR(150) DEFAULT NULL",
+    'declara_iva'        => "TINYINT(1) DEFAULT NULL",
+    'emite_facturas'     => "TINYINT(1) DEFAULT NULL",
+    'lleva_contabilidad' => "TINYINT(1) DEFAULT NULL",
+    'paga_cuota_rise'    => "TINYINT(1) DEFAULT NULL",
+    'emite_notas_venta'  => "TINYINT(1) DEFAULT NULL",
+    'conoce_limite_rise' => "TINYINT(1) DEFAULT NULL",
+];
+foreach ($cols_cp_guardar as $col => $def) {
+    $res = $conn->query("SHOW COLUMNS FROM cliente_prospecto LIKE '$col'");
+    if ($res && $res->num_rows === 0) {
+        $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN $col $def");
+    }
+}
 
 // ── Leer parámetros ──────────────────────────────────────────
 $usuario_id      = trim($_POST['usuario_id']   ?? '');
@@ -536,29 +570,37 @@ try {
               asesor_id, latitud, longitud, origen_prospecto, estado)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prospecto')"
         );
-        $st->bind_param('ssssssssssiisssssiiiiiiissdds',
+        // 27 ? en la query (estado='prospecto' es literal) → array dinámico
+        $ins_vals = [
             $cliente_id, $nombre_completo, $cedula, $telefono, $celular,
-            $email_c, $direccion, $ciudad, $actividad, $nombre_empresa,
-            $tiene_ruc, $tiene_rise, $ruc_val, $rise_val, $tipo_empresa,
-            $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
-            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,
-            $asesor_id, $lat_ini, $lng_ini, $origen_prospecto
-        );
+            $email_c, $direccion, $ciudad, $actividad, $nombre_empresa,  // 10s
+            $tiene_ruc, $tiene_rise,                                      // 2i
+            $ruc_val, $rise_val, $tipo_empresa,
+            $regimen_tributario, $numero_ruc,                             // 5s
+            $declara_iva, $emite_facturas, $lleva_contabilidad,
+            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,   // 6i
+            $asesor_id,                                                   // 1s
+            $lat_ini, $lng_ini,                                           // 2d
+            $origen_prospecto,                                            // 1s
+        ];
+        // 10s + 2i + 5s + 6i + 1s + 2d + 1s = 27 chars
+        $ins_types = str_repeat('s', 10) . 'ii' . str_repeat('s', 5) . str_repeat('i', 6) . 's' . 'dd' . 's';
+        $st->bind_param($ins_types, ...$ins_vals);
         $st->execute();
         $st->close();
     } else {
         // UPDATE cliente — 12 params: s×8 + i×2 + s×2 = 'ssssssssiiss'
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
-             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=COALESCE(?, ciudad),
+             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?,
                  actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
                  ruc_val=?, rise_val=?, tipo_empresa=?,
                  regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
                  paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?,
-                 asesor_id=?, origen_prospecto=COALESCE(?, origen_prospecto)
+                 asesor_id=?, origen_prospecto=?, estado=estado
              WHERE id=?"
         );
-        $st->bind_param('ssssssssiissssssiiiiiiisss',
+        $st->bind_param('ssssssssiisssssiiiiiiisss',
             $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
             $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise,
             $ruc_val, $rise_val, $tipo_empresa,
@@ -822,24 +864,26 @@ try {
               banco_ahorro, banco_corriente)
              VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)"
         );
-        // Formato 39 params:
-        $st->bind_param('ssiiisdssisisisiiiiiiiisssssiiiiiiiiiss',
-            $enc_id, $tarea_id,
-            $mantiene_ahorro, $mantiene_corriente,
-            $tiene_inversiones, $inst_inv, $valor_inv,
-            $plazo_inv, $fecha_venc_inv,
-            $int_pro, $f_nuevo,
-            $tiene_ops_cred, $inst_cred,
-            $interes_conocer, $nivel_interes,
-            $interes_cc, $interes_ahorro, $interes_inv, $interes_cred,
-            $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp,
-            $razon_otros,
-            $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
-            $busca_agilidad, $busca_cajeros, $busca_banca,
-            $busca_agencias, $busca_credito, $busca_td,
-            $busca_tc, $interes_trabajar, $fecha_venc_cdp,
-            $banco_ahorro, $banco_corriente
-        );
+        // Array de 39 valores → type string generado dinámicamente
+        $ec_vals = [
+            $enc_id, $tarea_id,                              // s s
+            $mantiene_ahorro, $mantiene_corriente,           // i i
+            $tiene_inversiones, $inst_inv, $valor_inv,       // i s d
+            $plazo_inv, $fecha_venc_inv,                     // s s
+            $int_pro, $f_nuevo,                              // i s
+            $tiene_ops_cred, $inst_cred,                     // i s
+            $interes_conocer, $nivel_interes,                // i s
+            $interes_cc, $interes_ahorro, $interes_inv, $interes_cred, // i i i i
+            $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp, // i i i i
+            $razon_otros,                                    // s
+            $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final, // s s s s
+            $busca_agilidad, $busca_cajeros, $busca_banca,   // i i i
+            $busca_agencias, $busca_credito, $busca_td,      // i i i
+            $busca_tc, $interes_trabajar, $fecha_venc_cdp,   // i i s
+            $banco_ahorro, $banco_corriente,                 // s s
+        ];
+        $ec_types = 'ss' . 'ii' . 'isd' . 'ss' . 'is' . 'is' . 'is' . 'iiii' . 'iiii' . 's' . 'ssss' . 'iii' . 'iii' . 'iis' . 'ss';
+        $st->bind_param($ec_types, ...$ec_vals);
         $st->execute();
         $st->close();
 
@@ -909,44 +953,48 @@ try {
             }
         }
 
-        // ── Crear TAREA 2: propuesta de inversión previa al vencimiento ──────────
-        // Se crea cuando el prospecto muestra interés en una inversión y se agenda
-        // una visita previa al vencimiento de su CDP/inversión actual.
-        // Independiente del acuerdo logrado (pueden existir las DOS tareas a la vez).
-        $tarea_prop_id    = null;
-        $tarea_prop_tipo  = null;
-        $tarea_prop_fecha = null;
-        $tarea_prop_hora  = null;
+        // ── Crear TAREA 2: Nueva Cita de Inversión (propuesta previa al vencimiento) ──
+        // Se crea INDEPENDIENTEMENTE del acuerdo logrado cuando:
+        //   - crear_tarea_prev_venc=1  (el asesor marcó que quiere proponer antes del vencimiento)
+        //   - Se usa fecha_previa_vencimiento si existe, o fecha_vencimiento_inversion como fallback
+        if ($crear_tarea_prev_venc) {
+            // Usar fecha_previa_vencimiento; si no hay, usar fecha_vencimiento_inversion
+            $fecha_inv_task = null;
+            if ($fecha_previa_venc !== null && $fecha_previa_venc !== '') {
+                $fecha_inv_task = $fecha_previa_venc;
+            } elseif (isset($fecha_venc_inv) && $fecha_venc_inv !== null && $fecha_venc_inv !== '') {
+                $fecha_inv_task = $fecha_venc_inv;
+            }
 
-        if ($crear_tarea_prev_venc && $fecha_previa_venc !== null) {
-            try {
-                $GLOBALS['phase'] = 'TAREA_PROPUESTA';
-                $tarea_prop_id   = genUUID();
-                $tarea_prop_tipo = 'nueva_cita_oficina';  // propuesta de inversión = cita oficina
-                $est_prop        = 'programada';
-                $obs_prop        = trim('Propuesta de inversión previa al vencimiento' .
-                                    ($propuesta_inversion ? ': ' . $propuesta_inversion : ''));
-                $hora_venc       = '';   // hora opcional: vacía si no se captura
-                $tarea_prop_fecha = $fecha_previa_venc;
-                $tarea_prop_hora  = $hora_venc;
-
-                $stp = $conn->prepare(
-                    "INSERT INTO tarea
-                     (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
-                      fecha_programada, hora_programada, observaciones)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-                );
-                if ($stp) {
-                    $stp->bind_param('ssssssss',
-                        $tarea_prop_id, $asesor_id, $cliente_id, $tarea_prop_tipo,
-                        $est_prop, $tarea_prop_fecha, $tarea_prop_hora, $obs_prop
+            if ($fecha_inv_task !== null) {
+                try {
+                    $GLOBALS['phase'] = 'TAREA_INVERSION';
+                    $tarea_inv_id    = genUUID();
+                    $est_inv         = 'programada';
+                    $tipo_inv        = 'nueva_cita_inversion';
+                    $obs_inv         = trim('Nueva cita de inversión: propuesta previa al vencimiento' .
+                                        ($propuesta_inversion ? ' — ' . $propuesta_inversion : ''));
+                    $stp = $conn->prepare(
+                        "INSERT INTO tarea
+                         (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+                          fecha_programada, hora_programada, observaciones)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                     );
-                    $stp->execute();
-                    $stp->close();
+                    if ($stp) {
+                        $hora_inv = '';
+                        $stp->bind_param('ssssssss',
+                            $tarea_inv_id, $asesor_id, $cliente_id, $tipo_inv,
+                            $est_inv, $fecha_inv_task, $hora_inv, $obs_inv
+                        );
+                        $stp->execute();
+                        $stp->close();
+                        // Marcar cliente pendiente si no estaba ya
+                        $conn->query("UPDATE cliente_prospecto SET estado='pendiente' WHERE id='$cliente_id' AND estado='prospecto'");
+                    }
+                } catch (\Throwable $_) {
+                    // No bloquear el flujo principal
+                    error_log('[guardar_encuesta][TAREA_INVERSION] ERROR: ' . $_->getMessage());
                 }
-            } catch (\Throwable $_) {
-                // No bloquear flujo principal
-                $tarea_prop_id = null;
             }
         }
     }

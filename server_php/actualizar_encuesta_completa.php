@@ -19,7 +19,7 @@ header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$API_BUILD = '2026-04-27b';
+$API_BUILD = '2026-05-06c';
 $GLOBALS['phase'] = 'BOOT';
 
 function respond_json($code, $payload) {
@@ -116,6 +116,7 @@ $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
 $ruc_val         = strOrNull($_POST['ruc_val']        ?? '');
 $rise_val        = strOrNull($_POST['rise_val']       ?? '');
 $tipo_empresa    = strOrNull($_POST['tipo_empresa']    ?? '');
+$nombre_empresa  = strOrNull($_POST['nombre_empresa'] ?? '');
 $regimen_tributario = strOrNull($_POST['regimen_tributario'] ?? '');
 $numero_ruc         = strOrNull($_POST['numero_ruc']         ?? '');
 $declara_iva        = intOrNull($_POST['declara_iva']        ?? null);
@@ -426,34 +427,42 @@ try {
     }
     $GLOBALS['phase'] = 'UPDATE_CLIENTE';
     if ($cliente_id !== '') {
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN ruc_val VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN rise_val VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN tipo_empresa VARCHAR(50) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN regimen_tributario VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN numero_ruc VARCHAR(20) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN declara_iva TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN emite_facturas TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN lleva_contabilidad TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN paga_cuota_rise TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN emite_notas_venta TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
-        try { $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN conoce_limite_rise TINYINT(1) DEFAULT NULL"); } catch (\Throwable $_) {}
-        $st = $conn->prepare(
-            "UPDATE cliente_prospecto
-             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=COALESCE(?, ciudad),
-                 actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
-                 origen_prospecto=COALESCE(?, origen_prospecto),
-                 ruc_val=?, rise_val=?, tipo_empresa=?,
-                 regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
-                 paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?
-             WHERE id=?"
-        );
-        $st->bind_param('ssssssssiississsiiiiiiis',
+        // ── Migración segura: solo agrega columna si no existe ──
+        $cols_cp = [
+            'ruc_val'           => "VARCHAR(20) DEFAULT NULL",
+            'rise_val'          => "VARCHAR(20) DEFAULT NULL",
+            'tipo_empresa'      => "VARCHAR(50) DEFAULT NULL",
+            'regimen_tributario'=> "VARCHAR(20) DEFAULT NULL",
+            'numero_ruc'        => "VARCHAR(20) DEFAULT NULL",
+            'declara_iva'       => "TINYINT(1) DEFAULT NULL",
+            'emite_facturas'    => "TINYINT(1) DEFAULT NULL",
+            'lleva_contabilidad'=> "TINYINT(1) DEFAULT NULL",
+            'paga_cuota_rise'   => "TINYINT(1) DEFAULT NULL",
+            'emite_notas_venta' => "TINYINT(1) DEFAULT NULL",
+            'conoce_limite_rise'=> "TINYINT(1) DEFAULT NULL",
+        ];
+        foreach ($cols_cp as $col => $def) {
+            $res = $conn->query("SHOW COLUMNS FROM cliente_prospecto LIKE '$col'");
+            if ($res && $res->num_rows === 0) {
+                $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN $col $def");
+            }
+        }
+
+        // Array de 23 valores → type string de 23 chars: 8s + 2i + 13s
+        $upd_vals = [
             $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
-            $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $origen_prospecto,
-            $ruc_val, $rise_val, $tipo_empresa,
-            $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
-            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise, $cliente_id
-        );
+            $actividad, $nombre_empresa,                              // 8 strings
+            $tiene_ruc, $tiene_rise,                                  // 2 ints
+            $ruc_val, $rise_val, $tipo_empresa, $regimen_tributario,
+            $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
+            $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,
+            $origen_prospecto, $cliente_id,                           // 13 strings
+        ];
+        $upd_types = str_repeat('s', 8) . 'ii' . str_repeat('s', 13); // = "ssssssssiissssssssssss s" sin espacios = 23
+        $sql_upd   = "UPDATE cliente_prospecto SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?, actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, origen_prospecto=? WHERE id=?";
+        $st = $conn->prepare($sql_upd);
+        if (!$st) { throw new \RuntimeException("prepare UC: " . $conn->error); }
+        $st->bind_param($upd_types, ...$upd_vals);
         $st->execute();
         $st->close();
     }
@@ -736,24 +745,26 @@ try {
                      banco_ahorro=?, banco_corriente=?
                  WHERE tarea_id = ?"
             );
-            $st->bind_param(
-                'iiisdssisisisiiiiiiiisssssiiiiiiiiiss',
-                $mantiene_ahorro, $mantiene_corriente,
-                $tiene_inversiones, $inst_inv, $valor_inv,
-                $plazo_inv, $fecha_venc_inv,
-                $int_pro, $f_nuevo,
-                $tiene_ops_cred, $inst_cred,
-                $interes_conocer, $nivel_interes,
-                $interes_cc, $interes_ahorro, $interes_inv, $interes_cred,
-                $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp,
-                $razon_otros,
-                $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
-                $busca_agilidad, $busca_cajeros, $busca_banca,
-                $busca_agencias, $busca_credito, $busca_td,
-                $busca_tc, $interes_trabajar, $fecha_venc_cdp,
-                $banco_ahorro, $banco_corriente,
-                $tarea_id
-            );
+            // Array dinámico — imposible de desajustar
+            $ec_upd_vals = [
+                $mantiene_ahorro, $mantiene_corriente,           // i i
+                $tiene_inversiones, $inst_inv, $valor_inv,       // i s d
+                $plazo_inv, $fecha_venc_inv,                     // s s
+                $int_pro, $f_nuevo,                              // i s
+                $tiene_ops_cred, $inst_cred,                     // i s
+                $interes_conocer, $nivel_interes,                // i s
+                $interes_cc, $interes_ahorro, $interes_inv, $interes_cred, // i i i i
+                $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp, // i i i i
+                $razon_otros,                                    // s
+                $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final, // s s s s
+                $busca_agilidad, $busca_cajeros, $busca_banca,   // i i i
+                $busca_agencias, $busca_credito, $busca_td,      // i i i
+                $busca_tc, $interes_trabajar, $fecha_venc_cdp,   // i i s
+                $banco_ahorro, $banco_corriente,                 // s s
+                $tarea_id,                                       // s (WHERE)
+            ];
+            $ec_upd_types = 'ii' . 'isd' . 'ss' . 'is' . 'is' . 'is' . 'iiii' . 'iiii' . 's' . 'ssss' . 'iii' . 'iii' . 'iis' . 'ss' . 's';
+            $st->bind_param($ec_upd_types, ...$ec_upd_vals);
             // Ensure DB ENUMs include expected values (avoid Data truncated errors).
             // If ALTER fails or lacks privileges, FALLBACK the value to 'otro' when the current
             // $acuerdo is not present in the column definition (prevents Data truncated errors).
@@ -813,23 +824,26 @@ try {
                   banco_ahorro, banco_corriente)
                  VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)"
             );
-            $st->bind_param('ssiiisdssisisisiiiiiiiisssssiiiiiiiiiss',
-                $enc_id, $tarea_id,
-                $mantiene_ahorro, $mantiene_corriente,
-                $tiene_inversiones, $inst_inv, $valor_inv,
-                $plazo_inv, $fecha_venc_inv,
-                $int_pro, $f_nuevo,
-                $tiene_ops_cred, $inst_cred,
-                $interes_conocer, $nivel_interes,
-                $interes_cc, $interes_ahorro, $interes_inv, $interes_cred,
-                $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp,
-                $razon_otros,
-                $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final,
-                $busca_agilidad, $busca_cajeros, $busca_banca,
-                $busca_agencias, $busca_credito, $busca_td,
-                $busca_tc, $interes_trabajar, $fecha_venc_cdp,
-                $banco_ahorro, $banco_corriente
-            );
+            // Array dinámico — imposible de desajustar
+            $ec_ins_vals = [
+                $enc_id, $tarea_id,                              // s s
+                $mantiene_ahorro, $mantiene_corriente,           // i i
+                $tiene_inversiones, $inst_inv, $valor_inv,       // i s d
+                $plazo_inv, $fecha_venc_inv,                     // s s
+                $int_pro, $f_nuevo,                              // i s
+                $tiene_ops_cred, $inst_cred,                     // i s
+                $interes_conocer, $nivel_interes,                // i s
+                $interes_cc, $interes_ahorro, $interes_inv, $interes_cred, // i i i i
+                $razon_ya_trabaja, $razon_desconfia, $razon_agusto, $razon_mala_exp, // i i i i
+                $razon_otros,                                    // s
+                $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final, // s s s s
+                $busca_agilidad, $busca_cajeros, $busca_banca,   // i i i
+                $busca_agencias, $busca_credito, $busca_td,      // i i i
+                $busca_tc, $interes_trabajar, $fecha_venc_cdp,   // i i s
+                $banco_ahorro, $banco_corriente,                 // s s
+            ];
+            $ec_ins_types = 'ss' . 'ii' . 'isd' . 'ss' . 'is' . 'is' . 'is' . 'iiii' . 'iiii' . 's' . 'ssss' . 'iii' . 'iii' . 'iis' . 'ss';
+            $st->bind_param($ec_ins_types, ...$ec_ins_vals);
             // Ensure DB ENUMs include expected values (avoid Data truncated errors).
             // If ALTER fails or lacks privileges, FALLBACK the value to 'otro' when the current
             // $acuerdo is not present in the column definition (prevents Data truncated errors).

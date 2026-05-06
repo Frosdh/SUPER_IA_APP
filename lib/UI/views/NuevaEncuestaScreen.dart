@@ -560,6 +560,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         _tieneEmpresa = false;
       }
 
+      // Tipo de empresa viene de cliente_prospecto.tipo_empresa
+      final tipoEmpStr = _s(cliente['tipo_empresa']);
+      _tipoServProduccion = tipoEmpStr.contains('servicio_produccion');
+      _tipoComercio       = tipoEmpStr.contains('comercio');
+
       final tieneRuc = _i(cliente['tiene_ruc']) == 1;
       final tieneRise = _i(cliente['tiene_rise']) == 1;
       final regTrib = _s(cliente['regimen_tributario']);
@@ -596,9 +601,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (neg is Map) {
       final n = Map<String, dynamic>.from(neg);
       _tieneEmpresa = true;
-      final _tipoEmpresaStr = _s(n['tipo_empresa']);
-      _tipoServProduccion = _tipoEmpresaStr.contains('servicio_produccion');
-      _tipoComercio = _tipoEmpresaStr.contains('comercio');
+      // tipo_empresa viene del cliente (cliente_prospecto), NO de encuesta_negocio
+      // Se mapea en el bloque de cliente más arriba; aquí no se sobreescribe.
       // Cargar por día individual; fallback al campo agrupado antiguo (retrocompatibilidad)
       final lvVenta = _d(n['venta_lv']).toStringAsFixed(2);
       _ventaLunCtrl.text  = _d(n['venta_lunes']).toStringAsFixed(2)  != '0.00' ? _d(n['venta_lunes']).toStringAsFixed(2)  : lvVenta;
