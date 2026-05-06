@@ -112,13 +112,10 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   final _ventaLvCtrl     = TextEditingController();
   final _ventaSabCtrl    = TextEditingController();
   final _ventaDomCtrl    = TextEditingController();
-  String? _mesAltaVenta;
-  String? _mesBajaVenta;
   // Levantamiento campo — compras
   final _compraLvCtrl    = TextEditingController();
   final _compraSabCtrl   = TextEditingController();
   final _compraDomCtrl   = TextEditingController();
-  String? _mesAltaCompra;
   // Días de atención
   bool _diaLv  = false;
   bool _diaSab = false;

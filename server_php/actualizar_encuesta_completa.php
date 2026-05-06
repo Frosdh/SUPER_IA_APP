@@ -572,9 +572,9 @@ try {
                      inmuebles_negocio_json=?, inmuebles_hogar_json=?
                  WHERE tarea_id = ?"
             );
-            // types: ddd ss ddd s iii iii d dddd ddddddd dddd ddddddd sssss s = 44
+            // types: ddd(3) ss(2) ddd(3) s(1) iiiiii(6) 23d's 6s's = 44
             $stN->bind_param(
-                'dddssdddsiiiiiiddddddddddddddddddddddddssssss',
+                'dddssdddsiiiiiidddddddddddddddddddddddssssss',
                 $venta_lv_n, $venta_sab_n, $venta_dom_n,
                 $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -607,9 +607,9 @@ try {
                   otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
-            // types: ss ddd ss ddd s iii iii d dddd ddddddd dddd ddddddd sssss = 45
+            // types: ss(2) ddd(3) ss(2) ddd(3) s(1) iiiiii(6) 23d's 5s's = 45
             $stN->bind_param(
-                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
+                'ssdddssdddsiiiiiiddddddddddddddddddddddsssss',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,

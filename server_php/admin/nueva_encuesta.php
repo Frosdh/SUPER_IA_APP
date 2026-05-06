@@ -1382,13 +1382,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <select name="acuerdo_logrado" required>
                                 <option value="">— Selecciona el resultado —</option>
                                 <option value="nueva_cita_campo">Nueva cita en campo</option>
-                                <option value="nueva_cita_oficina">Nueva cita en oficina</option>
-                                <option value="reprogramacion">Reprogramación</option>
-                                <option value="seguimiento_telefonico">Seguimiento telefónico</option>
-                                <option value="solicitud_credito">Solicitud de crédito</option>
-                                <option value="apertura_cuenta">Apertura de cuenta</option>
-                                <option value="sin_interes">Sin interés por ahora</option>
-                                <option value="otro">Otro</option>
+                                <option value="nueva_cita_oficina">Nueva cita en oficina / Solicitud</option>
+                                <option value="recolectar_documentacion">Recolectar documentación</option>
+                                <option value="levantamiento_campo">Levantamiento en campo</option>
+                                <option value="ninguno">Sin acuerdo / Sin interés</option>
                             </select>
                         </div>
                         <div class="fld">

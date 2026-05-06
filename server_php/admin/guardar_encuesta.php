@@ -65,6 +65,7 @@ $tiene_ruc   = pb('tiene_ruc');
 $tiene_rise  = pb('tiene_rise');
 $lat         = pn('lat');
 $lng         = pn('lng');
+$tipo_visita = pn('tipo_prospecto');   // frio | seguimiento | null
 
 // Datos de encuesta
 $ec_mantiene_ahorro = pb('ec_mantiene_cuenta_ahorro');
@@ -91,14 +92,24 @@ $int_inv       = (str_contains($prod_interes, 'inversion') ? 1 : 0);
 $int_cred      = (str_contains($prod_interes, 'credito')   ? 1 : 0);
 
 // Acuerdo y fechas
-$raw_acuerdo   = pn('acuerdo_logrado') ?? pn('tipo_acuerdo');
-$acuerdo_validos = [
-    'nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion',
-    'ninguno','levantamiento_campo',
-    'reprogramacion','seguimiento_telefonico','solicitud_credito',
-    'apertura_cuenta','sin_interes','otro',
+// DB ENUM válidos: 'nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'
+$raw_acuerdo     = pn('acuerdo_logrado') ?? pn('tipo_acuerdo');
+$db_enum_acuerdo = ['nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'];
+$acuerdo_map_form = [
+    'reprogramacion'         => 'ninguno',
+    'seguimiento_telefonico' => 'ninguno',
+    'solicitud_credito'      => 'nueva_cita_oficina',
+    'apertura_cuenta'        => 'nueva_cita_oficina',
+    'sin_interes'            => 'ninguno',
+    'otro'                   => 'ninguno',
 ];
-$acuerdo_logrado = in_array($raw_acuerdo, $acuerdo_validos) ? $raw_acuerdo : ($raw_acuerdo ? 'otro' : null);
+if ($raw_acuerdo === null || $raw_acuerdo === '') {
+    $acuerdo_logrado = null;
+} elseif (in_array($raw_acuerdo, $db_enum_acuerdo)) {
+    $acuerdo_logrado = $raw_acuerdo;
+} else {
+    $acuerdo_logrado = $acuerdo_map_form[$raw_acuerdo] ?? 'ninguno';
+}
 
 $fecha_acuerdo = pn('fecha_acuerdo');
 $hora_acuerdo  = pn('hora_acuerdo');
@@ -270,6 +281,8 @@ try {
     } else {
         // Crear tarea nueva (completada, fecha = hoy)
         $tarea_id = uuid4();
+        $tipo_tarea_map = ['frio' => 'visita_frio', 'seguimiento' => 'evaluacion'];
+        $tipo_tarea = $tipo_tarea_map[$tipo_visita] ?? 'prospecto_nuevo';
         $pdo->prepare("
             INSERT INTO tarea
                 (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
@@ -277,9 +290,9 @@ try {
                  fecha_realizada,  hora_realizada,
                  latitud_inicio, longitud_inicio,
                  observaciones)
-            VALUES (?,?,?,'prospecto_nuevo','completada',?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,'completada',?,?,?,?,?,?,?)
         ")->execute([
-            $tarea_id, $asesor_id, $cliente_id,
+            $tarea_id, $asesor_id, $cliente_id, $tipo_tarea,
             $hoy, $hora, $hoy, $hora,
             ($lat && is_numeric($lat) ? (float)$lat : null),
             ($lng && is_numeric($lng) ? (float)$lng : null),
@@ -329,6 +342,12 @@ try {
         'interes_inversion'         => $int_inv,
         'interes_credito'           => $int_cred,
         'nivel_interes_captado'     => $nivel_interes,
+        // Razones por las que no firmó / no está interesado
+        'razon_ya_trabaja_institucion' => pb('ec_razon_ya_trabaja'),
+        'razon_desconfia_servicios'    => pb('ec_razon_desconfia'),
+        'razon_agusto_actual'          => pb('ec_razon_agusto_actual'),
+        'razon_mala_experiencia'       => pb('ec_razon_mala_experiencia'),
+        'razon_otros'                  => pn('ec_razon_otros'),
         // Cierre
         'acuerdo_logrado'           => $acuerdo_logrado,
         'fecha_acuerdo'             => ($fecha_acuerdo ?: null),
@@ -493,12 +512,12 @@ try {
             switch ($prod) {
                 case 'ahorro':
                     $pdo->prepare("INSERT INTO ficha_cuenta_ahorros (id,ficha_id,tipo_ahorro,titular_nombre,titular_cedula,titular_celular,monto_inicial,frecuencia_deposito) VALUES (?,?,?,?,?,?,?,?)")
-                        ->execute([uuid4(), $fid, pn('fa_tipo_ahorro'), pn('fa_nombre') ?? $nombre_full, pn('fa_cedula') ?? $cedula, pn('fa_celular') ?? $celular, pn('fa_monto_inicial'), pn('fa_frecuencia_deposito')]);
+                        ->execute([uuid4(), $fid, pn('fa_tipo_ahorro'), pn('fa_nombre') ?? $nombre_full, pn('fa_cedula') ?? $cedula, pn('fa_celular') ?? $celular, pn('fa_monto_inicial'), pn('fa_frecuencia')]);
                     $fichas_ok[] = 'Ahorro';
                     break;
                 case 'corriente':
                     $pdo->prepare("INSERT INTO ficha_cuenta_corriente (id,ficha_id,tipo_cc,titular_nombre,titular_cedula,titular_celular) VALUES (?,?,?,?,?,?)")
-                        ->execute([uuid4(), $fid, pn('fc_tipo'), pn('fc_nombre') ?? $nombre_full, pn('fc_cedula') ?? $cedula, pn('fc_celular') ?? $celular]);
+                        ->execute([uuid4(), $fid, pn('fc_tipo_cc'), pn('fc_nombre') ?? $nombre_full, pn('fc_cedula') ?? $cedula, pn('fc_celular') ?? $celular]);
                     $fichas_ok[] = 'Corriente';
                     break;
                 case 'inversion':

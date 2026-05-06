@@ -25,7 +25,8 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
   final TextEditingController _buscarCtrl = TextEditingController();
   final FocusNode _buscarFocus = FocusNode();
 
-  bool _cargando = false;
+  bool _cargando       = false;
+  bool _abriendo       = false;   // overlay mientras carga la pantalla de encuesta
   String? _error;
   List<Map<String, dynamic>> _resultados = [];
   bool _buscado = false;
@@ -117,6 +118,13 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
 
   // ── Abrir levantamiento del prospecto seleccionado ──────────
   Future<void> _abrirLevantamiento(Map<String, dynamic> cliente) async {
+    if (_abriendo) return;          // evitar doble tap
+    setState(() => _abriendo = true);
+
+    // Pequeña pausa para que el overlay se pinte antes de la navegación
+    await Future.delayed(const Duration(milliseconds: 80));
+
+    if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -124,22 +132,26 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
           tipoTarea:      'levantamiento',
           incluirEmpresa: true,
           initialData: {
-            'id':               cliente['id']            ?? '',
-            'nombre':          cliente['nombre']         ?? '',
-            'cedula':          cliente['cedula']         ?? '',
-            'telefono':        cliente['telefono']       ?? '',
-            'celular':         cliente['celular']        ?? '',
-            'email':           cliente['email']          ?? '',
-            'direccion':       cliente['direccion']      ?? '',
-            'ciudad':          cliente['ciudad']         ?? '',
-            'nombre_empresa':  cliente['nombre_empresa'] ?? '',
-            'es_cliente':      '1',
+            'id':             cliente['id']            ?? '',
+            'nombre':         cliente['nombre']        ?? '',
+            'cedula':         cliente['cedula']        ?? '',
+            'telefono':       cliente['telefono']      ?? '',
+            'celular':        cliente['celular']       ?? '',
+            'email':          cliente['email']         ?? '',
+            'direccion':      cliente['direccion']     ?? '',
+            'ciudad':         cliente['ciudad']        ?? '',
+            'nombre_empresa': cliente['nombre_empresa'] ?? '',
+            'es_cliente':     '1',
           },
         ),
       ),
     );
-    // Al volver, recargar para reflejar cambio de estado
-    if (mounted && _buscarCtrl.text.trim().isNotEmpty) _buscar();
+
+    if (mounted) {
+      setState(() => _abriendo = false);
+      // Recargar para reflejar el cambio de estado (pendiente → completado)
+      if (_buscarCtrl.text.trim().isNotEmpty) _buscar();
+    }
   }
 
   // ── UI ────────────────────────────────────────────────────────
@@ -162,8 +174,10 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: Column(
+      body: Stack(
         children: [
+          Column(
+            children: [
           // ── Cabecera de búsqueda ──────────────────────────────
           Container(
             decoration: const BoxDecoration(
@@ -251,6 +265,15 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
 
           // ── Cuerpo: lista de resultados ───────────────────────
           Expanded(child: _buildCuerpo()),
+            ],
+          ),
+          // ── Overlay de carga — bloquea interacción mientras abre la encuesta ──
+          if (_abriendo)
+            ModalBarrier(dismissible: false, color: Colors.black.withOpacity(0.5)),
+          if (_abriendo)
+            const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
         ],
       ),
     );

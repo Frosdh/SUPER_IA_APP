@@ -163,9 +163,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   final _compraVieCtrl  = TextEditingController();
   final _compraSabCtrl  = TextEditingController();
   final _compraDomCtrl  = TextEditingController();
-  String? _mesAltaVenta;
-  String? _mesBajaVenta;
-  String? _mesAltaCompra;
   // Días de atención individuales
   bool _diaLun = true;
   bool _diaMar = true;
@@ -565,9 +562,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _compraVieCtrl.text = _d(n['compra_viernes']).toStringAsFixed(2) != '0.00' ? _d(n['compra_viernes']).toStringAsFixed(2) : lvCompra;
       _compraSabCtrl.text = _d(n['compra_sabado']).toStringAsFixed(2);
       _compraDomCtrl.text = _d(n['compra_domingo']).toStringAsFixed(2);
-      _mesAltaVenta       = _s(n['mes_alta_venta']).isEmpty  ? null : _s(n['mes_alta_venta']);
-      _mesBajaVenta       = _s(n['mes_baja_venta']).isEmpty  ? null : _s(n['mes_baja_venta']);
-      _mesAltaCompra      = _s(n['mes_alta_compra']).isEmpty ? null : _s(n['mes_alta_compra']);
       _diaLun = _i(n['dia_lun']) == 1;
       _diaMar = _i(n['dia_mar']) == 1;
       _diaMie = _i(n['dia_mie']) == 1;
@@ -1316,8 +1310,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'venta_miercoles': _tieneEmpresa ? _ventaMieCtrl.text.trim() : '',
       'venta_jueves':    _tieneEmpresa ? _ventaJueCtrl.text.trim() : '',
       'venta_viernes':   _tieneEmpresa ? _ventaVieCtrl.text.trim() : '',
-      'mes_alta_venta':  _tieneEmpresa ? (_mesAltaVenta ?? '') : '',
-      'mes_baja_venta':  _tieneEmpresa ? (_mesBajaVenta ?? '') : '',
       'compra_lv':       _tieneEmpresa ? avgCompraLv.toStringAsFixed(2) : '',
       'compra_sabado':   _tieneEmpresa ? _compraSabCtrl.text.trim() : '',
       'compra_domingo':  _tieneEmpresa ? _compraDomCtrl.text.trim() : '',
@@ -1326,7 +1318,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'compra_miercoles':_tieneEmpresa ? _compraMieCtrl.text.trim() : '',
       'compra_jueves':   _tieneEmpresa ? _compraJueCtrl.text.trim() : '',
       'compra_viernes':  _tieneEmpresa ? _compraVieCtrl.text.trim() : '',
-      'mes_alta_compra': _tieneEmpresa ? (_mesAltaCompra ?? '') : '',
       // Días de atención (individuales y agrupados para compatibilidad)
       'dias_atencion_lunes':  _tieneEmpresa ? (_diaLun ? '1' : '0') : '0',
       'dias_atencion_martes': _tieneEmpresa ? (_diaMar ? '1' : '0') : '0',
@@ -1514,7 +1505,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         final otrosVal   = _toDouble(_prodOtrosCtrl[i].text);
         final costoTotal = totalMat + manoVal + empaVal + otrosVal;             // (1)
         final unidProd   = _toDouble(_prodUnidadesProdCtrl[i].text);            // (2)
-        final costoUnit  = unidProd * costoTotal;                               // A = (2)×(1)
+        final costoUnit  = unidProd > 0 ? costoTotal / unidProd : 0.0;           // A = (1)÷(2)
         final precioB    = _toDouble(_prodPrecioCtrl[i].text);                  // B
         final unidVendC  = _toDouble(_prodUnidadesVendCtrl[i].text);            // C
         final unidVerifD = _toDouble(_prodUnidExistCtrl[i].text);               // D
@@ -2566,9 +2557,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                   _compraVieCtrl.clear();
                   _compraSabCtrl.clear();
                   _compraDomCtrl.clear();
-                  _mesAltaVenta = null;
-                  _mesBajaVenta = null;
-                  _mesAltaCompra = null;
                   _diaLun = true;
                   _diaMar = true;
                   _diaMie = true;
@@ -2810,15 +2798,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _diaCampo('Viernes', _ventaVieCtrl, Icons.trending_up_rounded),
           _diaCampo('Sábado', _ventaSabCtrl, Icons.trending_up_rounded),
           _diaCampo('Domingo', _ventaDomCtrl, Icons.trending_up_rounded),
-          const SizedBox(height: 10),
-          Row(children: [
-            Expanded(child: _dropdownMesSimple('Mes alto (venta)', _mesAltaVenta, (v) => setState(() => _mesAltaVenta = v))),
-            const SizedBox(width: 10),
-            Expanded(child: _dropdownMesSimple('Mes bajo (venta)', _mesBajaVenta, (v) => setState(() => _mesBajaVenta = v))),
-          ]),
-
           const SizedBox(height: 16),
-          _seccionTitulo('Comportamiento de compras (monto \$ al día)'),
           _seccionTitulo('Comportamiento de compras (monto \$ al día)'),
           const SizedBox(height: 6),
           _diaCampo('Lunes', _compraLunCtrl, Icons.shopping_cart_rounded),
@@ -2828,8 +2808,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _diaCampo('Viernes', _compraVieCtrl, Icons.shopping_cart_rounded),
           _diaCampo('Sábado', _compraSabCtrl, Icons.shopping_cart_rounded),
           _diaCampo('Domingo', _compraDomCtrl, Icons.shopping_cart_rounded),
-          const SizedBox(height: 10),
-          _dropdownMesSimple('Mes alto (compra)', _mesAltaCompra, (v) => setState(() => _mesAltaCompra = v)),
 
           const SizedBox(height: 14),
           _seccionTitulo('Días de atención'),
@@ -2871,57 +2849,65 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(height: 22),
           _seccionTitulo('Forma de cobro'),
           const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: ConstantColors.borderLight),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(children: [
-                  Icon(Icons.payments_rounded, size: 18, color: ConstantColors.primaryBlue),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('¿Qué % cobra en efectivo?',
-                      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5))),
-                  const SizedBox(width: 8),
-                  Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(6)),
-                      child: Text('💵 $_pctEfectivo% efectivo',
-                          style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
-                    ),
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(6)),
-                      child: Text('💳 ${100 - _pctEfectivo}% digital',
-                          style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
-                    ),
-                  ]),
-                ]),
-                Slider(
-                  value: _pctEfectivo.toDouble(),
-                  min: 0, max: 100, divisions: 20,
-                  activeColor: Colors.green.shade600,
-                  label: '$_pctEfectivo%',
-                  onChanged: (v) => setState(() => _pctEfectivo = v.round()),
+          // StatefulBuilder: el Slider reconstruye solo este bloque (no toda la pantalla)
+          StatefulBuilder(
+            builder: (context, setLocal) {
+              return Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: ConstantColors.borderLight),
                 ),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('0% efectivo\n(todo digital)', textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
-                    Text('50/50', style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
-                    Text('100% efectivo\n(todo en cash)', textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                    Row(children: [
+                      Icon(Icons.payments_rounded, size: 18, color: ConstantColors.primaryBlue),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text('¿Qué % cobra en efectivo?',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5))),
+                      const SizedBox(width: 8),
+                      Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(6)),
+                          child: Text('💵 $_pctEfectivo% efectivo',
+                              style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                        ),
+                        const SizedBox(height: 3),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(6)),
+                          child: Text('💳 ${100 - _pctEfectivo}% digital',
+                              style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                        ),
+                      ]),
+                    ]),
+                    Slider(
+                      value: _pctEfectivo.toDouble(),
+                      min: 0, max: 100, divisions: 20,
+                      activeColor: Colors.green.shade600,
+                      label: '$_pctEfectivo%',
+                      // setLocal: reconstruye solo este bloque mientras arrastra
+                      onChanged: (v) => setLocal(() => _pctEfectivo = v.round()),
+                      // setState del padre solo al soltar (para que el resumen se actualice)
+                      onChangeEnd: (v) => setState(() => _pctEfectivo = v.round()),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('0% efectivo\n(todo digital)', textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                        Text('50/50', style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                        Text('100% efectivo\n(todo en cash)', textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              );
+            },
           ),
 
           // ── Productos según tipo de empresa ─────────────────────
@@ -4811,7 +4797,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     // ── Fórmulas (igual que Excel) ─────────────────────────────
     double totalMateria()  => mats.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
     double costoTotal()    => totalMateria() + _toDouble(mano.text) + _toDouble(empaque.text) + _toDouble(otros.text);
-    double costoUnitario() => _toDouble(unidProd.text) * costoTotal(); // A = (2) × (1)
+    double costoUnitario() {                                           // A = (1) / (2)
+      final u = _toDouble(unidProd.text);
+      return u == 0 ? 0 : costoTotal() / u;
+    }
     double ventasMensuales()  => _toDouble(precioB.text) * _toDouble(unidVendC.text);   // B × C
     double costoDeVentas()    => costoUnitario() * _toDouble(unidVendC.text);            // A × C
     double inventarios()      => costoUnitario() * _toDouble(unidVerifD.text);           // A × D
@@ -4913,7 +4902,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     _campoNumProd(unidProd,  'Unidades producidas  (2)', Icons.production_quantity_limits_rounded, rebuild),
 
                     // A. Costo unitario = (1)/(2)
-                    _filaCalculadaDestacada('A.  Costo unitario  (2×1)', costoUnitario()),
+                    _filaCalculadaDestacada('A.  Costo unitario  (1÷2)', costoUnitario()),
                     const SizedBox(height: 8),
 
                     _campoNumProd(precioB,   'B.  Precio unitario',      Icons.sell_rounded,              rebuild),

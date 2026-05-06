@@ -587,9 +587,9 @@ try {
             $gfs_n = $g_fam_salud     ?? 0.0; $gfo_n  = $g_fam_otros     ?? 0.0;
             $gfi_n = $g_fam_imprevistos ?? 0.0;
 
-            // types: 45 params — ss ddd ss ddd s iii iii d dddd ddddddd dddd ddddddd s ssss
+            // types: 45 params — ss(2) ddd(3) ss(2) ddd(3) s(1) iiiiii(6) ddddd(5) ddddddd(7) dddd(4) ddddddd(7) sssss(5)
             $stN->bind_param(
-                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
+                'ssdddssdddsiiiiiiddddddddddddddddddddddsssss',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
