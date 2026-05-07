@@ -108,6 +108,7 @@ $cols_cp = [
     'paga_cuota_rise'    => "TINYINT(1) DEFAULT NULL",
     'emite_notas_venta'  => "TINYINT(1) DEFAULT NULL",
     'conoce_limite_rise' => "TINYINT(1) DEFAULT NULL",
+    'tiene_empresa'      => "TINYINT(1) DEFAULT 0",
 ];
 foreach ($cols_cp as $col => $def) {
     $r = $conn->query("SHOW COLUMNS FROM cliente_prospecto LIKE '$col'");
@@ -601,14 +602,14 @@ try {
             $st = $conn->prepare(
                 "INSERT INTO cliente_prospecto
                  (id, nombre, cedula, telefono, telefono2, email, direccion, ciudad,
-                  actividad, nombre_empresa, tiene_ruc, tiene_rise,
+                  actividad, nombre_empresa, tiene_ruc, tiene_rise, tiene_empresa,
                   asesor_id, latitud, longitud, origen_prospecto, estado)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prospecto')"
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prospecto')"
             );
             if ($st) {
-                $st->bind_param(str_repeat('s', 10) . 'ii' . 's' . 'dd' . 's',
+                $st->bind_param(str_repeat('s', 10) . 'iii' . 's' . 'dd' . 's',
                     $cliente_id, $nombre_completo, $cedula, $telefono, $celular, $email_c, $direccion, $ciudad,
-                    $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise,
+                    $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $tiene_empresa_post,
                     $asesor_id, $lat_ini, $lng_ini, $origen_prospecto
                 );
                 $st->execute();
@@ -621,14 +622,14 @@ try {
                     "UPDATE cliente_prospecto 
                      SET ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?, 
                          declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?, 
-                         emite_notas_venta=?, conoce_limite_rise=?
+                         emite_notas_venta=?, conoce_limite_rise=?, tiene_empresa=?
                      WHERE id=?"
                 );
                 if ($upd_extra) {
-                    $upd_extra->bind_param('sssssiiiiiiis', 
+                    $upd_extra->bind_param('sssssiiiiiiiis', 
                         $ruc_val, $rise_val, $tipo_empresa, $regimen_tributario, $numero_ruc,
                         $declara_iva, $emite_facturas, $lleva_contabilidad, $paga_cuota_rise,
-                        $emite_notas_venta, $conoce_limite_rise, $cliente_id
+                        $emite_notas_venta, $conoce_limite_rise, $tiene_empresa_post, $cliente_id
                     );
                     $upd_extra->execute();
                     $upd_extra->close();
@@ -643,18 +644,18 @@ try {
                  actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
                  ruc_val=?, rise_val=?, tipo_empresa=?,
                  regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
-                 paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?,
+                 paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, tiene_empresa=?,
                  asesor_id=?, origen_prospecto=?, estado=estado
              WHERE id=?"
         );
         if ($st) {
-            $upd_types = str_repeat('s', 8) . 'ii' . str_repeat('s', 5) . str_repeat('i', 6) . str_repeat('s', 3);
+            $upd_types = str_repeat('s', 8) . 'ii' . str_repeat('s', 5) . str_repeat('i', 7) . str_repeat('s', 3);
             $st->bind_param($upd_types,
                 $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
                 $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise,
                 $ruc_val, $rise_val, $tipo_empresa,
                 $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
-                $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,
+                $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise, $tiene_empresa_post,
                 $asesor_id, $origen_prospecto, $cliente_id
             );
             $st->execute();

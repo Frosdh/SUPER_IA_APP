@@ -56,30 +56,33 @@ if ($creditoProcesoId || $clienteId) {
         //    de empresa (encuesta_negocio) debe estar completo antes de aprobar ──
         if ($intentaAprobar && $clienteId) {
             $stCliente = $pdo->prepare(
-                "SELECT nombre_empresa FROM cliente_prospecto WHERE id = ? LIMIT 1"
+                "SELECT nombre_empresa, tiene_empresa FROM cliente_prospecto WHERE id = ? LIMIT 1"
             );
             $stCliente->execute([$clienteId]);
             $rowCliente = $stCliente->fetch();
-            $tieneEmpresa = $rowCliente && !empty(trim($rowCliente['nombre_empresa'] ?? ''));
+            // Si el flag tiene_empresa es 1, o si tiene un nombre de empresa, se requiere levantamiento
+            $tieneEmpresa = $rowCliente && (
+                ($rowCliente['tiene_empresa'] == 1) || 
+                (!empty(trim($rowCliente['nombre_empresa'] ?? '')))
+            );
 
             if ($tieneEmpresa) {
-                // Verificar que exista al menos un registro de encuesta_negocio
-                // con datos financieros básicos ingresados (levantar empresa)
-                $tableExists = (bool)$pdo->query("SHOW TABLES LIKE 'encuesta_negocio'")->fetchColumn();
+                // Verificar que exista al menos un registro de encuesta_negocio completo
                 $encNegocioCompleta = false;
-                if ($tableExists) {
-                    $stEnc = $pdo->prepare(
-                        "SELECT en.id FROM encuesta_negocio en
-                         INNER JOIN tarea t ON t.id = en.tarea_id
-                         WHERE t.cliente_prospecto_id = ?
-                           AND (en.venta_lv IS NOT NULL
-                                OR en.costos_ventas IS NOT NULL
-                                OR en.gastos_negocio IS NOT NULL)
-                         LIMIT 1"
-                    );
-                    $stEnc->execute([$clienteId]);
-                    $encNegocioCompleta = (bool)$stEnc->fetchColumn();
-                }
+                $stEnc = $pdo->prepare(
+                    "SELECT en.id FROM encuesta_negocio en
+                     INNER JOIN tarea t ON t.id COLLATE utf8mb4_unicode_ci = en.tarea_id COLLATE utf8mb4_unicode_ci
+                     WHERE t.cliente_prospecto_id COLLATE utf8mb4_unicode_ci = ?
+                       AND (
+                           (en.venta_lv IS NOT NULL AND en.venta_lv > 0)
+                           OR (en.costos_ventas IS NOT NULL AND en.costos_ventas > 0)
+                           OR (en.gastos_negocio IS NOT NULL AND en.gastos_negocio > 0)
+                       )
+                     LIMIT 1"
+                );
+                $stEnc->execute([$clienteId]);
+                $encNegocioCompleta = (bool)$stEnc->fetchColumn();
+
                 if (!$encNegocioCompleta) {
                     echo json_encode([
                         'status'  => 'error',

@@ -254,25 +254,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     // Antes de actualizar a 'aprobada', verificar reglas especiales para crédito
                     if ($accion === 'aprobar' && $tipoPost === 'credito') {
                         try {
-                            $stF = $pdo->prepare('SELECT fc.tiene_empresa, fp.cliente_cedula FROM ficha_credito fc JOIN ficha_producto fp ON fc.ficha_id = fp.id WHERE fp.id = ? LIMIT 1');
+                            $stF = $pdo->prepare('SELECT fc.tiene_empresa as tiene_empresa_fc, fp.cliente_cedula FROM ficha_credito fc JOIN ficha_producto fp ON fc.ficha_id = fp.id WHERE fp.id = ? LIMIT 1');
                             $stF->execute([$idFicha]);
                             $finfo = $stF->fetch(PDO::FETCH_ASSOC) ?: null;
-                            if ($finfo && !empty($finfo['tiene_empresa']) && (int)$finfo['tiene_empresa'] === 1) {
-                                // buscar cliente_prospecto.id por cédula
-                                $clienteId = null;
-                                if (!empty($finfo['cliente_cedula'])) {
-                                    $stC = $pdo->prepare('SELECT id FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
-                                    $stC->execute([ (string)$finfo['cliente_cedula'] ]);
-                                    $clienteId = $stC->fetchColumn() ?: null;
+                            
+                            $cedula = $finfo['cliente_cedula'] ?? null;
+                            $tieneEmpresa = false;
+
+                            // 1. Verificar si en la ficha se marcó que tiene empresa
+                            if ($finfo && !empty($finfo['tiene_empresa_fc']) && (int)$finfo['tiene_empresa_fc'] === 1) {
+                                $tieneEmpresa = true;
+                            }
+
+                            // 2. Buscar cliente_prospecto.id y verificar su flag 'tiene_empresa'
+                            $clienteId = null;
+                            if ($cedula) {
+                                $stC = $pdo->prepare('SELECT id, tiene_empresa FROM cliente_prospecto WHERE cedula = ? LIMIT 1');
+                                $stC->execute([ (string)$cedula ]);
+                                $cp_row = $stC->fetch(PDO::FETCH_ASSOC);
+                                if ($cp_row) {
+                                    $clienteId = $cp_row['id'];
+                                    if ((int)($cp_row['tiene_empresa'] ?? 0) === 1) {
+                                        $tieneEmpresa = true;
+                                    }
                                 }
+                            }
+
+                            if ($tieneEmpresa) {
                                 $tieneEncuestaNeg = false;
                                 if ($clienteId !== null) {
-                                    $stEN = $pdo->prepare('SELECT 1 FROM encuesta_negocio en JOIN tarea t ON en.tarea_id = t.id WHERE t.cliente_prospecto_id = ? LIMIT 1');
+                                    // Verificar que exista al menos un registro de encuesta_negocio con datos financieros
+                                    $stEN = $pdo->prepare('SELECT 1 FROM encuesta_negocio en 
+                                                         JOIN tarea t ON en.tarea_id COLLATE utf8mb4_unicode_ci = t.id COLLATE utf8mb4_unicode_ci
+                                                         WHERE t.cliente_prospecto_id COLLATE utf8mb4_unicode_ci = ? 
+                                                           AND (
+                                                               (en.venta_lv IS NOT NULL AND en.venta_lv > 0) OR 
+                                                               (en.costos_ventas IS NOT NULL AND en.costos_ventas > 0) OR 
+                                                               (en.gastos_negocio IS NOT NULL AND en.gastos_negocio > 0)
+                                                           )
+                                                         LIMIT 1');
                                     $stEN->execute([$clienteId]);
                                     if ($stEN->fetchColumn()) $tieneEncuestaNeg = true;
                                 }
+
                                 if (!$tieneEncuestaNeg) {
-                                    throw new Exception('No se puede aprobar: falta levantamiento de empresa completo. Complete "Levantamiento de empresa" antes de aprobar créditos cuando el prospecto tiene empresa.');
+                                    throw new Exception('No se puede aprobar: El prospecto tiene empresa pero falta completar el Levantamiento de Negocio (encuesta financiera). El asesor debe completar esta información desde la app.');
                                 }
                             }
                         } catch (Throwable $eCheck) {
