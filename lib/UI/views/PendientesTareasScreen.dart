@@ -845,6 +845,36 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                     ),
+                    if (tipo == 'nueva_cita_inversion' || tipo == 'prospecto_nuevo' || tipo == 'visita_frio') ...[
+                      const SizedBox(width: 10),
+                      ElevatedButton.icon(
+                        onPressed: tareaId.isEmpty
+                            ? null
+                            : () async {
+                                final result = await Navigator.of(context).push<bool?>(
+                                  MaterialPageRoute(
+                                    builder: (_) => NuevaEncuestaScreen(
+                                      tipoTarea: tipo,
+                                      tareaIdEdicion: tareaId,
+                                      incluirEmpresa: false,
+                                    ),
+                                  ),
+                                );
+                                if (result == true) await _cargar();
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: ConstantColors.primaryBlue,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.assignment_rounded, size: 16),
+                        label: const Text(
+                          'Realizar',
+                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                        ),
+                      ),
+                    ],
                     const SizedBox(width: 10),
                     ElevatedButton.icon(
                       onPressed: (tareaId.isEmpty || !buenVisto) ? null : () => _finalizarTarea(tareaId),
@@ -964,62 +994,90 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
           return buildEmpty('No hay tareas seleccionadas para hoy.');
         }
       } else {
-        final poolTareas = otras.where((t) => (t['es_pool']?.toString() ?? '0') == '1').toList();
-        final propiasTareas = otras.where((t) => (t['es_pool']?.toString() ?? '0') != '1').toList();
+        final now = DateTime.now();
+        final hoyDate = DateTime(now.year, now.month, now.day);
+        final finSemana = hoyDate.add(Duration(days: 7 - hoyDate.weekday));
+
+        // Helpers de fecha
+        DateTime? _parseDate(String? s) {
+          if (s == null || s.isEmpty) return null;
+          try { return DateTime.parse(s.split('T').first); } catch (_) { return null; }
+        }
+
+        final poolTareas     = otras.where((t) => (t['es_pool']?.toString() ?? '0') == '1').toList();
+        final propiasTareas  = otras.where((t) => (t['es_pool']?.toString() ?? '0') != '1').toList();
+
+        // Agrupar propias por período
+        final vencidas   = propiasTareas.where((t) {
+          final f = _parseDate(t['fecha_programada']?.toString());
+          return f != null && f.isBefore(hoyDate);
+        }).toList();
+
+        final tareasHoy  = propiasTareas.where((t) {
+          final f = _parseDate(t['fecha_programada']?.toString());
+          return f != null && f.isAtSameMomentAs(hoyDate);
+        }).toList();
+
+        final estaSemana = propiasTareas.where((t) {
+          final f = _parseDate(t['fecha_programada']?.toString());
+          return f != null && f.isAfter(hoyDate) && !f.isAfter(finSemana);
+        }).toList();
+
+        final futuras    = propiasTareas.where((t) {
+          final f = _parseDate(t['fecha_programada']?.toString());
+          return f != null && f.isAfter(finSemana);
+        }).toList();
+
+        // Sin fecha programada → agrupar aparte
+        final sinFecha   = propiasTareas.where((t) {
+          final f = _parseDate(t['fecha_programada']?.toString());
+          return f == null;
+        }).toList();
 
         if (poolTareas.isEmpty && propiasTareas.isEmpty) {
           return buildEmpty('No hay tareas para mostrar.');
         }
 
-        // ── Sección: Tareas disponibles (pool) ──
-        if (poolTareas.isNotEmpty) {
+        void addSection(String title, List<Map<String,dynamic>> items, {Color? titleColor, IconData? icon}) {
+          if (items.isEmpty) return;
           widgets.add(
             Padding(
-              padding: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.only(top: 6, bottom: 10),
               child: Row(
                 children: [
-                  Icon(Icons.inbox_rounded, color: Colors.teal.shade300, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Tareas disponibles',
-                    style: TextStyle(
-                      color: Colors.teal.shade200,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
+                  if (icon != null) ...[Icon(icon, size: 16, color: titleColor ?? ConstantColors.textWhite), const SizedBox(width: 6)],
+                  Text(title, style: TextStyle(color: titleColor ?? ConstantColors.textWhite, fontWeight: FontWeight.w800, fontSize: 14)),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (titleColor ?? ConstantColors.textWhite).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    child: Text('${items.length}', style: TextStyle(color: titleColor ?? ConstantColors.textWhite, fontWeight: FontWeight.w700, fontSize: 12)),
                   ),
                 ],
               ),
             ),
           );
-          for (final t in poolTareas) {
+          for (final t in items) {
             widgets.add(card(t));
             widgets.add(const SizedBox(height: 10));
           }
-          widgets.add(const SizedBox(height: 6));
         }
 
-        // ── Sección: Mis tareas programadas ──
-        if (propiasTareas.isNotEmpty) {
-          widgets.add(
-            const Padding(
-              padding: EdgeInsets.only(bottom: 10),
-              child: Text(
-                'Mis tareas programadas',
-                style: TextStyle(
-                  color: ConstantColors.textWhite,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          );
+        // Pool primero
+        if (poolTareas.isNotEmpty) {
+          addSection('Tareas disponibles', poolTareas, titleColor: Colors.teal.shade200, icon: Icons.inbox_rounded);
+          widgets.add(const SizedBox(height: 4));
         }
 
-        for (final t in propiasTareas) {
-          widgets.add(card(t));
-          widgets.add(const SizedBox(height: 10));
-        }
+        // Luego propias agrupadas
+        addSection('Vencidas / sin hacer', vencidas,   titleColor: Colors.red.shade300,    icon: Icons.warning_amber_rounded);
+        addSection('Hoy',                  tareasHoy,  titleColor: Colors.amber.shade300,  icon: Icons.today_rounded);
+        addSection('Esta semana',          estaSemana, titleColor: Colors.blue.shade300,   icon: Icons.date_range_rounded);
+        addSection('Próximas semanas',     futuras,    titleColor: Colors.green.shade300,  icon: Icons.event_rounded);
+        addSection('Sin fecha asignada',   sinFecha,   titleColor: ConstantColors.textGrey, icon: Icons.schedule_rounded);
       }
 
       if (widgets.isNotEmpty) {
@@ -1038,9 +1096,9 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
           backgroundColor: ConstantColors.backgroundDark,
           foregroundColor: ConstantColors.textWhite,
           elevation: 0,
-          title: const Text(
-            'Lista tareas',
-            style: TextStyle(fontWeight: FontWeight.w800),
+          title: Text(
+            'Lista tareas (${_tareas.length})',
+            style: const TextStyle(fontWeight: FontWeight.w800),
           ),
           actions: [
             IconButton(

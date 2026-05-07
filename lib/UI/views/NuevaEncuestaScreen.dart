@@ -293,6 +293,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // Nueva funcionalidad: propuesta antes del vencimiento
   bool? _propuestaPrevVenc;
   DateTime? _fechaPrevVencInv;
+  TimeOfDay? _horaPrevVencInv;
   final _propuestaInvCtrl = TextEditingController();
 
   // Bancos para cuentas ahorro/corriente
@@ -1498,6 +1499,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         'fecha_previa_vencimiento': _fechaPrevVencInv != null
           ? '${_fechaPrevVencInv!.year}-${_fechaPrevVencInv!.month.toString().padLeft(2, '0')}-${_fechaPrevVencInv!.day.toString().padLeft(2, '0')}'
           : '',
+        'hora_previa_vencimiento': _horaPrevVencInv != null
+          ? '${_horaPrevVencInv!.hour.toString().padLeft(2, '0')}:${_horaPrevVencInv!.minute.toString().padLeft(2, '0')}:00'
+          : '',
         'propuesta_inversion': _propuestaInvCtrl.text.trim(),
         'tiene_operaciones_crediticias':
           _tieneOpsCred == null ? '' : (_tieneOpsCred! ? '1' : '0'),
@@ -1705,6 +1709,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 'post_venta':            'Post venta',
                 'represtamo':            'Représ tamo',
                 'seguimiento':           'Seguimiento',
+                'nueva_cita_inversion':  '💰 Nueva cita de inversión',
               };
               return labels[tipo] ?? tipo.replaceAll('_', ' ');
             }
@@ -4563,15 +4568,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             // Fecha y hora para crear la tarea/propuesta
             _fieldFecha(
               label: 'Fecha de la propuesta (tarea)',
-              fecha: _fechaAcuerdo,
+              fecha: _fechaPrevVencInv,
               onPick: () => _seleccionarFecha((d) => setState(() {
-                _fechaAcuerdo = d;
-                // al elegir fecha asumimos que se quiere agendar una cita en campo
-                _acuerdo = 'nueva_cita_campo';
+                _fechaPrevVencInv = d;
               })),
             ),
             const SizedBox(height: 8),
-            _fieldHora(),
+            _fieldHora(
+              label: 'Hora de la propuesta',
+              hora: _horaPrevVencInv,
+              onPick: (t) => setState(() => _horaPrevVencInv = t),
+            ),
             const SizedBox(height: 8),
             _campo(
               controller: _propuestaInvCtrl,
@@ -4741,7 +4748,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 _seleccionarFecha((d) => setState(() => _fechaAcuerdo = d)),
           ),
           const SizedBox(height: 8),
-          _fieldHora(),
+          _fieldHora(
+            label: 'Hora del acuerdo',
+            hora: _horaAcuerdo,
+            onPick: (t) => setState(() => _horaAcuerdo = t),
+          ),
         ],
         const SizedBox(height: 16),
         _campo(
@@ -5929,12 +5940,16 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
-  Widget _fieldHora() {
+  Widget _fieldHora({
+    required String label,
+    required TimeOfDay? hora,
+    required ValueChanged<TimeOfDay> onPick,
+  }) {
     return GestureDetector(
       onTap: () async {
         final t = await showTimePicker(
           context: context,
-          initialTime: _horaAcuerdo ?? TimeOfDay.now(),
+          initialTime: hora ?? TimeOfDay.now(),
           builder: (ctx, child) => Theme(
             data: ThemeData.dark().copyWith(
               colorScheme: ColorScheme.dark(primary: ConstantColors.warning),
@@ -5942,7 +5957,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             child: child!,
           ),
         );
-        if (t != null) setState(() => _horaAcuerdo = t);
+        if (t != null) onPick(t);
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -5957,11 +5972,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                 color: ConstantColors.warning, size: 20),
             const SizedBox(width: 12),
             Text(
-              _horaAcuerdo != null
-                  ? _horaAcuerdo!.format(context)
-                  : 'Hora del acuerdo',
+              hora != null ? hora.format(context) : label,
               style: TextStyle(
-                color: _horaAcuerdo != null
+                color: hora != null
                     ? ConstantColors.textDark
                     : ConstantColors.textDarkGrey,
                 fontSize: 14,

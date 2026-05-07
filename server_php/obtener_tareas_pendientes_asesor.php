@@ -40,34 +40,47 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $desde)) {
 }
 
 try {
-    // Resolver asesor_id desde usuario_id (y validar asesor_id si viene)
-    $st = $conn->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
-    $st->bind_param('s', $usuario_id);
-    $st->execute();
-    $row = $st->get_result()->fetch_assoc();
-    $st->close();
+    // 1. Priorizar asesor_id del POST (si viene)
+    // 2. Si no viene, resolver desde usuario_id
+    $asesor_id = $asesor_id_in;
 
-    if (!$row || empty($row['id'])) {
-        echo json_encode(['status' => 'error', 'message' => 'Asesor no encontrado para este usuario'], JSON_UNESCAPED_UNICODE);
+    if ($asesor_id === '') {
+        $st = $conn->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
+        $st->bind_param('s', $usuario_id);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $st->close();
+
+        if ($row && !empty($row['id'])) {
+            $asesor_id = (string)$row['id'];
+        }
+    }
+
+    if ($asesor_id === '') {
+        echo json_encode(['status' => 'error', 'message' => 'No se pudo determinar el ID de asesor'], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
-    $asesor_id = (string)$row['id'];
-    if ($asesor_id_in !== '' && $asesor_id_in !== $asesor_id) {
-        echo json_encode(['status' => 'error', 'message' => 'asesor_id no coincide con la sesion'], JSON_UNESCAPED_UNICODE);
-        exit;
+    // Asegurar que el ENUM de tipo_tarea incluya nueva_cita_inversion
+    $colTarea = $conn->query("SHOW COLUMNS FROM tarea LIKE 'tipo_tarea'")->fetch_assoc();
+    if ($colTarea && strpos($colTarea['Type'], "'nueva_cita_inversion'") === false) {
+        $conn->query("ALTER TABLE tarea MODIFY COLUMN tipo_tarea ENUM(
+            'prospecto_nuevo','visita_frio','evaluacion','recuperacion',
+            'post_venta','represtamo','documentos_pendientes',
+            'nueva_cita_campo','nueva_cita_oficina','nueva_cita_inversion',
+            'levantamiento','seguimiento'
+        ) NOT NULL DEFAULT 'prospecto_nuevo'");
     }
 
     // Asegurar columnas para selección diaria / fijado (migración no destructiva)
     foreach ([
         'estado_seleccion_prev' => "ADD COLUMN estado_seleccion_prev VARCHAR(20) DEFAULT NULL AFTER estado",
-        'seleccionada_dia'      => "ADD COLUMN seleccionada_dia DATE DEFAULT NULL AFTER estado_seleccion_prev",
-        'seleccionada_at'       => "ADD COLUMN seleccionada_at DATETIME DEFAULT NULL AFTER seleccionada_dia",
-        'seleccion_fijada'      => "ADD COLUMN seleccion_fijada TINYINT(1) NOT NULL DEFAULT 0 AFTER seleccionada_at",
-        'seleccion_fijada_at'   => "ADD COLUMN seleccion_fijada_at DATETIME DEFAULT NULL AFTER seleccion_fijada",
+        'seleccionada_dia'      => "ADD COLUMN seleccionada_dia VARCHAR(10) DEFAULT NULL",
+        'seleccion_fijada'      => "ADD COLUMN seleccion_fijada TINYINT(1) DEFAULT 0",
+        'fecha_seleccion_fijada'=> "ADD COLUMN fecha_seleccion_fijada DATE DEFAULT NULL"
     ] as $col => $ddl) {
-        $chk = $conn->query("SHOW COLUMNS FROM tarea LIKE '$col'");
-        if ($chk && $chk->num_rows === 0) {
+        $check = $conn->query("SHOW COLUMNS FROM tarea LIKE '$col'");
+        if ($check && $check->num_rows === 0) {
             $conn->query("ALTER TABLE tarea $ddl");
         }
     }
@@ -136,7 +149,7 @@ try {
         LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
         WHERE $tipoClause (
             (
-                t.asesor_id = ?
+                (t.asesor_id = ? OR TRIM(t.asesor_id) = TRIM(?))
                 AND (
                     t.estado IN ('programada','pendiente','postergada','en_proceso')
                     OR (t.estado = 'completada' AND t.fecha_realizada >= ?)
@@ -144,20 +157,21 @@ try {
             )
             OR
             (
-                t.asesor_id IS NULL
+                (t.asesor_id IS NULL OR TRIM(t.asesor_id) = '')
                 AND t.seleccion_fijada = 0
                 AND t.estado IN ('programada','pendiente','postergada')
             )
         )
         ORDER BY
           CASE WHEN t.estado = 'completada' THEN t.fecha_realizada ELSE t.fecha_programada END ASC,
-          CASE WHEN t.estado = 'completada' THEN t.hora_realizada  ELSE t.hora_programada  END ASC,
-          t.created_at DESC
+          t.created_at DESC,
+          CASE WHEN t.estado = 'completada' THEN t.hora_realizada  ELSE t.hora_programada  END ASC
         LIMIT 300
     ";
 
     $st = $conn->prepare($sql);
-    $st->bind_param('ss', $asesor_id, $desde);
+    // Bind de parámetros: asesor_id (1), asesor_id (2), desde (3)
+    $st->bind_param('sss', $asesor_id, $asesor_id, $desde);
     $st->execute();
     $res = $st->get_result();
 
@@ -192,10 +206,32 @@ try {
     }
     $st->close();
 
+    // DEBUG: Log if nueva_cita_inversion is found
+    $countInv = 0;
+    foreach ($tareas as $tx) {
+        if ($tx['tipo_tarea'] === 'nueva_cita_inversion') $countInv++;
+    }
+    error_log("[obtener_tareas_pendientes_asesor] Total: " . count($tareas) . " | Inversion: $countInv | Asesor: $asesor_id");
+
+    // DEBUG: Get total tasks for this asesor in DB
+    $stDbg = $conn->prepare("SELECT COUNT(*) as total FROM tarea WHERE asesor_id = ?");
+    $stDbg->bind_param('s', $asesor_id);
+    $stDbg->execute();
+    $dbgRow = $stDbg->get_result()->fetch_assoc();
+    $totalDB = $dbgRow['total'] ?? 0;
+    $stDbg->close();
+
+    // DEBUG: Get enum definition
+    $colT = $conn->query("SHOW COLUMNS FROM tarea LIKE 'tipo_tarea'")->fetch_assoc();
+    $enumDef = $colT ? $colT['Type'] : 'unknown';
+
+    // DEBUG: Collect all unique types found in results
+    $typesFound = [];
     echo json_encode([
         'status' => 'success',
         'asesor_id' => $asesor_id,
         'desde' => $desde,
+        'total_db' => $totalDB,
         'tareas' => $tareas,
     ], JSON_UNESCAPED_UNICODE);
 
