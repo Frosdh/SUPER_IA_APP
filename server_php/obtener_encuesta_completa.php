@@ -323,11 +323,17 @@ try {
                 'compra_miercoles'       => isset($r['compra_miercoles'])? (float)$r['compra_miercoles']: null,
                 'compra_jueves'          => isset($r['compra_jueves'])   ? (float)$r['compra_jueves']   : null,
                 'compra_viernes'         => isset($r['compra_viernes'])  ? (float)$r['compra_viernes']  : null,
-                'dia_lunes'              => isset($r['dia_lunes'])    ? (int)$r['dia_lunes']    : 0,
-                'dia_martes'             => isset($r['dia_martes'])   ? (int)$r['dia_martes']   : 0,
-                'dia_miercoles'          => isset($r['dia_miercoles'])? (int)$r['dia_miercoles']: 0,
-                'dia_jueves'             => isset($r['dia_jueves'])   ? (int)$r['dia_jueves']   : 0,
-                'dia_viernes'            => isset($r['dia_viernes'])  ? (int)$r['dia_viernes']  : 0,
+                // Claves cortas que Flutter lee: n['dia_lun'], n['dia_mar'], etc.
+                'dia_lun'                => isset($r['dia_lunes'])    ? (int)$r['dia_lunes']    : 0,
+                'dia_mar'                => isset($r['dia_martes'])   ? (int)$r['dia_martes']   : 0,
+                'dia_mie'                => isset($r['dia_miercoles'])? (int)$r['dia_miercoles']: 0,
+                'dia_jue'                => isset($r['dia_jueves'])   ? (int)$r['dia_jueves']   : 0,
+                'dia_vie'                => isset($r['dia_viernes'])  ? (int)$r['dia_viernes']  : 0,
+                // Productos, activos y comercio (JSON)
+                'comercio_productos_json' => $r['comercio_productos_json'] ?? null,
+                'productos_json'          => $r['productos_json']          ?? null,
+                'activos_negocio_json'    => $r['activos_negocio_json']    ?? null,
+                'activos_hogar_json'      => $r['activos_hogar_json']      ?? null,
             ];
         }
     } catch (\Throwable $eEn) {

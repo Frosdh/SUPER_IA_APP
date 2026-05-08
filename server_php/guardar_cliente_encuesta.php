@@ -262,6 +262,22 @@ $mes_alta_compra    = strOrNull($_POST['mes_alta_compra'] ?? '');
 $dia_lv             = (int)($_POST['dias_atencion_lv'] ?? 0);
 $dia_sab            = (int)($_POST['dias_atencion_sab'] ?? 0);
 $dia_dom            = (int)($_POST['dias_atencion_dom'] ?? 0);
+// Ventas/compras/días individuales por día (Flutter los envía separados)
+$venta_lunes     = floatOrNull($_POST['venta_lunes']     ?? '');
+$venta_martes    = floatOrNull($_POST['venta_martes']    ?? '');
+$venta_miercoles = floatOrNull($_POST['venta_miercoles'] ?? '');
+$venta_jueves    = floatOrNull($_POST['venta_jueves']    ?? '');
+$venta_viernes   = floatOrNull($_POST['venta_viernes']   ?? '');
+$compra_lunes    = floatOrNull($_POST['compra_lunes']    ?? '');
+$compra_martes   = floatOrNull($_POST['compra_martes']   ?? '');
+$compra_miercoles= floatOrNull($_POST['compra_miercoles']?? '');
+$compra_jueves   = floatOrNull($_POST['compra_jueves']   ?? '');
+$compra_viernes  = floatOrNull($_POST['compra_viernes']  ?? '');
+$dia_lunes       = (int)($_POST['dias_atencion_lunes']     ?? 0);
+$dia_martes      = (int)($_POST['dias_atencion_martes']    ?? 0);
+$dia_miercoles   = (int)($_POST['dias_atencion_miercoles'] ?? 0);
+$dia_jueves      = (int)($_POST['dias_atencion_jueves']    ?? 0);
+$dia_viernes     = (int)($_POST['dias_atencion_viernes']   ?? 0);
 $pct_contado        = intOrNull($_POST['pct_contado'] ?? null);
 $pct_credito        = intOrNull($_POST['pct_credito'] ?? null);
 $pct_efectivo       = intOrNull($_POST['pct_efectivo'] ?? null);
@@ -298,6 +314,11 @@ $inmuebles_negocio_json  = $_POST['inmuebles_negocio_json']  ?? null;
 $inmuebles_hogar_json    = $_POST['inmuebles_hogar_json']    ?? null;
 // Otras deudas (JSON)
 $otras_deudas_json = $_POST['otras_deudas_json'] ?? null;
+// Productos y activos fijos (JSON)
+$comercio_productos_json = $_POST['comercio_productos_json'] ?? null;
+$productos_json          = $_POST['productos_json']          ?? null;
+$activos_negocio_json    = $_POST['activos_negocio_json']    ?? null;
+$activos_hogar_json      = $_POST['activos_hogar_json']      ?? null;
 
 // Normalize/validate acuerdo: accept frontend variants and map to DB enum values
 // Use the raw incoming value so we can map human-friendly labels sent by the app
@@ -482,6 +503,27 @@ if ($tiene_empresa_post === 1) {
         "vehiculos_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN vehiculos_hogar_json LONGTEXT DEFAULT NULL",
         "inmuebles_negocio_json"  => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_negocio_json LONGTEXT DEFAULT NULL",
         "inmuebles_hogar_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN inmuebles_hogar_json LONGTEXT DEFAULT NULL",
+        // Columnas individuales por día (Flutter las envía separadas)
+        "venta_lunes"     => "ALTER TABLE encuesta_negocio ADD COLUMN venta_lunes DECIMAL(12,2) DEFAULT NULL",
+        "venta_martes"    => "ALTER TABLE encuesta_negocio ADD COLUMN venta_martes DECIMAL(12,2) DEFAULT NULL",
+        "venta_miercoles" => "ALTER TABLE encuesta_negocio ADD COLUMN venta_miercoles DECIMAL(12,2) DEFAULT NULL",
+        "venta_jueves"    => "ALTER TABLE encuesta_negocio ADD COLUMN venta_jueves DECIMAL(12,2) DEFAULT NULL",
+        "venta_viernes"   => "ALTER TABLE encuesta_negocio ADD COLUMN venta_viernes DECIMAL(12,2) DEFAULT NULL",
+        "compra_lunes"    => "ALTER TABLE encuesta_negocio ADD COLUMN compra_lunes DECIMAL(12,2) DEFAULT NULL",
+        "compra_martes"   => "ALTER TABLE encuesta_negocio ADD COLUMN compra_martes DECIMAL(12,2) DEFAULT NULL",
+        "compra_miercoles"=> "ALTER TABLE encuesta_negocio ADD COLUMN compra_miercoles DECIMAL(12,2) DEFAULT NULL",
+        "compra_jueves"   => "ALTER TABLE encuesta_negocio ADD COLUMN compra_jueves DECIMAL(12,2) DEFAULT NULL",
+        "compra_viernes"  => "ALTER TABLE encuesta_negocio ADD COLUMN compra_viernes DECIMAL(12,2) DEFAULT NULL",
+        "dia_lunes"       => "ALTER TABLE encuesta_negocio ADD COLUMN dia_lunes TINYINT(1) NOT NULL DEFAULT 0",
+        "dia_martes"      => "ALTER TABLE encuesta_negocio ADD COLUMN dia_martes TINYINT(1) NOT NULL DEFAULT 0",
+        "dia_miercoles"   => "ALTER TABLE encuesta_negocio ADD COLUMN dia_miercoles TINYINT(1) NOT NULL DEFAULT 0",
+        "dia_jueves"      => "ALTER TABLE encuesta_negocio ADD COLUMN dia_jueves TINYINT(1) NOT NULL DEFAULT 0",
+        "dia_viernes"     => "ALTER TABLE encuesta_negocio ADD COLUMN dia_viernes TINYINT(1) NOT NULL DEFAULT 0",
+        // Productos y activos fijos
+        "comercio_productos_json" => "ALTER TABLE encuesta_negocio ADD COLUMN comercio_productos_json LONGTEXT DEFAULT NULL",
+        "productos_json"          => "ALTER TABLE encuesta_negocio ADD COLUMN productos_json LONGTEXT DEFAULT NULL",
+        "activos_negocio_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN activos_negocio_json LONGTEXT DEFAULT NULL",
+        "activos_hogar_json"      => "ALTER TABLE encuesta_negocio ADD COLUMN activos_hogar_json LONGTEXT DEFAULT NULL",
     ];
     foreach ($cols_faltantes as $col => $sql) {
         $chk = $conn->query("SHOW COLUMNS FROM encuesta_negocio LIKE '$col'");
@@ -770,6 +812,13 @@ try {
             $gfb_n = $g_fam_serv_bas  ?? 0.0; $gfe_n  = $g_fam_educacion ?? 0.0;
             $gfs_n = $g_fam_salud     ?? 0.0; $gfo_n  = $g_fam_otros     ?? 0.0;
             $gfi_n = $g_fam_imprevistos ?? 0.0;
+            // Días individuales normalizados
+            $vln_n = $venta_lunes     ?? 0.0; $vmr_n = $venta_martes    ?? 0.0;
+            $vmi_n = $venta_miercoles ?? 0.0; $vju_n = $venta_jueves    ?? 0.0;
+            $vvi_n = $venta_viernes   ?? 0.0;
+            $cln_n = $compra_lunes    ?? 0.0; $cmr_n = $compra_martes   ?? 0.0;
+            $cmi_n = $compra_miercoles?? 0.0; $cju_n = $compra_jueves   ?? 0.0;
+            $cvi_n = $compra_viernes  ?? 0.0;
 
             // ── ¿Existe ya una fila para esta tarea? ──
             $stChkN = $conn->prepare('SELECT id FROM encuesta_negocio WHERE tarea_id = ? LIMIT 1');
@@ -790,12 +839,16 @@ try {
                          g_neg_sueldos=?, g_neg_arriendo=?, g_neg_serv_bas=?, g_neg_transporte=?, g_neg_mantenimiento=?, g_neg_otros=?, g_neg_imprevistos=?,
                          o_ing_conyuge=?, o_ing_arriendos=?, o_ing_pensiones=?, o_ing_otros=?,
                          g_fam_alim=?, g_fam_arriendo=?, g_fam_serv_bas=?, g_fam_educacion=?, g_fam_salud=?, g_fam_otros=?, g_fam_imprevistos=?,
-                         otras_deudas_json=?, vehiculos_negocio_json=?, vehiculos_hogar_json=?, inmuebles_negocio_json=?, inmuebles_hogar_json=?
+                         otras_deudas_json=?, vehiculos_negocio_json=?, vehiculos_hogar_json=?, inmuebles_negocio_json=?, inmuebles_hogar_json=?,
+                         venta_lunes=?, venta_martes=?, venta_miercoles=?, venta_jueves=?, venta_viernes=?,
+                         compra_lunes=?, compra_martes=?, compra_miercoles=?, compra_jueves=?, compra_viernes=?,
+                         dia_lunes=?, dia_martes=?, dia_miercoles=?, dia_jueves=?, dia_viernes=?,
+                         comercio_productos_json=?, productos_json=?, activos_negocio_json=?, activos_hogar_json=?
                      WHERE id = ?"
                 );
-                // types: 44 params (no tarea_id)
+                // 63 params: 59 anteriores + 4 nuevos JSON (ssss) + WHERE id (s) = sssss al final
                 $stN->bind_param(
-                    'dddssdddsiiiiiidddddddddddddddddddddddssssss',
+                    'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiisssss',
                     $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                     $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
                     $dia_lv, $dia_sab, $dia_dom,
@@ -805,6 +858,10 @@ try {
                     $oic_n, $oia_n, $oip_n, $oio_n,
                     $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
                     $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json, $inmuebles_negocio_json, $inmuebles_hogar_json,
+                    $vln_n, $vmr_n, $vmi_n, $vju_n, $vvi_n,
+                    $cln_n, $cmr_n, $cmi_n, $cju_n, $cvi_n,
+                    $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes,
+                    $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json,
                     $negocio_id
                 );
             } else {
@@ -820,12 +877,16 @@ try {
                       g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
                       o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
                       g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
-                      otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                      otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json,
+                      venta_lunes, venta_martes, venta_miercoles, venta_jueves, venta_viernes,
+                      compra_lunes, compra_martes, compra_miercoles, compra_jueves, compra_viernes,
+                      dia_lunes, dia_martes, dia_miercoles, dia_jueves, dia_viernes,
+                      comercio_productos_json, productos_json, activos_negocio_json, activos_hogar_json)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                 );
-                // original types (45 params)
+                // 64 params: 60 anteriores + 4 nuevos JSON (ssss)
                 $stN->bind_param(
-                    'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
+                    'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissss',
                     $negocio_id, $tarea_id,
                     $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                     $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -835,7 +896,11 @@ try {
                     $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
                     $oic_n, $oia_n, $oip_n, $oio_n,
                     $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
-                    $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json, $inmuebles_negocio_json, $inmuebles_hogar_json
+                    $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json, $inmuebles_negocio_json, $inmuebles_hogar_json,
+                    $vln_n, $vmr_n, $vmi_n, $vju_n, $vvi_n,
+                    $cln_n, $cmr_n, $cmi_n, $cju_n, $cvi_n,
+                    $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes,
+                    $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json
                 );
             }
 
