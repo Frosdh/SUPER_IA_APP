@@ -317,8 +317,18 @@ $otras_deudas_json = $_POST['otras_deudas_json'] ?? null;
 // Productos y activos fijos (JSON)
 $comercio_productos_json = $_POST['comercio_productos_json'] ?? null;
 $productos_json          = $_POST['productos_json']          ?? null;
-$activos_negocio_json    = $_POST['activos_negocio_json']    ?? null;
 $activos_hogar_json      = $_POST['activos_hogar_json']      ?? null;
+
+// Balance General / Saldos (Nuevos campos v2026-05-08)
+$caja_efectivo    = floatOrNull($_POST['caja_efectivo']     ?? '');
+$bancos_saldo     = floatOrNull($_POST['bancos_saldo']      ?? '');
+$cxp_netas        = floatOrNull($_POST['cxp_netas']         ?? '');
+$inv_mat_prima    = floatOrNull($_POST['inv_mat_prima']     ?? '');
+$inv_prod_proc    = floatOrNull($_POST['inv_prod_proc']     ?? '');
+$creditos_pagar   = floatOrNull($_POST['creditos_pagar']    ?? '');
+$proveedores      = floatOrNull($_POST['proveedores']       ?? '');
+$otras_deudas_cp  = floatOrNull($_POST['otras_deudas_cp']   ?? '');
+$pasivos_lp       = floatOrNull($_POST['pasivos_lp']        ?? '');
 
 // Normalize/validate acuerdo: accept frontend variants and map to DB enum values
 // Use the raw incoming value so we can map human-friendly labels sent by the app
@@ -524,6 +534,17 @@ if ($tiene_empresa_post === 1) {
         "productos_json"          => "ALTER TABLE encuesta_negocio ADD COLUMN productos_json LONGTEXT DEFAULT NULL",
         "activos_negocio_json"    => "ALTER TABLE encuesta_negocio ADD COLUMN activos_negocio_json LONGTEXT DEFAULT NULL",
         "activos_hogar_json"      => "ALTER TABLE encuesta_negocio ADD COLUMN activos_hogar_json LONGTEXT DEFAULT NULL",
+        // Balance General (v2026-05-08)
+        "caja_efectivo"           => "ALTER TABLE encuesta_negocio ADD COLUMN caja_efectivo DECIMAL(12,2) DEFAULT NULL",
+        "bancos_saldo"            => "ALTER TABLE encuesta_negocio ADD COLUMN bancos_saldo DECIMAL(12,2) DEFAULT NULL",
+        "cxp_netas"               => "ALTER TABLE encuesta_negocio ADD COLUMN cxp_netas DECIMAL(12,2) DEFAULT NULL",
+        "inv_mat_prima"           => "ALTER TABLE encuesta_negocio ADD COLUMN inv_mat_prima DECIMAL(12,2) DEFAULT NULL",
+        "inv_prod_proc"           => "ALTER TABLE encuesta_negocio ADD COLUMN inv_prod_proc DECIMAL(12,2) DEFAULT NULL",
+        // Pasivo de la empresa (v2026-05-08)
+        "creditos_pagar"          => "ALTER TABLE encuesta_negocio ADD COLUMN creditos_pagar DECIMAL(12,2) DEFAULT NULL",
+        "proveedores"             => "ALTER TABLE encuesta_negocio ADD COLUMN proveedores DECIMAL(12,2) DEFAULT NULL",
+        "otras_deudas_cp"         => "ALTER TABLE encuesta_negocio ADD COLUMN otras_deudas_cp DECIMAL(12,2) DEFAULT NULL",
+        "pasivos_lp"              => "ALTER TABLE encuesta_negocio ADD COLUMN pasivos_lp DECIMAL(12,2) DEFAULT NULL",
     ];
     foreach ($cols_faltantes as $col => $sql) {
         $chk = $conn->query("SHOW COLUMNS FROM encuesta_negocio LIKE '$col'");
@@ -826,6 +847,15 @@ try {
             $cln_n = $compra_lunes    ?? 0.0; $cmr_n = $compra_martes   ?? 0.0;
             $cmi_n = $compra_miercoles?? 0.0; $cju_n = $compra_jueves   ?? 0.0;
             $cvi_n = $compra_viernes  ?? 0.0;
+            // Balance General
+            $caja_n   = $caja_efectivo   ?? 0.0; $banco_n = $bancos_saldo  ?? 0.0;
+            $cxp_n    = $cxp_netas       ?? 0.0; $imp_n   = $inv_mat_prima ?? 0.0;
+            $ipp_n    = $inv_prod_proc   ?? 0.0;
+            // Pasivo de la empresa
+            $credpag_n = $creditos_pagar  ?? 0.0;
+            $prov_n    = $proveedores     ?? 0.0;
+            $otrcp_n   = $otras_deudas_cp ?? 0.0;
+            $paslp_n   = $pasivos_lp      ?? 0.0;
 
             // ── ¿Existe ya una fila para esta tarea? ──
             $stChkN = $conn->prepare('SELECT id FROM encuesta_negocio WHERE tarea_id = ? LIMIT 1');
@@ -850,12 +880,14 @@ try {
                          venta_lunes=?, venta_martes=?, venta_miercoles=?, venta_jueves=?, venta_viernes=?,
                          compra_lunes=?, compra_martes=?, compra_miercoles=?, compra_jueves=?, compra_viernes=?,
                          dia_lunes=?, dia_martes=?, dia_miercoles=?, dia_jueves=?, dia_viernes=?,
-                         comercio_productos_json=?, productos_json=?, activos_negocio_json=?, activos_hogar_json=?
+                         comercio_productos_json=?, productos_json=?, activos_negocio_json=?, activos_hogar_json=?,
+                         caja_efectivo=?, bancos_saldo=?, cxp_netas=?, inv_mat_prima=?, inv_prod_proc=?,
+                         creditos_pagar=?, proveedores=?, otras_deudas_cp=?, pasivos_lp=?
                      WHERE id = ?"
                 );
-                // 63 params: 59 anteriores + 4 nuevos JSON (ssss) + WHERE id (s) = sssss al final
+                // 72 params: type string length must match exactly
                 $stN->bind_param(
-                    'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiisssss',
+                    'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssddddddddds',
                     $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                     $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
                     $dia_lv, $dia_sab, $dia_dom,
@@ -869,6 +901,8 @@ try {
                     $cln_n, $cmr_n, $cmi_n, $cju_n, $cvi_n,
                     $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes,
                     $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json,
+                    $caja_n, $banco_n, $cxp_n, $imp_n, $ipp_n,
+                    $credpag_n, $prov_n, $otrcp_n, $paslp_n,
                     $negocio_id
                 );
             } else {
@@ -888,12 +922,14 @@ try {
                       venta_lunes, venta_martes, venta_miercoles, venta_jueves, venta_viernes,
                       compra_lunes, compra_martes, compra_miercoles, compra_jueves, compra_viernes,
                       dia_lunes, dia_martes, dia_miercoles, dia_jueves, dia_viernes,
-                      comercio_productos_json, productos_json, activos_negocio_json, activos_hogar_json)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                      comercio_productos_json, productos_json, activos_negocio_json, activos_hogar_json,
+                      caja_efectivo, bancos_saldo, cxp_netas, inv_mat_prima, inv_prod_proc,
+                      creditos_pagar, proveedores, otras_deudas_cp, pasivos_lp)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
                 );
-                // 64 params: 60 anteriores + 4 nuevos JSON (ssss)
+                // 73 params: type string length must match exactly
                 $stN->bind_param(
-                    'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissss',
+                    'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssddddddddd',
                     $negocio_id, $tarea_id,
                     $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                     $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -907,7 +943,9 @@ try {
                     $vln_n, $vmr_n, $vmi_n, $vju_n, $vvi_n,
                     $cln_n, $cmr_n, $cmi_n, $cju_n, $cvi_n,
                     $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes,
-                    $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json
+                    $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json,
+                    $caja_n, $banco_n, $cxp_n, $imp_n, $ipp_n,
+                    $credpag_n, $prov_n, $otrcp_n, $paslp_n
                 );
             }
 

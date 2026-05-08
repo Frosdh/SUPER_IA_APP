@@ -67,7 +67,19 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   /// Reemplaza el setState(() {}) que antes se llamaba desde todos los
   /// reb()/rebuild() dentro de _buildPasoEmpresaNegocio() — eliminando
   /// el rebuild masivo del árbol completo en cada keystroke.
-  final _flujoVersion = ValueNotifier<int>(0);
+  // --- Balance General Controllers ---
+  final TextEditingController _cajaEfectivoCtrl = TextEditingController();
+  final TextEditingController _bancosSaldoCtrl  = TextEditingController();
+  final TextEditingController _cxpNetasCtrl      = TextEditingController();
+  final TextEditingController _invMatPrimaCtrl  = TextEditingController();
+  final TextEditingController _invProdProcCtrl  = TextEditingController();
+  // ── PASIVO de la empresa ─────────────────────────────────────────────────
+  final TextEditingController _creditosPagarCtrl  = TextEditingController();
+  final TextEditingController _proveedoresCtrl    = TextEditingController();
+  final TextEditingController _otrasDeudaCPCtrl   = TextEditingController();
+  final TextEditingController _pasivosLPCtrl      = TextEditingController();
+
+  final ValueNotifier<int> _flujoVersion = ValueNotifier<int>(0);
 
   // ── Modo edición ─────────────────────────────────────────────
   bool _cargandoEdicion = false;
@@ -196,7 +208,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   List<int> get _subPasosEmpresaActivos {
     final p = <int>[0]; // siempre: ventas/compras
     if (_tipoServProduccion || _tipoComercio) p.add(1); // productos
-    p.addAll([2, 3, 4, 5]); // activos neg, activos hog, gastos, resumen
+    p.addAll([2, 3, 4, 5, 6]); // activos neg, activos hog, gastos, resumen, balance
     return p;
   }
 
@@ -206,13 +218,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   }
   bool get _esPrimerSubPasoEmpresa => _subPasosEmpresaActivos.indexOf(_subPasoEmpresa) == 0;
 
-  static const _subPasoTitulos = <int, String>{
-    0: '📊 Ventas y Compras',
-    1: '🏭 Productos',
+  final Map<int, String> _subPasoTitulos = {
+    0: '💰 Comportamiento de Ventas',
+    1: '📦 Detalle de Productos',
     2: '🏢 Activos del Negocio',
     3: '🏠 Activos del Hogar',
-    4: '💰 Gastos e Ingresos',
-    5: '📈 Resumen Financiero',
+    4: '💸 Gastos e Ingresos',
+    5: '📈 Flujo de Caja',
+    6: '📉 Balance General',
   };
 
   // ── Vehículos (tabla) ────────────────────────────────────
@@ -652,6 +665,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _gNegMantCtrl.text        = _d(n['g_neg_mantenimiento']).toStringAsFixed(2);
       _gNegOtrosCtrl.text       = _d(n['g_neg_otros']).toStringAsFixed(2);
       _gNegImprevistosCtrl.text = _d(n['g_neg_imprevistos']).toStringAsFixed(2);
+
+      // Balance General / Saldos
+      _cajaEfectivoCtrl.text = _d(n['caja_efectivo']).toStringAsFixed(2);
+      _bancosSaldoCtrl.text  = _d(n['bancos_saldo']).toStringAsFixed(2);
+      _cxpNetasCtrl.text     = _d(n['cxp_netas']).toStringAsFixed(2);
+      _invMatPrimaCtrl.text  = _d(n['inv_mat_prima']).toStringAsFixed(2);
+      _invProdProcCtrl.text  = _d(n['inv_prod_proc']).toStringAsFixed(2);
+      _creditosPagarCtrl.text = _d(n['creditos_pagar']).toStringAsFixed(2);
+      _proveedoresCtrl.text   = _d(n['proveedores']).toStringAsFixed(2);
+      _otrasDeudaCPCtrl.text  = _d(n['otras_deudas_cp']).toStringAsFixed(2);
+      _pasivosLPCtrl.text     = _d(n['pasivos_lp']).toStringAsFixed(2);
       // Otros ingresos desglosados
       _oIngConyugeCtrl.text   = _d(n['o_ing_conyuge']).toStringAsFixed(2);
       _oIngArriendosCtrl.text = _d(n['o_ing_arriendos']).toStringAsFixed(2);
@@ -1014,6 +1038,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _razonOtrosCtrl.dispose();
     _obsCtrl.dispose();
     _flujoVersion.dispose();
+    _creditosPagarCtrl.dispose();
+    _proveedoresCtrl.dispose();
+    _otrasDeudaCPCtrl.dispose();
+    _pasivosLPCtrl.dispose();
     super.dispose();
   }
 
@@ -1433,6 +1461,16 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'dias_atencion_viernes': _tieneEmpresa ? (_diaVie ? '1' : '0') : '0',
       'dias_atencion_sab': _tieneEmpresa ? (_diaSab ? '1' : '0') : '0',
       'dias_atencion_dom': _tieneEmpresa ? (_diaDom ? '1' : '0') : '0',
+      // Balance General
+      'caja_efectivo':   _tieneEmpresa ? _cajaEfectivoCtrl.text.trim() : '',
+      'bancos_saldo':    _tieneEmpresa ? _bancosSaldoCtrl.text.trim() : '',
+      'cxp_netas':       _tieneEmpresa ? _cxpNetasCtrl.text.trim() : '',
+      'inv_mat_prima':   _tieneEmpresa ? _invMatPrimaCtrl.text.trim() : '',
+      'inv_prod_proc':   _tieneEmpresa ? _invProdProcCtrl.text.trim() : '',
+      'creditos_pagar':  _tieneEmpresa ? _creditosPagarCtrl.text.trim() : '',
+      'proveedores':     _tieneEmpresa ? _proveedoresCtrl.text.trim() : '',
+      'otras_deudas_cp': _tieneEmpresa ? _otrasDeudaCPCtrl.text.trim() : '',
+      'pasivos_lp':      _tieneEmpresa ? _pasivosLPCtrl.text.trim() : '',
       'dias_atencion_lv': _tieneEmpresa ? ((_diaLun||_diaMar||_diaMie||_diaJue||_diaVie) ? '1' : '0') : '0',
       'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
       'pct_contado':          _tieneEmpresa ? _pctContado.toString() : '',
@@ -2871,6 +2909,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             // después de las preguntas de ingresos y gastos.
           ],
           ],
+
         ],
       ),
     );
@@ -3199,14 +3238,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           // ── Activos Fijos del Negocio ──────────────────────────
           if (_subPasoEmpresa == 2) ...[
           const SizedBox(height: 28),
-          _buildActivosFijos(
-            titulo: '🏢 Activos Fijos del Negocio',
-            descControllers:   _actNegDescCtrl,
-            marcaControllers:  _actNegMarcaCtrl,
-            modeloControllers: _actNegModeloCtrl,
-            serieControllers:  _actNegSerieCtrl,
-            valorControllers:  _actNegValorCtrl,
-          ),
+          _buildActivosNegocioSimplificados(),
+        const SizedBox(height: 15),
+        _buildBalancesSaldosNegocio(),
           const SizedBox(height: 16),
           _buildVehiculos(titulo: '🚗 Vehículos del Negocio',
             descCtrl: _vehNegDescCtrl, marcaCtrl: _vehNegMarcaCtrl,
@@ -3221,14 +3255,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           // ── Activos Fijos del Hogar ────────────────────────────
           if (_subPasoEmpresa == 3) ...[
           const SizedBox(height: 28),
-          _buildActivosFijos(
-            titulo: '🏠 Activos Fijos del Hogar',
-            descControllers:   _actHogDescCtrl,
-            marcaControllers:  _actHogMarcaCtrl,
-            modeloControllers: _actHogModeloCtrl,
-            serieControllers:  _actHogSerieCtrl,
-            valorControllers:  _actHogValorCtrl,
-          ),
+          _buildActivosHogarSimplificados(),
           const SizedBox(height: 16),
           _buildVehiculos(titulo: '🚙 Vehículos del Hogar',
             descCtrl: _vehHogDescCtrl, marcaCtrl: _vehHogMarcaCtrl,
@@ -3435,13 +3462,16 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
           // ── Flujo de Ingresos y Gastos (resumen) ───────────────
           if (_subPasoEmpresa == 5) ...[
-          // ValueListenableBuilder: se reconstruye solo cuando algún campo
-          // de gastos/ingresos llama _flujoVersion.value++ — no el árbol completo.
-          const SizedBox(height: 28),
-          ValueListenableBuilder<int>(
-            valueListenable: _flujoVersion,
-            builder: (_, __, ___) => _buildFlujoResumen(),
-          ),
+            const SizedBox(height: 12),
+            ValueListenableBuilder<int>(
+              valueListenable: _flujoVersion,
+              builder: (_, __, ___) => _buildFlujoResumen(),
+            ),
+          ],
+
+          if (_subPasoEmpresa == 6) ...[
+            const SizedBox(height: 12),
+            _buildBalanceGeneralResumen(),
           ],
         ],
       ),
@@ -3825,17 +3855,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     final double saldoDisponible = ingresosNetosNegocio + otrosIngresos - gastoFamTotal;
     final Color colorSaldo = saldoDisponible >= 0 ? Colors.green.shade700 : Colors.red.shade700;
 
-    Widget fila(String label, double valor, {bool bold = false, Color? color, bool separador = false}) {
+    // --- CÁLCULO DE INVENTARIO PARA BALANCE ---
+    final double invProd = _tipoServProduccion
+        ? List.generate(_kProdCount, (i) {
+            final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+            final ct  = mat + _toDouble(_prodManoCtrl[i].text) +
+                        _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
+            final up  = _toDouble(_prodUnidadesProdCtrl[i].text);
+            final cu  = up > 0 ? ct / up : ct;
+            return cu * _toDouble(_prodUnidExistCtrl[i].text);
+          }).fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final double invCom = _tipoComercio
+        ? List.generate(_kComProdCount, (i) =>
+            _toDouble(_comUnidExistCtrl[i].text) * _toDouble(_comCostoCtrl[i].text))
+            .fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final double totalInventario = invProd + invCom;
+
+    Widget fila(String label, double valor, {bool bold = false, Color? color, bool separador = false, bool large = false}) {
       final c = color ?? (bold ? ConstantColors.textDark : ConstantColors.textDarkGrey);
+      final double fontSize = large ? 16 : 13;
       return Column(children: [
         if (separador) Divider(height: 12, color: ConstantColors.borderLight),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Row(children: [
             Expanded(child: Text(label,
-                style: TextStyle(fontSize: 13, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: c))),
+                style: TextStyle(fontSize: fontSize, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: c))),
             Text('\$${valor.toStringAsFixed(2)}',
-                style: TextStyle(fontSize: 13.5, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: c)),
+                style: TextStyle(fontSize: fontSize + 0.5, fontWeight: bold ? FontWeight.w800 : FontWeight.w600, color: c)),
           ]),
         ),
       ]);
@@ -3935,50 +3984,341 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: colorSaldo)),
                   ]),
                 ),
+                const SizedBox(height: 16),
+
+                const SizedBox(height: 10),
               ],
             ),
           ),
-
-          // --- SECCIÓN DE REFERENCIA APROXIMADA (COMPORTAMIENTO DIARIO) ---
-          if (ventasProductos > 0) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.amber.shade200),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(children: [
-                      Icon(Icons.info_outline_rounded, size: 16, color: Colors.amber.shade900),
-                      const SizedBox(width: 6),
-                      Text('Referencia (Comportamiento Diario)', 
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
-                    ]),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Ventas aprox. por mes: \$${ventasMensuales.toStringAsFixed(2)}\n'
-                      'Compras aprox. por mes: \$${comprasMensuales.toStringAsFixed(2)}',
-                      style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900, height: 1.4),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '* Estos valores son aproximados basados en los días de la semana y no se usan para el flujo principal cuando hay productos detallados.',
-                      style: TextStyle(fontSize: 10, color: Colors.amber.shade800, fontStyle: FontStyle.italic),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
         ],
       ),
     );
   }
+
+  Widget _buildBalanceGeneralResumen() {
+    // ── DISPONIBLE ───────────────────────────────────────────────
+    final double efectivo = _toDouble(_cajaEfectivoCtrl.text);
+    final double bancos   = _toDouble(_bancosSaldoCtrl.text);
+    final double totalDisponible = efectivo + bancos;
+
+    // ── EXIGIBLE ─────────────────────────────────────────────────
+    final double cxcNetas      = _toDouble(_cxpNetasCtrl.text);
+    final double totalExigible = cxcNetas;
+
+    // ── REALIZABLE ───────────────────────────────────────────────
+    // Inventario mercadería/producto terminado — extraído de tabla productos
+    final double invProdTerminado = _tipoServProduccion
+        ? List.generate(_kProdCount, (i) {
+            final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+            final ct  = mat + _toDouble(_prodManoCtrl[i].text) +
+                        _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
+            final up  = _toDouble(_prodUnidadesProdCtrl[i].text);
+            final cu  = up > 0 ? ct / up : ct;
+            return cu * _toDouble(_prodUnidExistCtrl[i].text);
+          }).fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final double invComercio = _tipoComercio
+        ? List.generate(_kComProdCount, (i) =>
+            _toDouble(_comUnidExistCtrl[i].text) * _toDouble(_comCostoCtrl[i].text))
+            .fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final double invMercaderia = invProdTerminado + invComercio;
+
+    // Materia prima: campo manual si > 0; sino auto-calculado desde producción
+    final double invMatPrimaManual = _toDouble(_invMatPrimaCtrl.text);
+    final double invMatPrimaAuto   = _tipoServProduccion
+        ? List.generate(_kProdCount, (i) {
+            if (_prodNameCtrl[i].text.trim().isEmpty) return 0.0;
+            final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+            return mat * _toDouble(_prodUnidExistCtrl[i].text);
+          }).fold(0.0, (a, b) => a + b)
+        : 0.0;
+    final double invMatPrima   = invMatPrimaManual > 0 ? invMatPrimaManual : invMatPrimaAuto;
+    final double invProdProceso = _toDouble(_invProdProcCtrl.text);
+    final double totalRealizable = invMercaderia + invMatPrima + invProdProceso;
+
+    // ── ACTIVO FIJO ──────────────────────────────────────────────
+    // actNegValorCtrl[0]=Maquinaria, [1]=Muebles, [2]=Herramientas, [3]=Otros
+    final double maquinaria    = _toDouble(_actNegValorCtrl[0].text);
+    final double muebles       = _toDouble(_actNegValorCtrl[1].text);
+    final double herramientas  = _toDouble(_actNegValorCtrl[2].text);
+    final double vehiculos     = _vehNegValCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+    final double terrenos      = _inmNegValCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+    final double otrosActFijos = _toDouble(_actNegValorCtrl[3].text);
+    final double totalActivoFijo = maquinaria + muebles + herramientas + vehiculos + terrenos + otrosActFijos;
+
+    // ── ACTIVO TOTAL ─────────────────────────────────────────────
+    final double activoTotal = totalDisponible + totalExigible + totalRealizable + totalActivoFijo;
+
+    // ── PATRIMONIO FAMILIAR ──────────────────────────────────────
+    final double activosHogar =
+        _actHogValorCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b) +
+        _vehHogValCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b) +
+        _inmHogValCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+    final double totalActivos  = activoTotal + activosHogar;
+    final double totalPasivos  = _deudaSaldoActCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+    final double patrimonioNeto = totalActivos - totalPasivos;
+
+    // ── Helpers de presentación ──────────────────────────────────
+    // Fila de sección: fondo negro texto blanco | total en amarillo
+    Widget seccion(String label, double total) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              color: Colors.black87,
+              child: Text(label,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white)),
+            ),
+          ),
+          Container(
+            width: 100,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            color: const Color(0xFFFFEB3B),
+            alignment: Alignment.centerRight,
+            child: Text('\$${total.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.black)),
+          ),
+        ]),
+      );
+    }
+
+    // Fila de item: label + valor en celda amarilla clara
+    Widget item(String label, double valor) {
+      return Row(children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            color: Colors.white,
+            child: Text(label,
+                style: const TextStyle(fontSize: 11.5, color: Colors.black87)),
+          ),
+        ),
+        Container(
+          width: 100,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          color: const Color(0xFFFFF9C4),
+          alignment: Alignment.centerRight,
+          child: Text('\$${valor.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87)),
+        ),
+      ]);
+    }
+
+    // Fila de total final: negra + amarilla grande
+    Widget totalFila(String label, double valor, {Color bgLabel = Colors.black, Color bgValor = const Color(0xFFFFEB3B)}) {
+      return Row(children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            color: bgLabel,
+            child: Text(label,
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13,
+                    color: bgLabel == Colors.white ? Colors.black87 : Colors.white)),
+          ),
+        ),
+        Container(
+          width: 100,
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+          color: bgValor,
+          alignment: Alignment.centerRight,
+          child: Text('\$${valor.toStringAsFixed(2)}',
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13,
+                  color: bgValor == Colors.white ? Colors.black87 : Colors.black)),
+        ),
+      ]);
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ConstantColors.borderLight),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
+      ),
+      clipBehavior: Clip.hardEdge,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Encabezado principal ─────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            color: const Color(0xFF1E3A5F),
+            child: Row(children: [
+              const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              const Text('BALANCE GENERAL',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900,
+                      fontSize: 15, letterSpacing: 0.8)),
+            ]),
+          ),
+
+          // ── Sub-encabezado ACTIVOS ───────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            color: Colors.black87,
+            alignment: Alignment.center,
+            child: const Text('ACTIVOS',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13,
+                    color: Colors.white, letterSpacing: 1.0)),
+          ),
+
+          // ── DISPONIBLE ───────────────────────────────────────
+          seccion('DISPONIBLE', totalDisponible),
+          item('EFECTIVO', efectivo),
+          item('BANCOS (CTAS CTES - CTAS AHORROS)', bancos),
+
+          // ── EXIGIBLE ─────────────────────────────────────────
+          seccion('EXIGIBLE', totalExigible),
+          item('CUENTAS X COBRAR NETAS (NO INCOBRABLES)', cxcNetas),
+
+          // ── REALIZABLE ───────────────────────────────────────
+          seccion('REALIZABLE', totalRealizable),
+          item('INVENTARIO MERCADERÍAS/PRODUCTO TERMINADO', invMercaderia),
+          item('INVENTARIO MATERIA PRIMA', invMatPrima),
+          item('INVENTARIO PRODUCTOS EN PROCESO', invProdProceso),
+
+          // ── ACTIVO FIJO ──────────────────────────────────────
+          seccion('ACTIVO FIJO', totalActivoFijo),
+          item('MAQUINARIA Y EQUIPO', maquinaria),
+          item('MUEBLES Y ENSERES', muebles),
+          item('HERRAMIENTAS', herramientas),
+          item('VEHÍCULOS', vehiculos),
+          item('TERRENOS/EDIFICIO/LOCAL', terrenos),
+          item('OTROS ACTIVOS FIJOS', otrosActFijos),
+
+          // ── ACTIVO TOTAL ─────────────────────────────────────
+          const SizedBox(height: 4),
+          totalFila('ACTIVO TOTAL', activoTotal),
+
+          // ── PASIVO DE LA EMPRESA ─────────────────────────────
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            color: Colors.red.shade800,
+            alignment: Alignment.center,
+            child: const Text('PASIVO DE LA EMPRESA',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13,
+                    color: Colors.white, letterSpacing: 1.0)),
+          ),
+          seccion('PASIVO CORTO PLAZO',
+              _toDouble(_creditosPagarCtrl.text) +
+              _toDouble(_proveedoresCtrl.text) +
+              _toDouble(_otrasDeudaCPCtrl.text)),
+          item('CRÉDITOS POR PAGAR (MENOR A UN AÑO)', _toDouble(_creditosPagarCtrl.text)),
+          item('PROVEEDORES', _toDouble(_proveedoresCtrl.text)),
+          item('OTRAS DEUDAS CORTO PLAZO', _toDouble(_otrasDeudaCPCtrl.text)),
+          seccion('PASIVO LARGO PLAZO', _toDouble(_pasivosLPCtrl.text)),
+          item('PASIVOS LARGO PLAZO (MAYOR A UN AÑO)', _toDouble(_pasivosLPCtrl.text)),
+          const SizedBox(height: 4),
+          totalFila('PASIVO TOTAL',
+              _toDouble(_creditosPagarCtrl.text) +
+              _toDouble(_proveedoresCtrl.text) +
+              _toDouble(_otrasDeudaCPCtrl.text) +
+              _toDouble(_pasivosLPCtrl.text),
+              bgLabel: Colors.red.shade700, bgValor: Colors.red.shade100),
+
+          // ── PATRIMONIO DE LA EMPRESA ──────────────────────────
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 7),
+            color: Colors.green.shade800,
+            alignment: Alignment.center,
+            child: const Text('PATRIMONIO DE LA EMPRESA',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13,
+                    color: Colors.white, letterSpacing: 1.0)),
+          ),
+          (() {
+            final double pasivoTotal =
+                _toDouble(_creditosPagarCtrl.text) +
+                _toDouble(_proveedoresCtrl.text) +
+                _toDouble(_otrasDeudaCPCtrl.text) +
+                _toDouble(_pasivosLPCtrl.text);
+            final double patrimonioEmpresa = activoTotal - pasivoTotal;
+            final double pasivoMasPatrimonio = pasivoTotal + patrimonioEmpresa;
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              item('ACTIVO TOTAL', activoTotal),
+              item('PASIVO TOTAL', pasivoTotal),
+              totalFila('PATRIMONIO DE LA EMPRESA', patrimonioEmpresa,
+                  bgLabel: patrimonioEmpresa >= 0 ? Colors.green.shade700 : Colors.red.shade700,
+                  bgValor: patrimonioEmpresa >= 0 ? const Color(0xFFC8E6C9) : Colors.red.shade100),
+              const SizedBox(height: 4),
+              totalFila('PASIVO + PATRIMONIO EMPRESA', pasivoMasPatrimonio,
+                  bgLabel: Colors.black87, bgValor: const Color(0xFFFFEB3B)),
+            ]);
+          })(),
+
+          // ── ACTIVOS DEL HOGAR Y PATRIMONIO ──────────────────
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: Colors.teal.shade700,
+            child: Row(children: [
+              const Icon(Icons.home_work_rounded, size: 16, color: Colors.white),
+              const SizedBox(width: 8),
+              const Text('ACTIVOS DEL HOGAR Y PATRIMONIO TOTAL',
+                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: Colors.white)),
+            ]),
+          ),
+
+          item('TOTAL ACTIVOS HOGAR (Enseres+Vehículos+Inmuebles)', activosHogar),
+          const SizedBox(height: 4),
+          totalFila('TOTAL ACTIVOS (Negocio + Hogar)', totalActivos,
+              bgLabel: Colors.blueGrey.shade700, bgValor: const Color(0xFFFFEB3B)),
+          const SizedBox(height: 2),
+          totalFila('TOTAL PASIVOS (Deudas)', totalPasivos,
+              bgLabel: Colors.red.shade700, bgValor: Colors.red.shade100),
+
+          // ── PATRIMONIO NETO ──────────────────────────────────
+          const SizedBox(height: 6),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: patrimonioNeto >= 0
+                  ? Colors.green.shade50
+                  : Colors.red.shade50,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: patrimonioNeto >= 0
+                    ? Colors.green.shade400
+                    : Colors.red.shade400,
+                width: 1.5,
+              ),
+            ),
+            child: Row(children: [
+              Icon(
+                patrimonioNeto >= 0
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+                color: patrimonioNeto >= 0 ? Colors.green.shade700 : Colors.red.shade700,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('PATRIMONIO NETO',
+                    style: TextStyle(
+                        fontWeight: FontWeight.w900, fontSize: 14,
+                        color: patrimonioNeto >= 0
+                            ? Colors.green.shade800
+                            : Colors.red.shade800)),
+              ),
+              Text('\$${patrimonioNeto.toStringAsFixed(2)}',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w900, fontSize: 15,
+                      color: patrimonioNeto >= 0
+                          ? Colors.green.shade800
+                          : Colors.red.shade800)),
+            ]),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ),
+    );
+  }
+
   
   Widget _buildActivosFijos({
     required String titulo,
@@ -4089,6 +4429,316 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
+  Widget _buildActivosNegocioSimplificados() {
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        void rebuild() { 
+          setLocal(() {}); 
+          _flujoVersion.value++; 
+        }
+
+        // Asegurar etiquetas fijas en los primeros 4 slots para persistencia coherente
+        if (_actNegDescCtrl[0].text != 'Maquinaria y equipo') _actNegDescCtrl[0].text = 'Maquinaria y equipo';
+        if (_actNegDescCtrl[1].text != 'Muebles y enseres')   _actNegDescCtrl[1].text = 'Muebles y enseres';
+        if (_actNegDescCtrl[2].text != 'Herramientas')        _actNegDescCtrl[2].text = 'Herramientas';
+        if (_actNegDescCtrl[3].text != 'Otros activos fluidos') _actNegDescCtrl[3].text = 'Otros activos fluidos';
+
+        final totalValor = _actNegValorCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+
+        Widget filaCerrada(String label, TextEditingController ctrl, IconData icon) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 16, color: ConstantColors.primaryBlue),
+                    const SizedBox(width: 8),
+                    Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: ConstantColors.textDark)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _campoActivoValor(ctrl, rebuild, hint: 'Valor total en \$'),
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ConstantColors.borderLight),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Encabezado
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.10),
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                  border: Border(bottom: BorderSide(color: const Color(0xFF3B82F6).withOpacity(0.3))),
+                ),
+                child: Row(children: [
+                  Icon(Icons.inventory_2_rounded, color: const Color(0xFF3B82F6), size: 20),
+                  const SizedBox(width: 10),
+                  Text('🏢 Activos Fijos del Negocio',
+                      style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+                ]),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    filaCerrada('Maquinaria y equipo de la empresa', _actNegValorCtrl[0], Icons.precision_manufacturing_rounded),
+                    filaCerrada('Muebles y enseres', _actNegValorCtrl[1], Icons.chair_rounded),
+                    filaCerrada('Herramientas', _actNegValorCtrl[2], Icons.build_rounded),
+                    filaCerrada('Otros activos fluidos', _actNegValorCtrl[3], Icons.account_balance_wallet_rounded),
+                  ],
+                ),
+              ),
+
+              // Fila TOTAL
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: ConstantColors.warning.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ConstantColors.warning.withOpacity(0.5), width: 1.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('VALOR TOTAL ACTIVOS',
+                        style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 14)),
+                    Text('\$${totalValor.toStringAsFixed(2)}',
+                        style: TextStyle(color: ConstantColors.warning, fontWeight: FontWeight.w900, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildActivosHogarSimplificados() {
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        void rebuild() { setLocal(() {}); _flujoVersion.value++; }
+
+        // Etiquetas fijas para Hogar
+        if (_actHogDescCtrl[0].text != 'Muebles y enseres de hogar') _actHogDescCtrl[0].text = 'Muebles y enseres de hogar';
+        if (_actHogDescCtrl[1].text != 'Línea blanca y electrodomésticos') _actHogDescCtrl[1].text = 'Línea blanca y electrodomésticos';
+        if (_actHogDescCtrl[2].text != 'Equipos electrónicos') _actHogDescCtrl[2].text = 'Equipos electrónicos';
+        if (_actHogDescCtrl[3].text != 'Otros activos propios') _actHogDescCtrl[3].text = 'Otros activos propios';
+
+        final totalValor = _actHogValorCtrl.map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+
+        Widget filaCerrada(String label, TextEditingController ctrl, IconData icon) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 16, color: Colors.blueGrey),
+                    const SizedBox(width: 8),
+                    Text(label, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: ConstantColors.textDark)),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                _campoActivoValor(ctrl, rebuild, hint: 'Valor total en \$'),
+              ],
+            ),
+          );
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: ConstantColors.borderLight),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                  border: Border(bottom: BorderSide(color: Colors.blueGrey.shade100)),
+                ),
+                child: Row(children: [
+                  Icon(Icons.home_work_rounded, color: Colors.blueGrey, size: 20),
+                  const SizedBox(width: 10),
+                  Text('🏠 Activos Fijos del Hogar',
+                      style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+                ]),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    filaCerrada('Muebles y enseres de hogar', _actHogValorCtrl[0], Icons.chair_rounded),
+                    filaCerrada('Línea blanca y electrodomésticos', _actHogValorCtrl[1], Icons.kitchen_rounded),
+                    filaCerrada('Equipos electrónicos (TV, PC, etc.)', _actHogValorCtrl[2], Icons.tv_rounded),
+                    filaCerrada('Otros activos propios', _actHogValorCtrl[3], Icons.stars_rounded),
+                  ],
+                ),
+              ),
+
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.blueGrey.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blueGrey.shade200, width: 1.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('VALOR TOTAL HOGAR',
+                        style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 14)),
+                    Text('\$${totalValor.toStringAsFixed(2)}',
+                        style: TextStyle(color: Colors.blueGrey.shade800, fontWeight: FontWeight.w900, fontSize: 16)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBalancesSaldosNegocio() {
+    return StatefulBuilder(builder: (ctx, setLocal) {
+      void reb() { setLocal(() {}); _flujoVersion.value++; }
+      Widget bCampo(TextEditingController c, String lbl, IconData ic) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Icon(ic, size: 16, color: ConstantColors.primaryBlue),
+            const SizedBox(width: 8),
+            Text(lbl, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: ConstantColors.textDark)),
+          ]),
+          const SizedBox(height: 6),
+          _campoActivoValor(c, reb, hint: 'Monto en \$'),
+        ]),
+      );
+
+      return Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ConstantColors.borderLight),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+            decoration: BoxDecoration(
+              color: ConstantColors.primaryBlue.withOpacity(0.08),
+              borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+              border: Border(bottom: BorderSide(color: ConstantColors.primaryBlue.withOpacity(0.2))),
+            ),
+            child: Row(children: [
+              Icon(Icons.account_balance_wallet_rounded, color: ConstantColors.primaryBlue, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text('📊 Balance: Disponibilidades e Inventarios',
+                    style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+              ),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: [
+              Text('DISPONIBLE Y EXIGIBLE', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.blueGrey, letterSpacing: 1)),
+              const SizedBox(height: 12),
+              bCampo(_cajaEfectivoCtrl, 'Efectivo en Caja', Icons.money_rounded),
+              bCampo(_bancosSaldoCtrl, 'Bancos (Saldos Cuentas)', Icons.account_balance_rounded),
+              bCampo(_cxpNetasCtrl, 'Cuentas x Cobrar Netas', Icons.assignment_turned_in_rounded),
+              
+              const Divider(height: 24),
+              Text('REALIZABLE (INVENTARIOS)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.blueGrey, letterSpacing: 1)),
+              const SizedBox(height: 12),
+              // Inventario Materia Prima ahora se extrae de los productos detallados
+              (() {
+                final double totalMatPrima = _tipoServProduccion
+                  ? List.generate(_kProdCount, (i) {
+                      if (_prodNameCtrl[i].text.trim().isEmpty) return 0.0;
+                      final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
+                      return mat * _toDouble(_prodUnidExistCtrl[i].text);
+                    }).fold(0.0, (a, b) => a + b)
+                  : 0.0;
+                
+                // Sincronizar controlador para persistencia
+                if (_invMatPrimaCtrl.text != totalMatPrima.toStringAsFixed(2)) {
+                  _invMatPrimaCtrl.text = totalMatPrima.toStringAsFixed(2);
+                }
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Row(children: [
+                    Icon(Icons.category_rounded, size: 18, color: Colors.blue.shade700),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text('Inventario Materia Prima', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: ConstantColors.textDark))),
+                    Text('\$${totalMatPrima.toStringAsFixed(2)}', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.blue.shade800)),
+                  ]),
+                );
+              })(),
+              // bCampo(_invProdProcCtrl, 'Inventario Productos en Proceso', Icons.pending_actions_rounded), // ELIMINADO POR SOLICITUD
+
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
+                child: Row(children: [
+                  Icon(Icons.info_outline, size: 16, color: Colors.blue.shade800),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('Nota: El Inventario de Mercaderías se extrae automáticamente de la tabla de productos.',
+                      style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontStyle: FontStyle.italic))),
+                ]),
+              ),
+
+              const Divider(height: 24),
+              Text('PASIVO DE LA EMPRESA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.red.shade700, letterSpacing: 1)),
+              const SizedBox(height: 4),
+              Text('Corto plazo (menor a 1 año)', style: TextStyle(fontSize: 10, color: Colors.blueGrey, fontStyle: FontStyle.italic)),
+              const SizedBox(height: 10),
+              bCampo(_creditosPagarCtrl, 'Créditos por Pagar (< 1 año)', Icons.credit_card_rounded),
+              bCampo(_proveedoresCtrl, 'Proveedores', Icons.store_rounded),
+              bCampo(_otrasDeudaCPCtrl, 'Otras Deudas Corto Plazo', Icons.receipt_long_rounded),
+              const SizedBox(height: 4),
+              Text('Largo plazo (mayor a 1 año)', style: TextStyle(fontSize: 10, color: Colors.blueGrey, fontStyle: FontStyle.italic)),
+              const SizedBox(height: 10),
+              bCampo(_pasivosLPCtrl, 'Pasivos Largo Plazo (> 1 año)', Icons.account_balance_rounded),
+            ]),
+          ),
+        ]),
+      );
+    });
+  }
+
   Widget _colHeader(String txt, {bool right = false}) {
     return Text(txt,
         textAlign: right ? TextAlign.right : TextAlign.left,
@@ -4138,7 +4788,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
-  Widget _campoActivoValor(TextEditingController ctrl, VoidCallback onChanged) {
+  Widget _campoActivoValor(TextEditingController ctrl, VoidCallback onChanged, {String? hint}) {
     return TextFormField(
       controller: ctrl,
       onChanged: (_) => onChanged(),
@@ -4147,7 +4797,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       textAlign: TextAlign.right,
       style: TextStyle(color: ConstantColors.textDark, fontSize: 12, fontWeight: FontWeight.w600),
       decoration: InputDecoration(
-        hintText: '0.00',
+        hintText: hint ?? '0.00',
         hintStyle: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey.withOpacity(0.5)),
         filled: true,
         fillColor: ConstantColors.backgroundYellowLight,

@@ -334,6 +334,17 @@ try {
                 'productos_json'          => $r['productos_json']          ?? null,
                 'activos_negocio_json'    => $r['activos_negocio_json']    ?? null,
                 'activos_hogar_json'      => $r['activos_hogar_json']      ?? null,
+                // Balance General
+                'caja_efectivo'           => isset($r['caja_efectivo']) ? (float)$r['caja_efectivo'] : 0,
+                'bancos_saldo'            => isset($r['bancos_saldo'])  ? (float)$r['bancos_saldo']  : 0,
+                'cxp_netas'               => isset($r['cxp_netas'])     ? (float)$r['cxp_netas']     : 0,
+                'inv_mat_prima'           => isset($r['inv_mat_prima']) ? (float)$r['inv_mat_prima'] : 0,
+                'inv_prod_proc'           => isset($r['inv_prod_proc']) ? (float)$r['inv_prod_proc'] : 0,
+                // Pasivo de la empresa
+                'creditos_pagar'          => isset($r['creditos_pagar'])   ? (float)$r['creditos_pagar']   : 0,
+                'proveedores'             => isset($r['proveedores'])       ? (float)$r['proveedores']       : 0,
+                'otras_deudas_cp'         => isset($r['otras_deudas_cp'])   ? (float)$r['otras_deudas_cp']   : 0,
+                'pasivos_lp'              => isset($r['pasivos_lp'])        ? (float)$r['pasivos_lp']        : 0,
             ];
         }
     } catch (\Throwable $eEn) {
