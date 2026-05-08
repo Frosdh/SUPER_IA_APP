@@ -2823,7 +2823,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             // ── BOTÓN CERRAR SESIÓN (izquierda inferior) ─────────────
             Positioned(
               left: 16,
-              bottom: currentPanelHeight + 16,
+              bottom: currentPanelHeight + 64,
               child: GestureDetector(
                 onTap: _cerrarSesion,
                 child: Container(
@@ -2865,7 +2865,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             // ── BOTÓN MI UBICACIÓN ──────────────────────────────────
             Positioned(
               right: 16,
-              bottom: currentPanelHeight + 16,
+              bottom: currentPanelHeight + 64,
               child: GestureDetector(
                 onTap: _centrarEnMiUbicacion,
                 child: Container(
@@ -2889,7 +2889,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
             if (_estadoViaje == EstadoViaje.ninguno)
               Positioned(
                 right: 16,
-                bottom: currentPanelHeight + 220, // elevar conjunto de botones
+                bottom: currentPanelHeight + 118, // bajar conjunto agrupado
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -2898,10 +2898,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     GestureDetector(
                       onTap: () => Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (_) => const MetasDiariasScreen()),
+                        MaterialPageRoute(
+                            builder: (_) => const MetasDiariasScreen()),
                       ),
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         margin: EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: ConstantColors.backgroundCard,
@@ -2953,14 +2955,16 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
                         final lat = parseDouble(res['destino_lat']);
                         final lng = parseDouble(res['destino_lng']);
-                        final nombre = (res['destino_nombre']?.toString() ?? '').trim();
+                        final nombre =
+                            (res['destino_nombre']?.toString() ?? '').trim();
                         if (lat == null || lng == null) return;
                         if (lat == 0.0 && lng == 0.0) return;
                         final destino = LatLng(lat, lng);
                         FocusScope.of(context).unfocus();
                         setState(() {
                           _destino = destino;
-                          _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
+                          _destinoNombre =
+                              nombre.isNotEmpty ? nombre : 'Cliente';
                           _paradasIntermedias = [];
                           _agregandoParada = false;
                           _sugerencias = [];
@@ -2980,7 +2984,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         _calcularRuta(destino);
                       },
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         margin: EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: ConstantColors.backgroundCard,
@@ -3018,11 +3023,13 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => const NuevaEncuestaScreen(
-                              tipoTarea: 'prospecto_nuevo', incluirEmpresa: false),
+                              tipoTarea: 'prospecto_nuevo',
+                              incluirEmpresa: false),
                         ),
                       ),
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         margin: EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -3078,14 +3085,16 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
                         final lat = parseDouble(res['destino_lat']);
                         final lng = parseDouble(res['destino_lng']);
-                        final nombre = (res['destino_nombre']?.toString() ?? '').trim();
+                        final nombre =
+                            (res['destino_nombre']?.toString() ?? '').trim();
                         if (lat == null || lng == null) return;
                         if (lat == 0.0 && lng == 0.0) return;
                         final destino = LatLng(lat, lng);
                         FocusScope.of(context).unfocus();
                         setState(() {
                           _destino = destino;
-                          _destinoNombre = nombre.isNotEmpty ? nombre : 'Cliente';
+                          _destinoNombre =
+                              nombre.isNotEmpty ? nombre : 'Cliente';
                           _paradasIntermedias = [];
                           _agregandoParada = false;
                           _sugerencias = [];
@@ -3105,7 +3114,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                         _calcularRuta(destino);
                       },
                       child: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                         margin: EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: ConstantColors.backgroundCard,
@@ -3137,56 +3147,49 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                       ),
                     ),
 
-                      // Levantamiento empresa removed from this Column
+                    // Levantamiento empresa: abre búsqueda por nombre de empresa
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const LevantarEmpresaScreen(),
+                        ),
+                      ),
+                      child: Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: ConstantColors.primaryBlue,
+                          borderRadius: BorderRadius.circular(24),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  ConstantColors.primaryBlue.withOpacity(0.28),
+                              blurRadius: 8,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.business_center_rounded,
+                                color: Colors.white, size: 18),
+                            SizedBox(width: 8),
+                            Text(
+                              'Levantamiento empresa',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
-
-              // Levantamiento empresa: abre búsqueda por nombre de empresa
-              if (_estadoViaje == EstadoViaje.ninguno)
-                Positioned(
-                  right: 16,
-                  bottom: currentPanelHeight + 72,
-                  child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const LevantarEmpresaScreen(),
-                      ),
-                    ),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: ConstantColors.primaryBlue,
-                        borderRadius: BorderRadius.circular(24),
-                        boxShadow: [
-                          BoxShadow(
-                            color: ConstantColors.primaryBlue.withOpacity(0.28),
-                            blurRadius: 8,
-                            offset: Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.business_center_rounded,
-                              color: Colors.white, size: 18),
-                          SizedBox(width: 8),
-                          Text(
-                            'Levantamiento empresa',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-              // (Añadir parada eliminado)
 
             // ── BOTÓN SHARE TRIP (Durante viaje activo) ───────────────
             if (_estadoViaje == EstadoViaje.conductorAsignado ||
