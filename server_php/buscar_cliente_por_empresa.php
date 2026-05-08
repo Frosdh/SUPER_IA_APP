@@ -71,11 +71,16 @@ try {
         // aparecerían como "más recientes" y ocultarían el levantamiento completado.
         if ($encNegExiste) {
             try {
+                // Solo mostrar badge "✓ Levantamiento completado" si la encuesta_negocio
+                // proviene de una tarea de tipo 'levantamiento' (guardada desde LevantarEmpresaScreen).
+                // Las encuestas iniciales (prospecto_nuevo) no crean encuesta_negocio desde
+                // guardar_cliente_encuesta.php, pero esta condición garantiza consistencia.
                 $sten = $conn->prepare(
                     "SELECT en.id AS en_id
                      FROM encuesta_negocio en
                      INNER JOIN tarea t ON t.id = en.tarea_id
                      WHERE t.cliente_prospecto_id = ?
+                       AND t.tipo_tarea = 'levantamiento'
                      ORDER BY t.created_at DESC
                      LIMIT 1"
                 );
@@ -83,7 +88,7 @@ try {
                 $sten->execute();
                 $ren = $sten->get_result()->fetch_assoc();
                 $sten->close();
-                // Solo necesitamos saber si existe (para el badge de la UI)
+                // Solo mostrar badge si el levantamiento fue completado correctamente
                 if ($ren) $cliente['encuesta_negocio'] = ['id' => $ren['en_id']];
             } catch (\Throwable $_) {
                 // No bloquear si la tabla existe pero hay otro problema

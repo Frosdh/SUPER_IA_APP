@@ -784,7 +784,14 @@ try {
     // ── 3c. Guardar levantamiento Empresa/Negocio (si aplica) ──
     // Nota: CREATE TABLE / ALTER TABLE se corrieron ANTES de begin_transaction()
     // para evitar que el DDL cause un commit implícito en MySQL y rompa la tx.
-    if ($tiene_empresa_post === 1) {
+    //
+    // IMPORTANTE: solo guardar encuesta_negocio cuando el tipo_tarea es 'levantamiento'.
+    // Flutter envía tipo_tarea='levantamiento' únicamente desde LevantarEmpresaScreen.
+    // La encuesta inicial (NuevaEncuestaScreen) usa tipo_tarea='prospecto_nuevo' u otro valor
+    // y solo guarda nombre/RUC/tipo empresa, sin datos financieros reales.
+    // Si se creara encuesta_negocio en esa fase, buscar_cliente_por_empresa.php
+    // mostraría "✓ Levantamiento completado" de forma prematura.
+    if ($tiene_empresa_post === 1 && $tipo_tarea === 'levantamiento') {
         $GLOBALS['phase'] = 'NEGOCIO';
         try {
             // Normalizar null -> 0 para evitar warnings en bind_param numérico
