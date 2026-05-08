@@ -187,7 +187,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _diaSab = false;
   bool _diaDom = false;
   int _pctContado = 80;   // % contado (crédito = 100 - contado)
-  int _pctEfectivo = 70;  // % cobrado en efectivo (resto = tarjeta/transferencia)
+  int _pctEfectivo = 100; // 100% efectivo por defecto al unificar sliders
 
   // ── Sub-pasos de empresaNegocio ──────────────────────────────
   // 0=Ventas/Compras 1=Productos 2=ActivosNeg 3=ActivosHog 4=GastosIngresos 5=Resumen
@@ -1435,6 +1435,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'dias_atencion_dom': _tieneEmpresa ? (_diaDom ? '1' : '0') : '0',
       'dias_atencion_lv': _tieneEmpresa ? ((_diaLun||_diaMar||_diaMie||_diaJue||_diaVie) ? '1' : '0') : '0',
       'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
+      'pct_contado':          _tieneEmpresa ? _pctContado.toString() : '',
       'pct_efectivo':         _tieneEmpresa ? _pctEfectivo.toString() : '',
       // Gastos negocio desglosados
       'g_neg_sueldos':        _tieneEmpresa ? _gNegSueldosCtrl.text.trim() : '',
@@ -3106,42 +3107,40 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     Row(children: [
                       Icon(Icons.payments_rounded, size: 18, color: ConstantColors.primaryBlue),
                       const SizedBox(width: 8),
-                      Expanded(child: Text('¿Qué % cobra en efectivo?',
+                      Expanded(child: Text('¿Cómo cobra sus ventas?',
                           style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5))),
                       const SizedBox(width: 8),
                       Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(6)),
-                          child: Text('💵 $_pctEfectivo% efectivo',
+                          child: Text('💵 $_pctContado% Efectivo',
                               style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
                         ),
                         const SizedBox(height: 3),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.blue.shade100, borderRadius: BorderRadius.circular(6)),
-                          child: Text('💳 ${100 - _pctEfectivo}% digital',
-                              style: TextStyle(color: Colors.blue.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
+                          decoration: BoxDecoration(color: Colors.orange.shade100, borderRadius: BorderRadius.circular(6)),
+                          child: Text('⏳ ${100 - _pctContado}% Crédito',
+                              style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
                         ),
                       ]),
                     ]),
                     Slider(
-                      value: _pctEfectivo.toDouble(),
+                      value: _pctContado.toDouble(),
                       min: 0, max: 100, divisions: 20,
                       activeColor: Colors.green.shade600,
-                      label: '$_pctEfectivo%',
-                      // setLocal: reconstruye solo este bloque mientras arrastra
-                      onChanged: (v) => setLocal(() => _pctEfectivo = v.round()),
-                      // setState del padre solo al soltar (para que el resumen se actualice)
-                      onChangeEnd: (v) => setState(() => _pctEfectivo = v.round()),
+                      label: '$_pctContado%',
+                      onChanged: (v) => setLocal(() => _pctContado = v.round()),
+                      onChangeEnd: (v) => setState(() => _pctContado = v.round()),
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('0% efectivo\n(todo digital)', textAlign: TextAlign.center,
+                        Text('0% Efectivo\n(Todo crédito)', textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
                         Text('50/50', style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
-                        Text('100% efectivo\n(todo en cash)', textAlign: TextAlign.center,
+                        Text('100% Efectivo\n(Todo cash)', textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
                       ],
                     ),
@@ -3747,84 +3746,84 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   //  FLUJO DE INGRESOS Y GASTOS (resumen visual)
   // ─────────────────────────────────────────────────────────────
   Widget _buildFlujoResumen() {
-    // ── BASE: comportamiento semanal × 4 = mensual ──────────────
-    // Esta es la fuente principal de ventas y compras (lo que el quiz pregunta)
-    final ventasSemana =
-        _toDouble(_ventaLunCtrl.text) + _toDouble(_ventaMarCtrl.text) +
-        _toDouble(_ventaMieCtrl.text) + _toDouble(_ventaJueCtrl.text) +
-        _toDouble(_ventaVieCtrl.text) + _toDouble(_ventaSabCtrl.text) +
-        _toDouble(_ventaDomCtrl.text);
-    final compraSemana =
-        _toDouble(_compraLunCtrl.text) + _toDouble(_compraMarCtrl.text) +
-        _toDouble(_compraMieCtrl.text) + _toDouble(_compraJueCtrl.text) +
-        _toDouble(_compraVieCtrl.text) + _toDouble(_compraSabCtrl.text) +
-        _toDouble(_compraDomCtrl.text);
-
-    final ventasMensuales = ventasSemana * 4;
-    final comprasMensuales = compraSemana * 4;
-
-    // ── Ventas desde productos (para desglose, si están llenos) ──
-    final ventasProd = _tipoServProduccion
+    // --- FUENTE PRIMARIA: productos comercializados / de producción ---
+    final double ventasProd = _tipoServProduccion
         ? List.generate(_kProdCount, (i) =>
             _toDouble(_prodPrecioCtrl[i].text) * _toDouble(_prodUnidadesVendCtrl[i].text))
             .fold(0.0, (a, b) => a + b)
         : 0.0;
-    final ventasCom = _tipoComercio
+    final double ventasCom = _tipoComercio
         ? List.generate(_kComProdCount, (i) =>
             _toDouble(_comPrecioCtrl[i].text) * _toDouble(_comCantidadCtrl[i].text))
             .fold(0.0, (a, b) => a + b)
         : 0.0;
+    final double ventasProductos = ventasProd + ventasCom;
 
-    // Ventas totales: prioridad al comportamiento diario × 4
-    // (si hay productos los mostramos como desglose pero no overrideamos)
-    final ventasTotal = ventasMensuales > 0 ? ventasMensuales : (ventasProd + ventasCom);
+    // --- FUENTE SECUNDARIA: comportamiento diario × 4 (referencia) ---
+    final double ventasSemana =
+        _toDouble(_ventaLunCtrl.text) + _toDouble(_ventaMarCtrl.text) +
+        _toDouble(_ventaMieCtrl.text) + _toDouble(_ventaJueCtrl.text) +
+        _toDouble(_ventaVieCtrl.text) + _toDouble(_ventaSabCtrl.text) +
+        _toDouble(_ventaDomCtrl.text);
+    final double compraSemana =
+        _toDouble(_compraLunCtrl.text) + _toDouble(_compraMarCtrl.text) +
+        _toDouble(_compraMieCtrl.text) + _toDouble(_compraJueCtrl.text) +
+        _toDouble(_compraVieCtrl.text) + _toDouble(_compraSabCtrl.text) +
+        _toDouble(_compraDomCtrl.text);
+    
+    final double ventasMensuales = ventasSemana * 4;
+    final double comprasMensuales = compraSemana * 4;
 
-    final ventasEfectivo      = ventasTotal * (_pctEfectivo / 100);
-    final ventasTransferencia = ventasTotal * ((100 - _pctEfectivo) / 100);
-    final ventasContado       = ventasTotal * (_pctContado / 100);
+    // --- PRIORIZACIÓN DE DATOS ---
+    final double ventasTotal = ventasProductos > 0 ? ventasProductos : ventasMensuales;
 
-    // ── Costos de ventas = compras mensuales (comportamiento × 4) ──
-    // Para producción: costo unitario = costoTotal / unidadesProducidas (no multiplicado)
-    final costosVentasProdDetalle = _tipoServProduccion
+    // --- DESGLOSE POR FORMA DE PAGO ---
+    // 1. Venta de Contado vs Crédito
+    final double ventasContado = ventasTotal * (_pctContado / 100);
+    final double ventasCredito = ventasTotal * ((100 - _pctContado) / 100);
+    
+    // 2. De lo contado, Efectivo vs Transferencia/Digital
+    final double ventasEfectivo      = ventasContado * (_pctEfectivo / 100);
+    final double ventasTransferencia = ventasContado * ((100 - _pctEfectivo) / 100);
+
+    // --- COSTOS ---
+    final double costosVentasProdDetalle = _tipoServProduccion
         ? List.generate(_kProdCount, (i) {
             final mat = _prodMatCtrl[i].map((c) => _toDouble(c.text)).fold(0.0, (a, b) => a + b);
             final ct  = mat + _toDouble(_prodManoCtrl[i].text) +
                         _toDouble(_prodEmpaqueCtrl[i].text) + _toDouble(_prodOtrosCtrl[i].text);
             final up  = _toDouble(_prodUnidadesProdCtrl[i].text);
-            // costo unitario = costo total del lote / unidades producidas
             final cu  = up > 0 ? ct / up : ct;
             return cu * _toDouble(_prodUnidadesVendCtrl[i].text);
           }).fold(0.0, (a, b) => a + b)
         : 0.0;
-    final costosVentasComDetalle = _tipoComercio
+    final double costosVentasComDetalle = _tipoComercio
         ? List.generate(_kComProdCount, (i) =>
             _toDouble(_comCantidadCtrl[i].text) * _toDouble(_comCostoCtrl[i].text))
             .fold(0.0, (a, b) => a + b)
         : 0.0;
 
-    // Costos: usar compras × 4 como base; si hay productos con datos, usar esos
-    final costosProductos = costosVentasProdDetalle + costosVentasComDetalle;
-    final costosVentas = comprasMensuales > 0
-        ? comprasMensuales
-        : (costosProductos > 0 ? costosProductos : 0.0);
+    final double costosProductos = costosVentasProdDetalle + costosVentasComDetalle;
+    final double costosVentas    = costosProductos > 0 ? costosProductos : comprasMensuales;
 
-    final utilidadBruta = ventasContado - costosVentas;
+    // --- FLUJO FINAL ---
+    final double utilidadBruta   = ventasTotal - costosVentas;
 
-    final gastoNegTotal = _td(_gNegSueldosCtrl) + _td(_gNegArriendoCtrl) + _td(_gNegServBasCtrl) +
+    final double gastoNegTotal   = _td(_gNegSueldosCtrl) + _td(_gNegArriendoCtrl) + _td(_gNegServBasCtrl) +
         _cuotasNegocioDeudas + _td(_gNegTransporteCtrl) + _td(_gNegMantCtrl) +
         _td(_gNegOtrosCtrl) + _td(_gNegImprevistosCtrl);
 
-    final ingresosNetosNegocio = utilidadBruta - gastoNegTotal;
+    final double ingresosNetosNegocio = utilidadBruta - gastoNegTotal;
 
-    final otrosIngresos = _td(_oIngConyugeCtrl) + _td(_oIngArriendosCtrl) +
+    final double otrosIngresos = _td(_oIngConyugeCtrl) + _td(_oIngArriendosCtrl) +
         _td(_oIngPensionesCtrl) + _td(_oIngOtrosCtrl);
 
-    final gastoFamTotal = _td(_gFamAlimCtrl) + _td(_gFamArriendoCtrl) + _td(_gFamServBasCtrl) +
+    final double gastoFamTotal = _td(_gFamAlimCtrl) + _td(_gFamArriendoCtrl) + _td(_gFamServBasCtrl) +
         _cuotasFamiliaresDeudas + _td(_gFamEducCtrl) + _td(_gFamSaludCtrl) +
         _td(_gFamOtrosCtrl) + _td(_gFamImprevistosCtrl);
 
-    final saldoDisponible = ingresosNetosNegocio + otrosIngresos - gastoFamTotal;
-    final colorSaldo = saldoDisponible >= 0 ? Colors.green.shade700 : Colors.red.shade700;
+    final double saldoDisponible = ingresosNetosNegocio + otrosIngresos - gastoFamTotal;
+    final Color colorSaldo = saldoDisponible >= 0 ? Colors.green.shade700 : Colors.red.shade700;
 
     Widget fila(String label, double valor, {bool bold = false, Color? color, bool separador = false}) {
       final c = color ?? (bold ? ConstantColors.textDark : ConstantColors.textDarkGrey);
@@ -3888,31 +3887,21 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Ventas
-                fila('VENTAS DE CONTADO (${_pctContado}%)', ventasContado, bold: true),
-                if (_tipoServProduccion || _tipoComercio) ...[
-                  if (_tipoServProduccion) subFila('Empresa Producción', ventasProd),
-                  if (_tipoComercio) subFila('Empresa Comercio', ventasCom),
-                ] else ...[
-                  subFila('Ventas mensuales (sem×4)', ventasMensuales),
-                ],
-                subFila('  💵 Efectivo ($_pctEfectivo%)', ventasEfectivo, color: Colors.green.shade700),
-                subFila('  💳 Tarjeta/Transf. (${100-_pctEfectivo}%)', ventasTransferencia, color: Colors.blue.shade600),
-                fila('(-) COSTOS DE VENTAS', costosVentas),
+                fila('VENTAS TOTALES', ventasTotal, bold: true, color: ConstantColors.primaryBlue),
+                subFila('Ventas en Efectivo (${_pctContado}%)', ventasContado, color: Colors.green.shade700),
+                subFila('Ventas a Crédito (${100 - _pctContado}%)', ventasCredito, color: Colors.orange.shade800),
+                const SizedBox(height: 8),
+
+                fila('(-) COSTO DE VENTAS', costosVentas, bold: true, color: Colors.red.shade700),
                 fila('(=) UTILIDAD BRUTA', utilidadBruta, bold: true,
                     color: utilidadBruta >= 0 ? Colors.green.shade800 : Colors.red.shade700,
                     separador: true),
 
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
                 fila('(-) GASTOS DEL NEGOCIO', gastoNegTotal),
-                subFila('Sueldos', _td(_gNegSueldosCtrl)),
-                subFila('Arriendo', _td(_gNegArriendoCtrl)),
-                subFila('Servicios básicos', _td(_gNegServBasCtrl)),
+                subFila('Gastos operativos', gastoNegTotal - _cuotasNegocioDeudas),
                 subFila('Cuotas préstamos negocio', _cuotasNegocioDeudas,
                     color: Colors.amber.shade800),
-                subFila('Transporte', _td(_gNegTransporteCtrl)),
-                subFila('Mantenimiento', _td(_gNegMantCtrl)),
-                subFila('Otros gastos negocio', _td(_gNegOtrosCtrl)),
-                subFila('Imprevistos', _td(_gNegImprevistosCtrl)),
 
                 fila('(=) INGRESOS NETOS DEL NEGOCIO', ingresosNetosNegocio, bold: true,
                     color: ingresosNetosNegocio >= 0 ? Colors.green.shade800 : Colors.red.shade700,
@@ -3920,22 +3909,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
                 const SizedBox(height: 4),
                 fila('(+) OTROS INGRESOS', otrosIngresos),
-                subFila('Cónyuge', _td(_oIngConyugeCtrl)),
-                subFila('Arriendos', _td(_oIngArriendosCtrl)),
-                subFila('Pensiones', _td(_oIngPensionesCtrl)),
-                subFila('Otros', _td(_oIngOtrosCtrl)),
+                subFila('Total otros ingresos', otrosIngresos),
 
                 const SizedBox(height: 4),
                 fila('(-) GASTOS FAMILIARES', gastoFamTotal, separador: true),
-                subFila('Alimentación', _td(_gFamAlimCtrl)),
-                subFila('Arriendo familiar', _td(_gFamArriendoCtrl)),
-                subFila('Servicios básicos', _td(_gFamServBasCtrl)),
+                subFila('Gastos hogar', gastoFamTotal - _cuotasFamiliaresDeudas),
                 subFila('Cuotas préstamos familiares', _cuotasFamiliaresDeudas,
                     color: Colors.amber.shade800),
-                subFila('Educación', _td(_gFamEducCtrl)),
-                subFila('Salud', _td(_gFamSaludCtrl)),
-                subFila('Otros gastos familiares', _td(_gFamOtrosCtrl)),
-                subFila('Imprevistos', _td(_gFamImprevistosCtrl)),
 
                 const SizedBox(height: 8),
                 Container(
@@ -3958,6 +3938,43 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ],
             ),
           ),
+
+          // --- SECCIÓN DE REFERENCIA APROXIMADA (COMPORTAMIENTO DIARIO) ---
+          if (ventasProductos > 0) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.info_outline_rounded, size: 16, color: Colors.amber.shade900),
+                      const SizedBox(width: 6),
+                      Text('Referencia (Comportamiento Diario)', 
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                    ]),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Ventas aprox. por mes: \$${ventasMensuales.toStringAsFixed(2)}\n'
+                      'Compras aprox. por mes: \$${comprasMensuales.toStringAsFixed(2)}',
+                      style: TextStyle(fontSize: 11.5, color: Colors.amber.shade900, height: 1.4),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '* Estos valores son aproximados basados en los días de la semana y no se usan para el flujo principal cuando hay productos detallados.',
+                      style: TextStyle(fontSize: 10, color: Colors.amber.shade800, fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
