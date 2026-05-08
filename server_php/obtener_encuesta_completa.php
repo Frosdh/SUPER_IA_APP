@@ -345,6 +345,14 @@ try {
                 'proveedores'             => isset($r['proveedores'])       ? (float)$r['proveedores']       : 0,
                 'otras_deudas_cp'         => isset($r['otras_deudas_cp'])   ? (float)$r['otras_deudas_cp']   : 0,
                 'pasivos_lp'              => isset($r['pasivos_lp'])        ? (float)$r['pasivos_lp']        : 0,
+                // Preguntas de identificación institucional
+                'p1_conoce_institucion'   => isset($r['p1_conoce_institucion']) ? (int)$r['p1_conoce_institucion'] : null,
+                'p1_obs'                  => $r['p1_obs'] ?? '',
+                'p2_es_cliente'           => isset($r['p2_es_cliente']) ? (int)$r['p2_es_cliente'] : null,
+                'p2_producto'             => $r['p2_producto'] ?? '',
+                'p2_obs'                  => $r['p2_obs'] ?? '',
+                'p3_satisfaccion'         => $r['p3_satisfaccion'] ?? '',
+                'p3_obs'                  => $r['p3_obs'] ?? '',
             ];
         }
     } catch (\Throwable $eEn) {

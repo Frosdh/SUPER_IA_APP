@@ -257,6 +257,13 @@ $creditos_pagar   = floatOrNull($_POST['creditos_pagar']    ?? '');
 $proveedores      = floatOrNull($_POST['proveedores']       ?? '');
 $otras_deudas_cp  = floatOrNull($_POST['otras_deudas_cp']   ?? '');
 $pasivos_lp       = floatOrNull($_POST['pasivos_lp']        ?? '');
+$p1_conoce        = ($_POST['p1_conoce_institucion'] ?? '') === '1' ? 1 : (($_POST['p1_conoce_institucion'] ?? '') === '0' ? 0 : null);
+$p1_obs           = $_POST['p1_obs'] ?? null;
+$p2_es_cliente    = ($_POST['p2_es_cliente'] ?? '') === '1' ? 1 : (($_POST['p2_es_cliente'] ?? '') === '0' ? 0 : null);
+$p2_producto      = $_POST['p2_producto'] ?? null;
+$p2_obs           = $_POST['p2_obs'] ?? null;
+$p3_satisfaccion  = $_POST['p3_satisfaccion'] ?? null;
+$p3_obs           = $_POST['p3_obs'] ?? null;
 
 // Normalize/validate acuerdo similar to guardar_cliente_encuesta
 function normalize_token_act(string $s): string {
@@ -634,7 +641,14 @@ try {
             'creditos_pagar DECIMAL(12,2) DEFAULT NULL',
             'proveedores DECIMAL(12,2) DEFAULT NULL',
             'otras_deudas_cp DECIMAL(12,2) DEFAULT NULL',
-            'pasivos_lp DECIMAL(12,2) DEFAULT NULL'];
+            'pasivos_lp DECIMAL(12,2) DEFAULT NULL',
+            'p1_conoce_institucion TINYINT(1) DEFAULT NULL',
+            'p1_obs TEXT DEFAULT NULL',
+            'p2_es_cliente TINYINT(1) DEFAULT NULL',
+            'p2_producto VARCHAR(255) DEFAULT NULL',
+            'p2_obs TEXT DEFAULT NULL',
+            'p3_satisfaccion VARCHAR(50) DEFAULT NULL',
+            'p3_obs TEXT DEFAULT NULL'];
         foreach ($newCols as $colDef) {
             $colName = explode(' ', $colDef)[0];
             @$conn->query("ALTER TABLE encuesta_negocio ADD COLUMN IF NOT EXISTS $colDef");
@@ -723,12 +737,13 @@ try {
                      dia_lunes=?, dia_martes=?, dia_miercoles=?, dia_jueves=?, dia_viernes=?,
                      comercio_productos_json=?, productos_json=?, activos_negocio_json=?, activos_hogar_json=?,
                      caja_efectivo=?, bancos_saldo=?, cxp_netas=?, inv_mat_prima=?, inv_prod_proc=?,
-                     creditos_pagar=?, proveedores=?, otras_deudas_cp=?, pasivos_lp=?
+                     creditos_pagar=?, proveedores=?, otras_deudas_cp=?, pasivos_lp=?,
+                     p1_conoce_institucion=?, p1_obs=?, p2_es_cliente=?, p2_producto=?, p2_obs=?, p3_satisfaccion=?, p3_obs=?
                  WHERE tarea_id = ?"
             );
-            // 72 params - type string must match exactly
+            // 79 params
             $stN->bind_param(
-                'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssddddddddds',
+                'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssddddddddisiss ss s',
                 $venta_lv_n, $venta_sab_n, $venta_dom_n,
                 $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -747,6 +762,7 @@ try {
                 $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json,
                 $caja_n, $banco_n, $cxp_n, $imp_n, $ipp_n,
                 $credpag_n, $prov_n, $otrcp_n, $paslp_n,
+                $p1_conoce, $p1_obs, $p2_es_cliente, $p2_producto, $p2_obs, $p3_satisfaccion, $p3_obs,
                 $tarea_id
             );
             $stN->execute();
@@ -770,12 +786,13 @@ try {
                   dia_lunes, dia_martes, dia_miercoles, dia_jueves, dia_viernes,
                   comercio_productos_json, productos_json, activos_negocio_json, activos_hogar_json,
                   caja_efectivo, bancos_saldo, cxp_netas, inv_mat_prima, inv_prod_proc,
-                  creditos_pagar, proveedores, otras_deudas_cp, pasivos_lp)
+                  creditos_pagar, proveedores, otras_deudas_cp, pasivos_lp,
+                  p1_conoce_institucion, p1_obs, p2_es_cliente, p2_producto, p2_obs, p3_satisfaccion, p3_obs)
                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
-            // 73 params - type string must match exactly
+            // 73 params -> 80
             $stN->bind_param(
-                'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssddddddddd',
+                'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssdddddddddisiss ss ',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -792,7 +809,8 @@ try {
                 $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes,
                 $comercio_productos_json, $productos_json, $activos_negocio_json, $activos_hogar_json,
                 $caja_n, $banco_n, $cxp_n, $imp_n, $ipp_n,
-                $credpag_n, $prov_n, $otrcp_n, $paslp_n
+                $credpag_n, $prov_n, $otrcp_n, $paslp_n,
+                $p1_conoce, $p1_obs, $p2_es_cliente, $p2_producto, $p2_obs, $p3_satisfaccion, $p3_obs
             );
             $stN->execute();
             $stN->close();

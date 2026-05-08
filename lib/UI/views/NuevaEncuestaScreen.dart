@@ -15,6 +15,7 @@ import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
 // ─────────────────────────────────────────────────────────────
 enum _Paso {
   inicial,
+  preguntasIniciales,
   datosCliente,
   empresaNegocio,
   productosActuales,
@@ -73,6 +74,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   final TextEditingController _cxpNetasCtrl      = TextEditingController();
   final TextEditingController _invMatPrimaCtrl  = TextEditingController();
   final TextEditingController _invProdProcCtrl  = TextEditingController();
+  // ── Preguntas de identificación institucional ────────────────────────────
+  bool? _p1ConoceInstitucion;
+  final TextEditingController _p1ObsCtrl      = TextEditingController();
+  bool? _p2EsCliente;
+  final TextEditingController _p2ProductoCtrl = TextEditingController();
+  final TextEditingController _p2ObsCtrl      = TextEditingController();
+  String? _p3Satisfaccion; // 'muy_a_gusto' | 'medianamente' | 'no_a_gusto'
+  final TextEditingController _p3ObsCtrl      = TextEditingController();
   // ── PASIVO de la empresa ─────────────────────────────────────────────────
   final TextEditingController _creditosPagarCtrl  = TextEditingController();
   final TextEditingController _proveedoresCtrl    = TextEditingController();
@@ -828,6 +837,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       }
       _interesConocerServicios = _ib(e['interes_conocer_servicios']);
       _interesConocer    = _ib(e['interes_conocer_productos']);
+      // Preguntas de identificación institucional
+      _p1ConoceInstitucion = _ib(e['p1_conoce_institucion']);
+      _p1ObsCtrl.text      = _s(e['p1_obs']);
+      _p2EsCliente         = _ib(e['p2_es_cliente']);
+      _p2ProductoCtrl.text = _s(e['p2_producto']);
+      _p2ObsCtrl.text      = _s(e['p2_obs']);
+      _p3Satisfaccion      = _s(e['p3_satisfaccion']).isEmpty ? null : _s(e['p3_satisfaccion']);
+      _p3ObsCtrl.text      = _s(e['p3_obs']);
       _interesCC     = _i(e['interes_cc'])        == 1;
       _interesAhorro = _i(e['interes_ahorro'])    == 1;
       _interesInv    = _i(e['interes_inversion']) == 1;
@@ -1042,6 +1059,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _proveedoresCtrl.dispose();
     _otrasDeudaCPCtrl.dispose();
     _pasivosLPCtrl.dispose();
+    _p1ObsCtrl.dispose();
+    _p2ProductoCtrl.dispose();
+    _p2ObsCtrl.dispose();
+    _p3ObsCtrl.dispose();
     super.dispose();
   }
 
@@ -1114,6 +1135,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _pagaCuotaRise     = _i(d['paga_cuota_rise']) == 1;
     _emiteNotasVenta   = _i(d['emite_notas_venta']) == 1;
     _conoceLimiteRise  = _i(d['conoce_limite_rise']) == 1;
+
+    // Preguntas de identificación institucional
+    _p1ConoceInstitucion = d['p1_conoce_institucion'] == null ? null : (_i(d['p1_conoce_institucion']) == 1);
+    _p1ObsCtrl.text      = _s(d['p1_obs']);
+    _p2EsCliente         = d['p2_es_cliente'] == null ? null : (_i(d['p2_es_cliente']) == 1);
+    _p2ProductoCtrl.text = _s(d['p2_producto']);
+    _p2ObsCtrl.text      = _s(d['p2_obs']);
+    _p3Satisfaccion      = d['p3_satisfaccion'];
+    _p3ObsCtrl.text      = _s(d['p3_obs']);
   }
 
   /// Flujo al tocar "SÍ" en "¿El prospecto desea ser encuestado?":
@@ -1212,7 +1242,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       if (!mounted) return;
       _esProspectoNuevo = true;
       _origenProspecto = null;
-      setState(() => _paso = _Paso.datosCliente);
+      setState(() => _paso = _Paso.preguntasIniciales);
       return;
     }
     if (!mounted) return;
@@ -1300,7 +1330,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (!mounted) return;
     final route2 = ModalRoute.of(context);
     if (route2 == null || !route2.isCurrent) return;
-    setState(() => _paso = _Paso.datosCliente);
+    setState(() => _paso = _Paso.preguntasIniciales);
   }
 
   Future<void> _obtenerGPS() async {
@@ -1471,6 +1501,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'proveedores':     _tieneEmpresa ? _proveedoresCtrl.text.trim() : '',
       'otras_deudas_cp': _tieneEmpresa ? _otrasDeudaCPCtrl.text.trim() : '',
       'pasivos_lp':      _tieneEmpresa ? _pasivosLPCtrl.text.trim() : '',
+      // Preguntas de identificación institucional
+      'p1_conoce_institucion': _p1ConoceInstitucion == true ? '1' : _p1ConoceInstitucion == false ? '0' : '',
+      'p1_obs':                _p1ObsCtrl.text.trim(),
+      'p2_es_cliente':         _p2EsCliente == true ? '1' : _p2EsCliente == false ? '0' : '',
+      'p2_producto':           _p2ProductoCtrl.text.trim(),
+      'p2_obs':                _p2ObsCtrl.text.trim(),
+      'p3_satisfaccion':       _p3Satisfaccion ?? '',
+      'p3_obs':                _p3ObsCtrl.text.trim(),
       'dias_atencion_lv': _tieneEmpresa ? ((_diaLun||_diaMar||_diaMie||_diaJue||_diaVie) ? '1' : '0') : '0',
       'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
       'pct_contado':          _tieneEmpresa ? _pctContado.toString() : '',
@@ -2090,7 +2128,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     // Si la encuesta se abrió en modo "levantamiento" solo mostramos
     // los pasos mínimos: datos del prospecto y (opcional) empresa/negocio.
     // No debe aparecer "Situación Financiera" ni "Acuerdo y Cierre".
-    final pasos = <_Paso>[_Paso.datosCliente];
+    final pasos = <_Paso>[];
+    if (!widget.modoEdicion && widget.tipoTarea != 'levantamiento') {
+      pasos.add(_Paso.preguntasIniciales);
+    }
+    pasos.add(_Paso.datosCliente);
     if (_tieneEmpresa && widget.incluirEmpresa) pasos.add(_Paso.empresaNegocio);
     if (widget.tipoTarea != 'levantamiento') {
       pasos.add(_Paso.productosActuales);
@@ -2108,7 +2150,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   void _irSiguientePaso() {
     if (_paso == _Paso.inicial) {
-      _cambiarPasoConTransicion(() => setState(() => _paso = _Paso.datosCliente));
+      _cambiarPasoConTransicion(() => setState(() => _paso = _Paso.preguntasIniciales));
       return;
     }
     
@@ -2380,6 +2422,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (widget.modoEdicion) {
       switch (_paso) {
         case _Paso.inicial:
+        case _Paso.preguntasIniciales:
         case _Paso.datosCliente:
           return 'Modificar datos';
         case _Paso.empresaNegocio:
@@ -2397,6 +2440,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         return widget.tipoTarea == 'recuperacion'
             ? 'Visita de Recuperación'
             : 'Nueva Tarea';
+      case _Paso.preguntasIniciales:
+        return 'Identificación';
       case _Paso.datosCliente:
         return 'Datos del Prospecto';
       case _Paso.empresaNegocio:
@@ -2476,6 +2521,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       case _Paso.inicial:
         contenido = _buildPasoInicial();
         break;
+      case _Paso.preguntasIniciales:
+        contenido = _buildPasoPreguntasIniciales();
+        break;
       case _Paso.datosCliente:
         contenido = _buildPasoDatosCliente();
         break;
@@ -2499,6 +2547,235 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── PASO 3: Interés en productos (placeholder, se muestra inline en Productos)
   Widget _buildPasoInteresProductos() {
     return const SizedBox.shrink();
+  }
+
+  // ── PASO 0b: Preguntas de identificación institucional ──────────
+
+  Widget _buildPasoPreguntasIniciales() {
+    Widget _campoObs(TextEditingController ctrl, String hint) => TextField(
+      controller: ctrl,
+      maxLines: 2,
+      style: TextStyle(fontSize: 13, color: ConstantColors.textDark),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey.withOpacity(0.6)),
+        filled: true,
+        fillColor: ConstantColors.grey100,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: ConstantColors.borderLight)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: ConstantColors.borderLight)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: ConstantColors.primaryBlue, width: 1.5)),
+      ),
+      onChanged: (_) => setState(() {}),
+    );
+
+    Widget _botonesYNo({required bool? valor, required void Function(bool) onChanged}) {
+      return Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => onChanged(true)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: valor == true ? ConstantColors.success.withOpacity(0.15) : ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: valor == true ? ConstantColors.success : ConstantColors.borderLight,
+                    width: valor == true ? 2 : 1),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.check_circle_outline_rounded,
+                    size: 18, color: valor == true ? ConstantColors.success : ConstantColors.textDarkGrey),
+                const SizedBox(width: 6),
+                Text('SÍ', style: TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 14,
+                    color: valor == true ? ConstantColors.success : ConstantColors.textDarkGrey)),
+              ]),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => onChanged(false)),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: valor == false ? ConstantColors.error.withOpacity(0.12) : ConstantColors.grey100,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: valor == false ? ConstantColors.error : ConstantColors.borderLight,
+                    width: valor == false ? 2 : 1),
+              ),
+              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(Icons.cancel_outlined,
+                    size: 18, color: valor == false ? ConstantColors.error : ConstantColors.textDarkGrey),
+                const SizedBox(width: 6),
+                Text('NO', style: TextStyle(
+                    fontWeight: FontWeight.w800, fontSize: 14,
+                    color: valor == false ? ConstantColors.error : ConstantColors.textDarkGrey)),
+              ]),
+            ),
+          ),
+        ),
+      ]);
+    }
+
+    Widget _tarjeta({required String numero, required String titulo, required Widget contenido}) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ConstantColors.borderLight),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(
+              width: 28, height: 28,
+              decoration: BoxDecoration(color: ConstantColors.primaryBlue, shape: BoxShape.circle),
+              alignment: Alignment.center,
+              child: Text(numero, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(titulo,
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14, color: ConstantColors.textDark))),
+          ]),
+          const SizedBox(height: 14),
+          contenido,
+        ]),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Text('Preguntas de identificación',
+            style: TextStyle(fontSize: 13, color: ConstantColors.textDarkGrey, fontStyle: FontStyle.italic)),
+        const SizedBox(height: 16),
+
+        // ── PREGUNTA 1 ─────────────────────────────────────────────
+        _tarjeta(
+          numero: '1',
+          titulo: '¿Usted conoce o ha escuchado sobre nuestra institución?',
+          contenido: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _botonesYNo(
+              valor: _p1ConoceInstitucion,
+              onChanged: (v) => _p1ConoceInstitucion = v,
+            ),
+            const SizedBox(height: 12),
+            Text('Observación:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ConstantColors.textDarkGrey)),
+            const SizedBox(height: 6),
+            _campoObs(_p1ObsCtrl, 'Comentario u observación...'),
+          ]),
+        ),
+
+        // ── PREGUNTA 2 ─────────────────────────────────────────────
+        _tarjeta(
+          numero: '2',
+          titulo: '¿Es usted cliente de nuestra institución?',
+          contenido: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _botonesYNo(
+              valor: _p2EsCliente,
+              onChanged: (v) => _p2EsCliente = v,
+            ),
+            if (_p2EsCliente == true) ...[
+              const SizedBox(height: 12),
+              Text('¿Con qué producto o servicio cuenta?',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ConstantColors.textDarkGrey)),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _p2ProductoCtrl,
+                style: TextStyle(fontSize: 13, color: ConstantColors.textDark),
+                decoration: InputDecoration(
+                  hintText: 'Ej: Ahorro, Crédito, Cuenta Corriente...',
+                  hintStyle: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey.withOpacity(0.6)),
+                  filled: true,
+                  fillColor: ConstantColors.grey100,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: ConstantColors.borderLight)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: ConstantColors.borderLight)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: ConstantColors.primaryBlue, width: 1.5)),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text('Observación:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ConstantColors.textDarkGrey)),
+            const SizedBox(height: 6),
+            _campoObs(_p2ObsCtrl, 'Comentario u observación...'),
+          ]),
+        ),
+
+        // ── PREGUNTA 3 ─────────────────────────────────────────────
+        _tarjeta(
+          numero: '3',
+          titulo: '¿Qué tan a gusto está con nuestros servicios?',
+          contenido: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ...{
+              'muy_a_gusto':      'Muy a gusto',
+              'medianamente':     'Medianamente a gusto',
+              'no_a_gusto':       'No estoy a gusto',
+            }.entries.map((entry) {
+              final seleccionado = _p3Satisfaccion == entry.key;
+              final color = entry.key == 'muy_a_gusto'
+                  ? Colors.green.shade600
+                  : entry.key == 'medianamente'
+                      ? Colors.orange.shade700
+                      : Colors.red.shade600;
+              return GestureDetector(
+                onTap: () => setState(() => _p3Satisfaccion = entry.key),
+                child: Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: seleccionado ? color.withOpacity(0.12) : ConstantColors.grey100,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: seleccionado ? color : ConstantColors.borderLight,
+                        width: seleccionado ? 2 : 1),
+                  ),
+                  child: Row(children: [
+                    Icon(seleccionado ? Icons.radio_button_checked_rounded : Icons.radio_button_unchecked_rounded,
+                        size: 20, color: seleccionado ? color : ConstantColors.textDarkGrey),
+                    const SizedBox(width: 10),
+                    Text(entry.value, style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: seleccionado ? FontWeight.w700 : FontWeight.w500,
+                        color: seleccionado ? color : ConstantColors.textDark)),
+                  ]),
+                ),
+              );
+            }),
+            const SizedBox(height: 8),
+            Text('Observación:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ConstantColors.textDarkGrey)),
+            const SizedBox(height: 6),
+            _campoObs(_p3ObsCtrl, 'Comentario u observación...'),
+          ]),
+        ),
+
+        const SizedBox(height: 12),
+        _botonFinalizar(
+          label: 'Continuar con la encuesta',
+          sublabel: 'Ingresar datos personales y del negocio',
+          onTap: () {
+            setState(() => _paso = _Paso.datosCliente);
+          },
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
   }
 
   // ── PASO 0: Pregunta inicial ─────────────────────────────────
