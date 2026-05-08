@@ -130,6 +130,7 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
       MaterialPageRoute(
         builder: (_) => NuevaEncuestaScreen(
           tipoTarea:      'levantamiento',
+          tareaIdEdicion: cliente['tarea_id']?.toString() ?? '',
           incluirEmpresa: true,
           initialData: {
             'id':             cliente['id']            ?? '',
@@ -141,6 +142,20 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
             'direccion':      cliente['direccion']     ?? '',
             'ciudad':         cliente['ciudad']        ?? '',
             'nombre_empresa': cliente['nombre_empresa'] ?? '',
+            'tiene_ruc':      cliente['tiene_ruc']      ?? 0,
+            'tiene_rise':     cliente['tiene_rise']     ?? 0,
+            'ruc_val':        cliente['ruc_val']        ?? '',
+            'rise_val':       cliente['rise_val']       ?? '',
+            'tipo_empresa':   cliente['tipo_empresa']   ?? '',
+            'regimen_tributario': cliente['regimen_tributario'] ?? '',
+            'numero_ruc':     cliente['numero_ruc']     ?? '',
+            'declara_iva':    cliente['declara_iva']    ?? 0,
+            'emite_facturas': cliente['emite_facturas'] ?? 0,
+            'lleva_contabilidad': cliente['lleva_contabilidad'] ?? 0,
+            'paga_cuota_rise': cliente['paga_cuota_rise'] ?? 0,
+            'emite_notas_venta': cliente['emite_notas_venta'] ?? 0,
+            'conoce_limite_rise': cliente['conoce_limite_rise'] ?? 0,
+            'tiene_empresa':  cliente['tiene_empresa']  ?? 0,
             'es_cliente':     '1',
           },
         ),

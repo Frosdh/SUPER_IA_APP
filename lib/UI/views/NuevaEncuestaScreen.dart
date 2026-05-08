@@ -100,6 +100,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // Régimen tributario
   String? _regimenTributario;          // 'ruc' | 'rise' | 'no_registrado'
   final _numeroRucCtrl  = TextEditingController(); // número RUC (opcional)
+  final _rucValCtrl     = TextEditingController(); 
+  final _riseValCtrl    = TextEditingController(); 
   bool? _declaraIva;
   bool? _emiteFacturas;
   bool? _llevaContabilidad;
@@ -354,6 +356,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     // inicial (¿Desea ser encuestado?) y vamos directo a los datos.
     if (widget.tipoTarea == 'levantamiento') {
       _paso = _Paso.datosCliente;
+      _tieneEmpresa = true; // Forzar para que PHP guarde los datos de negocio
     }
     if (widget.modoEdicion) {
       _cargandoEdicion = true;
@@ -579,6 +582,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         _regimenTributario = 'no_registrado';
       }
       _numeroRucCtrl.text = _s(cliente['numero_ruc']);
+      _rucValCtrl.text    = _s(cliente['ruc_val']);
+      _riseValCtrl.text   = _s(cliente['rise_val']);
       _declaraIva = _ib(cliente['declara_iva']);
       _emiteFacturas = _ib(cliente['emite_facturas']);
       _llevaContabilidad = _ib(cliente['lleva_contabilidad']);
@@ -906,6 +911,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _direccionCtrl.dispose();
     _ciudadCtrl.dispose();
     _numeroRucCtrl.dispose();
+    _rucValCtrl.dispose();
+    _riseValCtrl.dispose();
     _empresaCtrl.dispose();
     _ventaLunCtrl.dispose();
     _ventaMarCtrl.dispose();
@@ -1049,19 +1056,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     final act = _s(d['actividad']);
     if (act.isNotEmpty) _actividad = act;
 
-    final ne = _s(d['nombre_empresa']);
-    if (ne.isNotEmpty) {
-      _empresaCtrl.text = ne;
+    // Negocio / Empresa
+    final tieneE = _i(d['tiene_empresa']) == 1;
+    final ne     = _s(d['nombre_empresa']);
+    if (tieneE || ne.isNotEmpty) {
       _tieneEmpresa = true;
+      if (ne.isNotEmpty) _empresaCtrl.text = ne;
     }
 
-    final tieneRuc  = _i(d['tiene_ruc'])  == 1;
-    final tieneRise = _i(d['tiene_rise']) == 1;
-    if (tieneRuc) {
-      _regimenTributario = 'ruc';
-    } else if (tieneRise) {
-      _regimenTributario = 'rise';
+    final tipoEmpStr = _s(d['tipo_empresa']);
+    _tipoServProduccion = tipoEmpStr.contains('servicio_produccion');
+    _tipoComercio       = tipoEmpStr.contains('comercio');
+    _numeroRucCtrl.text = _s(d['numero_ruc']);
+    _rucValCtrl.text    = _s(d['ruc_val']);
+    _riseValCtrl.text   = _s(d['rise_val']);
+
+    final reg = _s(d['regimen_tributario']);
+    if (reg.isNotEmpty) {
+      _regimenTributario = reg;
+    } else {
+      // Fallback a los flags antiguos si no hay régimen explícito
+      if (_i(d['tiene_ruc']) == 1) _regimenTributario = 'ruc';
+      else if (_i(d['tiene_rise']) == 1) _regimenTributario = 'rise';
     }
+
+    _declaraIva        = _i(d['declara_iva']) == 1;
+    _emiteFacturas     = _i(d['emite_facturas']) == 1;
+    _llevaContabilidad = _i(d['lleva_contabilidad']) == 1;
+    _pagaCuotaRise     = _i(d['paga_cuota_rise']) == 1;
+    _emiteNotasVenta   = _i(d['emite_notas_venta']) == 1;
+    _conoceLimiteRise  = _i(d['conoce_limite_rise']) == 1;
   }
 
   /// Flujo al tocar "SÍ" en "¿El prospecto desea ser encuestado?":
@@ -1355,7 +1379,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       if (_clienteId != null && _clienteId!.isNotEmpty) 'cliente_id': _clienteId!,
       'fue_encuestado': fueEncuestado ? '1' : '0',
       'origen_prospecto': _origenProspecto ?? '',
-      if (widget.modoEdicion) 'tarea_id': widget.tareaIdEdicion ?? '',
+      'tarea_id': widget.tareaIdEdicion ?? '',
       // Cliente
       'nombre': _nombreCtrl.text.trim(),
       'apellidos': _apellidosCtrl.text.trim(),
@@ -1370,6 +1394,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'tiene_rise': _tieneRise ? '1' : '0',
       'regimen_tributario': _regimenTributario ?? '',
       'numero_ruc': _numeroRucCtrl.text.trim(),
+      'ruc_val': _rucValCtrl.text.trim(),
+      'rise_val': _riseValCtrl.text.trim(),
       // Sub-preguntas RUC
       'declara_iva':          _declaraIva       == null ? '' : (_declaraIva!       ? '1' : '0'),
       'emite_facturas':       _emiteFacturas    == null ? '' : (_emiteFacturas!    ? '1' : '0'),
@@ -1378,7 +1404,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'paga_cuota_rise':      _pagaCuotaRise    == null ? '' : (_pagaCuotaRise!    ? '1' : '0'),
       'emite_notas_venta':    _emiteNotasVenta  == null ? '' : (_emiteNotasVenta!  ? '1' : '0'),
       'conoce_limite_rise':   _conoceLimiteRise == null ? '' : (_conoceLimiteRise! ? '1' : '0'),
-      'tiene_empresa': _tieneEmpresa ? '1' : '0',
+      'tiene_empresa': (_tieneEmpresa || widget.tipoTarea == 'levantamiento') ? '1' : '0',
       'nombre_empresa': _empresaCtrl.text.trim(),
       'tipo_empresa': [if (_tipoServProduccion) 'servicio_produccion', if (_tipoComercio) 'comercio'].join(','),
       // Empresa/Negocio (si aplica)
@@ -6083,19 +6109,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 16,
-                      fontWeight: FontWeight.w800,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     sublabel,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.85),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                 ],
               ),
@@ -6103,4 +6128,4 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 }
-         
+          

@@ -312,6 +312,22 @@ try {
                 'vehiculos_hogar_json'    => $r['vehiculos_hogar_json']   ?? null,
                 'inmuebles_negocio_json'  => $r['inmuebles_negocio_json'] ?? null,
                 'inmuebles_hogar_json'    => $r['inmuebles_hogar_json']   ?? null,
+                // Ventas/compras/días por día individual
+                'venta_lunes'            => isset($r['venta_lunes'])     ? (float)$r['venta_lunes']     : null,
+                'venta_martes'           => isset($r['venta_martes'])    ? (float)$r['venta_martes']    : null,
+                'venta_miercoles'        => isset($r['venta_miercoles']) ? (float)$r['venta_miercoles'] : null,
+                'venta_jueves'           => isset($r['venta_jueves'])    ? (float)$r['venta_jueves']    : null,
+                'venta_viernes'          => isset($r['venta_viernes'])   ? (float)$r['venta_viernes']   : null,
+                'compra_lunes'           => isset($r['compra_lunes'])    ? (float)$r['compra_lunes']    : null,
+                'compra_martes'          => isset($r['compra_martes'])   ? (float)$r['compra_martes']   : null,
+                'compra_miercoles'       => isset($r['compra_miercoles'])? (float)$r['compra_miercoles']: null,
+                'compra_jueves'          => isset($r['compra_jueves'])   ? (float)$r['compra_jueves']   : null,
+                'compra_viernes'         => isset($r['compra_viernes'])  ? (float)$r['compra_viernes']  : null,
+                'dia_lunes'              => isset($r['dia_lunes'])    ? (int)$r['dia_lunes']    : 0,
+                'dia_martes'             => isset($r['dia_martes'])   ? (int)$r['dia_martes']   : 0,
+                'dia_miercoles'          => isset($r['dia_miercoles'])? (int)$r['dia_miercoles']: 0,
+                'dia_jueves'             => isset($r['dia_jueves'])   ? (int)$r['dia_jueves']   : 0,
+                'dia_viernes'            => isset($r['dia_viernes'])  ? (int)$r['dia_viernes']  : 0,
             ];
         }
     } catch (\Throwable $eEn) {

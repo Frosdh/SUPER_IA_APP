@@ -58,7 +58,9 @@ try {
         "SELECT cp.id, cp.nombre, cp.cedula, cp.telefono, cp.telefono2, cp.email,
                 cp.direccion, cp.ciudad, cp.zona, cp.actividad, cp.nombre_empresa,
                 cp.tiene_ruc, cp.tiene_rise, cp.asesor_id, cp.estado, cp.latitud, cp.longitud,
-                cp.created_at
+                cp.created_at, cp.tiene_empresa, cp.ruc_val, cp.rise_val, cp.tipo_empresa,
+                cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
+                cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise
          FROM cliente_prospecto cp
          WHERE cp.cedula = ?
          LIMIT 1"
@@ -158,6 +160,18 @@ try {
             'latitud'        => isset($row['latitud']) && $row['latitud'] !== null ? (float)$row['latitud'] : null,
             'longitud'       => isset($row['longitud']) && $row['longitud'] !== null ? (float)$row['longitud'] : null,
             'created_at'     => (string)($row['created_at'] ?? ''),
+            'tiene_empresa'  => (int)($row['tiene_empresa'] ?? 0),
+            'ruc_val'        => (string)($row['ruc_val'] ?? ''),
+            'rise_val'       => (string)($row['rise_val'] ?? ''),
+            'tipo_empresa'   => (string)($row['tipo_empresa'] ?? ''),
+            'regimen_tributario' => (string)($row['regimen_tributario'] ?? ''),
+            'numero_ruc'     => (string)($row['numero_ruc'] ?? ''),
+            'declara_iva'    => (int)($row['declara_iva'] ?? 0),
+            'emite_facturas' => (int)($row['emite_facturas'] ?? 0),
+            'lleva_contabilidad' => (int)($row['lleva_contabilidad'] ?? 0),
+            'paga_cuota_rise' => (int)($row['paga_cuota_rise'] ?? 0),
+            'emite_notas_venta' => (int)($row['emite_notas_venta'] ?? 0),
+            'conoce_limite_rise' => (int)($row['conoce_limite_rise'] ?? 0),
         ],
     ]);
 } catch (Throwable $e) {

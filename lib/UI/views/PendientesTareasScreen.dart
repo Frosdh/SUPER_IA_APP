@@ -845,7 +845,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                     ),
-                    if (tipo == 'nueva_cita_inversion' || tipo == 'prospecto_nuevo' || tipo == 'visita_frio') ...[
+                    if (tipo == 'nueva_cita_inversion' || tipo == 'prospecto_nuevo' || tipo == 'visita_frio' || tipo == 'levantamiento') ...[
                       const SizedBox(width: 10),
                       ElevatedButton.icon(
                         onPressed: tareaId.isEmpty
@@ -856,7 +856,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                                     builder: (_) => NuevaEncuestaScreen(
                                       tipoTarea: tipo,
                                       tareaIdEdicion: tareaId,
-                                      incluirEmpresa: false,
+                                      incluirEmpresa: (tipo == 'levantamiento'),
                                     ),
                                   ),
                                 );

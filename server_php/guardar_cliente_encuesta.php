@@ -93,6 +93,13 @@ try {
     error_log("[MIGRACION] Falló ALTER TABLE tarea: " . $e->getMessage());
 }
 
+// ── Migración de Colación en encuesta_negocio ────────────────────────────────
+// Prevenir error: Illegal mix of collations (utf8mb4_general_ci vs utf8mb4_unicode_ci)
+try {
+    $conn->query("ALTER TABLE encuesta_negocio CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+} catch (\Throwable $e) {
+    error_log("[MIGRACION] Falló ALTER COLLATION encuesta_negocio: " . $e->getMessage());
+}
 
 // ── Migración segura de columnas en cliente_prospecto ─────────
 $cols_cp = [
@@ -523,6 +530,18 @@ try {
         KEY idx_am_no_vista (vista_supervisor)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 } catch (\Throwable $_) {}
+
+// Pre-asegurar que tarea.tipo_tarea incluye 'nueva_cita_inversion'
+// (DDL fuera de la transacción para evitar commit implícito en MySQL)
+try {
+    $colT = $conn->query("SHOW COLUMNS FROM tarea LIKE 'tipo_tarea'")->fetch_assoc();
+    if ($colT && strpos($colT['Type'], "'nueva_cita_inversion'") === false) {
+        preg_match("/enum\((.+)\)/i", $colT['Type'], $m);
+        $currentVals = isset($m[1]) ? $m[1] : "'prospecto_nuevo'";
+        $newVals = rtrim($currentVals, ')') . ",'nueva_cita_inversion'";
+        $conn->query("ALTER TABLE tarea MODIFY COLUMN tipo_tarea ENUM($newVals) NOT NULL DEFAULT 'prospecto_nuevo'");
+    }
+} catch (\Throwable $_) {}
 // ────────────────────────────────────────────────────────────────────────────
 
 try {
@@ -663,9 +682,17 @@ try {
         }
     }
 
-    // ── 3. Crear tarea ───────────────────────────────────────
+    // ── 3. Crear o Actualizar tarea ──────────────────────────────
     $GLOBALS['phase'] = 'TAREA';
-    $tarea_id  = genUUID();
+    $tarea_id_post = strOrNull($_POST['tarea_id'] ?? '');
+    $is_update_task = ($tarea_id_post !== null);
+    
+    if ($is_update_task) {
+        $tarea_id = $tarea_id_post;
+    } else {
+        $tarea_id = genUUID();
+    }
+
     $fecha_hoy = date('Y-m-d');
     $hora_hoy    = date('H:i:s');
     $obs_tarea   = $observaciones ?? ($fue_encuestado ? '' : 'Cliente no quiso ser encuestado');
@@ -673,21 +700,44 @@ try {
     $fecha_prog  = $fecha_hoy;
     $hora_prog   = $hora_hoy;
 
-    // 14 params: 9×s + 4×d + 1×s
-    $st = $conn->prepare(
-        "INSERT INTO tarea
-         (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
-          fecha_programada, hora_programada, fecha_realizada, hora_realizada,
-          latitud_inicio, longitud_inicio, latitud_fin, longitud_fin, observaciones)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    );
-    $st->bind_param('sssssssssdddds',
-        $tarea_id, $asesor_id, $cliente_id, $tipo_tarea, $est_tarea,
-        $fecha_prog, $hora_prog, $fecha_hoy, $hora_hoy,
-        $lat_ini, $lng_ini, $lat_fin, $lng_fin, $obs_tarea
-    );
-    $st->execute();
-    $st->close();
+    if ($is_update_task) {
+        // Actualizar tarea existente
+        $st = $conn->prepare(
+            "UPDATE tarea 
+             SET estado = ?, 
+                 fecha_realizada = ?, 
+                 hora_realizada = ?, 
+                 observaciones = COALESCE(?, observaciones),
+                 latitud_inicio = COALESCE(?, latitud_inicio),
+                 longitud_inicio = COALESCE(?, longitud_inicio),
+                 latitud_fin = COALESCE(?, latitud_fin),
+                 longitud_fin = COALESCE(?, longitud_fin)
+             WHERE id = ?"
+        );
+        $st->bind_param('ssssdddds',
+            $est_tarea, $fecha_hoy, $hora_hoy, $obs_tarea,
+            $lat_ini, $lng_ini, $lat_fin, $lng_fin,
+            $tarea_id
+        );
+        $st->execute();
+        $st->close();
+    } else {
+        // INSERT de nueva tarea (comportamiento original)
+        $st = $conn->prepare(
+            "INSERT INTO tarea
+             (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+              fecha_programada, hora_programada, fecha_realizada, hora_realizada,
+              latitud_inicio, longitud_inicio, latitud_fin, longitud_fin, observaciones)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        );
+        $st->bind_param('sssssssssdddds',
+            $tarea_id, $asesor_id, $cliente_id, $tipo_tarea, $est_tarea,
+            $fecha_prog, $hora_prog, $fecha_hoy, $hora_hoy,
+            $lat_ini, $lng_ini, $lat_fin, $lng_fin, $obs_tarea
+        );
+        $st->execute();
+        $st->close();
+    } // end if ($is_update_task)
 
     // ── 3c. Guardar levantamiento Empresa/Negocio (si aplica) ──
     // Nota: CREATE TABLE / ALTER TABLE se corrieron ANTES de begin_transaction()
@@ -695,22 +745,6 @@ try {
     if ($tiene_empresa_post === 1) {
         $GLOBALS['phase'] = 'NEGOCIO';
         try {
-            $negocio_id = genUUID();
-            $stN = $conn->prepare(
-                "INSERT INTO encuesta_negocio
-                 (id, tarea_id,
-                  venta_lv, venta_sabado, venta_domingo, mes_alta_venta, mes_baja_venta,
-                  compra_lv, compra_sabado, compra_domingo, mes_alta_compra,
-                  dia_lv, dia_sab, dia_dom,
-                  pct_contado, pct_credito, pct_efectivo,
-                  recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares,
-                  g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
-                  o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
-                  g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
-                  otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-            );
-
             // Normalizar null -> 0 para evitar warnings en bind_param numérico
             $venta_lv_n  = $venta_lv  ?? 0.0;
             $venta_sab_n = $venta_sabado ?? 0.0;
@@ -737,21 +771,74 @@ try {
             $gfs_n = $g_fam_salud     ?? 0.0; $gfo_n  = $g_fam_otros     ?? 0.0;
             $gfi_n = $g_fam_imprevistos ?? 0.0;
 
-            // types: 45 params — ss(2) ddd(3) ss(2) ddd(3) s(1) iiiiii(6) ddddd(5) ddddddd(7) dddd(4) ddddddd(7) sssss(5)
-            $stN->bind_param(
-                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
-                $negocio_id, $tarea_id,
-                $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
-                $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
-                $dia_lv, $dia_sab, $dia_dom,
-                $pct_cont_n, $pct_cred_n, $pct_efec_n,
-                $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n,
-                $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
-                $oic_n, $oia_n, $oip_n, $oio_n,
-                $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
-                $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json,
-                $inmuebles_negocio_json, $inmuebles_hogar_json
-            );
+            // ── ¿Existe ya una fila para esta tarea? ──
+            $stChkN = $conn->prepare('SELECT id FROM encuesta_negocio WHERE tarea_id = ? LIMIT 1');
+            $stChkN->bind_param('s', $tarea_id);
+            $stChkN->execute();
+            $rowN = $stChkN->get_result()->fetch_assoc();
+            $stChkN->close();
+
+            if ($rowN) {
+                $negocio_id = $rowN['id'];
+                $stN = $conn->prepare(
+                    "UPDATE encuesta_negocio
+                     SET venta_lv=?, venta_sabado=?, venta_domingo=?, mes_alta_venta=?, mes_baja_venta=?,
+                         compra_lv=?, compra_sabado=?, compra_domingo=?, mes_alta_compra=?,
+                         dia_lv=?, dia_sab=?, dia_dom=?,
+                         pct_contado=?, pct_credito=?, pct_efectivo=?,
+                         recuperacion_credito=?, costos_ventas=?, gastos_negocio=?, otros_ingresos=?, gastos_familiares=?,
+                         g_neg_sueldos=?, g_neg_arriendo=?, g_neg_serv_bas=?, g_neg_transporte=?, g_neg_mantenimiento=?, g_neg_otros=?, g_neg_imprevistos=?,
+                         o_ing_conyuge=?, o_ing_arriendos=?, o_ing_pensiones=?, o_ing_otros=?,
+                         g_fam_alim=?, g_fam_arriendo=?, g_fam_serv_bas=?, g_fam_educacion=?, g_fam_salud=?, g_fam_otros=?, g_fam_imprevistos=?,
+                         otras_deudas_json=?, vehiculos_negocio_json=?, vehiculos_hogar_json=?, inmuebles_negocio_json=?, inmuebles_hogar_json=?
+                     WHERE id = ?"
+                );
+                // types: 44 params (no tarea_id)
+                $stN->bind_param(
+                    'dddssdddsiiiiiidddddddddddddddddddddddssssss',
+                    $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
+                    $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
+                    $dia_lv, $dia_sab, $dia_dom,
+                    $pct_cont_n, $pct_cred_n, $pct_efec_n,
+                    $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n,
+                    $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
+                    $oic_n, $oia_n, $oip_n, $oio_n,
+                    $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
+                    $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json, $inmuebles_negocio_json, $inmuebles_hogar_json,
+                    $negocio_id
+                );
+            } else {
+                $negocio_id = genUUID();
+                $stN = $conn->prepare(
+                    "INSERT INTO encuesta_negocio
+                     (id, tarea_id,
+                      venta_lv, venta_sabado, venta_domingo, mes_alta_venta, mes_baja_venta,
+                      compra_lv, compra_sabado, compra_domingo, mes_alta_compra,
+                      dia_lv, dia_sab, dia_dom,
+                      pct_contado, pct_credito, pct_efectivo,
+                      recuperacion_credito, costos_ventas, gastos_negocio, otros_ingresos, gastos_familiares,
+                      g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
+                      o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
+                      g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
+                      otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                );
+                // original types (45 params)
+                $stN->bind_param(
+                    'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
+                    $negocio_id, $tarea_id,
+                    $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
+                    $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
+                    $dia_lv, $dia_sab, $dia_dom,
+                    $pct_cont_n, $pct_cred_n, $pct_efec_n,
+                    $recup_n, $costos_n, $gastos_n, $otros_n, $gfam_n,
+                    $gns_n, $gna_n, $gnb_n, $gnt_n, $gnm_n, $gno_n, $gni_n,
+                    $oic_n, $oia_n, $oip_n, $oio_n,
+                    $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
+                    $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json, $inmuebles_negocio_json, $inmuebles_hogar_json
+                );
+            }
+
             $stN->execute();
             $stN->close();
         } catch (\Throwable $eN) {

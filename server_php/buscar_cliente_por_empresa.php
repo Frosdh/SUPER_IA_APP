@@ -24,10 +24,19 @@ if ($nombre_empresa === '') {
 try {
     $q = "%" . $nombre_empresa . "%";
     $st = $conn->prepare(
-        "SELECT id, nombre, cedula, telefono, telefono2 AS celular, email,
-                nombre_empresa, ciudad, direccion, estado
-         FROM cliente_prospecto
-         WHERE nombre_empresa LIKE ?
+        "SELECT cp.id, cp.nombre, cp.cedula, cp.telefono, cp.telefono2 AS celular, cp.email,
+                cp.nombre_empresa, cp.ciudad, cp.direccion, cp.estado,
+                cp.tiene_ruc, cp.tiene_rise, cp.ruc_val, cp.rise_val, cp.tipo_empresa,
+                cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
+                cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise,
+                cp.tiene_empresa,
+                (SELECT t.id FROM tarea t 
+                 WHERE t.cliente_prospecto_id = cp.id 
+                   AND t.tipo_tarea = 'levantamiento' 
+                   AND t.estado != 'completada'
+                 ORDER BY t.created_at DESC LIMIT 1) as tarea_id
+         FROM cliente_prospecto cp
+         WHERE cp.nombre_empresa LIKE ?
          LIMIT ?"
     );
     $st->bind_param('si', $q, $limit);

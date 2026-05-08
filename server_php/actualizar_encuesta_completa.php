@@ -226,6 +226,22 @@ $vehiculos_negocio_json  = $_POST['vehiculos_negocio_json']  ?? null;
 $vehiculos_hogar_json    = $_POST['vehiculos_hogar_json']    ?? null;
 $inmuebles_negocio_json  = $_POST['inmuebles_negocio_json']  ?? null;
 $inmuebles_hogar_json    = $_POST['inmuebles_hogar_json']    ?? null;
+// Campos por día individual (nuevos desde app v2)
+$venta_lunes     = floatOrNull($_POST['venta_lunes']     ?? '');
+$venta_martes    = floatOrNull($_POST['venta_martes']    ?? '');
+$venta_miercoles = floatOrNull($_POST['venta_miercoles'] ?? '');
+$venta_jueves    = floatOrNull($_POST['venta_jueves']    ?? '');
+$venta_viernes   = floatOrNull($_POST['venta_viernes']   ?? '');
+$compra_lunes     = floatOrNull($_POST['compra_lunes']     ?? '');
+$compra_martes    = floatOrNull($_POST['compra_martes']    ?? '');
+$compra_miercoles = floatOrNull($_POST['compra_miercoles'] ?? '');
+$compra_jueves    = floatOrNull($_POST['compra_jueves']    ?? '');
+$compra_viernes   = floatOrNull($_POST['compra_viernes']   ?? '');
+$dia_lunes     = (int)($_POST['dias_atencion_lunes']     ?? 0);
+$dia_martes    = (int)($_POST['dias_atencion_martes']    ?? 0);
+$dia_miercoles = (int)($_POST['dias_atencion_miercoles'] ?? 0);
+$dia_jueves    = (int)($_POST['dias_atencion_jueves']    ?? 0);
+$dia_viernes   = (int)($_POST['dias_atencion_viernes']   ?? 0);
 
 // Normalize/validate acuerdo similar to guardar_cliente_encuesta
 function normalize_token_act(string $s): string {
@@ -268,7 +284,7 @@ try {
     $GLOBALS['phase'] = 'LOAD_TAREA';
 
     // ── 1. Recuperar tarea y cliente actual ─────────────────────
-    $st = $conn->prepare('SELECT asesor_id, cliente_prospecto_id, estado FROM tarea WHERE id = ? LIMIT 1');
+    $st = $conn->prepare('SELECT asesor_id, cliente_prospecto_id, estado, tipo_tarea FROM tarea WHERE id = ? LIMIT 1');
     $st->bind_param('s', $tarea_id);
     $st->execute();
     $rowT = $st->get_result()->fetch_assoc();
@@ -281,6 +297,7 @@ try {
     $asesor_id   = (string)$rowT['asesor_id'];
     $cliente_id  = (string)$rowT['cliente_prospecto_id'];
     $estadoPrev  = (string)$rowT['estado'];
+    $tipo_tarea_db = (string)$rowT['tipo_tarea'];
 
     // Validar que quien edita sea el asesor dueño (si se envió)
     if ($asesor_id_in !== '' && $asesor_id_in !== $asesor_id) {
@@ -472,22 +489,46 @@ try {
     $obs_tarea = $observaciones ?? '';
 
     // Solo actualiza GPS si vienen explícitamente
+    // Para levantamiento: también marca como completada
+    $es_levantamiento = ($tipo_tarea_db === 'levantamiento');
     if ($lat_ini !== null || $lng_ini !== null || $lat_fin !== null || $lng_fin !== null) {
-        $st = $conn->prepare(
-            "UPDATE tarea
-             SET observaciones=?,
-                 latitud_inicio = COALESCE(?, latitud_inicio),
-                 longitud_inicio = COALESCE(?, longitud_inicio),
-                 latitud_fin = COALESCE(?, latitud_fin),
-                 longitud_fin = COALESCE(?, longitud_fin)
-             WHERE id=?"
-        );
-        $st->bind_param('sdddds', $obs_tarea, $lat_ini, $lng_ini, $lat_fin, $lng_fin, $tarea_id);
+        if ($es_levantamiento) {
+            $fecha_hoy = date('Y-m-d');
+            $hora_hoy  = date('H:i:s');
+            $st = $conn->prepare(
+                "UPDATE tarea
+                 SET observaciones=?, estado='completada', fecha_realizada=?, hora_realizada=?,
+                     latitud_inicio = COALESCE(?, latitud_inicio),
+                     longitud_inicio = COALESCE(?, longitud_inicio),
+                     latitud_fin = COALESCE(?, latitud_fin),
+                     longitud_fin = COALESCE(?, longitud_fin)
+                 WHERE id=?"
+            );
+            $st->bind_param('sssddddds', $obs_tarea, $fecha_hoy, $hora_hoy, $lat_ini, $lng_ini, $lat_fin, $lng_fin, $tarea_id);
+        } else {
+            $st = $conn->prepare(
+                "UPDATE tarea
+                 SET observaciones=?,
+                     latitud_inicio = COALESCE(?, latitud_inicio),
+                     longitud_inicio = COALESCE(?, longitud_inicio),
+                     latitud_fin = COALESCE(?, latitud_fin),
+                     longitud_fin = COALESCE(?, longitud_fin)
+                 WHERE id=?"
+            );
+            $st->bind_param('sdddds', $obs_tarea, $lat_ini, $lng_ini, $lat_fin, $lng_fin, $tarea_id);
+        }
         $st->execute();
         $st->close();
     } else {
-        $st = $conn->prepare("UPDATE tarea SET observaciones=? WHERE id=?");
-        $st->bind_param('ss', $obs_tarea, $tarea_id);
+        if ($es_levantamiento) {
+            $fecha_hoy = date('Y-m-d');
+            $hora_hoy  = date('H:i:s');
+            $st = $conn->prepare("UPDATE tarea SET observaciones=?, estado='completada', fecha_realizada=?, hora_realizada=? WHERE id=?");
+            $st->bind_param('ssss', $obs_tarea, $fecha_hoy, $hora_hoy, $tarea_id);
+        } else {
+            $st = $conn->prepare("UPDATE tarea SET observaciones=? WHERE id=?");
+            $st->bind_param('ss', $obs_tarea, $tarea_id);
+        }
         $st->execute();
         $st->close();
     }
@@ -556,7 +597,16 @@ try {
             'g_fam_salud DECIMAL(12,2) DEFAULT NULL','g_fam_otros DECIMAL(12,2) DEFAULT NULL',
             'g_fam_imprevistos DECIMAL(12,2) DEFAULT NULL','otras_deudas_json LONGTEXT DEFAULT NULL',
             'vehiculos_negocio_json LONGTEXT DEFAULT NULL','vehiculos_hogar_json LONGTEXT DEFAULT NULL',
-            'inmuebles_negocio_json LONGTEXT DEFAULT NULL','inmuebles_hogar_json LONGTEXT DEFAULT NULL'];
+            'inmuebles_negocio_json LONGTEXT DEFAULT NULL','inmuebles_hogar_json LONGTEXT DEFAULT NULL',
+            'venta_lunes DECIMAL(12,2) DEFAULT NULL','venta_martes DECIMAL(12,2) DEFAULT NULL',
+            'venta_miercoles DECIMAL(12,2) DEFAULT NULL','venta_jueves DECIMAL(12,2) DEFAULT NULL',
+            'venta_viernes DECIMAL(12,2) DEFAULT NULL',
+            'compra_lunes DECIMAL(12,2) DEFAULT NULL','compra_martes DECIMAL(12,2) DEFAULT NULL',
+            'compra_miercoles DECIMAL(12,2) DEFAULT NULL','compra_jueves DECIMAL(12,2) DEFAULT NULL',
+            'compra_viernes DECIMAL(12,2) DEFAULT NULL',
+            'dia_lunes TINYINT(1) DEFAULT 0','dia_martes TINYINT(1) DEFAULT 0',
+            'dia_miercoles TINYINT(1) DEFAULT 0','dia_jueves TINYINT(1) DEFAULT 0',
+            'dia_viernes TINYINT(1) DEFAULT 0'];
         foreach ($newCols as $colDef) {
             $colName = explode(' ', $colDef)[0];
             @$conn->query("ALTER TABLE encuesta_negocio ADD COLUMN IF NOT EXISTS $colDef");
@@ -630,12 +680,16 @@ try {
                      g_fam_alim=?, g_fam_arriendo=?, g_fam_serv_bas=?, g_fam_educacion=?, g_fam_salud=?, g_fam_otros=?, g_fam_imprevistos=?,
                      otras_deudas_json=?,
                      vehiculos_negocio_json=?, vehiculos_hogar_json=?,
-                     inmuebles_negocio_json=?, inmuebles_hogar_json=?
+                     inmuebles_negocio_json=?, inmuebles_hogar_json=?,
+                     venta_lunes=?, venta_martes=?, venta_miercoles=?, venta_jueves=?, venta_viernes=?,
+                     compra_lunes=?, compra_martes=?, compra_miercoles=?, compra_jueves=?, compra_viernes=?,
+                     dia_lunes=?, dia_martes=?, dia_miercoles=?, dia_jueves=?, dia_viernes=?
                  WHERE tarea_id = ?"
             );
             // types: ddd(3) ss(2) ddd(3) s(1) iiiiii(6) 23d's 6s's = 44
+            // types: ddd ss ddd s iiiiii 23d sssss 10d 5i s = 59
             $stN->bind_param(
-                'dddssdddsiiiiiidddddddddddddddddddddddssssss',
+                'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiis',
                 $venta_lv_n, $venta_sab_n, $venta_dom_n,
                 $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -648,6 +702,9 @@ try {
                 $otras_deudas_json,
                 $vehiculos_negocio_json, $vehiculos_hogar_json,
                 $inmuebles_negocio_json, $inmuebles_hogar_json,
+                $venta_lunes, $venta_martes, $venta_miercoles, $venta_jueves, $venta_viernes,
+                $compra_lunes, $compra_martes, $compra_miercoles, $compra_jueves, $compra_viernes,
+                $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes,
                 $tarea_id
             );
             $stN->execute();
@@ -665,12 +722,15 @@ try {
                   g_neg_sueldos, g_neg_arriendo, g_neg_serv_bas, g_neg_transporte, g_neg_mantenimiento, g_neg_otros, g_neg_imprevistos,
                   o_ing_conyuge, o_ing_arriendos, o_ing_pensiones, o_ing_otros,
                   g_fam_alim, g_fam_arriendo, g_fam_serv_bas, g_fam_educacion, g_fam_salud, g_fam_otros, g_fam_imprevistos,
-                  otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                  otras_deudas_json, vehiculos_negocio_json, vehiculos_hogar_json, inmuebles_negocio_json, inmuebles_hogar_json,
+                  venta_lunes, venta_martes, venta_miercoles, venta_jueves, venta_viernes,
+                  compra_lunes, compra_martes, compra_miercoles, compra_jueves, compra_viernes,
+                  dia_lunes, dia_martes, dia_miercoles, dia_jueves, dia_viernes)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
             );
-            // types: ss(2) ddd(3) ss(2) ddd(3) s(1) iiiiii(6) 23d's 5s's = 45
+            // types: ss ddd ss ddd s iiiiii 23d sssss 10d 5i = 60
             $stN->bind_param(
-                'ssdddssdddsiiiiiidddddddddddddddddddddddsssss',
+                'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiii',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -681,7 +741,10 @@ try {
                 $oic_n, $oia_n, $oip_n, $oio_n,
                 $gfa_n, $gfar_n, $gfb_n, $gfe_n, $gfs_n, $gfo_n, $gfi_n,
                 $otras_deudas_json, $vehiculos_negocio_json, $vehiculos_hogar_json,
-                $inmuebles_negocio_json, $inmuebles_hogar_json
+                $inmuebles_negocio_json, $inmuebles_hogar_json,
+                $venta_lunes, $venta_martes, $venta_miercoles, $venta_jueves, $venta_viernes,
+                $compra_lunes, $compra_martes, $compra_miercoles, $compra_jueves, $compra_viernes,
+                $dia_lunes, $dia_martes, $dia_miercoles, $dia_jueves, $dia_viernes
             );
             $stN->execute();
             $stN->close();
