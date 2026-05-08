@@ -30,10 +30,9 @@ try {
                 cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
                 cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise,
                 cp.tiene_empresa,
-                (SELECT t.id FROM tarea t 
-                 WHERE t.cliente_prospecto_id = cp.id 
-                   AND t.tipo_tarea = 'levantamiento' 
-                   AND t.estado != 'completada'
+                (SELECT t.id FROM tarea t
+                 WHERE t.cliente_prospecto_id = cp.id
+                   AND t.tipo_tarea = 'levantamiento'
                  ORDER BY t.created_at DESC LIMIT 1) as tarea_id
          FROM cliente_prospecto cp
          WHERE cp.nombre_empresa LIKE ?
