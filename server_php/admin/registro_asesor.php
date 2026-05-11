@@ -190,8 +190,6 @@ if ($modo_supervisor) {
 $alertas_pendientes = 0;
 $navTitle = 'Registrar Asesor'; $navIcon = 'fas fa-user-tie'; require_once '_sidebar_supervisor.php';
 ?>
-<div class="main-content">
-    <div class="content-area">
         <div class="page-header">
             <a href="mis_asesores.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Mis Asesores</a>
             <h1><i class="fas fa-user-tie me-2"></i>Registrar Nuevo Asesor</h1>
@@ -219,6 +217,7 @@ $navTitle = 'Registrar Asesor'; $navIcon = 'fas fa-user-tie'; require_once '_sid
         <?php if ($success): ?>
         <div class="alert alert-success"><i class="fas fa-check-circle"></i>Solicitud enviada. El supervisor revisará tu registro pronto.</div>
         <?php endif; ?>
+        
 
         <!-- ── Formulario ────────────────────────────────── -->
         <form method="POST" action="procesar_registro_asesor.php" enctype="multipart/form-data" novalidate>

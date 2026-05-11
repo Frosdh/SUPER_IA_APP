@@ -485,21 +485,27 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
     <title>Metas del Equipo — Super_IA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="supervisor_layout.css">
 </head>
 <body>
 
-        <?php $navTitle = 'Metas del Equipo'; $navIcon = 'fas fa-bullseye'; ?>
-        <?php require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle = 'Metas del Equipo'; $navIcon = 'fas fa-bullseye'; ?>
+<?php require_once '_sidebar_supervisor.php'; ?>
+
+<div class="main-content">
+  <div class="content-area">
 
         <?php if ($flash): ?>
             <div class="flash flash-<?= htmlspecialchars($flash['type']) ?>"><?= $flash['msg'] ?></div>
         <?php endif; ?>
 
         <!-- FORMULARIO ASIGNAR META -->
-        <div class="card-block">
-            <h3><i class="fas fa-plus-circle" style="color:#10b981;"></i> Asignar Meta Diaria a un Asesor</h3>
+        <div class="card-block" style="max-width:900px;margin:0 auto 28px;">
+            <h3 style="font-size:1.3rem;font-weight:800;margin-bottom:18px;color:#123a6d;display:flex;align-items:center;gap:10px;">
+                <i class="fas fa-plus-circle" style="color:#10b981;"></i> Asignar Meta Diaria a un Asesor
+            </h3>
             <form method="post" action="metas.php">
-                <div class="form-grid">
+                <div class="form-grid" style="margin-bottom:18px;">
                     <div>
                         <label>Asesor</label>
                         <select name="asesor_id" required>
@@ -538,31 +544,40 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
                         <input type="number" name="meta_inversiones" min="0" value="0">
                     </div>
                 </div>
-                <div style="margin-top:14px;">
+                <div style="margin-bottom:14px;">
                     <label>Observaciones (opcional)</label>
                     <textarea name="observaciones" rows="2" placeholder="Notas para el asesor..."></textarea>
                 </div>
-                <button type="submit" class="btn-save"><i class="fas fa-save"></i> Guardar Meta</button>
+                <div style="display:flex;justify-content:center;">
+                    <button type="submit" class="btn-save" style="min-width:160px;">
+                        <i class="fas fa-save"></i> Guardar Meta
+                    </button>
+                </div>
             </form>
         </div>
 
 
         <!-- METAS ACTUALES -->
-        <div class="card-block">
-            <h3><i class="fas fa-list-check" style="color:#3b82f6;"></i> Metas Asignadas</h3>
-
-            <form method="get" class="filter-bar">
-                <div>
-                    <label>Ver fecha</label>
-                    <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" onchange="this.form.submit()">
+        <div class="card-block" style="max-width:1100px;margin:0 auto 28px;">
+            <h3 style="font-size:1.2rem;font-weight:800;margin-bottom:18px;color:#123a6d;display:flex;align-items:center;gap:10px;">
+                <i class="fas fa-list-check" style="color:#3b82f6;"></i> Metas Asignadas
+            </h3>
+            <form method="get" class="meta-filter-form" style="display:flex;justify-content:flex-end;align-items:end;gap:16px;padding:0 0 18px 0;">
+                <div class="filter-group" style="display:flex;flex-direction:column;min-width:200px;">
+                    <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;color:#475569;font-weight:600;">
+                        <i class="fas fa-calendar"></i> Ver fecha
+                    </label>
+                    <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" onchange="this.form.submit()" style="padding:10px 12px;border:1px solid #d2d6dc;border-radius:8px;background:#ffffff;font-size:0.95rem;">
                 </div>
             </form>
-
             <?php if (empty($metas_hoy)): ?>
-                <p style="color:var(--brand-gray);padding:20px;text-align:center;"><i class="fas fa-inbox"></i> No hay metas asignadas para esta fecha.</p>
+                <div class="empty-state" style="text-align:center;padding:40px 20px;color:var(--brand-gray);">
+                    <i class="fas fa-inbox" style="font-size:3rem;margin-bottom:16px;opacity:0.5;"></i>
+                    <p style="margin:0;font-size:1rem;">No hay metas asignadas para esta fecha.</p>
+                </div>
             <?php else: ?>
-                <div style="overflow-x:auto;">
-                    <table>
+                <div class="table-container" style="overflow-x:auto;border-radius:12px;border:1px solid #e2e8f0;background:#ffffff;">
+                    <table style="margin:0;border-radius:12px;min-width:680px;width:100%;">
                         <thead>
                             <tr>
                                 <th>Asesor</th>
@@ -584,7 +599,6 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
                                 'completado' => 'Completado',
                                 'no_cumplido' => 'No cumplido'
                             ][$m['estado']] ?? $m['estado'];
-
                             $fmt = function($av, $meta) {
                                 $av = (int)$av; $meta = (int)$meta;
                                 $ok = $meta > 0 && $av >= $meta;

@@ -286,3 +286,212 @@ table tbody tr:hover { background: #f8fafc; }
     .sidebar-link { justify-content: center; padding: 12px; }
     .sidebar-link i { font-size: 18px; margin: 0; }
 }
+
+/* ── ESTILOS ESPECÍFICOS PARA FORMULARIO DE METAS ── */
+.meta-form-container {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.meta-form {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.form-section {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 20px;
+}
+
+.form-section h4 {
+    margin: 0 0 16px 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--brand-navy-deep);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.form-section h4 i {
+    color: var(--brand-yellow);
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.form-grid-products {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.form-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: #475569;
+    font-weight: 600;
+}
+
+.form-group label i {
+    color: var(--brand-yellow);
+    font-size: 0.85em;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 12px 14px;
+    border: 1px solid #d2d6dc;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--brand-yellow);
+    box-shadow: 0 0 0 3px rgba(255, 221, 0, 0.1);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: center;
+    padding-top: 16px;
+    border-top: 1px solid #e2e8f0;
+}
+
+.form-actions .btn-save {
+    min-width: 160px;
+    justify-content: center;
+}
+
+/* Responsive para formulario de metas */
+@media (max-width: 768px) {
+    .meta-form-container {
+        margin: 0;
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .form-grid-products {
+        grid-template-columns: 1fr;
+    }
+
+    .form-section {
+        padding: 16px;
+    }
+}
+
+/* ── ESTILOS PARA SECCIÓN DE METAS ASIGNADAS ── */
+.meta-filter-section {
+    margin-bottom: 20px;
+}
+
+.meta-filter-form {
+    display: flex;
+    justify-content: center;
+    align-items: end;
+    gap: 16px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+}
+
+.filter-group {
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+}
+
+.filter-group label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+    color: #475569;
+    font-weight: 600;
+}
+
+.filter-group label i {
+    color: var(--brand-yellow);
+}
+
+.filter-group input {
+    padding: 10px 12px;
+    border: 1px solid #d2d6dc;
+    border-radius: 8px;
+    background: #ffffff;
+    font-size: 0.95rem;
+}
+
+.filter-group input:focus {
+    outline: none;
+    border-color: var(--brand-yellow);
+    box-shadow: 0 0 0 3px rgba(255, 221, 0, 0.1);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--brand-gray);
+}
+
+.empty-state i {
+    font-size: 3rem;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+.empty-state p {
+    margin: 0;
+    font-size: 1rem;
+}
+
+.table-container {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #ffffff;
+}
+
+.table-container table {
+    margin: 0;
+    border-radius: 12px;
+}
+
+/* Responsive para filtros */
+@media (max-width: 768px) {
+    .meta-filter-form {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .filter-group {
+        min-width: auto;
+    }
+}

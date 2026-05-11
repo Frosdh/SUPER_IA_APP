@@ -108,134 +108,86 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
     <title>Super_IA - Mis Asesores</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --brand-yellow: #ffdd00;
-            --brand-yellow-deep: #f4c400;
-            --brand-navy: #123a6d;
-            --brand-navy-deep: #0a2748;
-            --brand-gray: #6b7280;
-            --brand-border: #d7e0ea;
-            --brand-card: #ffffff;
-            --brand-bg: #f4f6f9;
-            --brand-shadow: 0 16px 34px rgba(18, 58, 109, 0.08);
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
-
-
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
-        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; }
-        .btn-logout:hover { background: rgba(255,221,0,0.24); color: white; }
-
-        .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        .page-header { margin-bottom: 30px; }
-        .page-header h1 { margin: 0; font-size: 28px; font-weight: 800; color: var(--brand-navy-deep); }
-        .asesor-card { background: white; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); margin-bottom: 20px; overflow: hidden; border-left: 4px solid var(--brand-yellow-deep); }
-        .asesor-header { padding: 20px; background: #f8f9fa; display: flex; justify-content: space-between; align-items: center; cursor: pointer; }
-        .asesor-header:hover { background: #f0f1f3; }
-        .asesor-info h5 { margin: 0; font-weight: 700; color: #1f2937; }
-        .asesor-meta { color: #64748b; font-size: 13px; margin-top: 5px; }
-        .clients-count { background: var(--brand-navy); color: white; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px; }
-        .asesor-clients { padding: 0; display: none; }
-        .asesor-clients.show { display: block; }
-        .client-item { padding: 12px 20px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
-        .client-item:last-child { border-bottom: none; }
-        .client-item:hover { background: #fafbff; }
-        .client-name { font-weight: 600; color: #1f2937; }
-        .client-contact { color: #64748b; font-size: 12px; }
-        .badge-active { background: #10b981; }
-        .badge-inactive { background: #ef4444; }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-    </style>
+    <link rel="stylesheet" href="supervisor_layout.css">
 </head>
 <body>
 
+
 <?php $navTitle = 'Mis Asesores'; $navIcon = 'fas fa-users'; require_once '_sidebar_supervisor.php'; ?>
-
-<!-- MAIN CONTENT -->
 <div class="main-content">
-    <!-- CONTENT -->
     <div class="content-area">
-
-        <div class="page-header">
-            <h1><i class="fas fa-users me-2"></i>Mi Equipo de Asesores y sus Clientes</h1>
-        </div>
-
-        <?php if (empty($asesores)): ?>
-        <div style="background: white; padding: 40px; text-align: center; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06);">
-            <i class="fas fa-inbox" style="font-size: 48px; color: #d1d5db; margin-bottom: 15px;"></i>
-            <h4 style="color: #64748b;">No tienes asesores asignados</h4>
-        </div>
-        <?php else: ?>
-
-        <!-- ASESORES Y CLIENTES -->
-        <?php foreach ($asesores as $asesor): ?>
-        <?php $asesorKey = (string)($asesor['id_usuario'] ?? ''); ?>
-        <div class="asesor-card">
-            <div class="asesor-header" onclick="toggleClientes('<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>')">
-                <div class="asesor-info">
-                    <h5><?php echo htmlspecialchars($asesor['nombres'] . ' ' . $asesor['apellidos']); ?></h5>
-                    <div class="asesor-meta">
-                        <i class="fas fa-user me-1"></i><?php echo htmlspecialchars($asesor['usuario']); ?> | 
-                        <i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($asesor['email']); ?> | 
-                        <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($asesor['telefono'] ?? 'N/A'); ?>
-                    </div>
+        <div class="card-block" style="max-width:900px;margin:0 auto 28px;">
+            <h2 style="font-size:1.5rem;font-weight:800;margin-bottom:18px;color:#123a6d;display:flex;align-items:center;gap:10px;">
+                <i class="fas fa-users" style="color:#f4c400;"></i> Mi Equipo de Asesores y sus Clientes
+            </h2>
+            <?php if (empty($asesores)): ?>
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p>No tienes asesores asignados</p>
                 </div>
-                <div style="display: flex; gap: 10px; align-items: center;">
-                    <div class="clients-count"><?php echo $asesor['total_clientes']; ?> clientes</div>
-                    <i class="fas fa-chevron-down" id="chevron-<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>" style="color: #6b11ff; transition: 0.3s;"></i>
-                </div>
-            </div>
-
-            <div class="asesor-clients" id="clients-<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>">
-                <?php if (empty($clientes_por_asesor[$asesorKey])): ?>
-                <div style="padding: 20px; text-align: center; color: #9ca3af;">
-                    <i class="fas fa-inbox me-2"></i>Sin clientes asignados
-                </div>
-                <?php else: ?>
-                    <?php foreach ($clientes_por_asesor[$asesorKey] as $cliente): ?>
-                    <div class="client-item">
-                        <div style="flex: 1;">
-                            <div class="client-name"><?php echo htmlspecialchars($cliente['nombre']); ?><?php if (!empty($cliente['cedula'])): ?> <span style="font-weight:500; color:#64748b;">(CI: <?php echo htmlspecialchars($cliente['cedula']); ?>)</span><?php endif; ?></div>
-                            <div class="client-contact">
-                                <i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($cliente['email'] ?? 'N/A'); ?> | 
-                                <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($cliente['telefono2'] ?? $cliente['telefono'] ?? 'N/A'); ?>
+            <?php else: ?>
+                <?php foreach ($asesores as $asesor): ?>
+                    <?php $asesorKey = (string)($asesor['id_usuario'] ?? ''); ?>
+                    <div class="asesor-card" style="margin-bottom:18px;">
+                        <div class="asesor-header" style="padding:18px 22px;background:#f8fafc;display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleClientes('<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>')">
+                            <div class="asesor-info">
+                                <h5 style="margin:0;font-weight:700;color:#1f2937;font-size:1.1rem;">
+                                    <?php echo htmlspecialchars($asesor['nombres'] . ' ' . $asesor['apellidos']); ?>
+                                </h5>
+                                <div class="asesor-meta" style="color:#64748b;font-size:13px;margin-top:5px;">
+                                    <i class="fas fa-user me-1"></i><?php echo htmlspecialchars($asesor['usuario']); ?> |
+                                    <i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($asesor['email']); ?> |
+                                    <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($asesor['telefono'] ?? 'N/A'); ?>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center;">
+                                <div class="clients-count" style="background:#123a6d;color:white;padding:6px 12px;border-radius:6px;font-weight:600;font-size:13px;">
+                                    <?php echo $asesor['total_clientes']; ?> clientes
+                                </div>
+                                <i class="fas fa-chevron-down" id="chevron-<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>" style="color:#6b11ff;transition:0.3s;"></i>
                             </div>
                         </div>
-                        <div>
-                            <?php if ($cliente['activo']): ?>
-                                <span class="badge badge-active" style="color: white;">✓ Activo</span>
+                        <div class="asesor-clients" id="clients-<?php echo htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8'); ?>">
+                            <?php if (empty($clientes_por_asesor[$asesorKey])): ?>
+                                <div class="empty-state" style="padding:20px 0;">
+                                    <i class="fas fa-inbox"></i> Sin clientes asignados
+                                </div>
                             <?php else: ?>
-                                <span class="badge badge-inactive" style="color: white;">✗ Inactivo</span>
+                                <?php foreach ($clientes_por_asesor[$asesorKey] as $cliente): ?>
+                                    <div class="client-item" style="padding:12px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;">
+                                        <div style="flex:1;">
+                                            <div class="client-name" style="font-weight:600;color:#1f2937;">
+                                                <?php echo htmlspecialchars($cliente['nombre']); ?><?php if (!empty($cliente['cedula'])): ?> <span style="font-weight:500;color:#64748b;">(CI: <?php echo htmlspecialchars($cliente['cedula']); ?>)</span><?php endif; ?>
+                                            </div>
+                                            <div class="client-contact" style="color:#64748b;font-size:12px;">
+                                                <i class="fas fa-envelope me-1"></i><?php echo htmlspecialchars($cliente['email'] ?? 'N/A'); ?> |
+                                                <i class="fas fa-phone me-1"></i><?php echo htmlspecialchars($cliente['telefono2'] ?? $cliente['telefono'] ?? 'N/A'); ?>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <?php if ($cliente['activo']): ?>
+                                                <span class="badge badge-active" style="background:#10b981;color:white;">✓ Activo</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-inactive" style="background:#ef4444;color:white;">✗ Inactivo</span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
                             <?php endif; ?>
                         </div>
                     </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
-        <?php endforeach; ?>
-
-        <?php endif; ?>
     </div>
 </div>
-
 <script>
 function toggleClientes(asesorId) {
     const clientsDiv = document.getElementById('clients-' + asesorId);
     const chevron = document.getElementById('chevron-' + asesorId);
-    
     clientsDiv.classList.toggle('show');
     chevron.style.transform = clientsDiv.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 </script>
-
 </body>
 </html>

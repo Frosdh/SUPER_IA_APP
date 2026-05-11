@@ -600,8 +600,6 @@ $currentPage = 'recuperacion';
 <body>
   <?php $navTitle = 'Recuperación'; $navIcon = 'fas fa-user-clock'; require_once '_sidebar_supervisor.php'; ?>
 
-  <div class="main-content">
-    <div class="content-area">
       <div class="page-header">
         <h1><i class="fas fa-user-clock"></i> Recuperación de Cartera</h1>
         <button class="btn-bulk" id="btnBulkCrear" style="display:none;">
