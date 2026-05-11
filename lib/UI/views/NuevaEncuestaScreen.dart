@@ -1512,6 +1512,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'dias_atencion_lv': _tieneEmpresa ? ((_diaLun||_diaMar||_diaMie||_diaJue||_diaVie) ? '1' : '0') : '0',
       'costos_ventas':        _tieneEmpresa ? _costosVentasCtrl.text.trim() : '',
       'pct_contado':          _tieneEmpresa ? _pctContado.toString() : '',
+      'pct_credito':          _tieneEmpresa ? (100 - _pctContado).toString() : '',
       'pct_efectivo':         _tieneEmpresa ? _pctEfectivo.toString() : '',
       // Gastos negocio desglosados
       'g_neg_sueldos':        _tieneEmpresa ? _gNegSueldosCtrl.text.trim() : '',
@@ -3430,7 +3431,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(color: Colors.green.shade100, borderRadius: BorderRadius.circular(6)),
-                          child: Text('💵 $_pctContado% Efectivo',
+                          child: Text('💵 $_pctContado% Contado',
                               style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w700, fontSize: 11.5)),
                         ),
                         const SizedBox(height: 3),
@@ -3453,10 +3454,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('0% Efectivo\n(Todo crédito)', textAlign: TextAlign.center,
+                        Text('0% Contado\n(Todo crédito)', textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
                         Text('50/50', style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
-                        Text('100% Efectivo\n(Todo cash)', textAlign: TextAlign.center,
+                        Text('100% Contado\n(Todo cash)', textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 11, color: ConstantColors.textDarkGrey)),
                       ],
                     ),

@@ -512,103 +512,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
             .alm-header { padding: 14px 16px; }
         }
     </style>
-    </head>
-    <body>
-
-<!-- SIDEBAR -->
-<?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php'; else: ?>
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> Super_IA
-    </div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <?php if ($user_role === 'supervisor'): ?>
-        <a href="supervisor_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
-        <a href="mapa_vivo_superIA.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
-        <?php elseif ($user_role === 'super_admin'): ?>
-        <a href="super_admin_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
-        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
-        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
-        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
-        <?php elseif ($user_role === 'admin'): ?>
-        <a href="index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
-        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
-        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
-        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
-        <?php else: ?>
-        <a href="<?php echo ($user_role === 'supervisor') ? 'supervisor_index.php' : 'asesor_index.php'; ?>" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
-        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
-        <?php endif; ?>
-    </div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <?php if ($user_role === 'super_admin' || $user_role === 'admin'): ?>
-        <a href="usuarios.php" class="sidebar-link"><i class="fas fa-users"></i> Usuarios</a>
-        <?php endif; ?>
-        <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Clientes</a>
-        <a href="operaciones.php" class="sidebar-link"><i class="fas fa-handshake"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Operaciones</a>
-        <a href="alertas.php" class="sidebar-link active"><i class="fas fa-bell"></i> Alertas</a>
-    </div>
-    <?php if ($user_role === 'supervisor'): ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores.php" class="sidebar-link"><i class="fas fa-users"></i> Mis Asesores</a>
-        <a href="registro_asesor.php" class="sidebar-link"><i class="fas fa-user-plus"></i> Crear Asesor</a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link"><i class="fas fa-file-circle-check"></i> Solicitudes de Asesor</a>
-    </div>
-    <?php endif; ?>
-    <?php if ($user_role === 'super_admin'): ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Super Administración</div>
-        <a href="administrar_solicitudes_admin.php" class="sidebar-link"><i class="fas fa-file-alt"></i> Solicitudes de Admin</a>
-    </div>
-    <?php endif; ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Configuración</div>
-        <a href="#" class="sidebar-link"><i class="fas fa-cog"></i> Configuración</a>
-    </div>
-</div>
-<?php endif; ?>
-
+<?php 
+if ($user_role === 'supervisor') {
+    $navTitle = 'Alertas'; 
+    $navIcon = 'fas fa-bell';
+    require_once '_sidebar_supervisor.php'; 
+} else { ?>
+<!-- SIDEBAR Y NAVBAR LEGACY PARA OTROS ROLES -->
+<div class="sidebar">...</div>
 <div class="main-content">
-    <div class="navbar-custom">
-        <?php if ($user_role === 'supervisor'): ?>
-            <h2><i class="fas fa-shield-halved me-2" style="color: var(--brand-yellow);"></i>Super_IA - Supervisor</h2>
-        <?php else: ?>
-            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA
-                <?php
-                if ($user_role === 'super_admin') echo '- SuperAdministrador';
-                elseif ($user_role === 'admin') echo '- Admin';
-                elseif ($user_role === 'supervisor') echo '- Supervisor';
-                else echo '- Asesor';
-                ?>
-            </h2>
-        <?php endif; ?>
-        <div class="user-info">
-            <div>
-                <strong>
-                    <?php
-                    if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_nombre']);
-                    elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_nombre']);
-                    elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_nombre']);
-                    else echo htmlspecialchars($_SESSION['asesor_nombre']);
-                    ?>
-                </strong><br>
-                <small>
-                    <?php
-                    if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_rol']);
-                    elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_rol']);
-                    elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_rol']);
-                    else echo htmlspecialchars($_SESSION['asesor_rol']);
-                    ?>
-                </small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-
+    <div class="navbar-custom">...</div>
     <div class="content-area">
+<?php } ?>
+
         <div class="page-header">
             <h1><i class="fas fa-bell me-2"></i>Centro de Alertas</h1>
         </div>

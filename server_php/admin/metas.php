@@ -484,75 +484,12 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
     <title>Metas del Equipo — Super_IA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root{
-            --brand-yellow:#ffdd00; --brand-yellow-deep:#f4c400;
-            --brand-navy:#123a6d;  --brand-navy-deep:#0a2748;
-            --brand-gray:#6b7280;  --brand-border:#d7e0ea;
-            --brand-card:#ffffff;  --brand-bg:#f4f6f9;
-            --brand-shadow:0 16px 34px rgba(18,58,109,.08);
-        }
-        *{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:'Inter','Segoe UI',sans-serif;background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%);display:flex;height:100vh;color:var(--brand-navy-deep);}
-        .sidebar{width:230px;background:linear-gradient(180deg,var(--brand-navy-deep),var(--brand-navy));color:#fff;padding:20px 0;overflow-y:auto;position:fixed;height:100vh;left:0;top:0;z-index:100;}
-        .sidebar-brand{padding:0 20px 24px;font-size:18px;font-weight:800;border-bottom:1px solid rgba(255,221,0,.18);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
-        .sidebar-brand i{color:var(--brand-yellow);}
-        .sidebar-section{padding:0 15px;margin-bottom:22px;}
-        .sidebar-section-title{font-size:11px;text-transform:uppercase;color:rgba(255,255,255,.5);letter-spacing:.6px;padding:0 10px;margin-bottom:10px;font-weight:700;}
-        .sidebar-link{display:flex;align-items:center;gap:12px;padding:11px 15px;margin-bottom:4px;border-radius:10px;color:rgba(255,255,255,.82);text-decoration:none;font-size:14px;border:1px solid transparent;transition:all .22s;}
-        .sidebar-link:hover{background:rgba(255,221,0,.12);color:#fff;padding-left:20px;border-color:rgba(255,221,0,.15);}
-        .sidebar-link.active{background:linear-gradient(90deg,var(--brand-yellow),var(--brand-yellow-deep));color:var(--brand-navy-deep);font-weight:700;}
-        .main-content{flex:1;margin-left:230px;display:flex;flex-direction:column;overflow:hidden;}
-        .navbar-custom{background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));color:#fff;padding:15px 30px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
-        .navbar-custom h2{margin:0;font-size:20px;font-weight:700;}
-        .user-info{display:flex;align-items:center;gap:15px;}
-        .user-info > div{text-align:right;line-height:1.25;}
-        .user-info small{opacity:.75;font-size:12px;}
-        .btn-logout{background:rgba(255,221,0,.15);color:#fff;border:1px solid rgba(255,221,0,.28);padding:8px 15px;border-radius:10px;text-decoration:none;font-weight:600;transition:background .2s;}
-        .btn-logout:hover{background:rgba(255,221,0,.24);color:#fff;}
-        .content-area{flex:1;overflow-y:auto;padding:28px 30px;}
-        .card-block{background:#fff;border-radius:16px;box-shadow:var(--brand-shadow);border:1px solid var(--brand-border);padding:22px;margin-bottom:22px;}
-        .card-block h3{font-size:17px;font-weight:800;margin-bottom:16px;color:var(--brand-navy-deep);display:flex;align-items:center;gap:10px;}
-        .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;}
-        label{font-size:12px;font-weight:700;color:var(--brand-navy);text-transform:uppercase;letter-spacing:.3px;margin-bottom:6px;display:block;}
-        input,select,textarea{width:100%;padding:10px 12px;border:1px solid var(--brand-border);border-radius:10px;font-size:14px;font-family:inherit;}
-        input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand-navy);box-shadow:0 0 0 3px rgba(18,58,109,.1);}
-        .btn-save{background:linear-gradient(135deg,var(--brand-yellow),var(--brand-yellow-deep));color:var(--brand-navy-deep);border:none;padding:12px 28px;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-top:16px;}
-        .btn-save:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(244,196,0,.35);}
-        .flash{padding:12px 16px;border-radius:10px;margin-bottom:16px;font-weight:600;}
-        .flash-success{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;}
-        .flash-error{background:#fef2f2;color:#991b1b;border:1px solid #fca5a5;}
-        table{width:100%;border-collapse:collapse;}
-        th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--brand-border);font-size:13px;}
-        th{background:#fafbfc;font-weight:800;text-transform:uppercase;font-size:11px;color:var(--brand-gray);letter-spacing:.4px;}
-        .est-badge{padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800;text-transform:uppercase;}
-        .est-pendiente{background:#fffbeb;color:#92400e;}
-        .est-completado{background:#ecfdf5;color:#065f46;}
-        .est-no_cumplido{background:#fef2f2;color:#991b1b;}
-        .avance{font-size:12px;color:var(--brand-gray);}
-        .avance b{color:var(--brand-navy-deep);}
-        .filter-bar{display:flex;gap:12px;align-items:end;margin-bottom:18px;flex-wrap:wrap;}
-        @media (max-width:900px){.form-grid{grid-template-columns:repeat(2,1fr);}}
     </style>
 </head>
 <body>
 
-<?php require_once '_sidebar_supervisor.php'; ?>
-
-<div class="main-content">
-
-    <div class="navbar-custom">
-        <h2><i class="fas fa-bullseye" style="color:var(--brand-yellow);"></i> Metas del Equipo</h2>
-        <div class="user-info">
-            <div>
-                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
-                <small><?= htmlspecialchars($supervisor_rol) ?></small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-
-    <div class="content-area">
+        <?php $navTitle = 'Metas del Equipo'; $navIcon = 'fas fa-bullseye'; ?>
+        <?php require_once '_sidebar_supervisor.php'; ?>
 
         <?php if ($flash): ?>
             <div class="flash flash-<?= htmlspecialchars($flash['type']) ?>"><?= $flash['msg'] ?></div>
@@ -916,6 +853,7 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
         </div>
 
     </div>
-</div>
+    </div> <!-- .content-area -->
+</div> <!-- .main-content -->
 </body>
 </html>

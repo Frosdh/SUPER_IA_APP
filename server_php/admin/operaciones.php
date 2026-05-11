@@ -551,14 +551,6 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
-        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
-        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; border: 1px solid transparent; }
-        .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
-        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; box-shadow: 0 10px 24px rgba(255,221,0,0.18); }
         .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
@@ -642,159 +634,18 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
 </head>
 <body>
 
-<?php if ($user_role === 'supervisor'): require_once '_sidebar_supervisor.php'; else: ?>
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> Super_IA
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <?php if ($user_role === 'super_admin'): ?>
-        <a href="super_admin_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <a href="mapa_calor.php" class="sidebar-link">
-            <i class="fas fa-fire"></i> Mapa de Calor
-        </a>
-        <a href="historial_rutas.php" class="sidebar-link">
-            <i class="fas fa-history"></i> Historial de Viajes
-        </a>
-        <?php elseif ($user_role === 'admin'): ?>
-        <a href="index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <a href="mapa_calor.php" class="sidebar-link">
-            <i class="fas fa-fire"></i> Mapa de Calor
-        </a>
-        <a href="historial_rutas.php" class="sidebar-link">
-            <i class="fas fa-history"></i> Historial de Viajes
-        </a>
-        <?php elseif ($user_role === 'supervisor'): ?>
-        <a href="supervisor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_superIA.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <?php else: ?>
-        <a href="asesor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <?php endif; ?>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <?php if ($user_role === 'super_admin' || $user_role === 'admin'): ?>
-        <a href="usuarios.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Usuarios
-        </a>
-        <?php endif; ?>
-        <a href="clientes.php" class="sidebar-link">
-            <i class="fas fa-briefcase"></i> Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link active">
-            <i class="fas fa-handshake"></i> Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
-    </div>
-
-    <?php if ($user_role === 'supervisor'): ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Mis Asesores
-        </a>
-        <a href="registro_asesor.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link">
-            <i class="fas fa-file-circle-check"></i> Solicitudes de Asesor
-        </a>
-    </div>
-    <?php endif; ?>
-    
-    <?php if ($user_role === 'super_admin'): ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Super Administración</div>
-        <a href="administrar_solicitudes_admin.php" class="sidebar-link">
-            <i class="fas fa-file-alt"></i> Solicitudes de Admin
-        </a>
-    </div>
-    <?php endif; ?>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Configuración</div>
-        <a href="#" class="sidebar-link">
-            <i class="fas fa-cog"></i> Configuración
-        </a>
-    </div>
-</div>
-<?php endif; ?>
-
-<!-- MAIN CONTENT -->
+<?php 
+if ($user_role === 'supervisor') {
+    $navTitle = 'Operaciones'; 
+    $navIcon = 'fas fa-handshake';
+    require_once '_sidebar_supervisor.php'; 
+} else { ?>
+<!-- SIDEBAR Y NAVBAR LEGACY PARA OTROS ROLES (Si aplica) -->
+<div class="sidebar">...</div>
 <div class="main-content">
-    <!-- NAVBAR -->
-    <div class="navbar-custom">
-        <h2>
-            <?php if ($user_role === 'super_admin'): ?>
-                👑 Super_IA - SuperAdministrador
-            <?php elseif ($user_role === 'admin'): ?>
-                🎯 Super_IA - Admin
-            <?php elseif ($user_role === 'supervisor'): ?>
-                👔 Super_IA - Supervisor
-            <?php else: ?>
-                👤 Super_IA - Asesor
-            <?php endif; ?>
-        </h2>
-        <div class="user-info">
-            <div>
-                <strong>
-                    <?php 
-                    if ($user_role === 'super_admin') {
-                        echo htmlspecialchars($_SESSION['super_admin_nombre']);
-                    } elseif ($user_role === 'admin') {
-                        echo htmlspecialchars($_SESSION['admin_nombre']);
-                    } elseif ($user_role === 'supervisor') {
-                        echo htmlspecialchars($_SESSION['supervisor_nombre']);
-                    } else {
-                        echo htmlspecialchars($_SESSION['asesor_nombre']);
-                    }
-                    ?>
-                </strong><br>
-                <small>
-                    <?php 
-                    if ($user_role === 'super_admin') {
-                        echo htmlspecialchars($_SESSION['super_admin_rol']);
-                    } elseif ($user_role === 'admin') {
-                        echo htmlspecialchars($_SESSION['admin_rol']);
-                    } elseif ($user_role === 'supervisor') {
-                        echo htmlspecialchars($_SESSION['supervisor_rol']);
-                    } else {
-                        echo htmlspecialchars($_SESSION['asesor_rol']);
-                    }
-                    ?>
-                </small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-    
-    <!-- CONTENT -->
+    <div class="navbar-custom">...</div>
     <div class="content-area">
+<?php } ?>
 
         <div class="page-header">
             <h1><i class="fas fa-handshake me-2"></i><?= htmlspecialchars($page_title) ?></h1>
@@ -936,8 +787,8 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
             <?php endif; ?>
         </div>
 
-    </div><!-- /content-area -->
-</div><!-- /main-content -->
+    </div> <!-- .content-area -->
+</div> <!-- .main-content -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>

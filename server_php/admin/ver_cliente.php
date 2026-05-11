@@ -399,41 +399,37 @@ $is_supervisor = ($user_role === 'supervisor');
 </head>
 <body>
 
-<!-- ══════════ SIDEBAR ══════════ -->
+<?php 
+$currentPage = 'clientes';
+$alertas_pendientes = 0;
+if ($user_role === 'supervisor') {
+    $sess_sup_id = $_SESSION['supervisor_id'] ?? null;
+    if ($sess_sup_id) {
+        try {
+            $stS = $pdo->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+            $stS->execute([$sess_sup_id]);
+            $table_id = $stS->fetchColumn();
+            if ($table_id) {
+                $stA = $pdo->prepare('SELECT COUNT(*) FROM alerta_modificacion WHERE supervisor_id = ? AND vista_supervisor = 0');
+                $stA->execute([$table_id]);
+                $alertas_pendientes = (int)$stA->fetchColumn();
+            }
+        } catch (Throwable $e) {}
+    }
+}
+
+if ($user_role === 'supervisor') {
+    require_once '_sidebar_supervisor.php'; 
+} else {
+?>
+<!-- SIDEBAR OTROS ROLES -->
 <div class="sidebar">
     <div class="brand"><i class="fas fa-star"></i><span>Super_IA</span></div>
-
-    <?php if ($user_role === 'supervisor'): ?>
-    <div class="section-label">PRINCIPAL</div>
-    <a href="index_supervisor.php"><i class="fas fa-home"></i> Dashboard</a>
-    <a href="mis_asesores.php"><i class="fas fa-users"></i> Mis Asesores</a>
-    <a href="operaciones.php"><i class="fas fa-briefcase"></i> Operaciones</a>
-    <a href="pendientes.php"><i class="fas fa-hourglass-end"></i> Pendientes</a>
-    <div class="section-label" style="margin-top:18px;">ANÁLISIS</div>
-    <a href="reportes.php"><i class="fas fa-chart-bar"></i> Reportes KPI</a>
-    <a href="mapa_vivo.php"><i class="fas fa-map-marked-alt"></i> Ubicaciones</a>
-    <a href="alertas.php"><i class="fas fa-bell"></i> Alertas</a>
-    <div class="section-label" style="margin-top:18px;">GESTIÓN</div>
-    <a href="clientes.php" class="active"><i class="fas fa-address-book"></i> Mis Clientes</a>
-    <a href="registro_asesor.php"><i class="fas fa-user-plus"></i> Nuevo Asesor</a>
-    <?php elseif ($user_role === 'admin' || $user_role === 'super_admin'): ?>
-    <div class="section-label">PRINCIPAL</div>
     <a href="index.php"><i class="fas fa-home"></i> Dashboard</a>
-    <div class="section-label" style="margin-top:18px;">GESTIÓN</div>
-    <a href="usuarios.php"><i class="fas fa-users"></i> Usuarios</a>
     <a href="clientes.php" class="active"><i class="fas fa-address-book"></i> Clientes</a>
-    <a href="operaciones.php"><i class="fas fa-briefcase"></i> Operaciones</a>
-    <?php elseif ($user_role === 'asesor'): ?>
-    <div class="section-label">PRINCIPAL</div>
-    <a href="asesor_index.php"><i class="fas fa-home"></i> Mi Dashboard</a>
-    <a href="clientes.php" class="active"><i class="fas fa-address-book"></i> Mis Clientes</a>
-    <?php endif; ?>
-
-    <div class="logout-link">
-        <div class="section-label">SESIÓN</div>
-        <a href="logout.php" style="color:rgba(252,165,165,.8)!important;"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</a>
-    </div>
+    <a href="logout.php"><i class="fas fa-sign-out-alt"></i> Salir</a>
 </div>
+<?php } ?>
 
 <!-- ══════════ MAIN ══════════ -->
 <div class="main-content">
