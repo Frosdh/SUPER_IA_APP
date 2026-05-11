@@ -480,75 +480,125 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     
     <!-- CONTENT -->
     <div class="content-area">
-        <div class="page-header">
-            <h1><i class="fas fa-briefcase me-2"></i>Clientes</h1>
-            <p class="text-muted mt-2">Total de clientes: <strong><?php echo count($clientes); ?></strong></p>
+        <div class="page-header d-flex justify-content-between align-items-end mb-4">
+            <div>
+                <h1 class="fw-800" style="color: var(--brand-navy-deep, #0a2748);"><i class="fas fa-address-book me-2 text-primary"></i>Directorio de Clientes</h1>
+                <p class="text-muted mt-2 mb-0">Gestiona y filtra todos los clientes y prospectos de tu equipo.</p>
+            </div>
         </div>
+        
+        <!-- KPI Row -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #3b82f6 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Total Clientes</div>
+                        <h3 class="m-0 fw-800" style="color:var(--brand-navy-deep, #0a2748);"><?= $stats['total_clientes'] ?? 0 ?></h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #10b981 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Activos / Clientes</div>
+                        <h3 class="m-0 fw-800 text-success"><?= $stats['clientes_activos'] ?? 0 ?></h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #ef4444 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Descartados</div>
+                        <h3 class="m-0 fw-800 text-danger"><?= $stats['clientes_inactivos'] ?? 0 ?></h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 <?php endif; ?>
 
-        <div class="table-card">
-            <div class="card-header-custom">
-                <h6>💼 Listado de Clientes</h6>
-                <div class="search-box" style="max-width: 300px;">
-                    <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                        <input type="text" id="searchClients" class="form-control border-start-0" placeholder="Buscar por nombre o cédula...">
+        <div class="table-card bg-white" style="border-radius:20px; border:1px solid #e2e8f0; box-shadow:0 10px 30px rgba(0,0,0,0.05);">
+            <div class="card-header-custom p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3" style="background:#fff;">
+                <h5 class="m-0 fw-800 d-flex align-items-center gap-2" style="color:var(--brand-navy-deep, #0a2748);">
+                    <i class="fas fa-list-ul text-primary"></i> Listado Completo
+                </h5>
+                <div class="search-box mx-auto" style="flex:1; max-width:600px;">
+                    <div class="input-group input-group-lg shadow-sm" style="border-radius:16px; border:2px solid #f1f5f9; overflow:hidden;">
+                        <span class="input-group-text bg-white border-0 text-primary"><i class="fas fa-search"></i></span>
+                        <input type="text" id="searchClients" class="form-control border-0 bg-white shadow-none fw-semibold" placeholder="Buscar cliente por nombre o cédula..." style="font-size:15px;">
                     </div>
                 </div>
             </div>
             
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Cédula</th>
-                        <th>Celular</th>
-                        <th>Asesor</th>
-                        <th>Fecha Registro</th>
-                        <th>Estado</th>
-                        <th>Perfil</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (empty($clientes)): ?>
-                    <tr>
-                        <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
-                            <i class="fas fa-inbox me-2" style="color: #d1d5db;"></i>No hay clientes para mostrar
-                        </td>
-                    </tr>
-                    <?php else: ?>
-                    <?php foreach ($clientes as $cliente): ?>
-                    <tr>
-                        <td class="client-name"><?php echo htmlspecialchars($cliente['nombre']); ?></td>
-                        <td class="client-cedula"><?php echo htmlspecialchars($cliente['cedula'] ?? '—'); ?></td>
-                        <td><?php echo htmlspecialchars($cliente['celular'] ?? ($cliente['telefono'] ?? '—')); ?></td>
-                        <td><?php echo htmlspecialchars($cliente['asesor_nombre'] ?? 'Sin asignar'); ?></td>
-                        <td><?php echo date('d/m/Y', strtotime($cliente['fecha_creacion'])); ?></td>
-                        <td>
-                            <?php
-                                $estadoDb = strtolower((string)($cliente['estado'] ?? ''));
-                                if ($estadoDb === 'descartado') {
-                                    echo '<span class="badge badge-danger" style="color:white;">✗ Descartado</span>';
-                                } else {
-                                    $esCliente = cliente_es_cliente_por_aprobacion($pdo, (string)($cliente['id'] ?? ''), (string)($cliente['cedula'] ?? ''));
-                                    if ($esCliente) {
-                                        echo '<span class="badge badge-success" style="color:white;">✓ Cliente</span>';
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead style="background:#f8fafc;">
+                        <tr>
+                            <th class="ps-4 py-3 text-muted" style="font-size:11px; letter-spacing:0.5px;">CLIENTE</th>
+                            <th class="py-3 text-muted" style="font-size:11px; letter-spacing:0.5px;">CONTACTO</th>
+                            <th class="py-3 text-muted" style="font-size:11px; letter-spacing:0.5px;">ASESOR</th>
+                            <th class="py-3 text-muted" style="font-size:11px; letter-spacing:0.5px;">FECHA REGISTRO</th>
+                            <th class="py-3 text-muted text-center" style="font-size:11px; letter-spacing:0.5px;">ESTADO</th>
+                            <th class="text-end pe-4 py-3 text-muted" style="font-size:11px; letter-spacing:0.5px;">ACCIÓN</th>
+                        </tr>
+                    </thead>
+                    <tbody class="border-top-0">
+                        <?php if (empty($clientes)): ?>
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="text-muted mb-2"><i class="fas fa-inbox fa-3x opacity-25"></i></div>
+                                <h6 class="fw-bold text-muted">No hay clientes para mostrar</h6>
+                            </td>
+                        </tr>
+                        <?php else: ?>
+                        <?php foreach ($clientes as $cliente): ?>
+                        <tr style="transition:all 0.2s ease; cursor:pointer;" onmouseover="this.style.background='#f8fafc'; this.style.transform='scale(1.002)';" onmouseout="this.style.background='transparent'; this.style.transform='scale(1)';">
+                            <td class="ps-4 py-3">
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center rounded-3 fw-bold" style="width:45px; height:45px; font-size:16px;">
+                                        <?= strtoupper(substr(trim($cliente['nombre']), 0, 2)) ?>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold text-dark client-name" style="font-size:14.5px;"><?php echo htmlspecialchars($cliente['nombre']); ?></div>
+                                        <div class="text-muted small client-cedula"><i class="fas fa-id-card me-1 opacity-50"></i> <?php echo htmlspecialchars($cliente['cedula'] ?? '—'); ?></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-dark" style="font-size:14px;"><i class="fas fa-mobile-alt text-muted me-1 opacity-50"></i> <?php echo htmlspecialchars($cliente['celular'] ?? ($cliente['telefono'] ?? '—')); ?></div>
+                            </td>
+                            <td>
+                                <span class="badge bg-light text-dark border px-2 py-1"><i class="fas fa-user-tie me-1 text-primary opacity-75"></i> <?php echo htmlspecialchars($cliente['asesor_nombre'] ?? 'Sin asignar'); ?></span>
+                            </td>
+                            <td>
+                                <div class="text-muted small fw-medium"><i class="fas fa-calendar-alt me-1 opacity-50"></i> <?php echo date('d M, Y', strtotime($cliente['fecha_creacion'])); ?></div>
+                            </td>
+                            <td class="text-center">
+                                <?php
+                                    $estadoDb = strtolower((string)($cliente['estado'] ?? ''));
+                                    if ($estadoDb === 'descartado') {
+                                        echo '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-3 py-2" style="border-radius:8px;">Descartado</span>';
                                     } else {
-                                        echo '<span class="badge" style="background:#f59e0b;color:#111827;">Prospecto</span>';
+                                        $esCliente = cliente_es_cliente_por_aprobacion($pdo, (string)($cliente['id'] ?? ''), (string)($cliente['cedula'] ?? ''));
+                                        if ($esCliente) {
+                                            echo '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2" style="border-radius:8px;"><i class="fas fa-check-circle me-1"></i> Cliente</span>';
+                                        } else {
+                                            echo '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-3 py-2" style="border-radius:8px;"><i class="fas fa-clock me-1"></i> Prospecto</span>';
+                                        }
                                     }
-                                }
-                            ?>
-                        </td>
-                        <td>
-                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm" style="background:#123a6d;color:white;font-weight:600;padding:4px 12px;border-radius:8px;">
-                                <i class="fas fa-user-circle me-1"></i> Ver Perfil
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+                                ?>
+                            </td>
+                            <td class="text-end pe-4">
+                                <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-primary shadow-sm px-3" style="border-radius:8px; font-weight:600; background:var(--brand-navy,#123a6d); border:none;">
+                                    Ver Perfil <i class="fas fa-arrow-right ms-1"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </div>

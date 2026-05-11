@@ -431,12 +431,7 @@ if ($user_role === 'supervisor') {
 </div>
 <?php } ?>
 
-<?php if ($user_role === 'supervisor'): ?>
-<!-- ══════════ MAIN ══════════ -->
-<div class="main-content">
-    <!-- CONTENT -->
-    <div class="content-area">
-<?php else: ?>
+<?php if ($user_role !== 'supervisor'): ?>
 <!-- ══════════ MAIN ══════════ -->
 <div class="main-content">
     <!-- NAVBAR -->

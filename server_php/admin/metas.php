@@ -485,390 +485,344 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
     <title>Metas del Equipo — Super_IA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="supervisor_layout.css">
+    <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
 </head>
 <body>
 
 <?php $navTitle = 'Metas del Equipo'; $navIcon = 'fas fa-bullseye'; ?>
 <?php require_once '_sidebar_supervisor.php'; ?>
 
-<div class="main-content">
-  <div class="content-area">
+<?php if ($flash): ?>
+    <div class="flash flash-<?= htmlspecialchars($flash['type']) ?>"><?= $flash['msg'] ?></div>
+<?php endif; ?>
 
-        <?php if ($flash): ?>
-            <div class="flash flash-<?= htmlspecialchars($flash['type']) ?>"><?= $flash['msg'] ?></div>
-        <?php endif; ?>
+        <!-- WELCOME BANNER -->
+        <div class="welcome-card mb-4">
+            <div>
+                <h1>Metas y Seguimiento</h1>
+                <p>Gestiona los objetivos diarios de tu equipo y monitorea su progreso en tiempo real.</p>
+            </div>
+            <div class="welcome-meta">
+                <div class="welcome-meta-item">
+                    <div class="wm-num"><?= count($metas_hoy) ?></div>
+                    <div class="wm-lbl">Metas Hoy</div>
+                </div>
+                <div class="welcome-meta-item">
+                    <div class="wm-num"><?= count($tareas_incompletas) ?></div>
+                    <div class="wm-lbl">Pendientes</div>
+                </div>
+            </div>
+        </div>
 
         <!-- FORMULARIO ASIGNAR META -->
-        <div class="card-block" style="max-width:900px;margin:0 auto 28px;">
-            <h3 style="font-size:1.3rem;font-weight:800;margin-bottom:18px;color:#123a6d;display:flex;align-items:center;gap:10px;">
-                <i class="fas fa-plus-circle" style="color:#10b981;"></i> Asignar Meta Diaria a un Asesor
-            </h3>
-            <form method="post" action="metas.php">
-                <div class="form-grid" style="margin-bottom:18px;">
-                    <div>
-                        <label>Asesor</label>
-                        <select name="asesor_id" required>
-                            <option value="">-- Selecciona --</option>
-                            <?php foreach ($asesores as $a): ?>
-                                <option value="<?= htmlspecialchars($a['id']) ?>"><?= htmlspecialchars($a['nombre']) ?></option>
-                            <?php endforeach; ?>
-                        </select>
+        <div class="section-card mb-4">
+            <div class="section-header">
+                <h5><i class="fas fa-plus-circle text-success"></i> Asignar Meta Diaria</h5>
+                <span class="badge-premium badge-navy-soft">Nueva Asignación</span>
+            </div>
+            <div class="section-body">
+                <form method="post" action="metas.php">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <div class="form-section h-100">
+                                <h4><i class="fas fa-user-tie"></i> Información General</h4>
+                                <div class="row g-3">
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small text-muted">Asesor a Cargo</label>
+                                        <select name="asesor_id" class="form-select form-select-lg shadow-sm" required style="border-radius:12px; border-color:#e2e8f0;">
+                                            <option value="">-- Selecciona --</option>
+                                            <?php foreach ($asesores as $a): ?>
+                                                <option value="<?= htmlspecialchars($a['id']) ?>"><?= htmlspecialchars($a['nombre']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label fw-bold small text-muted">Fecha de Aplicación</label>
+                                        <input type="date" name="fecha" class="form-control form-control-lg shadow-sm" value="<?= htmlspecialchars($fecha_filtro) ?>" required style="border-radius:12px; border-color:#e2e8f0;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-section h-100">
+                                <h4><i class="fas fa-bullseye"></i> Objetivos del Día</h4>
+                                <div class="row g-3">
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-poll me-1"></i> Encuestas</label>
+                                        <input type="number" name="meta_encuestas" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-user-plus me-1"></i> Clientes</label>
+                                        <input type="number" name="meta_clientes_nuevos" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-hand-holding-usd me-1"></i> Créditos</label>
+                                        <input type="number" name="meta_creditos" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-piggy-bank me-1"></i> Ahorros</label>
+                                        <input type="number" name="meta_cuenta_ahorros" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-money-check-alt me-1"></i> C. Corriente</label>
+                                        <input type="number" name="meta_cuenta_corriente" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-chart-line me-1"></i> Inversiones</label>
+                                        <input type="number" name="meta_inversiones" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-group px-2">
+                                <label class="form-label fw-bold small text-muted">Observaciones y Notas para el Asesor</label>
+                                <textarea name="observaciones" class="form-control shadow-sm" rows="2" placeholder="Instrucciones específicas..." style="border-radius:12px; border-color:#e2e8f0;"></textarea>
+                            </div>
+                        </div>
+                        <div class="col-12 text-center pt-2">
+                            <button type="submit" class="btn-save px-5 shadow" style="height:50px; border-radius:15px; font-weight:800; letter-spacing:0.5px;">
+                                <i class="fas fa-save me-2"></i> ESTABLECER METAS
+                            </button>
+                        </div>
                     </div>
-                    <div>
-                        <label>Fecha</label>
-                        <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" required>
-                    </div>
-                    <div>
-                        <label><i class="fas fa-poll"></i> Encuestas</label>
-                        <input type="number" name="meta_encuestas" min="0" value="0">
-                    </div>
-                    <div>
-                        <label><i class="fas fa-user-plus"></i> Clientes nuevos</label>
-                        <input type="number" name="meta_clientes_nuevos" min="0" value="0">
-                    </div>
-                    <div>
-                        <label><i class="fas fa-hand-holding-usd"></i> Créditos</label>
-                        <input type="number" name="meta_creditos" min="0" value="0">
-                    </div>
-                    <div>
-                        <label><i class="fas fa-piggy-bank"></i> Cuentas ahorros</label>
-                        <input type="number" name="meta_cuenta_ahorros" min="0" value="0">
-                    </div>
-                    <div>
-                        <label><i class="fas fa-wallet"></i> Cuentas corrientes</label>
-                        <input type="number" name="meta_cuenta_corriente" min="0" value="0">
-                    </div>
-                    <div>
-                        <label><i class="fas fa-chart-line"></i> Inversiones</label>
-                        <input type="number" name="meta_inversiones" min="0" value="0">
-                    </div>
-                </div>
-                <div style="margin-bottom:14px;">
-                    <label>Observaciones (opcional)</label>
-                    <textarea name="observaciones" rows="2" placeholder="Notas para el asesor..."></textarea>
-                </div>
-                <div style="display:flex;justify-content:center;">
-                    <button type="submit" class="btn-save" style="min-width:160px;">
-                        <i class="fas fa-save"></i> Guardar Meta
-                    </button>
-                </div>
-            </form>
+                </form>
+            </div>
         </div>
 
 
         <!-- METAS ACTUALES -->
-        <div class="card-block" style="max-width:1100px;margin:0 auto 28px;">
-            <h3 style="font-size:1.2rem;font-weight:800;margin-bottom:18px;color:#123a6d;display:flex;align-items:center;gap:10px;">
-                <i class="fas fa-list-check" style="color:#3b82f6;"></i> Metas Asignadas
-            </h3>
-            <form method="get" class="meta-filter-form" style="display:flex;justify-content:flex-end;align-items:end;gap:16px;padding:0 0 18px 0;">
-                <div class="filter-group" style="display:flex;flex-direction:column;min-width:200px;">
-                    <label style="display:flex;align-items:center;gap:6px;font-size:0.9rem;color:#475569;font-weight:600;">
-                        <i class="fas fa-calendar"></i> Ver fecha
-                    </label>
-                    <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" onchange="this.form.submit()" style="padding:10px 12px;border:1px solid #d2d6dc;border-radius:8px;background:#ffffff;font-size:0.95rem;">
-                </div>
-            </form>
+        <div class="section-card mb-4">
+            <div class="section-header">
+                <h5><i class="fas fa-list-check text-primary"></i> Estado de Metas del Equipo</h5>
+                <form method="get" class="d-flex align-items-center gap-3">
+                    <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-calendar-day"></i> Consultar Fecha:</label>
+                    <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" onchange="this.form.submit()" class="form-control form-control-sm shadow-sm" style="width:auto; border-radius:8px;">
+                </form>
+            </div>
+            <div class="section-body p-0">
+
             <?php if (empty($metas_hoy)): ?>
-                <div class="empty-state" style="text-align:center;padding:40px 20px;color:var(--brand-gray);">
-                    <i class="fas fa-inbox" style="font-size:3rem;margin-bottom:16px;opacity:0.5;"></i>
-                    <p style="margin:0;font-size:1rem;">No hay metas asignadas para esta fecha.</p>
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p>No hay metas asignadas para esta fecha.</p>
                 </div>
             <?php else: ?>
-                <div class="table-container" style="overflow-x:auto;border-radius:12px;border:1px solid #e2e8f0;background:#ffffff;">
-                    <table style="margin:0;border-radius:12px;min-width:680px;width:100%;">
+                <div class="table-premium-container">
+                    <table class="table-premium">
                         <thead>
                             <tr>
                                 <th>Asesor</th>
-                                <th>Encuestas</th>
-                                <th>Clientes</th>
-                                <th>Créditos</th>
-                                <th>C. Ahorro</th>
-                                <th>C. Corriente</th>
-                                <th>Inversiones</th>
-                                <th>Estado</th>
+                                <th class="text-center">Encuestas</th>
+                                <th class="text-center">Clientes</th>
+                                <th class="text-center">Créditos</th>
+                                <th class="text-center">C. Ahorro</th>
+                                <th class="text-center">C. Corriente</th>
+                                <th class="text-center">Inversiones</th>
+                                <th class="text-center">Estado</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php foreach ($metas_hoy as $m): ?>
                             <?php
-                            $estClass = 'est-' . $m['estado'];
-                            $estLabel = [
-                                'pendiente' => 'Pendiente',
-                                'completado' => 'Completado',
-                                'no_cumplido' => 'No cumplido'
-                            ][$m['estado']] ?? $m['estado'];
-                            $fmt = function($av, $meta) {
+                            $estClass = 'badge-' . ($m['estado'] === 'completado' ? 'success' : ($m['estado'] === 'no_cumplido' ? 'danger' : 'warning')) . '-soft';
+                            $estLabel = ['pendiente'=>'Pendiente','completado'=>'Completado','no_cumplido'=>'No cumplido'][$m['estado']] ?? $m['estado'];
+                            
+                            $fmtProgress = function($av, $meta) {
                                 $av = (int)$av; $meta = (int)$meta;
-                                $ok = $meta > 0 && $av >= $meta;
-                                $color = $ok ? '#10b981' : ($meta == 0 ? '#6b7280' : '#d97706');
-                                return "<span style='color:$color'><b>$av</b>/$meta</span>";
+                                if ($meta <= 0) return '<span class="text-muted small">—</span>';
+                                $pct = min(100, round($av * 100 / $meta));
+                                $color = $av >= $meta ? 'var(--brand-success)' : 'var(--brand-warning)';
+                                return '
+                                    <div class="d-flex flex-column align-items-center" style="min-width:80px;">
+                                        <div class="fw-bold mb-1" style="font-size:12px; color:'.$color.'">'.$av.'/'.$meta.'</div>
+                                        <div class="progress-container" style="height:4px;">
+                                            <div class="progress-bar-fill" style="width:'.$pct.'%; background:'.$color.'"></div>
+                                        </div>
+                                    </div>';
                             };
                             ?>
                             <tr>
-                                <td><b><?= htmlspecialchars($m['asesor_nombre']) ?></b></td>
-                                <td class="avance"><?= $fmt($m['avance_encuestas'], $m['meta_encuestas']) ?></td>
-                                <td class="avance"><?= $fmt($m['avance_clientes_nuevos'], $m['meta_clientes_nuevos']) ?></td>
-                                <td class="avance"><?= $fmt($m['avance_creditos'], $m['meta_creditos']) ?></td>
-                                <td class="avance"><?= $fmt($m['avance_cuenta_ahorros'], $m['meta_cuenta_ahorros']) ?></td>
-                                <td class="avance"><?= $fmt($m['avance_cuenta_corriente'], $m['meta_cuenta_corriente']) ?></td>
-                                <td class="avance"><?= $fmt($m['avance_inversiones'], $m['meta_inversiones']) ?></td>
-                                <td><span class="est-badge <?= $estClass ?>"><?= $estLabel ?></span></td>
+                                <td>
+                                    <div class="fw-bold text-navy"><?= htmlspecialchars($m['asesor_nombre']) ?></div>
+                                    <small class="text-muted" style="font-size:10px;">ID: <?= $m['asesor_id'] ?></small>
+                                </td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_encuestas'], $m['meta_encuestas']) ?></td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_clientes_nuevos'], $m['meta_clientes_nuevos']) ?></td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_creditos'], $m['meta_creditos']) ?></td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_cuenta_ahorros'], $m['meta_cuenta_ahorros']) ?></td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_cuenta_corriente'], $m['meta_cuenta_corriente']) ?></td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_inversiones'], $m['meta_inversiones']) ?></td>
+                                <td class="text-center">
+                                    <span class="badge-premium <?= $estClass ?>"><?= $estLabel ?></span>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                         </tbody>
                     </table>
                 </div>
             <?php endif; ?>
+            </div>
         </div>
 
-        <!-- ── TAREAS DEL EQUIPO (seleccionadas por los asesores) ── -->
-        <div class="card-block">
-            <h3><i class="fas fa-tasks" style="color:#8b5cf6;"></i> Tareas del Equipo</h3>
-
-            <form method="get" class="filter-bar">
-                <!-- conservar filtro de fecha de metas -->
-                <input type="hidden" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>">
-                <div style="min-width:200px;">
-                    <label>Asesor</label>
-                    <select name="t_asesor" onchange="this.form.submit()">
-                        <option value="">— Todos mis asesores —</option>
-                        <?php foreach ($asesores as $a): ?>
-                            <option value="<?= htmlspecialchars($a['id']) ?>" <?= $tareas_asesor_filtro === (string)$a['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($a['nombre']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div>
-                    <label>Desde</label>
-                    <input type="date" name="t_desde" value="<?= htmlspecialchars($tareas_desde) ?>" onchange="this.form.submit()">
-                </div>
-                <div>
-                    <label>Hasta</label>
-                    <input type="date" name="t_hasta" value="<?= htmlspecialchars($tareas_hasta) ?>" onchange="this.form.submit()">
-                </div>
-                <div>
-                    <button type="submit" class="btn-save" style="margin-top:0;padding:10px 18px;">
-                        <i class="fas fa-filter"></i> Filtrar
-                    </button>
-                </div>
-            </form>
+        <!-- ── TAREAS DEL EQUIPO ── -->
+        <div class="section-card">
+            <div class="section-header">
+                <h5><i class="fas fa-tasks text-purple"></i> Gestión de Tareas del Equipo</h5>
+                <form method="get" class="row g-2 align-items-end">
+                    <input type="hidden" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>">
+                    <div class="col-auto">
+                        <label class="small fw-bold text-muted mb-1 d-block">Filtrar Asesor</label>
+                        <select name="t_asesor" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
+                            <option value="">— Todos —</option>
+                            <?php foreach ($asesores as $a): ?>
+                                <option value="<?= htmlspecialchars($a['id']) ?>" <?= $tareas_asesor_filtro === (string)$a['id'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($a['nombre']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-auto">
+                        <label class="small fw-bold text-muted mb-1 d-block">Desde</label>
+                        <input type="date" name="t_desde" value="<?= htmlspecialchars($tareas_desde) ?>" class="form-control form-control-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
+                    </div>
+                    <div class="col-auto">
+                        <label class="small fw-bold text-muted mb-1 d-block">Hasta</label>
+                        <input type="date" name="t_hasta" value="<?= htmlspecialchars($tareas_hasta) ?>" class="form-control form-control-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
+                    </div>
+                </form>
+            </div>
+            <div class="section-body">
 
             <!-- Tareas Incompletas / Pospuestas -->
-            <h4 style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--brand-navy-deep);">
-                <i class="fas fa-hourglass-half" style="color:#d97706;"></i>
-                Tareas incompletas / pospuestas
-                <span style="font-weight:500;color:var(--brand-gray);font-size:12px;">
-                    (<?= count($tareas_incompletas) ?>)
-                </span>
-            </h4>
-            <?php if (empty($tareas_incompletas)): ?>
-                <p style="color:var(--brand-gray);padding:14px;text-align:center;">
-                    <i class="fas fa-check-double"></i>
-                    No hay tareas incompletas en este rango.
-                </p>
-            <?php else: ?>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Asesor</th>
-                                <th>Cliente</th>
-                                <th>Tipo</th>
-                                <th>Día original</th>
-                                <th>Reprogramada</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($tareas_incompletas as $t): ?>
-                            <?php
-                            [$estLabel, $estClass] = metas_estado_tarea_badge(
-                                $t['estado'] ?? '',
-                                $t['seleccionada_dia'] ?? '',
-                                $t['fecha_programada'] ?? '',
-                                $t['pospuesta_de_dia'] ?? null
-                            );
-                            $tipoTxt    = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
-                            $fechaProg  = trim(($t['fecha_programada'] ?? '') . ' ' . ($t['hora_programada'] ?? ''));
-                            $selDia     = $t['seleccionada_dia']  ?? '';
-                            $pospDia    = $t['pospuesta_de_dia']  ?? '';
-
-                            // Día original: el registro explícito si existe,
-                            // si no, el seleccionada_dia o el fecha_programada.
-                            $diaOriginal = $pospDia !== '' ? $pospDia
-                                         : ($selDia !== '' ? $selDia
-                                         : ($t['fecha_programada'] ?? ''));
-
-                            // Reprogramada: si está pospuesta, mostramos la
-                            // fecha nueva (fecha_programada o seleccionada_dia).
-                            $reprog = '';
-                            if ($pospDia !== '') {
-                                $reprog = $t['fecha_programada'] ?? '';
-                                if ($reprog === '' || $reprog === $pospDia) {
-                                    $reprog = $selDia;
+            <div class="mt-4">
+                <h5 class="fw-800 text-navy mb-3 d-flex align-items-center gap-2">
+                    <i class="fas fa-hourglass-half text-warning"></i> 
+                    Incompletas / Pospuestas
+                    <span class="badge-premium badge-warning-soft ms-2"><?= count($tareas_incompletas) ?></span>
+                </h5>
+                
+                <?php if (empty($tareas_incompletas)): ?>
+                    <div class="p-4 text-center border rounded-4 bg-light opacity-50">
+                        <i class="fas fa-check-double mb-2 d-block"></i> No hay pendientes en este rango
+                    </div>
+                <?php else: ?>
+                    <div class="table-premium-container">
+                        <table class="table-premium">
+                            <thead>
+                                <tr>
+                                    <th>Asesor / Cliente</th>
+                                    <th>Tarea</th>
+                                    <th>Día Original</th>
+                                    <th>Nueva Fecha</th>
+                                    <th class="text-end">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($tareas_incompletas as $t): ?>
+                                <?php
+                                [$estLabel, $estClass] = metas_estado_tarea_badge(
+                                    $t['estado'] ?? '', $t['seleccionada_dia'] ?? '',
+                                    $t['fecha_programada'] ?? '', $t['pospuesta_de_dia'] ?? null
+                                );
+                                $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
+                                $diaOriginal = $t['pospuesta_de_dia'] ?: ($t['seleccionada_dia'] ?: ($t['fecha_programada'] ?? ''));
+                                
+                                $reprog = '';
+                                if ($t['pospuesta_de_dia']) {
+                                    $reprog = $t['fecha_programada'] ?: $t['seleccionada_dia'];
                                 }
-                            }
-                            ?>
-                            <tr>
-                                <td><b><?= htmlspecialchars($t['asesor_nombre'] ?? '') ?></b></td>
-                                <td>
-                                    <?= htmlspecialchars($t['cliente_nombre'] ?? '—') ?>
-                                    <?php if (!empty($t['cliente_ciudad'])): ?>
-                                        <div style="color:var(--brand-gray);font-size:11px;">
-                                            <?= htmlspecialchars($t['cliente_ciudad']) ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?= htmlspecialchars($tipoTxt) ?></td>
-                                <td>
-                                    <?= htmlspecialchars($diaOriginal ?: '—') ?>
-                                    <?php if (!empty($t['hora_programada']) && $pospDia === ''): ?>
-                                        <div style="color:var(--brand-gray);font-size:11px;">
-                                            <?= htmlspecialchars($t['hora_programada']) ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if ($reprog !== ''): ?>
-                                        <span style="color:#d97706;font-weight:700;">
-                                            <i class="fas fa-arrow-right" style="font-size:10px;"></i>
-                                            <?= htmlspecialchars($reprog) ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span style="color:var(--brand-gray);">—</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><span class="est-badge <?= $estClass ?>"><?= htmlspecialchars($estLabel) ?></span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                </div>
-            <?php endif; ?>
+                                ?>
+                                <tr>
+                                    <td>
+                                        <div class="fw-bold"><?= htmlspecialchars($t['asesor_nombre']) ?></div>
+                                        <div class="small text-muted"><?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente') ?></div>
+                                    </td>
+                                    <td><span class="badge-premium badge-info-soft"><?= htmlspecialchars($tipoTxt) ?></span></td>
+                                    <td><?= date('d M', strtotime($diaOriginal)) ?></td>
+                                    <td>
+                                        <?php if ($reprog): ?>
+                                            <span class="text-warning fw-bold">
+                                                <i class="fas fa-arrow-right small"></i> <?= date('d M', strtotime($reprog)) ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span class="text-muted">—</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="text-end">
+                                        <span class="badge-premium badge-danger-soft"><?= $estLabel ?></span>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
 
-            <!-- Tareas Programadas -->
-            <h4 style="margin:22px 0 10px;font-size:15px;font-weight:800;color:var(--brand-navy-deep);">
-                <i class="fas fa-calendar-alt" style="color:#3b82f6;"></i>
-                Tareas programadas
-                <span style="font-weight:500;color:var(--brand-gray);font-size:12px;">
-                    (<?= count($tareas_programadas) ?>)
-                </span>
-            </h4>
-            <?php if (empty($tareas_programadas)): ?>
-                <p style="color:var(--brand-gray);padding:14px;text-align:center;">
-                    <i class="fas fa-inbox"></i>
-                    No hay tareas programadas en este rango.
-                </p>
-            <?php else: ?>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Asesor</th>
-                                <th>Cliente</th>
-                                <th>Tipo</th>
-                                <th>Fecha</th>
-                                <th>Hora</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($tareas_programadas as $t): ?>
-                            <?php
-                            $tipoTxt   = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
-                            $fechaProg = $t['fecha_programada'] ?? '';
-                            $horaProg  = $t['hora_programada']  ?? '';
-                            $fuePosp   = !empty($t['pospuesta_de_dia']);
+            <!-- Tareas Programadas / Completadas Grid -->
+            <div class="row g-4 mt-4">
+                <div class="col-lg-6">
+                    <h5 class="fw-800 text-navy mb-3 d-flex align-items-center gap-2">
+                        <i class="fas fa-calendar-alt text-primary"></i> 
+                        Programadas
+                        <span class="badge-premium badge-info-soft ms-2"><?= count($tareas_programadas) ?></span>
+                    </h5>
+                    <div class="p-0 border rounded-4 bg-white overflow-hidden shadow-sm" style="max-height: 500px; overflow-y: auto;">
+                        <?php if (empty($tareas_programadas)): ?>
+                            <div class="p-5 text-center text-muted opacity-50 small">No hay tareas programadas</div>
+                        <?php else: ?>
+                            <?php foreach ($tareas_programadas as $t): 
+                                $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea']);
                             ?>
-                            <tr>
-                                <td><b><?= htmlspecialchars($t['asesor_nombre'] ?? '') ?></b></td>
-                                <td>
-                                    <?= htmlspecialchars($t['cliente_nombre'] ?? '—') ?>
-                                    <?php if (!empty($t['cliente_ciudad'])): ?>
-                                        <div style="color:var(--brand-gray);font-size:11px;">
-                                            <?= htmlspecialchars($t['cliente_ciudad']) ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?= htmlspecialchars($tipoTxt) ?></td>
-                                <td>
-                                    <?= htmlspecialchars($fechaProg ?: '—') ?>
-                                    <?php if ($fuePosp): ?>
-                                        <div style="color:#d97706;font-size:11px;font-weight:700;">
-                                            <i class="fas fa-history" style="font-size:9px;"></i>
-                                            Reprogramada desde <?= htmlspecialchars($t['pospuesta_de_dia']) ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?= htmlspecialchars($horaProg ?: '—') ?></td>
-                                <td><span class="est-badge est-pendiente">Programada</span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                            <div class="act-item">
+                                <div class="act-dot dot-blue"><i class="fas fa-clock"></i></div>
+                                <div class="act-body">
+                                    <div class="act-title"><?= htmlspecialchars($t['asesor_nombre']) ?></div>
+                                    <div class="act-meta"><?= htmlspecialchars($tipoTxt) ?> · <?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente') ?></div>
+                                </div>
+                                <div class="act-date text-end">
+                                    <div class="fw-bold"><?= date('d/m', strtotime($t['fecha_programada'])) ?></div>
+                                    <div class="small opacity-75"><?= $t['hora_programada'] ?: '--:--' ?></div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            <?php endif; ?>
 
-            <!-- Tareas Completadas -->
-            <h4 style="margin:22px 0 10px;font-size:15px;font-weight:800;color:var(--brand-navy-deep);">
-                <i class="fas fa-check-circle" style="color:#10b981;"></i>
-                Tareas completadas
-                <span style="font-weight:500;color:var(--brand-gray);font-size:12px;">
-                    (<?= count($tareas_completadas) ?>)
-                </span>
-            </h4>
-            <?php if (empty($tareas_completadas)): ?>
-                <p style="color:var(--brand-gray);padding:14px;text-align:center;">
-                    <i class="fas fa-inbox"></i>
-                    No hay tareas completadas en este rango.
-                </p>
-            <?php else: ?>
-                <div style="overflow-x:auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Asesor</th>
-                                <th>Cliente</th>
-                                <th>Tipo</th>
-                                <th>Programada</th>
-                                <th>Realizada</th>
-                                <th>Estado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($tareas_completadas as $t): ?>
-                            <?php
-                            $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
-                            $fechaProg = trim(($t['fecha_programada'] ?? '') . ' ' . ($t['hora_programada'] ?? ''));
-                            $fechaReal = trim(($t['fecha_realizada']  ?? '') . ' ' . ($t['hora_realizada']  ?? ''));
+                <div class="col-lg-6">
+                    <h5 class="fw-800 text-navy mb-3 d-flex align-items-center gap-2">
+                        <i class="fas fa-check-circle text-success"></i> 
+                        Completadas
+                        <span class="badge-premium badge-success-soft ms-2"><?= count($tareas_completadas) ?></span>
+                    </h5>
+                    <div class="p-0 border rounded-4 bg-white overflow-hidden shadow-sm" style="max-height: 500px; overflow-y: auto;">
+                        <?php if (empty($tareas_completadas)): ?>
+                            <div class="p-5 text-center text-muted opacity-50 small">No hay tareas completadas</div>
+                        <?php else: ?>
+                            <?php foreach ($tareas_completadas as $t): 
+                                $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea']);
                             ?>
-                            <tr>
-                                <td><b><?= htmlspecialchars($t['asesor_nombre'] ?? '') ?></b></td>
-                                <td>
-                                    <?= htmlspecialchars($t['cliente_nombre'] ?? '—') ?>
-                                    <?php if (!empty($t['cliente_ciudad'])): ?>
-                                        <div style="color:var(--brand-gray);font-size:11px;">
-                                            <?= htmlspecialchars($t['cliente_ciudad']) ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?= htmlspecialchars($tipoTxt) ?></td>
-                                <td><?= htmlspecialchars(trim($fechaProg)) ?: '—' ?></td>
-                                <td><?= htmlspecialchars(trim($fechaReal)) ?: '—' ?></td>
-                                <td><span class="est-badge est-completado">Completada</span></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                            <div class="act-item">
+                                <div class="act-dot dot-ok"><i class="fas fa-check"></i></div>
+                                <div class="act-body">
+                                    <div class="act-title"><?= htmlspecialchars($t['asesor_nombre']) ?></div>
+                                    <div class="act-meta"><?= htmlspecialchars($tipoTxt) ?> · <?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente') ?></div>
+                                </div>
+                                <div class="act-date text-end">
+                                    <div class="fw-bold text-success"><?= date('d/m', strtotime($t['fecha_realizada'])) ?></div>
+                                    <div class="small opacity-75"><?= $t['hora_realizada'] ?: '--:--' ?></div>
+                                </div>
+                            </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
-            <?php endif; ?>
+            </div>
         </div>
-
     </div>
-    </div> <!-- .content-area -->
-</div> <!-- .main-content -->
+    </div><!-- /.content-area -->
+</div><!-- /.main-content -->
 </body>
 </html>
