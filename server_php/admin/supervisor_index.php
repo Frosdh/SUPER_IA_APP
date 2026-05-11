@@ -299,25 +299,7 @@ $currentPage = 'dashboard';
 </head>
 <body>
 
-<?php require_once '_sidebar_supervisor.php'; ?>
-
-<!-- ══════════ MAIN ══════════ -->
-<div class="main-content">
-
-    <!-- NAVBAR -->
-    <div class="navbar-custom">
-        <h2><i class="fas fa-shield-halved me-2" style="color:var(--brand-yellow);"></i>Super_IA — Supervisor</h2>
-        <div class="user-info">
-            <div>
-                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
-                <small><?= htmlspecialchars($supervisor_rol) ?></small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-
-    <!-- CONTENT -->
-    <div class="content-area">
+<?php $navTitle = 'Dashboard'; $navIcon = 'fas fa-home'; require_once '_sidebar_supervisor.php'; ?>
 
         <!-- WELCOME BANNER -->
         <div class="welcome-card">

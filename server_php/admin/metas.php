@@ -12,6 +12,7 @@ if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in
     exit;
 }
 
+
 $supervisor_usuario_id = $_SESSION['supervisor_id'];
 $supervisor_nombre     = $_SESSION['supervisor_nombre'] ?? 'Supervisor';
 $supervisor_rol        = $_SESSION['supervisor_rol'] ?? 'Supervisor';
@@ -484,7 +485,6 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
     <title>Metas del Equipo — Super_IA</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    </style>
 </head>
 <body>
 
@@ -545,6 +545,7 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
                 <button type="submit" class="btn-save"><i class="fas fa-save"></i> Guardar Meta</button>
             </form>
         </div>
+
 
         <!-- METAS ACTUALES -->
         <div class="card-block">
