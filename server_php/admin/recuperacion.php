@@ -598,19 +598,9 @@ $currentPage = 'recuperacion';
 </head>
 
 <body>
-  <?php require_once '_sidebar_supervisor.php'; ?>
+  <?php $navTitle = 'Recuperación'; $navIcon = 'fas fa-user-clock'; require_once '_sidebar_supervisor.php'; ?>
 
   <div class="main-content">
-    <div class="navbar-custom">
-      <h2><i class="fas fa-user-clock"></i> Recuperación de Cartera</h2>
-      <div style="display:flex;align-items:center;gap:14px;font-size:13px;">
-        <div><strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br><small
-            style="opacity:.7;"><?= htmlspecialchars($supervisor_rol) ?></small></div>
-        <a href="logout.php"
-          style="background:rgba(255,221,0,.15);color:#fff;border:1px solid rgba(255,221,0,.28);padding:7px 14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px;">Salir</a>
-      </div>
-    </div>
-
     <div class="content-area">
       <div class="page-header">
         <h1><i class="fas fa-user-clock"></i> Recuperación de Cartera</h1>

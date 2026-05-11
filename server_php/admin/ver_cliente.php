@@ -419,7 +419,7 @@ if ($user_role === 'supervisor') {
 }
 
 if ($user_role === 'supervisor') {
-    require_once '_sidebar_supervisor.php'; 
+    $navTitle = 'Detalle de Cliente'; $navIcon = 'fas fa-user'; require_once '_sidebar_supervisor.php'; 
 } else {
 ?>
 <!-- SIDEBAR OTROS ROLES -->
@@ -431,6 +431,12 @@ if ($user_role === 'supervisor') {
 </div>
 <?php } ?>
 
+<?php if ($user_role === 'supervisor'): ?>
+<!-- ══════════ MAIN ══════════ -->
+<div class="main-content">
+    <!-- CONTENT -->
+    <div class="content-area">
+<?php else: ?>
 <!-- ══════════ MAIN ══════════ -->
 <div class="main-content">
     <!-- NAVBAR -->
@@ -447,10 +453,10 @@ if ($user_role === 'supervisor') {
             <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
         </div>
     </div>
-
+    
     <!-- CONTENT -->
     <div class="content-area">
-
+<?php endif; ?>
         <div class="page-header">
             <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Clientes</a>
             <h1><i class="fas fa-user me-2"></i>Perfil del Cliente</h1>

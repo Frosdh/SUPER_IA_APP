@@ -438,6 +438,22 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
 </div>
 <?php endif; ?>
 
+<?php if ($user_role === 'supervisor'): ?>
+<?php $navTitle = 'Mis Clientes'; $navIcon = 'fas fa-address-book'; require_once '_sidebar_supervisor.php'; ?>
+<?php else: ?>
+<!-- Para admin/super_admin, usar layout normal -->
+<?php endif; ?>
+
+<?php if ($user_role === 'supervisor'): ?>
+<!-- MAIN CONTENT -->
+<div class="main-content">
+    <!-- CONTENT -->
+    <div class="content-area">
+        <div class="page-header">
+            <h1><i class="fas fa-briefcase me-2"></i>Clientes</h1>
+            <p class="text-muted mt-2">Total de clientes: <strong><?php echo count($clientes); ?></strong></p>
+        </div>
+<?php else: ?>
 <!-- MAIN CONTENT -->
 <div class="main-content">
     <!-- NAVBAR -->
@@ -483,6 +499,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
             <h1><i class="fas fa-briefcase me-2"></i>Clientes</h1>
             <p class="text-muted mt-2">Total de clientes: <strong><?php echo count($clientes); ?></strong></p>
         </div>
+<?php endif; ?>
 
         <div class="table-card">
             <div class="card-header-custom">

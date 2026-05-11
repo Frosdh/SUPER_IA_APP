@@ -188,19 +188,9 @@ if ($modo_supervisor) {
 <!-- ════════════════ MODO SUPERVISOR ════════════════ -->
 <?php
 $alertas_pendientes = 0;
-require_once '_sidebar_supervisor.php';
+$navTitle = 'Registrar Asesor'; $navIcon = 'fas fa-user-tie'; require_once '_sidebar_supervisor.php';
 ?>
 <div class="main-content">
-    <div class="navbar-custom">
-        <h2><i class="fas fa-shield-halved me-2" style="color:var(--brand-yellow);"></i>Super_IA — Supervisor</h2>
-        <div class="user-info">
-            <div>
-                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
-                <small><?= htmlspecialchars($supervisor_rol) ?></small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
     <div class="content-area">
         <div class="page-header">
             <a href="mis_asesores.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Mis Asesores</a>

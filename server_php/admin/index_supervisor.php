@@ -315,46 +315,10 @@ $totalPendientes = count($alertas_pendientes);
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-star"></i> Super_IA
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <a href="index_supervisor.php" class="sidebar-link active">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="registro_asesor.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Administración</div>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link">
-            <i class="fas fa-file-alt"></i> Solicitudes de Asesor
-        </a>
-    </div>
-</div>
+<?php $navTitle = 'Dashboard'; $navIcon = 'fas fa-home'; require_once '_sidebar_supervisor.php'; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">
-    <!-- NAVBAR -->
-    <div class="navbar-custom">
-        <h2 style="display: flex; align-items: center; gap: 10px;">
-            <i class="fas fa-star"></i> Super_IA Logan - Dashboard Supervisor
-        </h2>
-        <div class="user-info" style="color: var(--azul-marino);">
-            <div>
-                <strong><?php echo htmlspecialchars($supervisor_nombre); ?></strong><br>
-                <small style="color: rgba(30, 58, 95, 0.7);">Supervisor</small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-    
     <!-- CONTENT -->
     <div class="content-area">
 

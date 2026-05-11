@@ -157,22 +157,10 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 </head>
 <body>
 
-<?php require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle = 'Mis Asesores'; $navIcon = 'fas fa-users'; require_once '_sidebar_supervisor.php'; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">
-    <!-- NAVBAR -->
-    <div class="navbar-custom">
-        <h2>🎯 Super_IA - Supervisor</h2>
-        <div class="user-info">
-            <div>
-                <strong><?php echo htmlspecialchars($_SESSION['supervisor_nombre']); ?></strong><br>
-                <small><?php echo htmlspecialchars($_SESSION['supervisor_rol']); ?></small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-    
     <!-- CONTENT -->
     <div class="content-area">
 
