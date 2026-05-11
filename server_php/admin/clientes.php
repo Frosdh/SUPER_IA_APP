@@ -89,7 +89,7 @@ try {
     if ($user_role === 'super_admin' || $user_role === 'admin') {
         // SuperAdmin y Admin ven todos los clientes
         $query = "
-            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.estado,
+            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.telefono2 as celular, cp.estado,
                    CONCAT_WS(' - ', cp.zona, cp.ciudad) as region, 
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion, 
@@ -115,7 +115,7 @@ try {
             $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
         } else {
         $query = "
-            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.estado,
+            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.telefono2 as celular, cp.estado,
                    CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
                    cp.created_at as fecha_creacion, 
@@ -143,15 +143,18 @@ try {
             $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
         } else {
         $query = "
-            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.estado,
+            SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.telefono2 as celular, cp.estado,
                    CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
-                   cp.created_at as fecha_creacion
+                   cp.created_at as fecha_creacion,
+                   u.nombre as asesor_nombre
             FROM cliente_prospecto cp
+            LEFT JOIN asesor a ON cp.asesor_id = a.id
+            LEFT JOIN usuario u ON a.usuario_id = u.id
             WHERE cp.asesor_id = :asesor_id
             ORDER BY cp.created_at DESC
         ";
-        $col_asesor = false;
+        $col_asesor = true;
         $stmt = $pdo->prepare($query);
         $stmt->execute([':asesor_id' => $asesor_table_id]);
         $clientes = $stmt->fetchAll();
@@ -484,21 +487,24 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
         <div class="table-card">
             <div class="card-header-custom">
                 <h6>💼 Listado de Clientes</h6>
+                <div class="search-box" style="max-width: 300px;">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="searchClients" class="form-control border-start-0" placeholder="Buscar por nombre o cédula...">
+                    </div>
+                </div>
             </div>
             
             <table class="table table-hover">
                 <thead>
                     <tr>
                         <th>Nombre</th>
-                        <th>Email</th>
-                        <th>Teléfono</th>
-                        <?php if ($col_asesor): ?>
-                        <th>Asesor Asignado</th>
-                        <?php endif; ?>
-                        <th>Región</th>
+                        <th>Cédula</th>
+                        <th>Celular</th>
+                        <th>Asesor</th>
                         <th>Fecha Registro</th>
                         <th>Estado</th>
-                        <th>Acciones</th>
+                        <th>Perfil</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -511,13 +517,10 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                     <?php else: ?>
                     <?php foreach ($clientes as $cliente): ?>
                     <tr>
-                        <td><?php echo htmlspecialchars($cliente['nombre']); ?></td>
-                        <td><?php echo htmlspecialchars($cliente['email'] ?? ''); ?></td>
-                        <td><?php echo htmlspecialchars($cliente['telefono'] ?? ''); ?></td>
-                        <?php if ($col_asesor): ?>
+                        <td class="client-name"><?php echo htmlspecialchars($cliente['nombre']); ?></td>
+                        <td class="client-cedula"><?php echo htmlspecialchars($cliente['cedula'] ?? '—'); ?></td>
+                        <td><?php echo htmlspecialchars($cliente['celular'] ?? ($cliente['telefono'] ?? '—')); ?></td>
                         <td><?php echo htmlspecialchars($cliente['asesor_nombre'] ?? 'Sin asignar'); ?></td>
-                        <?php endif; ?>
-                        <td><?php echo htmlspecialchars($cliente['region'] ?: 'Sin región'); ?></td>
                         <td><?php echo date('d/m/Y', strtotime($cliente['fecha_creacion'])); ?></td>
                         <td>
                             <?php
@@ -535,8 +538,8 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                             ?>
                         </td>
                         <td>
-                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-outline-primary" title="Ver encuesta y fichas del cliente">
-                                <i class="fas fa-eye"></i>
+                            <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm" style="background:#123a6d;color:white;font-weight:600;padding:4px 12px;border-radius:8px;">
+                                <i class="fas fa-user-circle me-1"></i> Ver Perfil
                             </a>
                         </td>
                     </tr>
@@ -548,5 +551,20 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     </div>
 </div>
 
+<script>
+document.getElementById('searchClients').addEventListener('keyup', function() {
+    let filter = this.value.toLowerCase();
+    let rows = document.querySelectorAll('table tbody tr');
+    rows.forEach(row => {
+        let name = row.querySelector('.client-name') ? row.querySelector('.client-name').textContent.toLowerCase() : '';
+        let cedula = row.querySelector('.client-cedula') ? row.querySelector('.client-cedula').textContent.toLowerCase() : '';
+        if (name.includes(filter) || cedula.includes(filter)) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+});
+</script>
 </body>
 </html>

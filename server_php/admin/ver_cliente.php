@@ -119,17 +119,63 @@ try {
     $st->execute([$cliente_id]);
     $encuesta = $st->fetch();
 } catch (PDOException $e) { $encuesta = null; }
-
-// ── 3. Tareas del cliente ─────────────────────────────────────
+ 
+ // ── 2b. Levantamiento de Empresa (Encuesta de Negocio) ────────
+ $encuesta_negocio = null;
+ try {
+     $st = $pdo->prepare("
+         SELECT en.* 
+         FROM   encuesta_negocio en
+         JOIN   tarea t ON t.id = en.tarea_id
+         WHERE  t.cliente_prospecto_id = ?
+         ORDER  BY en.created_at DESC
+         LIMIT  1
+     ");
+     $st->execute([$cliente_id]);
+     $encuesta_negocio = $st->fetch();
+ } catch (PDOException $e) { $encuesta_negocio = null; }
+ 
+ // ── 2c. Cálculos de Negocio (Totales) ─────────────────────────
+ $en_tot_v_sem = 0; $en_tot_c_sem = 0;
+ if ($encuesta_negocio) {
+     $en_tot_v_sem = ($encuesta_negocio['venta_lunes'] ?? 0) + ($encuesta_negocio['venta_martes'] ?? 0) + ($encuesta_negocio['venta_miercoles'] ?? 0) + ($encuesta_negocio['venta_jueves'] ?? 0) + ($encuesta_negocio['venta_viernes'] ?? 0) + ($encuesta_negocio['venta_sabado'] ?? 0) + ($encuesta_negocio['venta_domingo'] ?? 0);
+     if ($en_tot_v_sem <= 0) $en_tot_v_sem = ($encuesta_negocio['venta_lv'] ?? 0) + ($encuesta_negocio['venta_sabado'] ?? 0) + ($encuesta_negocio['venta_domingo'] ?? 0);
+     
+     $en_tot_c_sem = ($encuesta_negocio['compra_lunes'] ?? 0) + ($encuesta_negocio['compra_martes'] ?? 0) + ($encuesta_negocio['compra_miercoles'] ?? 0) + ($encuesta_negocio['compra_jueves'] ?? 0) + ($encuesta_negocio['compra_viernes'] ?? 0) + ($encuesta_negocio['compra_sabado'] ?? 0) + ($encuesta_negocio['compra_domingo'] ?? 0);
+     if ($en_tot_c_sem <= 0) $en_tot_c_sem = ($encuesta_negocio['compra_lv'] ?? 0) + ($encuesta_negocio['compra_sabado'] ?? 0) + ($encuesta_negocio['compra_domingo'] ?? 0);
+ }
+ $en_tot_v_mes = $en_tot_v_sem * 4.33;
+ $en_tot_c_mes = $en_tot_c_sem * 4.33;
+ 
+ // ── 2d. Alertas del Cliente ──────────────────────────────────
+ $alertas_cliente = [];
+ try {
+     $st = $pdo->prepare("
+         SELECT am.*, u.nombre as asesor_nombre
+         FROM alerta_modificacion am
+         JOIN tarea t ON t.id = am.tarea_id
+         LEFT JOIN asesor a ON a.id = am.asesor_id
+         LEFT JOIN usuario u ON u.id = a.usuario_id
+         WHERE t.cliente_prospecto_id = ?
+         ORDER BY am.created_at DESC
+     ");
+     $st->execute([$cliente_id]);
+     $alertas_cliente = $st->fetchAll();
+ } catch (PDOException $e) { $alertas_cliente = []; }
+ 
+ // ── 3. Tareas del cliente ─────────────────────────────────────
 $tareas = [];
 try {
     $st = $pdo->prepare("
-        SELECT t.*, u.nombre AS asesor_nombre
+        SELECT t.*, u.nombre AS asesor_nombre,
+               av.acuerdo AS av_tipo, av.fecha_acuerdo AS av_fecha, av.hora_acuerdo AS av_hora, 
+               av.lugar AS av_lugar, av.resultado AS av_resultado
         FROM   tarea t
         LEFT JOIN asesor a ON a.id = t.asesor_id
         LEFT JOIN usuario u ON u.id = a.usuario_id
+        LEFT JOIN acuerdo_visita av ON av.tarea_id = t.id
         WHERE  t.cliente_prospecto_id = ?
-        ORDER  BY t.created_at DESC
+        ORDER  BY t.fecha_programada DESC, t.created_at DESC
     ");
     $st->execute([$cliente_id]);
     $tareas = $st->fetchAll();
@@ -473,6 +519,15 @@ $is_supervisor = ($user_role === 'supervisor');
                     <?= etiqYN('Tiene RISE', $cliente['tiene_rise'] ?? null) ?>
                     <?= etiq('Zona',   $cliente['zona']   ?? '') ?>
                     <?= etiq('Ciudad', $cliente['ciudad'] ?? '') ?>
+                     
+                     <!-- Campos adicionales si existen -->
+                     <?php if (isset($cliente['genero'])): ?>
+                         <?= etiq('Género', $cliente['genero'] ?? '') ?>
+                         <?= etiq('Estado Civil', $cliente['estado_civil'] ?? '') ?>
+                         <?= etiq('Nivel Educación', $cliente['nivel_educacion'] ?? '') ?>
+                         <?= etiq('Tipo Vivienda', $cliente['tipo_vivienda'] ?? '') ?>
+                         <?= etiq('Dependientes', $cliente['num_dependientes'] ?? '') ?>
+                     <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -565,6 +620,14 @@ $is_supervisor = ($user_role === 'supervisor');
                 if (!empty($encuesta['busca_credito']))   $busca[] = 'Crédito rápido';
                 if (!empty($encuesta['busca_td']))        $busca[] = 'Tarjeta débito';
                 if (!empty($encuesta['busca_tc']))        $busca[] = 'Tarjeta crédito';
+                
+                // Nuevos campos de búsqueda
+                if (!empty($encuesta['que_busca_agilidad']))        $busca[] = 'Agilidad (Detalle)';
+                if (!empty($encuesta['que_busca_cajeros']))         $busca[] = 'Cajeros (Detalle)';
+                if (!empty($encuesta['que_busca_banca_linea']))     $busca[] = 'Banca en línea (Detalle)';
+                if (!empty($encuesta['que_busca_agencias']))        $busca[] = 'Agencias (Detalle)';
+                if (!empty($encuesta['que_busca_credito_rapido']))  $busca[] = 'Crédito rápido (Detalle)';
+                
                 if (!empty($busca)):
                 ?>
                 <div class="ficha-subsection">
@@ -574,10 +637,430 @@ $is_supervisor = ($user_role === 'supervisor');
                     </div>
                 </div>
                 <?php endif; ?>
+ 
+                <!-- Información Institucional y Bancaria -->
+                <div class="ficha-subsection">
+                    <div class="ficha-subtitle"><i class="fas fa-university"></i> Relación Bancaria e Institucional</div>
+                    <?php 
+                    // Estas preguntas se guardan en encuesta_negocio según el último esquema
+                    $inst = $encuesta_negocio ?: $encuesta; 
+                    ?>
+                    <div class="dato-grid">
+                        <?= etiq('Banco Ahorro (Actual)', $encuesta['banco_ahorro'] ?? '') ?>
+                        <?= etiq('Banco Corriente (Actual)', $encuesta['banco_corriente'] ?? '') ?>
+                        <?= etiqYN('¿Conoce la institución?', $inst['p1_conoce_institucion'] ?? null) ?>
+                        <?= etiqYN('¿Es cliente actualmente?', $inst['p2_es_cliente'] ?? null) ?>
+                        <?= etiq('Satisfacción General', $inst['p3_satisfaccion'] ?? '') ?>
+                        <?php if (!empty($inst['p2_producto'])): ?>
+                            <?= etiq('Producto que posee', $inst['p2_producto']) ?>
+                        <?php endif; ?>
+                    </div>
+                    <?php if (!empty($inst['p1_obs']) || !empty($inst['p2_obs']) || !empty($inst['p3_obs'])): ?>
+                        <div class="mt-2 p-2 rounded" style="background: #f8fafc; font-size: 12px; border-left: 3px solid #cbd5e1;">
+                            <strong>Observaciones Institucionales:</strong><br>
+                            <?= htmlspecialchars(trim(implode(' / ', array_filter([$inst['p1_obs'] ?? '', $inst['p2_obs'] ?? '', $inst['p3_obs'] ?? ''])), ' /')) ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+ 
 
-            </div>
-        </div>
-        <?php endif; ?>
+ 
+             </div>
+         </div>
+         <?php endif; ?>
+ 
+         <!-- ── LEVANTAMIENTO DE EMPRESA ── -->
+         <?php if ($encuesta_negocio): ?>
+         <div class="section-card">
+             <div class="section-header">
+                 <div class="sec-icon sec-green"><i class="fas fa-store"></i></div>
+                 <h5>Levantamiento de Empresa / Negocio</h5>
+             </div>
+             <div class="section-body">
+                 
+                  <!-- Ventas y Compras -->
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-chart-line"></i> Flujo de Ventas y Compras (Detalle Diario y Mensual)</div>
+                      
+                      <div class="table-responsive mb-3">
+                          <table class="table table-bordered table-sm text-center" style="font-size: 12px; background: #f8fafc;">
+                              <thead class="table-light">
+                                  <tr>
+                                      <th>Concepto</th>
+                                      <th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th>
+                                      <th class="table-primary">Semanal</th>
+                                      <th class="table-success">Mensual Est.</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <tr>
+                                      <td class="text-start"><strong>Ventas</strong></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_lunes'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_martes'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_miercoles'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_jueves'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_viernes'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_sabado'] ?? 0, 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['venta_domingo'] ?? 0, 2) ?></td>
+                                      <td class="table-primary"><strong>$<?= number_format($en_tot_v_sem, 2) ?></strong></td>
+                                      <td class="table-success"><strong>$<?= number_format($en_tot_v_mes, 2) ?></strong></td>
+                                  </tr>
+                                  <tr>
+                                      <td class="text-start"><strong>Compras</strong></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_lunes'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_martes'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_miercoles'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_jueves'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_viernes'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_sabado'] ?? 0, 2) ?></td>
+                                      <td>$<?= number_format($encuesta_negocio['compra_domingo'] ?? 0, 2) ?></td>
+                                      <td class="table-primary"><strong>$<?= number_format($en_tot_c_sem, 2) ?></strong></td>
+                                      <td class="table-success"><strong>$<?= number_format($en_tot_c_mes, 2) ?></strong></td>
+                                  </tr>
+                              </tbody>
+                          </table>
+                      </div>
+ 
+                      <div class="dato-grid">
+                          <?= etiq('Mes Alta Venta',         $encuesta_negocio['mes_alta_venta'] ?? '') ?>
+                          <?= etiq('Mes Baja Venta',          $encuesta_negocio['mes_baja_venta'] ?? '') ?>
+                          <?= etiq('Mes Alta Compra',         $encuesta_negocio['mes_alta_compra'] ?? '') ?>
+                          
+                          <div class="dato-row" style="grid-column: 1 / -1; border-bottom: none; padding-top: 15px;">
+                              <div class="dato-label">Días de atención (Activos)</div>
+                              <div class="doc-chips">
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_lunes'] ?? $encuesta_negocio['dia_lv'] ?? 0) ? 'ok' : 'no' ?>">Lun</span>
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_martes'] ?? $encuesta_negocio['dia_lv'] ?? 0) ? 'ok' : 'no' ?>">Mar</span>
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_miercoles'] ?? $encuesta_negocio['dia_lv'] ?? 0) ? 'ok' : 'no' ?>">Mié</span>
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_jueves'] ?? $encuesta_negocio['dia_lv'] ?? 0) ? 'ok' : 'no' ?>">Jue</span>
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_viernes'] ?? $encuesta_negocio['dia_lv'] ?? 0) ? 'ok' : 'no' ?>">Vie</span>
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_sab'] ?? 0) ? 'ok' : 'no' ?>">Sáb</span>
+                                  <span class="doc-chip <?= ($encuesta_negocio['dia_dom'] ?? 0) ? 'ok' : 'no' ?>">Dom</span>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+ 
+                 <!-- Política de Ventas -->
+                 <div class="ficha-subsection">
+                     <div class="ficha-subtitle"><i class="fas fa-receipt"></i> Política de Ventas y Cobro (Detalle de porcentajes)</div>
+                     <div class="dato-grid">
+                         <div class="dato-row" style="border-bottom: 2px solid #ffdd00;">
+                             <span class="dato-label">Ventas al Contado</span>
+                             <span class="dato-val"><strong style="font-size: 18px; color: #059669;"><?= $encuesta_negocio['pct_contado'] ?? '0' ?>%</strong></span>
+                         </div>
+                         <div class="dato-row" style="border-bottom: 2px solid #ffdd00;">
+                             <span class="dato-label">Ventas al Crédito</span>
+                             <span class="dato-val"><strong style="font-size: 18px; color: #dc2626;"><?= $encuesta_negocio['pct_credito'] ?? '0' ?>%</strong></span>
+                         </div>
+                         <div class="dato-row" style="border-bottom: 2px solid #ffdd00;">
+                             <span class="dato-label">Uso de Efectivo</span>
+                             <span class="dato-val"><strong style="font-size: 18px; color: #1e40af;"><?= $encuesta_negocio['pct_efectivo'] ?? '0' ?>%</strong></span>
+                         </div>
+                         <?= etiq('Recuperación de cartera', $encuesta_negocio['recuperacion_credito'] ?? '', 'USD') ?>
+                     </div>
+                 </div>
+ 
+                 <!-- Gastos del Negocio -->
+                 <div class="ficha-subsection">
+                     <div class="ficha-subtitle"><i class="fas fa-file-invoice-dollar"></i> Gastos del Negocio</div>
+                     <div class="dato-grid">
+                         <?= etiq('Costos de Ventas',  $encuesta_negocio['costos_ventas'] ?? '', 'USD') ?>
+                         <?= etiq('Sueldos y Salarios', $encuesta_negocio['g_neg_sueldos'] ?? '', 'USD') ?>
+                         <?= etiq('Arriendo Local',     $encuesta_negocio['g_neg_arriendo'] ?? '', 'USD') ?>
+                         <?= etiq('Servicios Básicos',  $encuesta_negocio['g_neg_serv_bas'] ?? '', 'USD') ?>
+                         <?= etiq('Transporte',         $encuesta_negocio['g_neg_transporte'] ?? '', 'USD') ?>
+                         <?= etiq('Mantenimiento',      $encuesta_negocio['g_neg_mantenimiento'] ?? '', 'USD') ?>
+                         <?= etiq('Otros Gastos',       $encuesta_negocio['g_neg_otros'] ?? '', 'USD') ?>
+                         <?= etiq('Imprevistos',        $encuesta_negocio['g_neg_imprevistos'] ?? '', 'USD') ?>
+                         <div class="dato-row">
+                             <span class="dato-label">Total Gastos Negocio</span>
+                             <span class="dato-val"><strong>$<?= number_format($encuesta_negocio['gastos_negocio'] ?? 0, 2) ?></strong></span>
+                         </div>
+                     </div>
+                 </div>
+ 
+                 <!-- Otros Ingresos y Gastos Familiares -->
+                 <div class="row">
+                     <div class="col-md-6">
+                         <div class="ficha-subsection">
+                             <div class="ficha-subtitle"><i class="fas fa-plus-circle"></i> Otros Ingresos</div>
+                             <div class="dato-grid" style="grid-template-columns: 1fr;">
+                                 <?= etiq('Ingresos Cónyuge', $encuesta_negocio['o_ing_conyuge'] ?? '', 'USD') ?>
+                                 <?= etiq('Arriendos',        $encuesta_negocio['o_ing_arriendos'] ?? '', 'USD') ?>
+                                 <?= etiq('Pensiones',        $encuesta_negocio['o_ing_pensiones'] ?? '', 'USD') ?>
+                                 <?= etiq('Otros',            $encuesta_negocio['o_ing_otros'] ?? '', 'USD') ?>
+                                 <?= etiq('Total Otros Ingresos', $encuesta_negocio['otros_ingresos'] ?? '', 'USD') ?>
+                             </div>
+                         </div>
+                     </div>
+                     <div class="col-md-6">
+                         <div class="ficha-subsection">
+                             <div class="ficha-subtitle"><i class="fas fa-home"></i> Gastos Familiares</div>
+                             <div class="dato-grid" style="grid-template-columns: 1fr;">
+                                 <?= etiq('Alimentación',   $encuesta_negocio['g_fam_alim'] ?? '', 'USD') ?>
+                                 <?= etiq('Arriendo Casa',  $encuesta_negocio['g_fam_arriendo'] ?? '', 'USD') ?>
+                                 <?= etiq('Servicios Bás.', $encuesta_negocio['g_fam_serv_bas'] ?? '', 'USD') ?>
+                                 <?= etiq('Educación',      $encuesta_negocio['g_fam_educacion'] ?? '', 'USD') ?>
+                                 <?= etiq('Salud',          $encuesta_negocio['g_fam_salud'] ?? '', 'USD') ?>
+                                 <?= etiq('Otros Gastos',   $encuesta_negocio['g_fam_otros'] ?? '', 'USD') ?>
+                                 <?= etiq('Imprevistos',    $encuesta_negocio['g_fam_imprevistos'] ?? '', 'USD') ?>
+                                 <?= etiq('Total Gastos Fam.', $encuesta_negocio['gastos_familiares'] ?? '', 'USD') ?>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+                 
+                 <!-- Estado Financiero / Balance -->
+                 <?php if (isset($encuesta_negocio['caja_efectivo']) || isset($encuesta_negocio['bancos_saldo'])): ?>
+                 <div class="ficha-subsection">
+                     <div class="ficha-subtitle"><i class="fas fa-university"></i> Situación Financiera / Saldos</div>
+                     <div class="dato-grid">
+                          <?= etiq('Caja Efectivo', $encuesta_negocio['caja_efectivo'] ?? '', 'USD') ?>
+                          <?= etiq('Saldo Bancos',   $encuesta_negocio['bancos_saldo'] ?? '', 'USD') ?>
+                          <?= etiq('Cuentas x Pagar (Netas)', $encuesta_negocio['cxp_netas'] ?? '', 'USD') ?>
+                          <?= etiq('Inv. Materia Prima', $encuesta_negocio['inv_mat_prima'] ?? '', 'USD') ?>
+                          <?= etiq('Inv. Prod. Proceso', $encuesta_negocio['inv_prod_proc'] ?? '', 'USD') ?>
+                          <?= etiq('Créditos x Pagar', $encuesta_negocio['creditos_pagar'] ?? '', 'USD') ?>
+                          <?= etiq('Proveedores', $encuesta_negocio['proveedores'] ?? '', 'USD') ?>
+                          <?= etiq('Pasivos LP', $encuesta_negocio['pasivos_lp'] ?? '', 'USD') ?>
+                     </div>
+                 </div>
+                 <?php endif; ?>
+
+                  <!-- Activos Declarados -->
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-car-side"></i> Activos y Vehículos</div>
+                      <?php 
+                      $veh_neg = json_decode($encuesta_negocio['vehiculos_negocio_json'] ?? '[]', true);
+                      $veh_hog = json_decode($encuesta_negocio['vehiculos_hogar_json'] ?? '[]', true);
+                      $all_veh = array_merge(
+                          array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($veh_neg)?$veh_neg:[]),
+                          array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($veh_hog)?$veh_hog:[])
+                      );
+                      ?>
+                      <?php if (!empty($all_veh)): ?>
+                      <div class="table-responsive">
+                          <table class="table table-sm table-bordered" style="font-size:12px;">
+                              <thead class="bg-light">
+                                  <tr>
+                                      <th>Tipo</th><th>Descripción</th><th>Marca/Modelo</th><th>Año</th><th>Valor</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <?php foreach ($all_veh as $v): ?>
+                                  <?php if (empty($v['descripcion']) && empty($v['marca'])) continue; ?>
+                                  <tr>
+                                      <td><span class="badge <?= $v['tipo']=='Negocio'?'bg-info':'bg-secondary' ?>"><?= $v['tipo'] ?></span></td>
+                                      <td><?= htmlspecialchars($v['descripcion'] ?? '') ?></td>
+                                      <td><?= htmlspecialchars($v['marca'] ?? '') ?> <?= htmlspecialchars($v['modelo'] ?? '') ?></td>
+                                      <td><?= htmlspecialchars($v['anio'] ?? '') ?></td>
+                                      <td>$<?= number_format((float)($v['valor'] ?? 0), 2) ?></td>
+                                  </tr>
+                                  <?php endforeach; ?>
+                              </tbody>
+                          </table>
+                      </div>
+                      <?php else: ?>
+                          <p class="text-muted" style="font-size:12px;">No se declararon vehículos.</p>
+                      <?php endif; ?>
+                  </div>
+
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-building"></i> Inmuebles y Propiedades</div>
+                      <?php 
+                      $inm_neg = json_decode($encuesta_negocio['inmuebles_negocio_json'] ?? '[]', true);
+                      $inm_hog = json_decode($encuesta_negocio['inmuebles_hogar_json'] ?? '[]', true);
+                      $all_inm = array_merge(
+                          array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($inm_neg)?$inm_neg:[]),
+                          array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($inm_hog)?$inm_hog:[])
+                      );
+                      ?>
+                      <?php if (!empty($all_inm)): ?>
+                      <div class="table-responsive">
+                          <table class="table table-sm table-bordered" style="font-size:12px;">
+                              <thead class="bg-light">
+                                  <tr>
+                                      <th>Tipo</th><th>Descripción</th><th>Ubicación</th><th>Área</th><th>Valor Est.</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <?php foreach ($all_inm as $i): ?>
+                                  <?php if (empty($i['descripcion']) && empty($i['ubicacion'])) continue; ?>
+                                  <tr>
+                                      <td><span class="badge <?= $i['tipo']=='Negocio'?'bg-info':'bg-secondary' ?>"><?= $i['tipo'] ?></span></td>
+                                      <td><?= htmlspecialchars($i['descripcion'] ?? '') ?></td>
+                                      <td><?= htmlspecialchars($i['ubicacion'] ?? '') ?></td>
+                                      <td><?= htmlspecialchars($i['area'] ?? '') ?></td>
+                                      <td>$<?= number_format((float)($i['valor'] ?? 0), 2) ?></td>
+                                  </tr>
+                                  <?php endforeach; ?>
+                              </tbody>
+                          </table>
+                      </div>
+                      <?php else: ?>
+                          <p class="text-muted" style="font-size:12px;">No se declararon inmuebles.</p>
+                      <?php endif; ?>
+                  </div>
+
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-hand-holding-usd"></i> Otras Deudas Declaradas</div>
+                      <?php 
+                      $deudas = json_decode($encuesta_negocio['otras_deudas_json'] ?? '[]', true);
+                      ?>
+                      <?php if (!empty($deudas)): ?>
+                      <div class="table-responsive">
+                          <table class="table table-sm table-bordered" style="font-size:12px;">
+                              <thead class="bg-light">
+                                  <tr>
+                                      <th>Acreedor</th><th>Destino</th><th>Monto Inicial</th><th>Saldo Actual</th><th>Cuota Mes</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <?php foreach ($deudas as $d): ?>
+                                  <?php if (empty($d['acreedor'])) continue; ?>
+                                  <tr>
+                                      <td><strong><?= htmlspecialchars($d['acreedor'] ?? '') ?></strong></td>
+                                      <td><?= htmlspecialchars($d['destino'] ?? '') ?></td>
+                                      <td>$<?= number_format((float)($d['monto_inicial'] ?? 0), 2) ?></td>
+                                      <td class="text-danger">$<?= number_format((float)($d['saldo_actual'] ?? 0), 2) ?></td>
+                                      <td>$<?= number_format((float)($d['pago_mes'] ?? 0), 2) ?></td>
+                                  </tr>
+                                  <?php endforeach; ?>
+                              </tbody>
+                          </table>
+                      </div>
+                      <?php else: ?>
+                          <p class="text-muted" style="font-size:12px;">No se reportaron otras deudas.</p>
+                      <?php endif; ?>
+                  </div>
+
+                  <!-- Detalle de Productos (Comercio / Producción) -->
+                  <?php 
+                  $com_prods = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
+                  $prods     = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
+                  ?>
+                  
+                  <?php if (!empty($com_prods)): ?>
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-shopping-basket"></i> Detalle de Productos (Comercio)</div>
+                      <div class="table-responsive">
+                          <table class="table table-sm table-bordered" style="font-size:11px;">
+                              <thead class="table-light">
+                                  <tr>
+                                      <th>Producto</th><th>Costo Unit.</th><th>P. Venta</th><th>Cant. Mes</th><th>Venta Mes</th><th>Margen</th><th>Existencias</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <?php foreach ($com_prods as $cp): ?>
+                                  <?php if (empty($cp['nombre'])) continue; ?>
+                                  <tr>
+                                      <td><strong><?= htmlspecialchars($cp['nombre']) ?></strong></td>
+                                      <td>$<?= number_format((float)($cp['costo_unitario'] ?? 0), 2) ?></td>
+                                      <td>$<?= number_format((float)($cp['precio_venta_unitario'] ?? $cp['precio_venta_unidad'] ?? 0), 2) ?></td>
+                                      <td><?= (float)($cp['cantidad_vendida_mes'] ?? 0) ?></td>
+                                      <td class="table-success">$<?= number_format((float)($cp['venta_mes'] ?? 0), 2) ?></td>
+                                      <td><?= (float)($cp['margen_utilidad'] ?? 0) ?>%</td>
+                                      <td><?= (float)($cp['unidades_existentes'] ?? 0) ?></td>
+                                  </tr>
+                                  <?php endforeach; ?>
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+                  <?php endif; ?>
+
+                  <?php if (!empty($prods)): ?>
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-tools"></i> Detalle de Producción / Servicios</div>
+                      <?php foreach ($prods as $p): ?>
+                      <?php if (empty($p['nombre'])) continue; ?>
+                      <div class="border rounded p-2 mb-3 bg-white">
+                          <h6 class="mb-2" style="color:#1e40af; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">
+                              <i class="fas fa-box-open"></i> <?= htmlspecialchars($p['nombre']) ?>
+                          </h6>
+                          <div class="row g-2">
+                              <div class="col-md-7">
+                                  <table class="table table-sm table-borderless m-0" style="font-size:10.5px;">
+                                      <tr class="table-light">
+                                          <th colspan="2">Estructura de Costos</th>
+                                      </tr>
+                                      <?php 
+                                      $materias = is_array($p['materias'] ?? null) ? $p['materias'] : [];
+                                      foreach ($materias as $m): if (empty($m['nombre'])) continue;
+                                      ?>
+                                      <tr>
+                                          <td><?= htmlspecialchars($m['nombre']) ?></td>
+                                          <td class="text-end">$<?= number_format((float)($m['valor'] ?? 0), 2) ?></td>
+                                      </tr>
+                                      <?php endforeach; ?>
+                                      <tr class="border-top">
+                                          <td><strong>Total Materia Prima</strong></td>
+                                          <td class="text-end"><strong>$<?= number_format((float)($p['total_materia_prima'] ?? 0), 2) ?></strong></td>
+                                      </tr>
+                                      <tr><td>Mano de obra / Empaques / Otros</td><td class="text-end">$<?= number_format((float)($p['mano_obra']??0) + (float)($p['empaques']??0) + (float)($p['otros_costos']??0), 2) ?></td></tr>
+                                      <tr class="table-primary">
+                                          <td><strong>COSTO TOTAL UNITARIO</strong></td>
+                                          <td class="text-end"><strong>$<?= number_format((float)($p['costo_unitario'] ?? 0), 2) ?></strong></td>
+                                      </tr>
+                                  </table>
+                              </div>
+                              <div class="col-md-5">
+                                  <div class="dato-grid" style="grid-template-columns: 1fr; gap:5px; border:none; padding:0;">
+                                      <div class="dato-row"><span class="dato-label">Precio Unitario</span><span class="dato-val">$<?= number_format((float)($p['precio_unitario']??0), 2) ?></span></div>
+                                      <div class="dato-row"><span class="dato-label">Ventas Mes</span><span class="dato-val"><strong>$<?= number_format((float)($p['ventas_mensuales']??0), 2) ?></strong></span></div>
+                                      <div class="dato-row"><span class="dato-label">Costo Ventas</span><span class="dato-val">$<?= number_format((float)($p['costo_ventas']??0), 2) ?></span></div>
+                                      <div class="dato-row"><span class="dato-label">Inventario</span><span class="dato-val">$<?= number_format((float)($p['inventarios']??0), 2) ?></span></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                      <?php endforeach; ?>
+                  </div>
+                  <?php endif; ?>
+
+                  <div class="ficha-subsection">
+                      <div class="ficha-subtitle"><i class="fas fa-box"></i> Activos Fijos y Herramientas</div>
+                      <?php 
+                      $act_neg = json_decode($encuesta_negocio['activos_negocio_json'] ?? '[]', true);
+                      $act_hog = json_decode($encuesta_negocio['activos_hogar_json'] ?? '[]', true);
+                      $all_act = array_merge(
+                          array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($act_neg)?$act_neg:[]),
+                          array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($act_hog)?$act_hog:[])
+                      );
+                      ?>
+                      <?php if (!empty($all_act)): ?>
+                      <div class="table-responsive">
+                          <table class="table table-sm table-bordered" style="font-size:11px;">
+                              <thead class="bg-light">
+                                  <tr>
+                                      <th>Tipo</th><th>Descripción</th><th>Marca/Modelo</th><th>Serie</th><th>Valor</th>
+                                  </tr>
+                              </thead>
+                              <tbody>
+                                  <?php foreach ($all_act as $a): ?>
+                                  <?php if (empty($a['descripcion'])) continue; ?>
+                                  <tr>
+                                      <td><span class="badge <?= $a['tipo']=='Negocio'?'bg-info':'bg-secondary' ?>"><?= $a['tipo'] ?></span></td>
+                                      <td><?= htmlspecialchars($a['descripcion'] ?? '') ?></td>
+                                      <td><?= htmlspecialchars($a['marca'] ?? '') ?> <?= htmlspecialchars($a['modelo'] ?? '') ?></td>
+                                      <td><?= htmlspecialchars($a['serie'] ?? '') ?></td>
+                                      <td>$<?= number_format((float)($a['valor_comercial'] ?? 0), 2) ?></td>
+                                  </tr>
+                                  <?php endforeach; ?>
+                              </tbody>
+                          </table>
+                      </div>
+                      <?php else: ?>
+                          <p class="text-muted" style="font-size:12px;">No se declararon otros activos fijos.</p>
+                      <?php endif; ?>
+                  </div>
+
+
+ 
+             </div>
+         </div>
+         <?php endif; ?>
 
         <!-- ── TAREAS ── -->
         <div class="section-card">
@@ -592,12 +1075,12 @@ $is_supervisor = ($user_role === 'supervisor');
                 <table class="task-table">
                     <thead>
                         <tr>
-                            <th>Tipo</th>
-                            <th>Fecha</th>
+                            <th>Tipo / Tarea</th>
+                            <th>Programación</th>
                             <th>Estado</th>
-                            <th>Acuerdo logrado</th>
+                            <th>Ejecución / GPS</th>
+                            <th>Acuerdo / Resultado</th>
                             <th>Asesor</th>
-                            <th>Observaciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -607,6 +1090,13 @@ $is_supervisor = ($user_role === 'supervisor');
                         $estadoClass= 'badge-pendiente';
                         if (($t['estado'] ?? '') === 'completada') $estadoClass = 'badge-completada';
                         elseif (($t['estado'] ?? '') === 'cancelada') $estadoClass = 'badge-cancelada';
+                        
+                        // GPS info
+                        $gps = '—';
+                        if (!empty($t['latitud_inicio']) && !empty($t['longitud_inicio'])) {
+                            $gps = sprintf('<a href="https://www.google.com/maps?q=%s,%s" target="_blank" class="text-primary" title="Ver en Mapa"><i class="fas fa-map-marker-alt"></i> Inicio</a>', $t['latitud_inicio'], $t['longitud_inicio']);
+                        }
+                        
                         $acuerdo = $t['acuerdo_logrado'] ?? 'ninguno';
                         $acuerdoClass = 'acuerdo-ninguno';
                         if (str_starts_with($acuerdo, 'nueva_cita')) $acuerdoClass = 'acuerdo-nueva_cita';
@@ -615,13 +1105,53 @@ $is_supervisor = ($user_role === 'supervisor');
                         $acuerdoLabel = ucfirst(str_replace('_', ' ', $acuerdo));
                         ?>
                         <tr>
-                            <td><strong><?= htmlspecialchars($tipoLabel) ?></strong></td>
-                            <td><?= $t['fecha_programada'] ? date('d/m/Y', strtotime($t['fecha_programada'])) : '—' ?></td>
+                            <td>
+                                <strong><?= htmlspecialchars($tipoLabel) ?></strong><br>
+                                <small class="text-muted"><?= htmlspecialchars(mb_substr($t['observaciones'] ?? '',0,40)) ?>...</small>
+                            </td>
+                            <td>
+                                <i class="far fa-calendar-alt me-1"></i> <?= $t['fecha_programada'] ? date('d/m/Y', strtotime($t['fecha_programada'])) : '—' ?><br>
+                                <i class="far fa-clock me-1"></i> <?= $t['hora_programada'] ?? '—' ?>
+                            </td>
                             <td><span class="badge-estado <?= $estadoClass ?>"><?= ucfirst($t['estado'] ?? '—') ?></span></td>
-                            <td><span class="acuerdo-badge <?= $acuerdoClass ?>"><?= htmlspecialchars($acuerdoLabel) ?></span></td>
+                            <td>
+                                <?php if ($t['fecha_realizada']): ?>
+                                    <small><?= date('d/m/Y', strtotime($t['fecha_realizada'])) ?> <?= $t['hora_realizada'] ?></small><br>
+                                    <?= $gps ?>
+                                <?php else: ?>
+                                    <span class="text-muted">—</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <?php if ($t['av_tipo']): ?>
+                                    <span class="badge bg-light text-dark border" style="font-size:11px;">
+                                        <i class="fas fa-handshake me-1"></i> <?= htmlspecialchars($t['av_tipo']) ?>
+                                    </span><br>
+                                    <small class="text-success"><?= htmlspecialchars($t['av_resultado'] ?? '') ?></small>
+                                <?php else: ?>
+                                    <span class="acuerdo-badge <?= $acuerdoClass ?>"><?= htmlspecialchars($acuerdoLabel) ?></span>
+                                <?php endif; ?>
+                            </td>
                             <td><?= htmlspecialchars($t['asesor_nombre'] ?? '—') ?></td>
-                            <td style="max-width:220px;white-space:normal;font-size:13px;"><?= htmlspecialchars($t['observaciones'] ?? '—') ?></td>
                         </tr>
+                        <!-- Fila de detalle si hay acuerdo de visita específico -->
+                        <?php if ($t['av_tipo'] || !empty($t['observaciones'])): ?>
+                        <tr style="background:#fdfdfd;">
+                            <td colspan="6" style="padding: 5px 15px; border-top: none;">
+                                <div style="font-size: 12px; color: #64748b; line-height: 1.4;">
+                                    <?php if (!empty($t['observaciones'])): ?>
+                                        <strong>Obs:</strong> <?= htmlspecialchars($t['observaciones']) ?>
+                                    <?php endif; ?>
+                                    <?php if ($t['av_lugar']): ?>
+                                        <span class="ms-3"><strong>Lugar Acuerdo:</strong> <?= htmlspecialchars($t['av_lugar']) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($t['av_fecha']): ?>
+                                        <span class="ms-3"><strong>Próxima Cita:</strong> <?= date('d/m/Y', strtotime($t['av_fecha'])) ?> <?= $t['av_hora'] ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                     </tbody>
                 </table>
@@ -705,6 +1235,50 @@ $is_supervisor = ($user_role === 'supervisor');
             <?php endif; ?>
             </div>
         </div>
+ 
+         <!-- ── ALERTAS DEL CLIENTE ── -->
+         <?php if ($alertas_cliente): ?>
+         <div class="section-card">
+             <div class="section-header">
+                 <div class="sec-icon sec-red" style="background: #fee2e2; color: #dc2626;"><i class="fas fa-bell"></i></div>
+                 <h5>Alertas y Modificaciones Recientes</h5>
+             </div>
+             <div class="section-body" style="padding:0;">
+                 <table class="task-table">
+                     <thead>
+                         <tr>
+                             <th>Tipo / Campo</th>
+                             <th>Estado</th>
+                             <th>Asesor</th>
+                             <th>Fecha Alerta</th>
+                             <th>Acción</th>
+                         </tr>
+                     </thead>
+                     <tbody>
+                         <?php foreach ($alertas_cliente as $al): ?>
+                         <tr>
+                             <td><strong><?= htmlspecialchars($al['campo_modificado'] ?? 'Modificación') ?></strong></td>
+                             <td>
+                                 <?php if (!($al['vista_supervisor'] ?? 0)): ?>
+                                     <span class="badge bg-danger">Pendiente</span>
+                                 <?php else: ?>
+                                     <span class="badge bg-success">Revisada</span>
+                                 <?php endif; ?>
+                             </td>
+                             <td><?= htmlspecialchars($al['asesor_nombre'] ?? '—') ?></td>
+                             <td><?= date('d/m/Y H:i', strtotime($al['created_at'])) ?></td>
+                             <td>
+                                 <a href="alertas_detalle.php?id=<?= urlencode($al['id']) ?>" class="btn btn-sm btn-outline-danger" title="Ver detalle de la modificación">
+                                     <i class="fas fa-search-plus"></i>
+                                 </a>
+                             </td>
+                         </tr>
+                         <?php endforeach; ?>
+                     </tbody>
+                 </table>
+             </div>
+         </div>
+         <?php endif; ?>
 
         <!-- ══════════ FICHAS DE PRODUCTO ══════════ -->
         <?php if ($ficha_credito || $ficha_corriente || $ficha_ahorros || $ficha_inversiones): ?>

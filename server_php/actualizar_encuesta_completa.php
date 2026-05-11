@@ -743,7 +743,7 @@ try {
             );
             // 79 params
             $stN->bind_param(
-                'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssddddddddisiss ss s',
+                'dddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssdddddddddisisssss',
                 $venta_lv_n, $venta_sab_n, $venta_dom_n,
                 $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
@@ -792,7 +792,7 @@ try {
             );
             // 73 params -> 80
             $stN->bind_param(
-                'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssdddddddddisiss ss ',
+                'ssdddssdddsiiiiiidddddddddddddddddddddddsssssddddddddddiiiiissssdddddddddisissss',
                 $negocio_id, $tarea_id,
                 $venta_lv_n, $venta_sab_n, $venta_dom_n, $mes_alta_venta, $mes_baja_venta,
                 $compra_lv_n, $compra_sab_n, $compra_dom_n, $mes_alta_compra,
