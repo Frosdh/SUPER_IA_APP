@@ -422,30 +422,8 @@ $totalPendientes    = 0;
 </head>
 <body>
 
-<?php require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle = 'Mapa en Vivo'; $navIcon = 'fas fa-map-location-dot'; $navSubtitle = count($ubicaciones) . ' asesores en línea'; require_once '_sidebar_supervisor.php'; ?>
 
-<!-- Main -->
-<div class="main-content">
-    <div class="navbar-custom">
-        <div>
-            <h2>
-                <i class="fas fa-map-location-dot me-2" style="color:var(--brand-yellow);"></i>
-                Super_IA – Supervisor
-            </h2>
-            <small style="opacity:.85;">
-                <span id="count-label"><?= count($ubicaciones) ?></span> asesores en línea
-            </small>
-        </div>
-        <div class="user-info">
-            <div>
-                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
-                <small>supervisor</small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesion</a>
-        </div>
-    </div>
-
-    <div class="content-area">
         <div class="d-flex align-items-center justify-content-between" style="margin-bottom:14px;">
             <div>
                 <h1 style="margin:0;font-size:28px;font-weight:800;color:var(--brand-navy-deep);">

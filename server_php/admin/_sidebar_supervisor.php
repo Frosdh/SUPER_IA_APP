@@ -130,10 +130,15 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2>
-            <i class="<?= $navIcon ?? 'fas fa-shield-halved' ?> me-2" style="color:var(--brand-yellow);"></i>
-            <?= $navTitle ?? 'Super_IA — Supervisor' ?>
-        </h2>
+        <div class="nav-title-group">
+            <h2>
+                <i class="<?= $navIcon ?? 'fas fa-shield-halved' ?> me-2" style="color:var(--brand-yellow);"></i>
+                <?= $navTitle ?? 'Super_IA — Supervisor' ?>
+            </h2>
+            <?php if (!empty($navSubtitle)): ?>
+                <small class="navbar-subtitle"><?= htmlspecialchars($navSubtitle) ?></small>
+            <?php endif; ?>
+        </div>
         <div class="user-info">
             <div>
                 <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
