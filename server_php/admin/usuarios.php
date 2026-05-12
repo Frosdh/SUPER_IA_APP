@@ -204,9 +204,17 @@ $currentPage = 'usuarios';
     <!-- CONTENT -->
     <div class="content-area">
 
-        <div class="page-header">
-            <h1><i class="fas fa-users me-2"></i>Usuarios del Sistema</h1>
-            <p class="text-muted mt-2">Total de usuarios: <strong><?php echo count($usuarios); ?></strong></p>
+        <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div>
+                <h1><i class="fas fa-users me-2"></i>Usuarios del Sistema</h1>
+                <p id="cntGlobal" class="text-muted mt-2">Total de usuarios: <strong><?php echo count($usuarios); ?></strong></p>
+            </div>
+            <div class="search-box" style="flex:1; max-width:400px;">
+                <div class="input-group shadow-sm" style="border-radius:12px; border:1px solid #e5e7eb; overflow:hidden; background: #fff;">
+                    <span class="input-group-text bg-white border-0 text-primary"><i class="fas fa-search"></i></span>
+                    <input type="text" id="searchUsers" class="form-control border-0 bg-white shadow-none fw-semibold" placeholder="Buscar usuario por nombre o email..." style="font-size:14px; padding: 12px;">
+                </div>
+            </div>
         </div>
 
         <!-- TABS -->
@@ -549,5 +557,58 @@ $currentPage = 'usuarios';
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputBusqueda = document.getElementById('searchUsers');
+    const cntGlobal = document.getElementById('cntGlobal');
+
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function() {
+            const filter = this.value.toLowerCase().trim();
+            const allRows = document.querySelectorAll('.table tbody tr:not(.empty-row)');
+            let visiblesGlobal = 0;
+            
+            // Filtrar todas las tablas
+            allRows.forEach(row => {
+                // Nombre en columna 3, Email en columna 4
+                const name = row.querySelector('td:nth-child(3)') ? row.querySelector('td:nth-child(3)').textContent.toLowerCase() : '';
+                const email = row.querySelector('td:nth-child(4)') ? row.querySelector('td:nth-child(4)').textContent.toLowerCase() : '';
+                
+                if (name.includes(filter) || email.includes(filter)) {
+                    row.style.display = '';
+                    visiblesGlobal++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Manejar estados vacíos por tabla
+            const tables = document.querySelectorAll('.table');
+            tables.forEach(table => {
+                const tbody = table.querySelector('tbody');
+                const rows = tbody.querySelectorAll('tr:not(.empty-row)');
+                let visiblesTab = 0;
+                rows.forEach(r => { if(r.style.display !== 'none') visiblesTab++; });
+
+                let emptyRow = tbody.querySelector('.empty-row');
+                if (visiblesTab === 0 && rows.length > 0) {
+                    if (!emptyRow) {
+                        const tr = document.createElement('tr');
+                        tr.className = 'empty-row';
+                        tr.innerHTML = `<td colspan="7" class="text-center py-4 text-muted"><i class="fas fa-search me-2 opacity-50"></i>No se encontraron usuarios</td>`;
+                        tbody.appendChild(tr);
+                    }
+                } else {
+                    if (emptyRow) emptyRow.remove();
+                }
+            });
+
+            if (cntGlobal) {
+                cntGlobal.innerHTML = filter ? `Encontrados: <strong>${visiblesGlobal}</strong> usuarios` : `Total de usuarios: <strong>${allRows.length}</strong>`;
+            }
+        });
+    }
+});
+</script>
 </body>
 </html>

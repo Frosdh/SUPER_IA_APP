@@ -321,6 +321,13 @@ $currentPage = 'solicitudes_supervisor';
             </div>
         </div>
 
+        <!-- FILTROS DE BÚSQUEDA -->
+        <div class="filter-bar" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,.04);">
+            <i class="fas fa-search" style="color:#6b7280;"></i>
+            <input type="text" id="busquedaSolicitud" placeholder="Buscar por nombre o email..." style="min-width:260px; flex:1; padding:9px 14px; border:1.5px solid #e2e8f0; border-radius:9px; font-size:14px; outline:none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#fbbf24'" onblur="this.style.borderColor='#e2e8f0'">
+            <span id="cntResultados" style="font-size:13px; color:#6b7280; margin-left:auto;"><?php echo count($solicitudes); ?> resultados</span>
+        </div>
+
         <!-- TABLA DE SOLICITUDES -->
         <div class="table-card">
             <div class="card-header-custom">
@@ -471,6 +478,53 @@ function cerrarModal() {
     const modal = document.getElementById('modal');
     modal.classList.remove('show');
 }
+
+// Lógica de búsqueda en la tabla
+document.addEventListener('DOMContentLoaded', function() {
+    const inputBusqueda = document.getElementById('busquedaSolicitud');
+    const cntResultados = document.getElementById('cntResultados');
+
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function() {
+            const term = this.value.toLowerCase().trim();
+            const filas = document.querySelectorAll('.table tbody tr:not(.empty-row)');
+            let visibles = 0;
+            
+            filas.forEach(fila => {
+                // Si la fila es la de "No hay solicitudes", la ignoramos
+                if (fila.querySelector('td[colspan]')) return;
+                
+                const usuario = fila.querySelector('td:nth-child(1)').textContent.toLowerCase();
+                const nombre = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                const email = fila.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                
+                if (usuario.includes(term) || nombre.includes(term) || email.includes(term)) {
+                    fila.style.display = '';
+                    visibles++;
+                } else {
+                    fila.style.display = 'none';
+                }
+            });
+
+            if (cntResultados) cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
+
+            let emptyRow = document.querySelector('.empty-row');
+            if (visibles === 0 && filas.length > 0) {
+                if (!emptyRow) {
+                    const tbody = document.querySelector('.table tbody');
+                    const tr = document.createElement('tr');
+                    tr.className = 'empty-row';
+                    tr.innerHTML = '<td colspan="7" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</td>';
+                    tbody.appendChild(tr);
+                } else {
+                    emptyRow.querySelector('td').innerHTML = `<i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes para "${this.value}".`;
+                }
+            } else {
+                if (emptyRow) emptyRow.remove();
+            }
+        });
+    }
+});
 
 document.getElementById('form-modal').onsubmit = function(e) {
     e.preventDefault();

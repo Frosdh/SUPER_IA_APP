@@ -519,13 +519,16 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
 
         <div class="table-card bg-white" style="border-radius:20px; border:1px solid #e2e8f0; box-shadow:0 10px 30px rgba(0,0,0,0.05);">
             <div class="card-header-custom p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3" style="background:#fff;">
-                <h5 class="m-0 fw-800 d-flex align-items-center gap-2" style="color:var(--brand-navy-deep, #0a2748);">
-                    <i class="fas fa-list-ul text-primary"></i> Listado Completo
-                </h5>
-                <div class="search-box mx-auto" style="flex:1; max-width:600px;">
-                    <div class="input-group input-group-lg shadow-sm" style="border-radius:16px; border:2px solid #f1f5f9; overflow:hidden;">
+                <div>
+                    <h5 class="m-0 fw-800 d-flex align-items-center gap-2" style="color:var(--brand-navy-deep, #0a2748);">
+                        <i class="fas fa-list-ul text-primary"></i> Listado Completo
+                    </h5>
+                    <small id="cntResultados" class="text-muted fw-semibold" style="font-size: 11px; margin-left: 28px;"><?= count($clientes) ?> clientes en total</small>
+                </div>
+                <div class="search-box" style="flex:1; max-width:500px;">
+                    <div class="input-group shadow-sm" style="border-radius:12px; border:2px solid #f1f5f9; overflow:hidden;">
                         <span class="input-group-text bg-white border-0 text-primary"><i class="fas fa-search"></i></span>
-                        <input type="text" id="searchClients" class="form-control border-0 bg-white shadow-none fw-semibold" placeholder="Buscar cliente por nombre o cédula..." style="font-size:15px;">
+                        <input type="text" id="searchClients" class="form-control border-0 bg-white shadow-none fw-semibold" placeholder="Buscar cliente por nombre o cédula..." style="font-size:14px; padding: 10px;">
                     </div>
                 </div>
             </div>
@@ -604,18 +607,57 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
 </div>
 
 <script>
-document.getElementById('searchClients').addEventListener('keyup', function() {
-    let filter = this.value.toLowerCase();
-    let rows = document.querySelectorAll('table tbody tr');
-    rows.forEach(row => {
-        let name = row.querySelector('.client-name') ? row.querySelector('.client-name').textContent.toLowerCase() : '';
-        let cedula = row.querySelector('.client-cedula') ? row.querySelector('.client-cedula').textContent.toLowerCase() : '';
-        if (name.includes(filter) || cedula.includes(filter)) {
-            row.style.display = '';
-        } else {
-            row.style.display = 'none';
-        }
-    });
+document.addEventListener('DOMContentLoaded', function() {
+    const inputBusqueda = document.getElementById('searchClients');
+    const cntResultados = document.getElementById('cntResultados');
+
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function() {
+            const filter = this.value.toLowerCase();
+            const rows = document.querySelectorAll('table tbody tr:not(#emptyFiltered)');
+            let visibles = 0;
+            
+            rows.forEach(row => {
+                // Si la fila es la de "No hay clientes para mostrar" (vacía de origen), la ignoramos
+                if (row.querySelector('td[colspan]')) return;
+                
+                const name = row.querySelector('.client-name') ? row.querySelector('.client-name').textContent.toLowerCase() : '';
+                const cedula = row.querySelector('.client-cedula') ? row.querySelector('.client-cedula').textContent.toLowerCase() : '';
+                
+                if (name.includes(filter) || cedula.includes(filter)) {
+                    row.style.display = '';
+                    visibles++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            if (cntResultados) {
+                cntResultados.textContent = visibles + (visibles === 1 ? ' cliente encontrado' : ' clientes encontrados');
+            }
+
+            let emptyRow = document.getElementById('emptyFiltered');
+            if (visibles === 0 && rows.length > 0) {
+                if (!emptyRow) {
+                    const tbody = document.querySelector('table tbody');
+                    const tr = document.createElement('tr');
+                    tr.id = 'emptyFiltered';
+                    tr.innerHTML = `
+                        <td colspan="6" class="text-center py-5">
+                            <div class="text-muted mb-3"><i class="fas fa-search fa-3x opacity-25"></i></div>
+                            <h6 class="fw-bold text-muted">No hay resultados para "${this.value}"</h6>
+                            <p class="text-muted small">Intenta con otro nombre o número de cédula.</p>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                } else {
+                    emptyRow.querySelector('h6').textContent = `No hay resultados para "${this.value}"`;
+                }
+            } else {
+                if (emptyRow) emptyRow.remove();
+            }
+        });
+    }
 });
 </script>
 </body>

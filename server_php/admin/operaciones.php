@@ -697,9 +697,17 @@ if ($user_role === 'supervisor') {
 
         <!-- TABLA DE OPERACIONES -->
         <div class="table-card">
-            <div class="card-header-custom d-flex justify-content-between align-items-center">
-                <h6><i class="fas fa-list me-2"></i><?= htmlspecialchars($table_title) ?></h6>
-                <span class="badge bg-secondary"><?= $total_ops ?> registros</span>
+            <div class="card-header-custom d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h6 class="m-0 fw-800" style="color:var(--brand-navy-deep, #0a2748);"><i class="fas fa-list me-2"></i><?= htmlspecialchars($table_title) ?></h6>
+                    <small id="cntResultados" class="text-muted fw-semibold" style="font-size: 11px;"><?= $total_ops ?> registros en total</small>
+                </div>
+                <div class="search-box" style="flex:1; max-width:400px;">
+                    <div class="input-group shadow-sm" style="border-radius:10px; border:1px solid #d7e0ea; overflow:hidden;">
+                        <span class="input-group-text bg-white border-0 text-primary"><i class="fas fa-search"></i></span>
+                        <input type="text" id="searchOps" class="form-control border-0 bg-white shadow-none" placeholder="Buscar por nombre o cédula..." style="font-size:14px;">
+                    </div>
+                </div>
             </div>
             <?php if (empty($operaciones)): ?>
             <div class="text-center py-5 text-muted">
@@ -791,5 +799,58 @@ if ($user_role === 'supervisor') {
 </div> <!-- .main-content -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const inputBusqueda = document.getElementById('searchOps');
+    const cntResultados = document.getElementById('cntResultados');
+
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function() {
+            const filter = this.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('.table tbody tr:not(#emptyFiltered)');
+            let visibles = 0;
+            
+            rows.forEach(row => {
+                // El cliente está en la segunda columna (nth-child(2))
+                // La cédula está en la tercera columna (nth-child(3))
+                const name = row.querySelector('td:nth-child(2)') ? row.querySelector('td:nth-child(2)').textContent.toLowerCase() : '';
+                const cedula = row.querySelector('td:nth-child(3)') ? row.querySelector('td:nth-child(3)').textContent.toLowerCase() : '';
+                
+                if (name.includes(filter) || cedula.includes(filter)) {
+                    row.style.display = '';
+                    visibles++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            if (cntResultados) {
+                cntResultados.textContent = visibles + (visibles === 1 ? ' registro encontrado' : ' registros encontrados');
+            }
+
+            let emptyRow = document.getElementById('emptyFiltered');
+            if (visibles === 0 && rows.length > 0) {
+                if (!emptyRow) {
+                    const tbody = document.querySelector('.table tbody');
+                    const tr = document.createElement('tr');
+                    tr.id = 'emptyFiltered';
+                    tr.innerHTML = `
+                        <td colspan="10" class="text-center py-5">
+                            <div class="text-muted mb-3"><i class="fas fa-search fa-3x opacity-25"></i></div>
+                            <h6 class="fw-bold text-muted">No hay resultados para "${this.value}"</h6>
+                            <p class="text-muted small">Intenta con otro nombre o número de cédula.</p>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                } else {
+                    emptyRow.querySelector('h6').textContent = `No hay resultados para "${this.value}"`;
+                }
+            } else {
+                if (emptyRow) emptyRow.remove();
+            }
+        });
+    }
+});
+</script>
 </body>
 </html>
