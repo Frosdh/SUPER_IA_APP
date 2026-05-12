@@ -15,226 +15,148 @@ if (!$is_asesor) {
 $asesor_id = $_SESSION['asesor_id'] ?? null;
 $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';
 
-$currentPage = 'mapa_vivo';
+// Obtener tareas pendientes del día para el badge del sidebar
+$tareas_pendientes = 0;
+$alertas_pendientes = 0;
+try {
+    if ($asesor_id) {
+        $st_id = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
+        $st_id->execute([$asesor_id]);
+        $asesor_table_id = $st_id->fetchColumn();
+
+        if ($asesor_table_id) {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM tarea WHERE asesor_id = ? AND fecha_programada = CURRENT_DATE AND estado != 'completada'");
+            $st->execute([$asesor_table_id]);
+            $tareas_pendientes = (int)$st->fetchColumn();
+
+            $st = $pdo->prepare("SELECT COUNT(*) FROM alerta_modificacion WHERE asesor_id = ? AND vista_supervisor = 0");
+            $st->execute([$asesor_table_id]);
+            $alertas_pendientes = (int)$st->fetchColumn();
+        }
+    }
+} catch (PDOException $e) {}
+
+$currentPage = 'mapa';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Ubicación en Vivo</title>
+    <title>Mi Ubicación en Vivo — Asesor</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <style>
         :root {
-            --amarillo: #FBBF24;
-            --amarillo-hover: #F59E0B;
-            --azul-marino: #1e3a5f;
-            --azul-claro: #2c5aa0;
-            --gris: #6b7280;
-            --gris-claro: #e5e7eb;
-            --gris-muy-claro: #f3f4f6;
+            --brand-yellow:#ffdd00; --brand-yellow-deep:#f4c400;
+            --brand-navy:#123a6d;   --brand-navy-deep:#0a2748;
+            --brand-gray:#6b7280;   --brand-border:#d7e0ea;
+            --brand-bg:#f4f6f9;
+            --brand-shadow:0 16px 34px rgba(18,58,109,.08);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--gris-muy-claro); display: flex; height: 100vh; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--brand-bg); display: flex; height: 100vh; overflow: hidden; }
         
-        .sidebar {
-            width: 230px;
-            background: linear-gradient(180deg, var(--azul-marino) 0%, #0f1f35 100%);
-            color: white;
-            padding: 20px 0;
-            overflow-y: auto;
-            position: fixed;
-            height: 100vh;
-            left: 0;
-            top: 0;
-        }
-        
-        .sidebar-brand { 
-            padding: 0 20px 30px; 
-            font-size: 18px; 
-            font-weight: 800; 
-            border-bottom: 1px solid rgba(251, 191, 36, 0.2); 
-            margin-bottom: 20px; 
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .sidebar-brand i { color: var(--amarillo); font-size: 24px; }
-        
-        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.6); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        
-        .sidebar-link { 
-            display: flex; 
-            align-items: center; 
-            gap: 12px; 
-            padding: 12px 15px; 
-            margin-bottom: 5px; 
-            border-radius: 8px; 
-            color: rgba(255,255,255,0.8); 
-            cursor: pointer; 
-            transition: all 0.3s ease; 
-            text-decoration: none; 
-            font-size: 14px; 
-        }
-        
-        .sidebar-link:hover { 
-            background: rgba(251, 191, 36, 0.15); 
-            color: #fff; 
-            padding-left: 20px; 
-        }
-        
-        .sidebar-link.active { 
-            background: linear-gradient(90deg, var(--amarillo), var(--amarillo-hover)); 
-            color: var(--azul-marino); 
-            font-weight: 600;
-        }
-        
+        /* SIDEBAR UNIFICADO STYLES (Copiados de asesor_index para consistencia) */
+        .sidebar{width:230px;background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%);color:#fff;padding:20px 0;overflow-y:auto;position:fixed;height:100vh;left:0;top:0;z-index:100;}
+        .sidebar-brand{padding:0 20px 24px;font-size:18px;font-weight:800;border-bottom:1px solid rgba(255,221,0,.18);margin-bottom:20px;display:flex;align-items:center;gap:10px;}
+        .sidebar-brand i{color:var(--brand-yellow);}
+        .sidebar-section{padding:0 15px;margin-bottom:22px;}
+        .sidebar-section-title{font-size:11px;text-transform:uppercase;color:rgba(255,255,255,.5);letter-spacing:.6px;padding:0 10px;margin-bottom:10px;font-weight:700;}
+        .sidebar-link{display:flex;align-items:center;gap:12px;padding:11px 15px;margin-bottom:4px;border-radius:10px;color:rgba(255,255,255,.82);text-decoration:none;font-size:14px;border:1px solid transparent;transition:all .22s;position:relative;}
+        .sidebar-link:hover{background:rgba(255,221,0,.12);color:#fff;padding-left:20px;border-color:rgba(255,221,0,.15);}
+        .sidebar-link.active{background:linear-gradient(90deg,var(--brand-yellow),var(--brand-yellow-deep));color:var(--brand-navy-deep);font-weight:700;}
+        .badge-nav{background:#dc2626;color:#fff;font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px;margin-left:auto;}
+
         .main-content { 
             flex: 1; 
             margin-left: 230px; 
             display: flex; 
             flex-direction: column; 
-            overflow: hidden; 
+            height: 100vh;
             min-width: 0;
+            position: relative;
         }
         
         .navbar-custom { 
-            background: linear-gradient(135deg, var(--amarillo) 0%, var(--amarillo-hover) 100%); 
-            color: var(--azul-marino); 
-            padding: 15px 30px; 
+            background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); 
+            color: #fff; 
+            padding: 14px 30px; 
             display: flex; 
             justify-content: space-between; 
             align-items: center; 
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); 
+            z-index: 50;
         }
         
-        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .navbar-custom h2 { margin: 0; font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .navbar-custom h2 i { color: var(--brand-yellow); }
         .user-info { display: flex; align-items: center; gap: 15px; }
         .btn-logout { 
-            background: rgba(30, 58, 95, 0.2); 
-            color: var(--azul-marino); 
-            border: 1px solid var(--azul-marino); 
-            padding: 8px 15px; 
-            border-radius: 6px; 
-            cursor: pointer; 
+            background: rgba(255, 221, 0, 0.15); 
+            color: #fff; 
+            border: 1px solid rgba(255, 221, 0, 0.28); 
+            padding: 7px 14px; 
+            border-radius: 10px; 
             text-decoration: none;
             font-weight: 600;
+            font-size: 13px;
             transition: all 0.3s ease;
         }
-        .btn-logout:hover { 
-            background: rgba(30, 58, 95, 0.3); 
-            transform: translateY(-2px);
-        }
+        .btn-logout:hover { background: rgba(255, 221, 0, 0.26); }
         
-        .content-area { flex: 1; overflow: hidden; padding: 20px; display: flex; flex-direction: column; }
-        
-        #map {
-            height: 100%;
-            width: 100%;
-            border-radius: 12px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-        }
+        .content-area { flex: 1; position: relative; overflow: hidden; background: #eee; }
+        #map { height: 100%; width: 100%; }
         
         .info-panel {
             position: absolute;
-            bottom: 20px;
-            left: 250px;
+            bottom: 30px;
+            left: 30px;
             background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            z-index: 400;
-            max-width: 350px;
-            border-left: 4px solid var(--amarillo);
+            padding: 22px;
+            border-radius: 16px;
+            box-shadow: 0 12px 34px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            max-width: 320px;
+            border-left: 5px solid var(--brand-yellow);
         }
         
-        .info-panel h6 { 
-            margin: 0 0 15px; 
-            color: var(--azul-marino); 
-            font-weight: 700; 
-            font-size: 14px;
-        }
-        
+        .info-panel h6 { margin: 0 0 15px; color: var(--brand-navy-deep); font-weight: 800; font-size: 15px; }
         .info-item { 
-            padding: 8px 0; 
-            font-size: 13px; 
-            color: var(--gris);
-            border-bottom: 1px solid var(--gris-claro);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 8px 0; font-size: 13px; color: var(--brand-gray); border-bottom: 1px solid #f1f5f9;
+            display: flex; justify-content: space-between; align-items: center;
         }
-        
         .info-item:last-child { border-bottom: none; }
-        .info-item strong { color: var(--azul-marino); }
+        .info-item strong { color: var(--brand-navy-deep); }
         
         .status-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            background: linear-gradient(135deg, var(--amarillo), var(--amarillo-hover));
-            color: var(--azul-marino);
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
+            display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.15); color: #059669;
+            border-radius: 20px; font-size: 11px; font-weight: 700;
         }
         
         @media (max-width: 768px) {
-            .sidebar { width: 0; }
+            .sidebar { transform: translateX(-100%); }
             .main-content { margin-left: 0; }
-            .info-panel { left: 20px; }
+            .info-panel { left: 15px; right: 15px; bottom: 15px; max-width: none; }
         }
     </style>
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-map-location-dot"></i>
-        <span>Mi Mapa</span>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Navegación</div>
-        <a href="asesor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_asesor.php" class="sidebar-link active">
-            <i class="fas fa-map"></i> Mi Ubicación
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <a href="clientes.php" class="sidebar-link">
-            <i class="fas fa-briefcase"></i> Mis Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link">
-            <i class="fas fa-handshake"></i> Mis Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
-    </div>
-</div>
+<?php require_once '_sidebar_asesor.php'; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <h2 style="display: flex; align-items: center; gap: 10px;">
-            <i class="fas fa-location-dot"></i> Mi Ubicación en Vivo
-        </h2>
+        <h2><i class="fas fa-location-dot"></i> Mi Ubicación en Vivo</h2>
         <div class="user-info">
             <div style="text-align: right;">
-                <strong><?php echo htmlspecialchars($asesor_nombre); ?></strong><br>
-                <small style="color: rgba(30, 58, 95, 0.7);">Asesor</small>
+                <strong style="display:block;"><?php echo htmlspecialchars($asesor_nombre); ?></strong>
+                <small style="opacity: 0.7;">Asesor de campo</small>
             </div>
             <a href="logout.php" class="btn-logout">
                 <i class="fas fa-sign-out-alt"></i> Salir

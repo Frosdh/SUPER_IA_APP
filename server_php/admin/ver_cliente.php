@@ -1240,8 +1240,8 @@ if ($user_role === 'supervisor') {
             </div>
         </div>
  
-         <!-- ── ALERTAS DEL CLIENTE ── -->
-         <?php if ($alertas_cliente): ?>
+        <!-- ── ALERTAS DEL CLIENTE (Solo visible para Supervisor/Admin) ── -->
+        <?php if ($alertas_cliente && $user_role !== 'asesor'): ?>
          <div class="section-card">
              <div class="section-header">
                  <div class="sec-icon sec-red" style="background: #fee2e2; color: #dc2626;"><i class="fas fa-bell"></i></div>

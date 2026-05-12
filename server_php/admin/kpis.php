@@ -101,24 +101,50 @@ if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
     else $kpi_prospeccion['comparativa'] = 'IGUAL';
 }
 
-// ── Datos para Gráfica (Prospectos por día) ──────────────────
+// ── Filtros de Agrupación ─────────────────────────────────────
+$groupBy = $_GET['groupBy'] ?? 'dia'; // dia | semana | mes
+
 $grafica_labels = [];
 $grafica_data = [];
+
 if ($supervisor_table_id) {
     $target_ids = $asesor_filtro ? [$asesor_filtro] : $asesor_ids_equipo;
     if (!empty($target_ids)) {
         $ph = implode(',', array_fill(0, count($target_ids), '?'));
-        $st = $pdo->prepare("SELECT DATE(created_at) as dia, COUNT(*) as cant 
-                             FROM cliente_prospecto 
-                             WHERE asesor_id IN ($ph) AND DATE(created_at) BETWEEN ? AND ?
-                             GROUP BY dia ORDER BY dia ASC");
-        $st->execute(array_merge($target_ids, [$fecha_inicio_mes, $fecha_fin_mes]));
-        $raw_grafica = $st->fetchAll(PDO::FETCH_KEY_PAIR);
         
-        for ($i = 1; $i <= $dia_max_grafica; $i++) {
-            $d = "$anio_actual-" . str_pad($mes_actual, 2, '0', STR_PAD_LEFT) . "-" . str_pad($i, 2, '0', STR_PAD_LEFT);
-            $grafica_labels[] = date('d M', strtotime($d));
-            $grafica_data[] = $raw_grafica[$d] ?? 0;
+        if ($groupBy === 'semana') {
+            // Mostrar semanas del mes seleccionado
+            $st = $pdo->prepare("SELECT WEEK(created_at, 1) as periodo, COUNT(*) as cant 
+                                 FROM cliente_prospecto 
+                                 WHERE asesor_id IN ($ph) AND YEAR(created_at) = ? AND MONTH(created_at) = ?
+                                 GROUP BY periodo ORDER BY periodo ASC");
+            $st->execute(array_merge($target_ids, [$anio_actual, $mes_actual]));
+            $raw_data = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+            
+            // Determinar cuántas semanas tiene el mes (aproximado 1-5)
+            $first_week = (int)date('W', strtotime($fecha_inicio_mes));
+            $last_week  = (int)date('W', strtotime($fecha_fin_mes));
+            if ($last_week < $first_week) $last_week = 53; // Fin de año
+
+            for ($w = $first_week; $w <= $last_week; $w++) {
+                $grafica_labels[] = "Sem. " . ($w - $first_week + 1);
+                $grafica_data[] = $raw_data[$w] ?? 0;
+            }
+        }
+        else {
+            // Por DEFECTO: Día (Mes seleccionado)
+            $st = $pdo->prepare("SELECT DATE(created_at) as dia, COUNT(*) as cant 
+                                 FROM cliente_prospecto 
+                                 WHERE asesor_id IN ($ph) AND DATE(created_at) BETWEEN ? AND ?
+                                 GROUP BY dia ORDER BY dia ASC");
+            $st->execute(array_merge($target_ids, [$fecha_inicio_mes, $fecha_fin_mes]));
+            $raw_grafica = $st->fetchAll(PDO::FETCH_KEY_PAIR);
+            
+            for ($i = 1; $i <= $dia_max_grafica; $i++) {
+                $d = "$anio_actual-" . str_pad($mes_actual, 2, '0', STR_PAD_LEFT) . "-" . str_pad($i, 2, '0', STR_PAD_LEFT);
+                $grafica_labels[] = date('d M', strtotime($d));
+                $grafica_data[] = $raw_grafica[$d] ?? 0;
+            }
         }
     }
 }
@@ -153,89 +179,82 @@ $navIcon = 'fas fa-chart-line';
 <?php require_once '_sidebar_supervisor.php'; ?>
 
 <div class="container-fluid p-4">
-    <!-- FILTROS -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="section-card p-3 d-flex align-items-center justify-content-between">
-                <h4 class="m-0 fw-800 text-navy"><i class="fas fa-filter me-2 text-primary"></i>Filtros de Reporte</h4>
-                <form method="get" class="d-flex gap-2 align-items-end">
-                    <div>
-                        <label class="small fw-bold text-muted mb-1">Mes</label>
-                        <select name="mes" class="form-select form-select-sm" onchange="this.form.submit()">
+    <!-- KPI CHART COMPACTO CON FILTROS INTEGRADOS -->
+    <div class="row">
+        <div class="col-lg-6">
+            <div class="section-card p-0 overflow-hidden" style="min-height: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+                <!-- CABECERA CON FILTROS INTEGRADOS -->
+                <div class="p-3 border-bottom bg-light d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fas fa-chart-line text-primary fs-5"></i>
+                        <h6 class="m-0 fw-800 text-navy">Evolución de Prospección</h6>
+                    </div>
+                    
+                    <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+                        <select name="mes" class="form-select form-select-sm border-0 shadow-sm" style="width:110px;" onchange="this.form.submit()">
                             <?php 
                             $meses_nombres = [1=>'Enero', 2=>'Febrero', 3=>'Marzo', 4=>'Abril', 5=>'Mayo', 6=>'Junio', 7=>'Julio', 8=>'Agosto', 9=>'Septiembre', 10=>'Octubre', 11=>'Noviembre', 12=>'Diciembre'];
                             foreach ($meses_nombres as $num => $nom): ?>
                                 <option value="<?= $num ?>" <?= $mes_actual == $num ? 'selected' : '' ?>><?= $nom ?></option>
                             <?php endforeach; ?>
                         </select>
-                    </div>
-                    <div>
-                        <label class="small fw-bold text-muted mb-1">Año</label>
-                        <select name="anio" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <select name="anio" class="form-select form-select-sm border-0 shadow-sm" style="width:85px;" onchange="this.form.submit()">
                             <?php for ($y = date('Y'); $y >= 2024; $y--): ?>
                                 <option value="<?= $y ?>" <?= $anio_actual == $y ? 'selected' : '' ?>><?= $y ?></option>
                             <?php endfor; ?>
                         </select>
-                    </div>
-                    <div>
-                        <label class="small fw-bold text-muted mb-1">Seleccionar Asesor</label>
-                        <select name="asesor_id" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <select name="asesor_id" class="form-select form-select-sm border-0 shadow-sm" style="width:160px;" onchange="this.form.submit()">
                             <option value="">— Todo el Equipo —</option>
                             <?php foreach ($asesores as $a): ?>
                                 <option value="<?= $a['id'] ?>" <?= $asesor_filtro == $a['id'] ? 'selected' : '' ?>><?= htmlspecialchars($a['nombre']) ?></option>
                             <?php endforeach; ?>
                         </select>
-                    </div>
-                    <button type="button" onclick="window.print()" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i></button>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- KPI CHART UNIFICADO -->
-    <div class="row justify-content-center">
-        <div class="col-lg-11">
-            <div class="section-card p-0 overflow-hidden" style="min-height: 550px;">
-                <div class="d-flex align-items-center justify-content-between px-4 py-3 border-bottom bg-light">
-                    <h5 class="m-0 fw-800 text-navy">
-                        <i class="fas fa-chart-line me-2 text-primary"></i> Evolución de Prospección — <?= $meses_nombres[(int)$mes_actual] ?> <?= $anio_actual ?>
-                    </h5>
-                    <!-- Opciones de Agrupación (Visual solamente por ahora, o implementar lógica) -->
-                    <div class="btn-group btn-group-sm shadow-sm">
-                        <button type="button" class="btn btn-white border fw-bold active">Día</button>
-                        <button type="button" class="btn btn-white border fw-bold disabled" title="Próximamente">Semana</button>
-                        <button type="button" class="btn btn-white border fw-bold disabled" title="Próximamente">Mes</button>
-                    </div>
+                        
+                        <input type="hidden" name="groupBy" id="groupByInput" value="<?= $groupBy ?>">
+                        <div class="btn-group btn-group-sm ms-2 shadow-sm">
+                            <button type="button" class="btn btn-white border fw-bold <?= $groupBy === 'dia' ? 'active bg-primary text-white' : '' ?>" onclick="setGroupBy('dia')">Día</button>
+                            <button type="button" class="btn btn-white border fw-bold <?= $groupBy === 'semana' ? 'active bg-primary text-white' : '' ?>" onclick="setGroupBy('semana')">Sem.</button>
+                        </div>
+                    </form>
                 </div>
 
+                <script>
+                function setGroupBy(val) {
+                    document.getElementById('groupByInput').value = val;
+                    document.getElementById('groupByInput').form.submit();
+                }
+                </script>
+
+                <!-- ÁREA DE GRÁFICA (REDUCIDA) -->
                 <div class="p-4 bg-white">
-                    <div style="height: 450px; width: 100%;">
+                    <div style="height: 320px; width: 100%;">
                         <canvas id="prospeccionChart"></canvas>
                     </div>
                 </div>
                 
-                <!-- MINI ESTADÍSTICAS INFERIORES -->
+                <!-- ESTADÍSTICAS RÁPIDAS -->
                 <div class="row g-0 border-top bg-light">
-                    <div class="col-md-3 p-3 border-end text-center">
-                        <div class="small text-muted mb-1">TOTAL PERIODO</div>
-                        <div class="fs-4 fw-800 text-navy"><?= $kpi_prospeccion['numero'] ?></div>
+                    <div class="col-3 p-3 border-end text-center">
+                        <div class="small text-muted" style="font-size:10px;">TOTAL</div>
+                        <div class="fw-800 text-navy"><?= $kpi_prospeccion['numero'] ?></div>
                     </div>
-                    <div class="col-md-3 p-3 border-end text-center">
-                        <div class="small text-muted mb-1">PROMEDIO DIARIO</div>
-                        <div class="fs-4 fw-800 text-primary"><?= $kpi_prospeccion['promedio_dia'] ?></div>
+                    <div class="col-3 p-3 border-end text-center">
+                        <div class="small text-muted" style="font-size:10px;">DIARIO</div>
+                        <div class="fw-800 text-primary"><?= $kpi_prospeccion['promedio_dia'] ?></div>
                     </div>
-                    <div class="col-md-3 p-3 border-end text-center">
-                        <div class="small text-muted mb-1">CUMPLIMIENTO META</div>
-                        <div class="fs-4 fw-800 text-success"><?= $kpi_prospeccion['cumplimiento'] ?>%</div>
+                    <div class="col-3 p-3 border-end text-center">
+                        <div class="small text-muted" style="font-size:10px;">META</div>
+                        <div class="fw-800 text-success"><?= $kpi_prospeccion['cumplimiento'] ?>%</div>
                     </div>
-                    <div class="col-md-3 p-3 text-center">
-                        <div class="small text-muted mb-1">VS MEDIA EQUIPO</div>
-                        <div class="fs-4 fw-800 <?= 'comp-' . strtolower($kpi_prospeccion['comparativa']) ?>"><?= $kpi_prospeccion['comparativa'] ?></div>
+                    <div class="col-3 p-3 text-center">
+                        <div class="small text-muted" style="font-size:10px;">STATUS</div>
+                        <div class="fw-800 <?= 'comp-' . strtolower($kpi_prospeccion['comparativa']) ?>"><?= $kpi_prospeccion['comparativa'] ?></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

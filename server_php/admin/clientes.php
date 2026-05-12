@@ -84,6 +84,10 @@ if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_i
 $clientes = [];
 $stats = ['total_clientes' => 0, 'clientes_activos' => 0, 'clientes_inactivos' => 0];
 $col_asesor = false;
+$asesor_table_id = null;
+$alertas_pendientes = 0;
+$tareas_pendientes = 0;
+
 
 try {
     if ($user_role === 'super_admin' || $user_role === 'admin') {
@@ -236,7 +240,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-<?php if ($is_supervisor_ui): ?>
+<?php if ($user_role === 'supervisor' || $user_role === 'asesor'): ?>
         :root {
             --brand-yellow: #ffdd00;
             --brand-yellow-deep: #f4c400;
@@ -249,25 +253,26 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
             --brand-shadow: 0 16px 34px rgba(18, 58, 109, 0.08);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
-        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--brand-bg); display: flex; height: 100vh; color: var(--brand-navy-deep); }
+        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; z-index: 100; }
         .sidebar-brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
         .sidebar-brand i { color:var(--brand-yellow); }
-        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; border: 1px solid transparent; }
+        .sidebar-section { padding: 0 15px; margin-bottom: 22px; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.5); letter-spacing: 0.6px; padding: 0 10px; margin-bottom: 10px; font-weight: 700; }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 15px; margin-bottom: 4px; border-radius: 10px; color: rgba(255,255,255,0.82); text-decoration: none; font-size: 14px; border: 1px solid transparent; transition: all .22s; position: relative; }
         .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
-        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; box-shadow: 0 10px 24px rgba(255,221,0,0.18); }
-        .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
+        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; }
+        .badge-nav { background:#dc2626; color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:10px; margin-left:auto; }
+        
         .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
-        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); position: sticky; top: 0; z-index: 50; }
+        .navbar-custom h2 { margin: 0; font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .navbar-custom h2 i { color: var(--brand-yellow); }
         .user-info { display: flex; align-items: center; gap: 15px; }
-        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; }
+        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; font-size: 13px; }
         .btn-logout:hover { background: rgba(255,221,0,0.24); color: white; }
+        
         .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        .page-header { margin-bottom: 30px; }
-        .page-header h1 { margin: 0; font-size: 28px; font-weight: 800; color: var(--brand-navy-deep); }
         .table-card { background: var(--brand-card); border-radius: 18px; box-shadow: var(--brand-shadow); overflow: hidden; border: 1px solid var(--brand-border); }
         .table-card .card-header-custom { padding: 20px; border-bottom: 1px solid rgba(215,224,234,0.7); display: flex; justify-content: space-between; align-items: center; }
         .table-card h6 { font-weight: 800; margin: 0; font-size: 16px; color: var(--brand-navy-deep); }
@@ -275,10 +280,7 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
         .table thead th { background: #f8fafc; font-size: 11px; text-transform: uppercase; color: var(--brand-gray); border: none; padding: 14px; }
         .table tbody td { padding: 14px; vertical-align: middle; border-color: rgba(215,224,234,0.55); }
         .table tbody tr:hover { background: rgba(255,221,0,0.06); }
-        .badge-success { background: #10b981; }
-        .badge-danger { background: #ef4444; }
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 <?php else: ?>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -334,152 +336,89 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
     </style>
 </head>
 <body>
+<?php 
+// ── Lógica para Sidebar Asesor ────────────────────────────────
+if ($user_role === 'asesor') {
+    $tareas_pendientes = 0;
+    try {
+        if (isset($asesor_table_id) && $asesor_table_id) {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM tarea WHERE asesor_id = ? AND fecha_programada = CURRENT_DATE AND estado != 'completada'");
+            $st->execute([$asesor_table_id]);
+            $tareas_pendientes = (int)$st->fetchColumn();
 
-<?php if ($user_role === 'supervisor'): ?>
-    <?php $navTitle = 'Mis Clientes'; $navIcon = 'fas fa-address-book'; require_once '_sidebar_supervisor.php'; ?>
-<?php else: ?>
-<!-- SIDEBAR -->
+            $st = $pdo->prepare("SELECT COUNT(*) FROM alerta_modificacion WHERE asesor_id = ? AND vista_supervisor = 0");
+            $st->execute([$asesor_table_id]);
+            $alertas_pendientes = (int)$st->fetchColumn();
+        }
+    } catch (PDOException $e) {}
+}
+if ($user_role === 'supervisor') {
+    $navTitle = 'Mis Clientes'; $navIcon = 'fas fa-address-book'; 
+    require_once '_sidebar_supervisor.php'; 
+} elseif ($user_role === 'asesor') {
+    $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';
+    require_once '_sidebar_asesor.php';
+} else {
+    // Sidebar genérico para otros roles (Admin / SuperAdmin)
+?>
 <div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> Super_IA
-    </div>
-    
+    <div class="sidebar-brand"><i class="fas fa-chart-pie"></i><span>Super_IA</span></div>
     <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <?php if ($user_role === 'supervisor'): ?>
-        <a href="supervisor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo_superIA.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <?php elseif ($user_role === 'super_admin'): ?>
-        <a href="super_admin_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <a href="mapa_calor.php" class="sidebar-link">
-            <i class="fas fa-fire"></i> Mapa de Calor
-        </a>
-        <a href="historial_rutas.php" class="sidebar-link">
-            <i class="fas fa-history"></i> Historial de Viajes
-        </a>
-        <?php elseif ($user_role === 'admin'): ?>
-        <a href="index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <a href="mapa_calor.php" class="sidebar-link">
-            <i class="fas fa-fire"></i> Mapa de Calor
-        </a>
-        <a href="historial_rutas.php" class="sidebar-link">
-            <i class="fas fa-history"></i> Historial de Viajes
-        </a>
-        <?php else: ?>
-        <a href="<?php echo ($user_role === 'supervisor') ? 'supervisor_index.php' : 'asesor_index.php'; ?>" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <a href="mapa_vivo.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-        <?php endif; ?>
+        <div class="sidebar-section-title">PRINCIPAL</div>
+        <a href="index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa</a>
     </div>
-    
     <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <?php if ($user_role === 'super_admin' || $user_role === 'admin'): ?>
-        <a href="usuarios.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Usuarios
-        </a>
-        <?php endif; ?>
-        <a href="clientes.php" class="sidebar-link active">
-            <i class="fas fa-briefcase"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link">
-            <i class="fas fa-handshake"></i> <?php echo ($user_role === 'asesor') ? 'Mis ' : ''; ?>Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
-    </div>
-
-    <?php if ($user_role === 'supervisor'): ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Mis Asesores
-        </a>
-        <a href="registro_asesor.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link">
-            <i class="fas fa-file-circle-check"></i> Solicitudes de Asesor
-        </a>
-    </div>
-    <?php endif; ?>
-    
-    <?php if ($user_role === 'super_admin'): ?>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Super Administración</div>
-        <a href="administrar_solicitudes_admin.php" class="sidebar-link">
-            <i class="fas fa-file-alt"></i> Solicitudes de Admin
-        </a>
-    </div>
-    <?php endif; ?>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Configuración</div>
-        <a href="#" class="sidebar-link">
-            <i class="fas fa-cog"></i> Configuración
-        </a>
+        <div class="sidebar-section-title">GESTIÓN</div>
+        <a href="clientes.php" class="sidebar-link active"><i class="fas fa-briefcase"></i> Clientes</a>
+        <a href="operaciones.php" class="sidebar-link"><i class="fas fa-handshake"></i> Operaciones</a>
+        <a href="alertas.php" class="sidebar-link"><i class="fas fa-bell"></i> Alertas</a>
     </div>
 </div>
+<?php } ?>
 
+
+<?php if ($user_role !== 'supervisor'): ?>
 <!-- MAIN CONTENT -->
 <div class="main-content">
     <!-- NAVBAR -->
     <div class="navbar-custom">
-        <?php if ($user_role === 'supervisor'): ?>
-            <h2><i class="fas fa-shield-halved me-2" style="color: var(--brand-yellow);"></i>Super_IA - Supervisor</h2>
+        <?php if ($user_role === 'asesor'): ?>
+            <h2><i class="fas fa-address-book me-2" style="color: var(--brand-yellow);"></i> Mis Clientes — Asesor</h2>
         <?php else: ?>
             <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA 
                 <?php 
-                if ($user_role === 'super_admin') echo '- SuperAdministrador';
+                if ($user_role === 'super_admin') echo '- SuperAdmin';
                 elseif ($user_role === 'admin') echo '- Admin';
-                elseif ($user_role === 'supervisor') echo '- Supervisor';
-                else echo '- Asesor';
                 ?>
             </h2>
         <?php endif; ?>
+
         <div class="user-info">
-            <div>
-                <strong>
+            <div style="text-align: right;">
+                <strong style="display:block;">
                     <?php 
                     if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_nombre']);
                     elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_nombre']);
-                    elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_nombre']);
                     else echo htmlspecialchars($_SESSION['asesor_nombre']);
                     ?>
-                </strong><br>
-                <small>
+                </strong>
+                <small style="opacity:0.7;">
                     <?php 
-                    if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_rol']);
-                    elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_rol']);
-                    elseif ($user_role === 'supervisor') echo htmlspecialchars($_SESSION['supervisor_rol']);
-                    else echo htmlspecialchars($_SESSION['asesor_rol']);
+                    if ($user_role === 'super_admin') echo 'SuperAdministrador';
+                    elseif ($user_role === 'admin') echo 'Administrador';
+                    else echo 'Asesor de campo';
                     ?>
                 </small>
             </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt me-1"></i>Salir</a>
         </div>
     </div>
     
     <!-- CONTENT -->
     <div class="content-area">
+<?php endif; ?>
+
         <div class="page-header d-flex justify-content-between align-items-end mb-4">
             <div>
                 <h1 class="fw-800" style="color: var(--brand-navy-deep, #0a2748);"><i class="fas fa-address-book me-2 text-primary"></i>Directorio de Clientes</h1>
@@ -515,8 +454,6 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
             </div>
         </div>
 
-<?php endif; ?>
-
         <div class="table-card bg-white" style="border-radius:20px; border:1px solid #e2e8f0; box-shadow:0 10px 30px rgba(0,0,0,0.05);">
             <div class="card-header-custom p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3" style="background:#fff;">
                 <div>
@@ -549,51 +486,59 @@ $is_supervisor_ui   = ($user_role === 'supervisor');
                         <?php if (empty($clientes)): ?>
                         <tr>
                             <td colspan="6" class="text-center py-5">
-                                <div class="text-muted mb-2"><i class="fas fa-inbox fa-3x opacity-25"></i></div>
-                                <h6 class="fw-bold text-muted">No hay clientes para mostrar</h6>
+                                <div class="text-muted mb-3"><i class="fas fa-user-slash fa-3x opacity-25"></i></div>
+                                <h6 class="fw-bold text-muted">Aún no tienes clientes o prospectos registrados</h6>
+                                <p class="small text-muted">Comienza realizando una nueva encuesta en campo.</p>
                             </td>
                         </tr>
                         <?php else: ?>
-                        <?php foreach ($clientes as $cliente): ?>
-                        <tr style="transition:all 0.2s ease; cursor:pointer;" onmouseover="this.style.background='#f8fafc'; this.style.transform='scale(1.002)';" onmouseout="this.style.background='transparent'; this.style.transform='scale(1)';">
+                        <?php foreach ($clientes as $cliente): 
+                            $estadoDb = strtolower((string)($cliente['estado'] ?? ''));
+                            $esDescartado = ($estadoDb === 'descartado');
+                            $esCliente = !$esDescartado && cliente_es_cliente_por_aprobacion($pdo, (string)($cliente['id'] ?? ''), (string)($cliente['cedula'] ?? ''));
+                        ?>
+                        <tr class="client-row" style="transition:all 0.2s ease;">
                             <td class="ps-4 py-3">
                                 <div class="d-flex align-items-center gap-3">
-                                    <div class="bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center rounded-3 fw-bold" style="width:45px; height:45px; font-size:16px;">
-                                        <?= strtoupper(substr(trim($cliente['nombre']), 0, 2)) ?>
+                                    <div class="avatar-circle <?= $esDescartado ? 'bg-danger' : ($esCliente ? 'bg-success' : 'bg-warning') ?> bg-opacity-10 text-<?= $esDescartado ? 'danger' : ($esCliente ? 'success' : 'warning') ?> d-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:48px; height:48px; font-size:16px; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                                        <?= strtoupper(substr(trim($cliente['nombre'] ?? 'U'), 0, 2)) ?>
                                     </div>
                                     <div>
-                                        <div class="fw-bold text-dark client-name" style="font-size:14.5px;"><?php echo htmlspecialchars($cliente['nombre']); ?></div>
-                                        <div class="text-muted small client-cedula"><i class="fas fa-id-card me-1 opacity-50"></i> <?php echo htmlspecialchars($cliente['cedula'] ?? '—'); ?></div>
+                                        <div class="fw-800 text-navy client-name" style="font-size:15px;"><?php echo htmlspecialchars($cliente['nombre']); ?></div>
+                                        <div class="text-muted small client-cedula fw-medium"><i class="fas fa-id-card me-1 opacity-50"></i> <?php echo htmlspecialchars($cliente['cedula'] ?? '—'); ?></div>
                                     </div>
                                 </div>
                             </td>
                             <td>
-                                <div class="fw-semibold text-dark" style="font-size:14px;"><i class="fas fa-mobile-alt text-muted me-1 opacity-50"></i> <?php echo htmlspecialchars($cliente['celular'] ?? ($cliente['telefono'] ?? '—')); ?></div>
+                                <div class="d-flex flex-column gap-1">
+                                    <div class="fw-bold text-dark" style="font-size:13.5px;"><i class="fas fa-phone-alt text-primary me-2 opacity-75" style="font-size:11px;"></i> <?php echo htmlspecialchars($cliente['celular'] ?? ($cliente['telefono'] ?? '—')); ?></div>
+                                    <?php if(!empty($cliente['email'])): ?>
+                                        <div class="text-muted" style="font-size:11.5px;"><i class="fas fa-envelope me-2 opacity-50" style="font-size:11px;"></i> <?php echo htmlspecialchars($cliente['email']); ?></div>
+                                    <?php endif; ?>
+                                </div>
                             </td>
                             <td>
-                                <span class="badge bg-light text-dark border px-2 py-1"><i class="fas fa-user-tie me-1 text-primary opacity-75"></i> <?php echo htmlspecialchars($cliente['asesor_nombre'] ?? 'Sin asignar'); ?></span>
+                                <div class="text-muted small fw-bold text-uppercase" style="font-size:10px; letter-spacing:0.3px;"><?php echo htmlspecialchars($cliente['region'] ?? 'Sin ubicación'); ?></div>
+                                <div class="text-navy fw-bold" style="font-size:12px;"><i class="fas fa-user-tie me-1 text-primary opacity-50"></i> <?php echo htmlspecialchars($cliente['asesor_nombre'] ?? 'Propio'); ?></div>
                             </td>
                             <td>
-                                <div class="text-muted small fw-medium"><i class="fas fa-calendar-alt me-1 opacity-50"></i> <?php echo date('d M, Y', strtotime($cliente['fecha_creacion'])); ?></div>
+                                <div class="text-muted small fw-medium"><i class="far fa-calendar-check me-1 opacity-50"></i> Registrado el</div>
+                                <div class="text-navy fw-bold" style="font-size:13px;"><?php echo date('d M, Y', strtotime($cliente['fecha_creacion'])); ?></div>
                             </td>
                             <td class="text-center">
                                 <?php
-                                    $estadoDb = strtolower((string)($cliente['estado'] ?? ''));
-                                    if ($estadoDb === 'descartado') {
-                                        echo '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 px-3 py-2" style="border-radius:8px;">Descartado</span>';
+                                    if ($esDescartado) {
+                                        echo '<span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-10 px-3 py-2 w-100" style="border-radius:10px; font-weight:800; font-size:11px;"><i class="fas fa-times-circle me-1"></i> DESCARTADO</span>';
+                                    } elseif ($esCliente) {
+                                        echo '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-10 px-3 py-2 w-100" style="border-radius:10px; font-weight:800; font-size:11px;"><i class="fas fa-check-circle me-1"></i> CLIENTE ACTIVO</span>';
                                     } else {
-                                        $esCliente = cliente_es_cliente_por_aprobacion($pdo, (string)($cliente['id'] ?? ''), (string)($cliente['cedula'] ?? ''));
-                                        if ($esCliente) {
-                                            echo '<span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 px-3 py-2" style="border-radius:8px;"><i class="fas fa-check-circle me-1"></i> Cliente</span>';
-                                        } else {
-                                            echo '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 px-3 py-2" style="border-radius:8px;"><i class="fas fa-clock me-1"></i> Prospecto</span>';
-                                        }
+                                        echo '<span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-10 px-3 py-2 w-100" style="border-radius:10px; font-weight:800; font-size:11px;"><i class="fas fa-clock me-1"></i> PROSPECTO</span>';
                                     }
                                 ?>
                             </td>
                             <td class="text-end pe-4">
-                                <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm btn-primary shadow-sm px-3" style="border-radius:8px; font-weight:600; background:var(--brand-navy,#123a6d); border:none;">
-                                    Ver Perfil <i class="fas fa-arrow-right ms-1"></i>
+                                <a href="ver_cliente.php?id=<?= urlencode($cliente['id'] ?? '') ?>" class="btn btn-sm shadow-sm px-3 py-2" style="border-radius:10px; font-weight:800; font-size:12px; background: var(--brand-navy); color: #fff; border:none; transition:0.2s;">
+                                    DETALLES <i class="fas fa-chevron-right ms-1" style="font-size:10px;"></i>
                                 </a>
                             </td>
                         </tr>
@@ -660,5 +605,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+    </div>
+</div>
 </body>
 </html>
