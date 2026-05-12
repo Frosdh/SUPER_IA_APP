@@ -273,6 +273,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       List.generate(_kDeudasCount, (_) => TextEditingController());
   late final List<TextEditingController> _deudaPagoMesCtrl =
       List.generate(_kDeudasCount, (_) => TextEditingController());
+  late final List<String?> _deudaTipo = List.generate(_kDeudasCount, (_) => null);
+  late final List<String?> _deudaPlazo = List.generate(_kDeudasCount, (_) => 'corto');
 
   // ── Gastos del negocio (desglosados) ──────────────────────
   final _gNegSueldosCtrl     = TextEditingController();
@@ -1491,7 +1493,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'dias_atencion_viernes': _tieneEmpresa ? (_diaVie ? '1' : '0') : '0',
       'dias_atencion_sab': _tieneEmpresa ? (_diaSab ? '1' : '0') : '0',
       'dias_atencion_dom': _tieneEmpresa ? (_diaDom ? '1' : '0') : '0',
-      // Balance General
+      // Balance General - Cálculos automáticos de Pasivos
       'caja_efectivo':   _tieneEmpresa ? _cajaEfectivoCtrl.text.trim() : '',
       'bancos_saldo':    _tieneEmpresa ? _bancosSaldoCtrl.text.trim() : '',
       'cxp_netas':       _tieneEmpresa ? _cxpNetasCtrl.text.trim() : '',
@@ -3517,8 +3519,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           if (_subPasoEmpresa == 2) ...[
           const SizedBox(height: 28),
           _buildActivosNegocioSimplificados(),
-        const SizedBox(height: 15),
-        _buildBalancesSaldosNegocio(),
           const SizedBox(height: 16),
           _buildVehiculos(titulo: '🚗 Vehículos del Negocio',
             descCtrl: _vehNegDescCtrl, marcaCtrl: _vehNegMarcaCtrl,
@@ -3732,9 +3732,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             );
           }),
 
-          // ─── Otras Deudas (tabla) ─────────────────────────────────
+          // ─── Balance: Disponibilidad, Inventarios y Deudas ───────
           const SizedBox(height: 22),
-          _buildOtrasDeudas(),
+          _buildBalancesSaldosNegocio(),
 
           ],
 
@@ -3953,17 +3953,25 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ─────────────────────────────────────────────────────────────
   Widget _buildOtrasDeudas() {
     return StatefulBuilder(builder: (context, setLocal) {
-      void rebuild() { setLocal(() {}); _flujoVersion.value++; }
+      void rebuild() {
+        setLocal(() {});
+        _flujoVersion.value++;
+      }
 
-      final totalSaldo  = _totalSaldoDeudas;
-      final totalPago   = _totalPagoMesDeudas;
+      final totalSaldo = _totalSaldoDeudas;
+      final totalPago = _totalPagoMesDeudas;
 
       return Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: ConstantColors.borderLight),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 6, offset: const Offset(0, 2))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 2))
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3973,51 +3981,119 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
                 color: Colors.red.shade50,
-                borderRadius: const BorderRadius.only(topLeft: Radius.circular(16), topRight: Radius.circular(16)),
+                borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16), topRight: Radius.circular(16)),
                 border: Border(bottom: BorderSide(color: Colors.red.shade200)),
               ),
               child: Row(children: [
-                Icon(Icons.account_balance_wallet_rounded, color: Colors.red.shade700, size: 20),
+                Icon(Icons.account_balance_wallet_rounded,
+                    color: Colors.red.shade700, size: 20),
                 const SizedBox(width: 10),
-                Text('💳 Otras Deudas',
-                    style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
+                Text('💳 Deudas y Préstamos',
+                    style: TextStyle(
+                        color: ConstantColors.textDark,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15)),
               ]),
             ),
-            // Cabecera de columnas
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              color: ConstantColors.grey100,
-              child: Row(children: [
-                Expanded(flex: 4, child: _colHeader('ACREEDOR')),
-                const SizedBox(width: 4),
-                Expanded(flex: 3, child: _colHeader('DESTINO')),
-                const SizedBox(width: 4),
-                Expanded(flex: 3, child: _colHeader('MONTO INI.')),
-                const SizedBox(width: 4),
-                Expanded(flex: 3, child: _colHeader('SALDO ACT.')),
-                const SizedBox(width: 4),
-                Expanded(flex: 3, child: _colHeader('PAGO MES', right: true)),
-              ]),
-            ),
-            // Filas
+            // Filas Estructuradas
             Padding(
-              padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+              padding: const EdgeInsets.all(12),
               child: Column(
                 children: List.generate(_kDeudasCount, (i) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ConstantColors.grey100.withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ConstantColors.borderLight),
+                    ),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(flex: 4, child: _campoActivoTexto(_deudaAcreedorCtrl[i], 'Acreedor', rebuild)),
-                        const SizedBox(width: 4),
-                        Expanded(flex: 3, child: _campoActivoTexto(_deudaDestinoCtrl[i], 'Destino', rebuild)),
-                        const SizedBox(width: 4),
-                        Expanded(flex: 3, child: _campoActivoNum(_deudaMontoIniCtrl[i], '\$', rebuild)),
-                        const SizedBox(width: 4),
-                        Expanded(flex: 3, child: _campoActivoNum(_deudaSaldoActCtrl[i], '\$', rebuild)),
-                        const SizedBox(width: 4),
-                        Expanded(flex: 3, child: _campoActivoNum(_deudaPagoMesCtrl[i], '\$', rebuild)),
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: ConstantColors.primaryBlue.withOpacity(0.1),
+                              child: Text('${i + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: ConstantColors.primaryBlue)),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _deudaTipo[i],
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Tipo de Deuda',
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: ConstantColors.borderLight)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: ConstantColors.borderLight)),
+                                ),
+                                style: const TextStyle(fontSize: 13, color: ConstantColors.primaryNavy, fontWeight: FontWeight.bold),
+                                dropdownColor: Colors.white,
+                                items: [
+                                  'Bancario',
+                                  'Familiar',
+                                  'Personal',
+                                  'Proveedor'
+                                ].map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(color: ConstantColors.primaryNavy)))).toList(),
+                                onChanged: (v) => setState(() {
+                                  _deudaTipo[i] = v;
+                                  rebuild();
+                                }),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                value: _deudaPlazo[i],
+                                isExpanded: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Plazo',
+                                  isDense: true,
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: ConstantColors.borderLight)),
+                                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: ConstantColors.borderLight)),
+                                ),
+                                style: const TextStyle(fontSize: 13, color: ConstantColors.primaryNavy, fontWeight: FontWeight.bold),
+                                dropdownColor: Colors.white,
+                                items: [
+                                  DropdownMenuItem(value: 'corto', child: Text('Corto P. (<1a)', style: const TextStyle(color: ConstantColors.primaryNavy))),
+                                  DropdownMenuItem(value: 'largo', child: Text('Largo P. (>1a)', style: const TextStyle(color: ConstantColors.primaryNavy))),
+                                ].toList(),
+                                onChanged: (v) => setState(() {
+                                  _deudaPlazo[i] = v;
+                                  rebuild();
+                                }),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: _campoActivoTexto(_deudaAcreedorCtrl[i], 'Institución / Nombre', rebuild),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 1,
+                              child: _campoActivoNum(_deudaSaldoActCtrl[i], 'Saldo \$', rebuild),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              flex: 1,
+                              child: _campoActivoNum(_deudaPagoMesCtrl[i], 'Cuota \$', rebuild),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   );
@@ -4026,23 +4102,39 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ),
             // Totales
             Container(
-              margin: const EdgeInsets.all(10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.amber.shade50,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.amber.shade400),
               ),
-              child: Row(children: [
-                Expanded(child: Text('TOTALES',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.amber.shade900))),
-                const SizedBox(width: 8),
-                Text('Saldo: \$${totalSaldo.toStringAsFixed(2)}',
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12.5, color: Colors.red.shade700)),
-                const SizedBox(width: 12),
-                Text('Pago/mes: \$${totalPago.toStringAsFixed(2)}',
-                    style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.red.shade800)),
-              ]),
+              child: Column(
+                children: [
+                  Row(children: [
+                    Expanded(child: Text('RESUMEN DE DEUDAS',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: Colors.amber.shade900))),
+                  ]),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Total Saldo:', style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12)),
+                      Text('\$${totalSaldo.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13, color: Colors.red.shade700)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Total Cuotas/Mes:', style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 12)),
+                      Text('\$${totalPago.toStringAsFixed(2)}',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: Colors.red.shade800)),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -4851,7 +4943,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               Icon(Icons.account_balance_wallet_rounded, color: ConstantColors.primaryBlue, size: 20),
               const SizedBox(width: 10),
               Expanded(
-                child: Text('📊 Balance: Disponibilidades e Inventarios',
+                child: Text('📊 Balance: Disponibilidad, Inventarios y Deudas',
                     style: TextStyle(color: ConstantColors.textDark, fontWeight: FontWeight.w800, fontSize: 15)),
               ),
             ]),
@@ -4899,18 +4991,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                   ]),
                 );
               })(),
-              // bCampo(_invProdProcCtrl, 'Inventario Productos en Proceso', Icons.pending_actions_rounded), // ELIMINADO POR SOLICITUD
-
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(10)),
-                child: Row(children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.blue.shade800),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('Nota: El Inventario de Mercaderías se extrae automáticamente de la tabla de productos.',
-                      style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontStyle: FontStyle.italic))),
-                ]),
-              ),
 
               const Divider(height: 24),
               Text('PASIVO DE LA EMPRESA', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900, color: Colors.red.shade700, letterSpacing: 1)),
