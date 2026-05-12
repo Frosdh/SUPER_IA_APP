@@ -285,34 +285,6 @@ $currentPage = 'solicitudes_asesor';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root {
-            --brand-yellow: #ffdd00;
-            --brand-yellow-deep: #f4c400;
-            --brand-navy: #123a6d;
-            --brand-navy-deep: #0a2748;
-            --brand-gray: #6b7280;
-            --brand-border: #d7e0ea;
-            --brand-card: #ffffff;
-            --brand-bg: #f4f6f9;
-            --brand-shadow: 0 16px 34px rgba(18, 58, 109, 0.08);
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
-        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
-        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; border: 1px solid transparent; }
-        .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
-        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; box-shadow: 0 10px 24px rgba(255,221,0,0.18); }
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
-        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; }
-        .btn-logout:hover { background: rgba(255,221,0,0.24); color: white; }
-        .content-area { flex: 1; overflow-y: auto; padding: 30px; }
         .page-header { margin-bottom: 30px; }
         .page-header h1 { margin: 0; font-size: 28px; font-weight: 800; color: var(--brand-navy-deep); }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
@@ -328,9 +300,9 @@ $currentPage = 'solicitudes_asesor';
         .table thead th { background: #f8fafc; font-size: 11px; text-transform: uppercase; color: var(--brand-gray); border: none; padding: 14px; }
         .table tbody td { padding: 14px; vertical-align: middle; border-color: rgba(215,224,234,0.55); }
         .table tbody tr:hover { background: #fafbff; }
-        .badge-pendiente { background: #fef08a; color: #713f12; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
-        .badge-aprobada { background: #dcfce7; color: #166534; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
-        .badge-rechazada { background: #fee2e2; color: #991b1b; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
+        .badge-pendiente { background: #fef08a; color: #713f12; padding: 5px 10px; border-radius: 6px; font-weight: 600; display:inline-block; }
+        .badge-aprobada { background: #dcfce7; color: #166534; padding: 5px 10px; border-radius: 6px; font-weight: 600; display:inline-block; }
+        .badge-rechazada { background: #fee2e2; color: #991b1b; padding: 5px 10px; border-radius: 6px; font-weight: 600; display:inline-block; }
         .btn-aprobar { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
         .btn-aprobar:hover { background: #059669; }
         .btn-rechazar { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -355,65 +327,11 @@ $currentPage = 'solicitudes_asesor';
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-chart-pie"></i> Super_IA
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <a href="supervisor_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-            <a href="mapa_vivo_superIA.php" class="sidebar-link">
-            <i class="fas fa-map"></i> Mapa en Vivo
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestión</div>
-        <a href="clientes.php" class="sidebar-link">
-            <i class="fas fa-briefcase"></i> Clientes
-        </a>
-        <a href="operaciones.php" class="sidebar-link">
-            <i class="fas fa-handshake"></i> Operaciones
-        </a>
-        <a href="alertas.php" class="sidebar-link">
-            <i class="fas fa-bell"></i> Alertas
-        </a>
-    </div>
-
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Mi Equipo</div>
-        <a href="mis_asesores.php" class="sidebar-link">
-            <i class="fas fa-users"></i> Mis Asesores
-        </a>
-        <a href="registro_asesor.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-        <a href="administrar_solicitudes_asesor.php" class="sidebar-link active">
-            <i class="fas fa-file-circle-check"></i> Solicitudes de Asesor
-        </a>
-    </div>
-</div>
-
-<!-- MAIN CONTENT -->
-<div class="main-content">
-    <!-- NAVBAR -->
-    <div class="navbar-custom">
-        <h2>📊 Super_IA - Solicitudes de Asesor</h2>
-        <div class="user-info">
-            <div>
-                <strong><?php echo htmlspecialchars($supervisor_nombre); ?></strong><br>
-                <small>Supervisor</small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-    
-    <!-- CONTENT -->
-    <div class="content-area">
+<?php
+$navTitle = 'Solicitudes de Asesores';
+$navIcon = 'fas fa-users';
+require_once '_sidebar_supervisor.php';
+?>
 
         <div class="page-header">
             <h1><i class="fas fa-users me-2"></i>Solicitudes de Asesores</h1>

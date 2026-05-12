@@ -452,9 +452,16 @@ if ($user_role === 'supervisor') {
     <!-- CONTENT -->
     <div class="content-area">
 <?php endif; ?>
-        <div class="page-header">
-            <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Clientes</a>
-            <h1><i class="fas fa-user me-2"></i>Perfil del Cliente</h1>
+        <div class="page-header d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <a href="clientes.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Clientes</a>
+                <h1 class="mt-2"><i class="fas fa-user me-2"></i>Perfil del Cliente</h1>
+            </div>
+            <div>
+                <button type="button" class="btn btn-primary shadow-sm px-4 py-2" data-bs-toggle="modal" data-bs-target="#pdfModal" style="border-radius:12px; font-weight:700; background:var(--brand-navy-deep); border:none;">
+                    <i class="fas fa-file-pdf me-2 text-danger"></i> Generar PDF
+                </button>
+            </div>
         </div>
 
         <!-- ── HERO ── -->
@@ -1449,7 +1456,99 @@ if ($user_role === 'supervisor') {
         </div>
         <?php endif; ?>
 
+        <!-- ── MODAL GENERAR PDF ── -->
+        <div class="modal fade" id="pdfModal" tabindex="-1" aria-labelledby="pdfModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius:20px; border:none; box-shadow:0 25px 50px rgba(0,0,0,0.15);">
+                    <div class="modal-header" style="background:#f8fafc; border-bottom:1px solid var(--brand-border); border-radius:20px 20px 0 0; padding:20px 24px;">
+                        <h5 class="modal-title fw-800" id="pdfModalLabel" style="color:var(--brand-navy-deep);"><i class="fas fa-file-pdf text-danger me-2"></i> Configurar PDF</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <p class="text-muted small mb-3">Selecciona las secciones que deseas incluir en el documento PDF del cliente <strong><?= htmlspecialchars($cliente['nombre'] ?? '') ?></strong>.</p>
+                        
+                        <div class="list-group" style="border-radius:12px; overflow:hidden;">
+                            <label class="list-group-item d-flex gap-3 align-items-center" style="padding:15px 20px; background:#f0f4f9;">
+                                <input class="form-check-input flex-shrink-0" type="checkbox" id="pdf_sec_datos" value="datos" checked disabled style="font-size:1.2em;">
+                                <span>
+                                    <span class="d-block fw-bold text-dark">Datos Personales</span>
+                                    <span class="d-block small text-muted">Información básica y contacto (Obligatorio)</span>
+                                </span>
+                            </label>
+                            
+                            <?php if ($encuesta): ?>
+                            <label class="list-group-item d-flex gap-3 align-items-center cursor-pointer" style="padding:15px 20px;">
+                                <input class="form-check-input flex-shrink-0" type="checkbox" id="pdf_sec_encuesta" value="encuesta" checked style="font-size:1.2em; cursor:pointer;">
+                                <span>
+                                    <span class="d-block fw-bold text-dark">Encuesta Comercial</span>
+                                    <span class="d-block small text-muted">Productos actuales y necesidades</span>
+                                </span>
+                            </label>
+                            <?php endif; ?>
+                            
+                            <?php if ($encuesta_negocio): ?>
+                            <label class="list-group-item d-flex gap-3 align-items-center cursor-pointer" style="padding:15px 20px;">
+                                <input class="form-check-input flex-shrink-0" type="checkbox" id="pdf_sec_empresa" value="empresa" checked style="font-size:1.2em; cursor:pointer;">
+                                <span>
+                                    <span class="d-block fw-bold text-dark">Levantamiento de Empresa</span>
+                                    <span class="d-block small text-muted">Flujos, ventas, compras y gastos</span>
+                                </span>
+                            </label>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($fichas) || !empty($tramites_credito)): ?>
+                            <label class="list-group-item d-flex gap-3 align-items-center cursor-pointer" style="padding:15px 20px;">
+                                <input class="form-check-input flex-shrink-0" type="checkbox" id="pdf_sec_operaciones" value="operaciones" checked style="font-size:1.2em; cursor:pointer;">
+                                <span>
+                                    <span class="d-block fw-bold text-dark">Operaciones y Solicitudes</span>
+                                    <span class="d-block small text-muted">Trámites de crédito, inversiones y cuentas</span>
+                                </span>
+                            </label>
+                            <?php endif; ?>
+                            
+                            <?php if (!empty($tareas) || !empty($alertas_cliente)): ?>
+                            <label class="list-group-item d-flex gap-3 align-items-center cursor-pointer" style="padding:15px 20px;">
+                                <input class="form-check-input flex-shrink-0" type="checkbox" id="pdf_sec_historial" value="historial" style="font-size:1.2em; cursor:pointer;">
+                                <span>
+                                    <span class="d-block fw-bold text-dark">Historial (Tareas / Alertas)</span>
+                                    <span class="d-block small text-muted">Registro de actividad y visitas</span>
+                                </span>
+                            </label>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="border-top:1px solid var(--brand-border); padding:20px 24px;">
+                        <button type="button" class="btn btn-light shadow-sm px-4" data-bs-dismiss="modal" style="border-radius:10px; font-weight:600;">Cancelar</button>
+                        <button type="button" class="btn btn-danger shadow-sm px-4" onclick="generarPDF()" style="border-radius:10px; font-weight:700;">
+                            <i class="fas fa-print me-2"></i> Crear Documento
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div><!-- /.content-area -->
 </div><!-- /.main-content -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function generarPDF() {
+    let secs = ['datos']; // Siempre incluido
+    if (document.getElementById('pdf_sec_encuesta') && document.getElementById('pdf_sec_encuesta').checked) secs.push('encuesta');
+    if (document.getElementById('pdf_sec_empresa') && document.getElementById('pdf_sec_empresa').checked) secs.push('empresa');
+    if (document.getElementById('pdf_sec_operaciones') && document.getElementById('pdf_sec_operaciones').checked) secs.push('operaciones');
+    if (document.getElementById('pdf_sec_historial') && document.getElementById('pdf_sec_historial').checked) secs.push('historial');
+    
+    const clientId = '<?= urlencode($cliente_id) ?>';
+    const url = 'generar_pdf_cliente.php?id=' + clientId + '&sec=' + secs.join(',');
+    
+    // Abrir en nueva pestaña
+    window.open(url, '_blank');
+    
+    // Cerrar el modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('pdfModal'));
+    if (modal) modal.hide();
+}
+</script>
 </body>
 </html>
