@@ -371,10 +371,18 @@ require_once '_sidebar_supervisor.php';
             </div>
         </div>
 
+        <!-- FILTROS DE BÚSQUEDA -->
+        <div class="filter-bar" style="background: #fff; border: 1px solid var(--brand-border); border-radius: 14px; padding: 14px 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; box-shadow: var(--brand-shadow);">
+            <i class="fas fa-search" style="color:var(--brand-gray);"></i>
+            <input type="text" id="busquedaSolicitud" placeholder="Buscar por nombre o cédula del cliente..." style="min-width:260px; flex:1; padding:9px 14px; border:1.5px solid var(--brand-border); border-radius:9px; font-size:14px; outline:none; transition: border-color 0.2s;" onfocus="this.style.borderColor='var(--brand-navy)'" onblur="this.style.borderColor='var(--brand-border)'">
+            <span id="cntResultados" style="font-size:13px; color:var(--brand-gray); margin-left:auto;"><?php echo count($solicitudes); ?> resultados</span>
+        </div>
+
         <!-- TABLA DE SOLICITUDES -->
-        <div class="table-card">
-            <div class="card-header-custom">
-                <h6><i class="fas fa-list me-2"></i>Listado de Solicitudes</h6>
+        <div class="table-card section-card">
+            <div class="card-header-custom section-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <h6 style="margin: 0; font-size: 15px; font-weight: 800; color: var(--brand-navy-deep);"><i class="fas fa-list me-2" style="color: #dc2626;"></i>Listado de Solicitudes</h6>
+                <span class="sec-badge" id="badgeResultados" style="font-size: 11px; background: var(--brand-navy); color: #fff; padding: 3px 9px; border-radius: 10px; font-weight: 700;"><?php echo count($solicitudes); ?> solicitudes</span>
             </div>
             <div style="overflow-x: auto;">
                 <table class="table">
@@ -591,6 +599,54 @@ function cerrarModal() {
     const modal = document.getElementById('modal');
     modal.classList.remove('show');
 }
+
+// Lógica de búsqueda en la tabla
+document.addEventListener('DOMContentLoaded', function() {
+    const inputBusqueda = document.getElementById('busquedaSolicitud');
+    const cntResultados = document.getElementById('cntResultados');
+    const badgeResultados = document.getElementById('badgeResultados');
+
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', function() {
+            const term = this.value.toLowerCase();
+            const filas = document.querySelectorAll('.table tbody tr:not(#emptyFiltered)');
+            let visibles = 0;
+            
+            filas.forEach(fila => {
+                // Si la fila es la de "No hay solicitudes", la ignoramos
+                if (fila.querySelector('td[colspan]')) return;
+                
+                const usuario = fila.querySelector('td:nth-child(1)').textContent.toLowerCase();
+                const nombre = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                
+                if (usuario.includes(term) || nombre.includes(term)) {
+                    fila.style.display = '';
+                    visibles++;
+                } else {
+                    fila.style.display = 'none';
+                }
+            });
+
+            if (cntResultados) cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
+            if (badgeResultados) badgeResultados.textContent = visibles + (visibles === 1 ? ' solicitud' : ' solicitudes');
+
+            let emptyRow = document.getElementById('emptyFiltered');
+            if (visibles === 0 && filas.length > 0) {
+                if (!emptyRow) {
+                    const tbody = document.querySelector('.table tbody');
+                    const tr = document.createElement('tr');
+                    tr.id = 'emptyFiltered';
+                    tr.innerHTML = '<td colspan="8" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</td>';
+                    tbody.appendChild(tr);
+                } else {
+                    emptyRow.style.display = '';
+                }
+            } else if (emptyRow) {
+                emptyRow.style.display = 'none';
+            }
+        });
+    }
+});
 </script>
 
 </body>

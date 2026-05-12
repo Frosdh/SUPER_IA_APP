@@ -42,11 +42,15 @@ if (!$cliente) die("Cliente no encontrado.");
 // ── Helpers ──────────────────────────────────────────────────
 function dato($v, string $suffix = '') {
     if ($v === null || trim((string)$v) === '') return '<span class="text-muted">—</span>';
-    return htmlspecialchars($v) . ($suffix ? " $suffix" : '');
+    if (is_numeric($v)) {
+        if ($suffix == '$') return '$' . number_format((float)$v, 2);
+        return htmlspecialchars((string)$v) . ($suffix ? " $suffix" : '');
+    }
+    return htmlspecialchars((string)$v) . ($suffix ? " $suffix" : '');
 }
 function yn($v, $si = 'Sí', $no = 'No') {
     if ($v === null || $v === '') return '<span class="text-muted">—</span>';
-    return (intval($v) === 1 || $v === 'si' || $v === 'true' || $v === 1) ? $si : $no;
+    return (intval($v) === 1 || $v === 'si' || $v === 'true' || strtolower((string)$v) === 'sí') ? $si : $no;
 }
 
 // ── Cargar Datos ─────────────────────────────────────────────
@@ -84,6 +88,14 @@ if (in_array('empresa', $secciones)) {
             if ($en_tot_c_sem <= 0) $en_tot_c_sem = ($encuesta_negocio['compra_lv'] ?? 0) + ($encuesta_negocio['compra_sabado'] ?? 0) + ($encuesta_negocio['compra_domingo'] ?? 0);
             $en_tot_v_mes = $en_tot_v_sem * 4.33;
             $en_tot_c_mes = $en_tot_c_sem * 4.33;
+
+            // Calcular inventarios desde JSON
+            $en_tot_inv = 0;
+            $inv_com = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
+            if (is_array($inv_com)) foreach($inv_com as $ic) $en_tot_inv += (float)($ic['costo_compra'] ?? $ic['costo'] ?? 0) * (float)($ic['stock_actual'] ?? $ic['cantidad'] ?? 0);
+            $inv_prod = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
+            if (is_array($inv_prod)) foreach($inv_prod as $ip) $en_tot_inv += (float)($ip['inventarios'] ?? 0);
+            $encuesta_negocio['_calc_inv'] = $en_tot_inv;
         }
     } catch (PDOException $e) {}
 }
@@ -476,7 +488,15 @@ if (in_array('historial', $secciones)) {
                 <div class="field" style="grid-column: span 2;"><span class="field-label">Nombre Empresa</span><span class="field-value"><?= dato($cliente['nombre_empresa']) ?></span></div>
                 
                 <div class="field"><span class="field-label">Tiene RUC</span><span class="field-value"><?= yn($cliente['tiene_ruc']) ?></span></div>
+                <div class="field"><span class="field-label">Número RUC</span><span class="field-value"><?= dato($cliente['numero_ruc'] ?? $cliente['ruc_val']) ?></span></div>
                 <div class="field"><span class="field-label">Tiene RISE</span><span class="field-value"><?= yn($cliente['tiene_rise']) ?></span></div>
+                <div class="field"><span class="field-label">Valor RISE</span><span class="field-value"><?= dato($cliente['rise_val']) ?></span></div>
+
+                <div class="field"><span class="field-label">Régimen</span><span class="field-value"><?= dato($cliente['regimen_tributario']) ?></span></div>
+                <div class="field"><span class="field-label">Tipo Empresa</span><span class="field-value"><?= dato($cliente['tipo_empresa']) ?></span></div>
+                <div class="field"><span class="field-label">Lleva Contabilidad</span><span class="field-value"><?= yn($cliente['lleva_contabilidad']) ?></span></div>
+                <div class="field"><span class="field-label">Declara IVA</span><span class="field-value"><?= yn($cliente['declara_iva']) ?></span></div>
+                
                 <div class="field"><span class="field-label">Asesor Asignado</span><span class="field-value"><?= dato($cliente['asesor_nombre']) ?></span></div>
                 <div class="field"><span class="field-label">Fecha Registro</span><span class="field-value"><?= date('d/m/Y', strtotime($cliente['created_at'])) ?></span></div>
             </div>
@@ -534,15 +554,17 @@ if (in_array('historial', $secciones)) {
                     </div>
                 </div>
                 
-                <?php $inst = $encuesta_negocio ?: $encuesta; ?>
-                <h3 class="subsection-title">Información Institucional Actual</h3>
-                <div class="grid-3">
-                    <div class="field"><span class="field-label">Banco Ahorro Actual</span><span class="field-value"><?= dato($encuesta['banco_ahorro'] ?? '') ?></span></div>
-                    <div class="field"><span class="field-label">Banco Corriente Actual</span><span class="field-value"><?= dato($encuesta['banco_corriente'] ?? '') ?></span></div>
-                    <div class="field"><span class="field-label">Conoce la institución</span><span class="field-value"><?= yn($inst['p1_conoce_institucion'] ?? '') ?></span></div>
-                    <div class="field"><span class="field-label">Es cliente actualmente</span><span class="field-value"><?= yn($inst['p2_es_cliente'] ?? '') ?></span></div>
-                    <div class="field"><span class="field-label">Producto que posee</span><span class="field-value"><?= dato($inst['p2_producto'] ?? '') ?></span></div>
-                    <div class="field"><span class="field-label">Satisfacción General</span><span class="field-value"><?= dato($inst['p3_satisfaccion'] ?? '') ?></span></div>
+                <h3 class="subsection-title">Análisis Institucional</h3>
+                <div class="grid-3 mb-3">
+                    <div class="field"><span class="field-label">¿Conoce la institución?</span><span class="field-value"><?= yn($encuesta_negocio['p1_conoce_institucion'] ?? '') ?></span></div>
+                    <div class="field" style="grid-column: span 2;"><span class="field-label">Observaciones Conoce</span><span class="field-value"><?= dato($encuesta_negocio['p1_obs'] ?? '') ?></span></div>
+                    
+                    <div class="field"><span class="field-label">¿Es cliente actual?</span><span class="field-value"><?= yn($encuesta_negocio['p2_es_cliente'] ?? '') ?></span></div>
+                    <div class="field"><span class="field-label">Producto que posee</span><span class="field-value"><?= dato($encuesta_negocio['p2_producto'] ?? '') ?></span></div>
+                    <div class="field"><span class="field-label">Observaciones Cliente</span><span class="field-value"><?= dato($encuesta_negocio['p2_obs'] ?? '') ?></span></div>
+                    
+                    <div class="field"><span class="field-label">Satisfacción General</span><span class="field-value badge badge-info"><?= dato($encuesta_negocio['p3_satisfaccion'] ?? '') ?></span></div>
+                    <div class="field" style="grid-column: span 2;"><span class="field-label">Observaciones Satisfacción</span><span class="field-value"><?= dato($encuesta_negocio['p3_obs'] ?? '') ?></span></div>
                 </div>
             </div>
         </div>
@@ -556,114 +578,286 @@ if (in_array('historial', $secciones)) {
             </div>
             <div class="section-body">
                 
-                <h3 class="subsection-title">Flujo de Ventas y Compras</h3>
+                <h3 class="subsection-title">Comportamiento de Ventas y Compras (Detallado)</h3>
                 <table class="table-premium">
                     <thead>
                         <tr>
-                            <th>Concepto</th><th>Lun</th><th>Mar</th><th>Mié</th><th>Jue</th><th>Vie</th><th>Sáb</th><th>Dom</th><th>SEMANAL</th><th>MENSUAL EST.</th>
+                            <th>Concepto</th><th>Lunes</th><th>Martes</th><th>Miér.</th><th>Jueves</th><th>Vier.</th><th>Sáb.</th><th>Dom.</th><th>TOTAL SEM.</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr>
-                            <td><strong>Ventas</strong></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_lunes'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_martes'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_miercoles'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_jueves'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_viernes'] ?? (($encuesta_negocio['venta_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_sabado'] ?? 0, 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['venta_domingo'] ?? 0, 2) ?></td>
-                            <td style="background:#f1f5f9; color:#0f172a;"><strong>$<?= number_format($en_tot_v_sem, 2) ?></strong></td>
-                            <td style="background:#d1fae5; color:#065f46;"><strong>$<?= number_format($en_tot_v_mes, 2) ?></strong></td>
+                            <td><strong>Ventas ($)</strong></td>
+                            <td><?= number_format($encuesta_negocio['venta_lunes'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['venta_martes'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['venta_miercoles'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['venta_jueves'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['venta_viernes'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['venta_sabado'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['venta_domingo'] ?? 0, 2) ?></td>
+                            <td style="background:#f1f5f9;"><strong>$<?= number_format($en_tot_v_sem, 2) ?></strong></td>
                         </tr>
                         <tr>
-                            <td><strong>Compras</strong></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_lunes'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_martes'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_miercoles'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_jueves'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_viernes'] ?? (($encuesta_negocio['compra_lv'] ?? 0)/5), 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_sabado'] ?? 0, 2) ?></td>
-                            <td>$<?= number_format($encuesta_negocio['compra_domingo'] ?? 0, 2) ?></td>
-                            <td style="background:#f1f5f9; color:#0f172a;"><strong>$<?= number_format($en_tot_c_sem, 2) ?></strong></td>
-                            <td style="background:#fee2e2; color:#991b1b;"><strong>$<?= number_format($en_tot_c_mes, 2) ?></strong></td>
+                            <td><strong>Compras ($)</strong></td>
+                            <td><?= number_format($encuesta_negocio['compra_lunes'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['compra_martes'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['compra_miercoles'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['compra_jueves'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['compra_viernes'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['compra_sabado'] ?? 0, 2) ?></td>
+                            <td><?= number_format($encuesta_negocio['compra_domingo'] ?? 0, 2) ?></td>
+                            <td style="background:#f1f5f9;"><strong>$<?= number_format($en_tot_c_sem, 2) ?></strong></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Atención</strong></td>
+                            <td><?= ($encuesta_negocio['dia_lunes']??0)?'SÍ':'—' ?></td>
+                            <td><?= ($encuesta_negocio['dia_martes']??0)?'SÍ':'—' ?></td>
+                            <td><?= ($encuesta_negocio['dia_miercoles']??0)?'SÍ':'—' ?></td>
+                            <td><?= ($encuesta_negocio['dia_jueves']??0)?'SÍ':'—' ?></td>
+                            <td><?= ($encuesta_negocio['dia_viernes']??0)?'SÍ':'—' ?></td>
+                            <td><?= ($encuesta_negocio['dia_sab']??0)?'SÍ':'—' ?></td>
+                            <td><?= ($encuesta_negocio['dia_dom']??0)?'SÍ':'—' ?></td>
+                            <td style="background:#f1f5f9;">—</td>
                         </tr>
                     </tbody>
                 </table>
-                
+
                 <div class="grid-4" style="margin-top: 15px;">
-                    <div class="field"><span class="field-label">Mes Alta Venta</span><span class="field-value"><?= dato($encuesta_negocio['mes_alta_venta']) ?></span></div>
-                    <div class="field"><span class="field-label">Mes Baja Venta</span><span class="field-value"><?= dato($encuesta_negocio['mes_baja_venta']) ?></span></div>
-                    <div class="field"><span class="field-label">Mes Alta Compra</span><span class="field-value"><?= dato($encuesta_negocio['mes_alta_compra']) ?></span></div>
-                    <div class="field"><span class="field-label">Días Atención</span><span class="field-value badge badge-neutral">
-                        <?= ($encuesta_negocio['dia_lunes']??$encuesta_negocio['dia_lv']??0)?'L ':'' ?>
-                        <?= ($encuesta_negocio['dia_martes']??$encuesta_negocio['dia_lv']??0)?'M ':'' ?>
-                        <?= ($encuesta_negocio['dia_miercoles']??$encuesta_negocio['dia_lv']??0)?'X ':'' ?>
-                        <?= ($encuesta_negocio['dia_jueves']??$encuesta_negocio['dia_lv']??0)?'J ':'' ?>
-                        <?= ($encuesta_negocio['dia_viernes']??$encuesta_negocio['dia_lv']??0)?'V ':'' ?>
-                        <?= ($encuesta_negocio['dia_sab']??0)?'S ':'' ?>
-                        <?= ($encuesta_negocio['dia_dom']??0)?'D ':'' ?>
-                    </span></div>
+                    <div class="field"><span class="field-label">Forma de Cobro (Contado)</span><span class="field-value badge badge-success"><?= dato($encuesta_negocio['pct_contado'] ?? '0', '%') ?></span></div>
+                    <div class="field"><span class="field-label">Forma de Cobro (Crédito)</span><span class="field-value badge badge-warning"><?= dato($encuesta_negocio['pct_credito'] ?? '0', '%') ?></span></div>
+                    <div class="field"><span class="field-label">Uso de Efectivo</span><span class="field-value badge badge-info"><?= dato($encuesta_negocio['pct_efectivo'] ?? '0', '%') ?></span></div>
+                    <div class="field"><span class="field-label">Recuperación Cartera</span><span class="field-value">$<?= number_format((float)($encuesta_negocio['recuperacion_credito'] ?? 0), 2) ?></span></div>
                 </div>
 
-                <div class="grid-3" style="margin-top: 15px;">
-                    <div class="field"><span class="field-label">Ventas al Contado</span><span class="field-value badge badge-success"><?= dato($encuesta_negocio['pct_contado'] ?? '0') ?>%</span></div>
-                    <div class="field"><span class="field-label">Ventas al Crédito</span><span class="field-value badge badge-warning"><?= dato($encuesta_negocio['pct_credito'] ?? '0') ?>%</span></div>
-                    <div class="field"><span class="field-label">Uso Efectivo / Recup. Cartera</span><span class="field-value"><?= dato($encuesta_negocio['pct_efectivo'] ?? '0') ?>% | $<?= dato($encuesta_negocio['recuperacion_credito'] ?? '0') ?></span></div>
-                </div>
-
-                <h3 class="subsection-title" style="margin-top:25px;">Estructura de Gastos e Ingresos</h3>
+                <h3 class="subsection-title" style="margin-top:25px;">Estructura de Gastos, Otros Ingresos y Flujo</h3>
                 <div class="grid-3">
                     <div class="finance-summary">
-                        <span class="field-label mb-2" style="font-size:11px;">Gastos del Negocio</span>
+                        <span class="field-label mb-2" style="font-size:11px; font-weight:700;">Gastos del Negocio</span>
                         <div class="grid-2">
-                            <div class="field"><span class="field-label">Costos Venta</span><span class="field-value">$<?= dato($encuesta_negocio['costos_ventas']) ?></span></div>
-                            <div class="field"><span class="field-label">Sueldos</span><span class="field-value">$<?= dato($encuesta_negocio['g_neg_sueldos']) ?></span></div>
-                            <div class="field"><span class="field-label">Arriendo</span><span class="field-value">$<?= dato($encuesta_negocio['g_neg_arriendo']) ?></span></div>
-                            <div class="field"><span class="field-label">Serv. Bás.</span><span class="field-value">$<?= dato($encuesta_negocio['g_neg_serv_bas']) ?></span></div>
-                            <div class="field"><span class="field-label">Transporte</span><span class="field-value">$<?= dato($encuesta_negocio['g_neg_transporte']) ?></span></div>
-                            <div class="field"><span class="field-label">Mantenimiento</span><span class="field-value">$<?= dato($encuesta_negocio['g_neg_mantenimiento']) ?></span></div>
-                            <div class="field" style="grid-column: span 2; margin-top:10px; border-top:1px solid #cbd5e1; padding-top:5px;">
-                                <span class="field-label">Total G. Negocio</span><span class="field-value" style="font-size:14px; color:var(--danger);"><strong>$<?= dato($encuesta_negocio['gastos_negocio']) ?></strong></span>
+                            <div class="field"><span class="field-label">Costos Venta</span><span class="field-value"><?= dato($encuesta_negocio['costos_ventas'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Sueldos</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_sueldos'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Arriendo</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_arriendo'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Serv. Bás.</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_serv_bas'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Transporte</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_transporte'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Mantenimiento</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_mantenimiento'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Imprevistos</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_imprevistos'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Otros</span><span class="field-value"><?= dato($encuesta_negocio['g_neg_otros'], '$') ?></span></div>
+                            <div class="field" style="grid-column: span 2; margin-top:10px; border-top:1.5px solid #cbd5e1; padding-top:8px;">
+                                <span class="field-label">Total G. Negocio</span><span class="field-value" style="font-size:15px; color:var(--danger);"><strong><?= dato($encuesta_negocio['gastos_negocio'], '$') ?></strong></span>
                             </div>
                         </div>
                     </div>
                     <div class="finance-summary">
-                        <span class="field-label mb-2" style="font-size:11px;">Gastos Familiares</span>
+                        <span class="field-label mb-2" style="font-size:11px; font-weight:700;">Gastos Familiares</span>
                         <div class="grid-2">
-                            <div class="field"><span class="field-label">Alimentación</span><span class="field-value">$<?= dato($encuesta_negocio['g_fam_alim']) ?></span></div>
-                            <div class="field"><span class="field-label">Arriendo Casa</span><span class="field-value">$<?= dato($encuesta_negocio['g_fam_arriendo']) ?></span></div>
-                            <div class="field"><span class="field-label">Servicios Bás.</span><span class="field-value">$<?= dato($encuesta_negocio['g_fam_serv_bas']) ?></span></div>
-                            <div class="field"><span class="field-label">Educación</span><span class="field-value">$<?= dato($encuesta_negocio['g_fam_educacion']) ?></span></div>
-                            <div class="field"><span class="field-label">Salud</span><span class="field-value">$<?= dato($encuesta_negocio['g_fam_salud']) ?></span></div>
-                            <div class="field"><span class="field-label">Otros Gastos</span><span class="field-value">$<?= dato($encuesta_negocio['g_fam_otros']) ?></span></div>
-                            <div class="field" style="grid-column: span 2; margin-top:10px; border-top:1px solid #cbd5e1; padding-top:5px;">
-                                <span class="field-label">Total G. Fam.</span><span class="field-value" style="font-size:14px; color:var(--danger);"><strong>$<?= dato($encuesta_negocio['gastos_familiares']) ?></strong></span>
+                            <div class="field"><span class="field-label">Alimentación</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_alim'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Arriendo Casa</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_arriendo'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Servicios Bás.</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_serv_bas'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Educación</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_educacion'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Salud</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_salud'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Imprevistos</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_imprevistos'], '$') ?></span></div>
+                            <div class="field"><span class="field-label">Otros Gastos</span><span class="field-value"><?= dato($encuesta_negocio['g_fam_otros'], '$') ?></span></div>
+                            <div class="field" style="grid-column: span 2; margin-top:10px; border-top:1.5px solid #cbd5e1; padding-top:8px;">
+                                <span class="field-label">Total G. Fam.</span><span class="field-value" style="font-size:15px; color:var(--danger);"><strong><?= dato($encuesta_negocio['gastos_familiares'], '$') ?></strong></span>
                             </div>
                         </div>
                     </div>
                     <div class="finance-summary">
-                        <span class="field-label mb-2" style="font-size:11px;">Otros Ingresos</span>
-                        <div class="field" style="margin-bottom:8px;"><span class="field-label">Ingresos Cónyuge</span><span class="field-value">$<?= dato($encuesta_negocio['o_ing_conyuge']) ?></span></div>
-                        <div class="field" style="margin-bottom:8px;"><span class="field-label">Arriendos / Pensiones</span><span class="field-value">$<?= dato($encuesta_negocio['o_ing_arriendos']) ?> / $<?= dato($encuesta_negocio['o_ing_pensiones']) ?></span></div>
-                        <div class="field" style="margin-bottom:8px;"><span class="field-label">Otros</span><span class="field-value">$<?= dato($encuesta_negocio['o_ing_otros']) ?></span></div>
-                        <div class="field" style="margin-top:10px; border-top:1px solid #cbd5e1; padding-top:5px;">
-                            <span class="field-label">Total O. Ingresos</span><span class="field-value" style="font-size:14px; color:var(--success);"><strong>$<?= dato($encuesta_negocio['otros_ingresos']) ?></strong></span>
+                        <span class="field-label mb-2" style="font-size:11px; font-weight:700;">Ingresos y Flujo</span>
+                        <div class="field"><span class="field-label">Ingresos Cónyuge</span><span class="field-value"><?= dato($encuesta_negocio['o_ing_conyuge'], '$') ?></span></div>
+                        <div class="field"><span class="field-label">Arriendos</span><span class="field-value"><?= dato($encuesta_negocio['o_ing_arriendos'], '$') ?></span></div>
+                        <div class="field"><span class="field-label">Pensiones</span><span class="field-value"><?= dato($encuesta_negocio['o_ing_pensiones'], '$') ?></span></div>
+                        <div class="field"><span class="field-label">Otros Ingresos</span><span class="field-value"><?= dato($encuesta_negocio['o_ing_otros'], '$') ?></span></div>
+                        <div class="field" style="margin-top:10px; border-top:1.5px solid #cbd5e1; padding-top:8px;">
+                            <span class="field-label">Ventas Mensuales (Est.)</span><span class="field-value" style="font-size:15px; color:var(--success);"><strong>$<?= number_format($en_tot_v_mes, 2) ?></strong></span>
+                        </div>
+                        <div class="field" style="margin-top:5px; border-top:1px solid #e2e8f0; padding-top:5px;">
+                            <span class="field-label">Excedente / Saldo Final</span>
+                            <?php 
+                                $ing_ext = (float)($encuesta_negocio['o_ing_conyuge']??0) + (float)($encuesta_negocio['o_ing_arriendos']??0) + (float)($encuesta_negocio['o_ing_pensiones']??0) + (float)($encuesta_negocio['o_ing_otros']??0);
+                                $ing_tot = $en_tot_v_mes + $ing_ext;
+                                $gas_tot = ($encuesta_negocio['gastos_negocio'] ?? 0) + ($encuesta_negocio['gastos_familiares'] ?? 0);
+                                $excedente = $ing_tot - $gas_tot;
+                            ?>
+                            <span class="field-value" style="font-size:18px; color:<?= $excedente >= 0 ? 'var(--success)' : 'var(--danger)' ?>;"><strong>$<?= number_format($excedente, 2) ?></strong></span>
                         </div>
                     </div>
                 </div>
-                
-                <h3 class="subsection-title">Saldos y Situación Financiera Actual</h3>
-                <div class="grid-4 finance-summary">
-                    <div class="field"><span class="field-label">Caja Efectivo</span><span class="field-value badge badge-success">$<?= dato($encuesta_negocio['caja_efectivo']) ?></span></div>
-                    <div class="field"><span class="field-label">Saldo Bancos</span><span class="field-value badge badge-success">$<?= dato($encuesta_negocio['bancos_saldo']) ?></span></div>
-                    <div class="field"><span class="field-label">Cuentas x Cobrar</span><span class="field-value badge badge-success">$<?= dato($encuesta_negocio['cxp_netas']) ?></span></div>
-                    <div class="field"><span class="field-label">Inv. Materia Prima</span><span class="field-value">$<?= dato($encuesta_negocio['inv_mat_prima']) ?></span></div>
-                    <div class="field"><span class="field-label">Inv. Prod. Proceso</span><span class="field-value">$<?= dato($encuesta_negocio['inv_prod_proc']) ?></span></div>
-                    <div class="field"><span class="field-label">Créditos x Pagar</span><span class="field-value badge badge-danger">$<?= dato($encuesta_negocio['creditos_pagar']) ?></span></div>
-                    <div class="field"><span class="field-label">Proveedores</span><span class="field-value badge badge-warning">$<?= dato($encuesta_negocio['proveedores']) ?></span></div>
-                    <div class="field"><span class="field-label">Pasivos LP</span><span class="field-value badge badge-danger">$<?= dato($encuesta_negocio['pasivos_lp']) ?></span></div>
+
+                <h3 class="subsection-title">Balance General (Situación Actual)</h3>
+                <div class="grid-2" style="gap: 20px;">
+                    <div>
+                        <span class="badge badge-info mb-2">ACTIVOS (Lo que posee)</span>
+                        <table class="table-premium">
+                            <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
+                            <tbody>
+                                <tr><td>Caja / Efectivo</td><td>$<?= number_format((float)($encuesta_negocio['caja_efectivo']??0), 2) ?></td></tr>
+                                <tr><td>Bancos / Ahorros</td><td>$<?= number_format((float)($encuesta_negocio['bancos_saldo']??0), 2) ?></td></tr>
+                                <tr><td>Cuentas por Cobrar (Netas)</td><td>$<?= number_format((float)($encuesta_negocio['cxp_netas']??0), 2) ?></td></tr>
+                                <tr><td>Inventario (Mat. Prima / Productos / Mercadería)</td><td>$<?= number_format((float)($encuesta_negocio['inv_mat_prima']??0) + (float)($encuesta_negocio['inv_prod_proc']??0) + (float)($encuesta_negocio['_calc_inv']??0), 2) ?></td></tr>
+                                <?php 
+                                    $tot_veh = 0; if(!empty($all_veh)) foreach($all_veh as $v) $tot_veh += (float)($v['valor']??0);
+                                    $tot_inm = 0; if(!empty($all_inm)) foreach($all_inm as $i) $tot_inm += (float)($i['valor']??0);
+                                    
+                                    // Total otros activos (del JSON)
+                                    $tot_oa = 0; 
+                                    if(!empty($all_act)) {
+                                        foreach($all_act as $a) {
+                                            $cu = (float)($a['valor_unitario'] ?? $a['valor_comercial'] ?? $a['valor'] ?? 0);
+                                            $ct = (float)($a['cantidad'] ?? 1); if($ct <= 0) $ct = 1;
+                                            $tot_oa += (float)($a['valor_total'] ?? ($cu * $ct));
+                                        }
+                                    }
+                                ?>
+                                <tr><td>Vehículos (Negocio + Hogar)</td><td>$<?= number_format($tot_veh, 2) ?></td></tr>
+                                <tr><td>Propiedades / Inmuebles</td><td>$<?= number_format($tot_inm, 2) ?></td></tr>
+                                <tr><td>Maquinaria / Enseres / Otros</td><td>$<?= number_format($tot_oa, 2) ?></td></tr>
+                                <tr style="background:#f1f5f9;">
+                                    <td><strong>TOTAL ACTIVOS</strong></td>
+                                    <?php $total_activos = (float)($encuesta_negocio['caja_efectivo']??0) + (float)($encuesta_negocio['bancos_saldo']??0) + (float)($encuesta_negocio['cxp_netas']??0) + (float)($encuesta_negocio['inv_mat_prima']??0) + (float)($encuesta_negocio['inv_prod_proc']??0) + (float)($encuesta_negocio['_calc_inv']??0) + $tot_veh + $tot_inm + $tot_oa; ?>
+                                    <td><strong style="color:var(--success); font-size:13px;">$<?= number_format($total_activos, 2) ?></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <span class="badge badge-danger mb-2">PASIVOS (Lo que debe)</span>
+                        <table class="table-premium">
+                            <thead><tr><th>Concepto</th><th>Valor</th></tr></thead>
+                            <tbody>
+                                <tr><td>Créditos por Pagar (C.P.)</td><td>$<?= number_format((float)($encuesta_negocio['creditos_pagar']??0), 2) ?></td></tr>
+                                <tr><td>Proveedores</td><td>$<?= number_format((float)($encuesta_negocio['proveedores']??0), 2) ?></td></tr>
+                                <tr><td>Otras Deudas C.P.</td><td>$<?= number_format((float)($encuesta_negocio['otras_deudas_cp']??0), 2) ?></td></tr>
+                                <tr><td>Pasivos L.P. (Hipotecas/Otros)</td><td>$<?= number_format((float)($encuesta_negocio['pasivos_lp']??0), 2) ?></td></tr>
+                                <tr style="background:#f1f5f9;">
+                                    <td><strong>TOTAL PASIVOS</strong></td>
+                                    <?php $total_pasivos = (float)($encuesta_negocio['creditos_pagar']??0) + (float)($encuesta_negocio['proveedores']??0) + (float)($encuesta_negocio['otras_deudas_cp']??0) + (float)($encuesta_negocio['pasivos_lp']??0); ?>
+                                    <td><strong style="color:var(--danger); font-size:13px;">$<?= number_format($total_pasivos, 2) ?></strong></td>
+                                </tr>
+                                <tr style="background:#f1f5f9;">
+                                    <td><strong>PATRIMONIO (Capital)</strong></td>
+                                    <td><strong style="color:var(--primary); font-size:13px;">$<?= number_format($total_activos - $total_pasivos, 2) ?></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
+
+                <!-- Activos Adicionales (Tabla de otros activos) -->
+                <?php 
+                $act_neg = json_decode($encuesta_negocio['activos_negocio_json'] ?? '[]', true);
+                $act_hog = json_decode($encuesta_negocio['activos_hogar_json'] ?? '[]', true);
+                $all_act = array_merge(
+                    array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($act_neg)?$act_neg:[]),
+                    array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($act_hog)?$act_hog:[])
+                );
+                if (!empty($all_act)):
+                ?>
+                <h3 class="subsection-title">Otros Activos / Maquinaria / Enseres</h3>
+                <table class="table-premium">
+                    <thead><tr><th>Tipo</th><th>Descripción / Activo</th><th>Detalle/Serie</th><th>Cantidad</th><th>Estado</th><th>Valor Unit.</th><th>Total</th></tr></thead>
+                    <tbody>
+                        <?php 
+                        $grand_tot_act = 0;
+                        foreach ($all_act as $a): 
+                            if(empty($a['descripcion']) && empty($a['activo'])) continue;
+                            $cant = (float)($a['cantidad'] ?? 1);
+                            if ($cant <= 0) $cant = 1;
+                            $v_unit = (float)($a['valor_unitario'] ?? $a['valor_comercial'] ?? $a['valor'] ?? 0);
+                            $v_tot  = (float)($a['valor_total'] ?? ($v_unit * $cant));
+                            $grand_tot_act += $v_tot;
+                        ?>
+                        <tr>
+                            <td><span class="badge <?= $a['tipo']=='Negocio'?'badge-info':'badge-neutral' ?>"><?= $a['tipo'] ?></span></td>
+                            <td><?= htmlspecialchars($a['descripcion'] ?? $a['activo'] ?? '') ?></td>
+                            <td><small class="text-muted"><?= htmlspecialchars(($a['marca']??'').' '.($a['modelo']??'').' '.($a['serie']??'')) ?></small></td>
+                            <td><?= $cant ?></td>
+                            <td><?= htmlspecialchars($a['estado'] ?? 'Bueno') ?></td>
+                            <td>$<?= number_format($v_unit, 2) ?></td>
+                            <td><strong>$<?= number_format($v_tot, 2) ?></strong></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <tr style="background:#f1f5f9;">
+                            <td colspan="6" style="text-align:right;"><strong>TOTAL OTROS ACTIVOS</strong></td>
+                            <td><strong style="color:var(--success);">$<?= number_format($grand_tot_act, 2) ?></strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+
+                <!-- Producción Detallada -->
+                <?php 
+                $prod_json = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
+                if (!empty($prod_json)):
+                ?>
+                <h3 class="subsection-title" style="margin-top:20px;">Productos de Producción (Detalle)</h3>
+                <table class="table-premium">
+                    <thead><tr><th>Producto</th><th>Unidad</th><th>Cant. Mensual</th><th>Costo Unit.</th><th>Precio Venta</th><th>Margen ($)</th><th>Total Venta Mes</th></tr></thead>
+                    <tbody>
+                        <?php 
+                        $tot_prod_v = 0;
+                        foreach ($prod_json as $p): 
+                            $cv = (float)($p['costo_unitario'] ?? $p['costo'] ?? 0);
+                            $pv = (float)($p['precio_venta'] ?? $p['precio'] ?? 0);
+                            $cant = (float)($p['cantidad_mensual'] ?? $p['cantidad'] ?? 0);
+                            $tvm = $pv * $cant;
+                            $tot_prod_v += $tvm;
+                            if(empty($p['nombre']) && empty($p['producto'])) continue;
+                        ?>
+                        <tr>
+                            <td><?= htmlspecialchars($p['nombre'] ?? $p['producto']) ?></td>
+                            <td><?= htmlspecialchars($p['unidad'] ?? 'Unid.') ?></td>
+                            <td><?= number_format($cant, 0) ?></td>
+                            <td>$<?= number_format($cv, 2) ?></td>
+                            <td>$<?= number_format($pv, 2) ?></td>
+                            <td>$<?= number_format($pv - $cv, 2) ?></td>
+                            <td><strong>$<?= number_format($tvm, 2) ?></strong></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <tr style="background:#f1f5f9;">
+                            <td colspan="6" style="text-align:right;"><strong>TOTAL VENTAS PRODUCCIÓN</strong></td>
+                            <td><strong style="color:var(--success);">$<?= number_format($tot_prod_v, 2) ?></strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <?php endif; ?>
+
+                <!-- Comercio / Inventario -->
+                <?php 
+                $com_json = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
+                if (!empty($com_json)):
+                ?>
+                <h3 class="subsection-title" style="margin-top:20px;">Inventario de Comercio / Mercadería</h3>
+                <table class="table-premium">
+                    <thead><tr><th>Producto / Mercadería</th><th>Stock Actual</th><th>Costo Compra</th><th>Precio Venta</th><th>Margen %</th><th>Valor Inventario</th></tr></thead>
+                    <tbody>
+                        <?php 
+                        $tot_inv_val = 0;
+                        foreach ($com_json as $c): 
+                            $costo = (float)($c['costo_compra'] ?? $c['costo'] ?? 0);
+                            $pv = (float)($c['precio_venta'] ?? $c['precio'] ?? 0);
+                            $stock = (float)($c['stock_actual'] ?? $c['cantidad'] ?? 0);
+                            $v_inv = $costo * $stock;
+                            $tot_inv_val += $v_inv;
+                            $margen_p = $pv > 0 ? (($pv - $costo) / $pv) * 100 : 0;
+                            if(empty($c['nombre']) && empty($c['producto'])) continue;
+                        ?>
+                        <tr>
+                            <td><?= htmlspecialchars($c['nombre'] ?? $c['producto']) ?></td>
+                            <td><?= number_format($stock, 0) ?></td>
+                            <td>$<?= number_format($costo, 2) ?></td>
+                            <td>$<?= number_format($pv, 2) ?></td>
+                            <td><?= number_format($margen_p, 1) ?>%</td>
+                            <td><strong>$<?= number_format($v_inv, 2) ?></strong></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <tr style="background:#f1f5f9;">
+                            <td colspan="5" style="text-align:right;"><strong>TOTAL VALOR INVENTARIO</strong></td>
+                            <td><strong style="color:var(--primary);">$<?= number_format($tot_inv_val, 2) ?></strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <?php endif; ?>
 
                 <?php 
                 $veh_neg = json_decode($encuesta_negocio['vehiculos_negocio_json'] ?? '[]', true);

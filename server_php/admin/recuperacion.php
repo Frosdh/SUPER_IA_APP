@@ -607,12 +607,6 @@ $currentPage = 'recuperacion';
         </button>
       </div>
 
-      <!-- Sugerencias live (click para filtrar/seleccionar) -->
-      <div id="suggestionsBox" style="display:none;position:relative;max-width:980px;margin-top:8px;">
-        <div id="suggestionsInner" style="position:relative;background:#fff;border:1px solid var(--brand-border);border-radius:10px;box-shadow:var(--brand-shadow);max-height:280px;overflow:auto;padding:8px;">
-          <!-- items populated by JS -->
-        </div>
-      </div>
 
       <!-- FILTROS — solo búsqueda por cliente/cédula -->
       <div class="filter-bar">
@@ -686,29 +680,6 @@ $currentPage = 'recuperacion';
                         data-credito-id="<?= htmlspecialchars($cr['id']) ?>" title="Meses en mora">
                     </td>
                     <td style="white-space:nowrap;">
-                      <?php $tel = trim($cr['telefono'] ?? ''); $tel_clean = preg_replace('/\D+/', '', $tel); ?>
-                      <?php $email = trim($cr['email'] ?? ''); ?>
-                      <?php
-                        // Heurística: si es número local ecuatoriano (9 dígitos empezando en 9), agregar prefijo 593 para WhatsApp
-                        $wa_tel = '';
-                        $tel_uri = '';
-                        if ($tel_clean) {
-                          if (strlen($tel_clean) == 9 && strpos($tel_clean, '9') === 0) {
-                            $wa_tel = '593' . $tel_clean;
-                            $tel_uri = '+593' . $tel_clean;
-                          } else {
-                            $wa_tel = $tel_clean;
-                            $tel_uri = $tel_clean;
-                          }
-                        }
-                      ?>
-                      <?php if ($tel_clean): ?>
-                        <a href="tel:<?= htmlspecialchars($tel_uri) ?>" class="btn btn-sm btn-outline-primary me-1" title="Llamar"><i class="fas fa-phone"></i></a>
-                        <a href="https://wa.me/<?= htmlspecialchars($wa_tel) ?>" target="_blank" class="btn btn-sm btn-outline-success me-1" title="WhatsApp"><i class="fab fa-whatsapp"></i></a>
-                      <?php endif; ?>
-                      <?php if ($email): ?>
-                        <a href="mailto:<?= htmlspecialchars($email) ?>" class="btn btn-sm btn-outline-secondary me-1" title="Email"><i class="fas fa-envelope"></i></a>
-                      <?php endif; ?>
                       <button class="btn-crear btn-abrir-modal" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
                         data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
                         data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"
@@ -928,68 +899,8 @@ $currentPage = 'recuperacion';
         if(vacioDiv) vacioDiv.style.display = (vis === 0) ? '' : 'none';
       }
       // Ejecutar al cargar
-      document.addEventListener('DOMContentLoaded', function(){ filtrarTabla(); buildSuggestions(); });
+      document.addEventListener('DOMContentLoaded', function(){ filtrarTabla(); });
 
-      // Construir lista de sugerencias a partir de la tabla
-      function buildSuggestions(){
-        var inner = document.getElementById('suggestionsInner');
-        if(!inner) return;
-        inner.innerHTML = '';
-        var filas = Array.from(document.querySelectorAll('#tablaCreditos tbody tr'));
-        filas.forEach(function(tr){
-          var nombre = (tr.dataset.nombre||'').trim();
-          var cedula = (tr.dataset.cedula||'').trim();
-          var asesor  = (tr.dataset.asesor||'').trim();
-          var creditId = tr.querySelector('.chk-rec')?tr.querySelector('.chk-rec').dataset.creditoId:'';
-          var label = nombre || cedula || ('Crédito ' + creditId);
-          var item = document.createElement('div');
-          item.className = 'suggestion-item';
-          item.style.cssText = 'padding:8px 10px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;';
-          item.innerHTML = '<div><strong style="font-weight:700;">'+escapeHtml(label)+'</strong><div style="font-size:12px;color:#6b7280;">'+escapeHtml(asesor)+' · '+escapeHtml(cedula)+'</div></div>';
-          item.dataset.nombre = nombre;
-          item.dataset.cedula = cedula;
-          item.dataset.asesor = asesor;
-          item.dataset.creditoId = creditId;
-          item.addEventListener('click', function(){
-            // al click: poner input, ocultar sugerencias y filtrar tabla dejando solo ese cliente visible
-            var qbox = document.getElementById('inputBusqueda');
-            qbox.value = this.dataset.nombre || this.dataset.cedula || '';
-            // opcional: seleccionar asesor en el select
-            var selA = document.getElementById('selectAsesorLive');
-            if(selA && this.dataset.asesor) selA.value = this.dataset.asesor.toLowerCase();
-            filtrarTabla();
-            hideSuggestions();
-            // intentar desplazar hasta la fila
-            var fila = document.querySelector('#tablaCreditos tbody tr[data-nombre="'+(this.dataset.nombre||'')+'"]');
-            if(fila) fila.scrollIntoView({behavior:'smooth',block:'center'});
-          });
-          inner.appendChild(item);
-        });
-      }
-
-      function showSuggestions(){
-        var box = document.getElementById('suggestionsBox'); if(!box) return; box.style.display='block';
-      }
-      function hideSuggestions(){
-        var box = document.getElementById('suggestionsBox'); if(!box) return; box.style.display='none';
-      }
-
-      // Escape simple HTML
-      function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-      // Mostrar sugerencias al enfocar el input, actualizar mientras escribe
-      var inputB = document.getElementById('inputBusqueda');
-      if(inputB){
-        inputB.addEventListener('focus', function(){ buildSuggestions(); showSuggestions(); });
-        inputB.addEventListener('input', function(){ buildSuggestions(); showSuggestions(); });
-      }
-      // Cerrar al hacer click fuera
-      document.addEventListener('click', function(e){
-        var box = document.getElementById('suggestionsBox');
-        if(!box) return;
-        if(e.target.closest('#suggestionsBox') || e.target.closest('#inputBusqueda')) return;
-        hideSuggestions();
-      });
       // Exponer filtrarTabla al scope global (input usa oninput)
       window.filtrarTabla = filtrarTabla;
     })();
