@@ -81,7 +81,9 @@ if (in_array('empresa', $secciones)) {
         ");
         $st->execute([$cliente_id]);
         $encuesta_negocio = $st->fetch();
+
         if ($encuesta_negocio) {
+            // ─── Cálculos de Ventas/Compras ──────────────────────────────
             $en_tot_v_sem = ($encuesta_negocio['venta_lunes'] ?? 0) + ($encuesta_negocio['venta_martes'] ?? 0) + ($encuesta_negocio['venta_miercoles'] ?? 0) + ($encuesta_negocio['venta_jueves'] ?? 0) + ($encuesta_negocio['venta_viernes'] ?? 0) + ($encuesta_negocio['venta_sabado'] ?? 0) + ($encuesta_negocio['venta_domingo'] ?? 0);
             if ($en_tot_v_sem <= 0) $en_tot_v_sem = ($encuesta_negocio['venta_lv'] ?? 0) + ($encuesta_negocio['venta_sabado'] ?? 0) + ($encuesta_negocio['venta_domingo'] ?? 0);
             $en_tot_c_sem = ($encuesta_negocio['compra_lunes'] ?? 0) + ($encuesta_negocio['compra_martes'] ?? 0) + ($encuesta_negocio['compra_miercoles'] ?? 0) + ($encuesta_negocio['compra_jueves'] ?? 0) + ($encuesta_negocio['compra_viernes'] ?? 0) + ($encuesta_negocio['compra_sabado'] ?? 0) + ($encuesta_negocio['compra_domingo'] ?? 0);
@@ -89,13 +91,64 @@ if (in_array('empresa', $secciones)) {
             $en_tot_v_mes = $en_tot_v_sem * 4.33;
             $en_tot_c_mes = $en_tot_c_sem * 4.33;
 
-            // Calcular inventarios desde JSON
+            // ─── Decodificación de JSONs ─────────────────────────────────
+            $veh_neg = json_decode($encuesta_negocio['vehiculos_negocio_json'] ?? '[]', true);
+            $veh_hog = json_decode($encuesta_negocio['vehiculos_hogar_json'] ?? '[]', true);
+            $all_veh = array_merge(
+                array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($veh_neg)?$veh_neg:[]),
+                array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($veh_hog)?$veh_hog:[])
+            );
+
+            $inm_neg = json_decode($encuesta_negocio['inmuebles_negocio_json'] ?? '[]', true);
+            $inm_hog = json_decode($encuesta_negocio['inmuebles_hogar_json'] ?? '[]', true);
+            $all_inm = array_merge(
+                array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($inm_neg)?$inm_neg:[]),
+                array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($inm_hog)?$inm_hog:[])
+            );
+
+            $act_neg = json_decode($encuesta_negocio['activos_negocio_json'] ?? '[]', true);
+            $act_hog = json_decode($encuesta_negocio['activos_hogar_json'] ?? '[]', true);
+            $all_act = array_merge(
+                array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($act_neg)?$act_neg:[]),
+                array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($act_hog)?$act_hog:[])
+            );
+
+            $prod_json = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
+            $com_json  = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
+            $deudas_json = json_decode($encuesta_negocio['otras_deudas_json'] ?? '[]', true);
+
+            // ─── Cálculos de Inventarios ─────────────────────────────────
             $en_tot_inv = 0;
-            $inv_com = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
-            if (is_array($inv_com)) foreach($inv_com as $ic) $en_tot_inv += (float)($ic['costo_compra'] ?? $ic['costo'] ?? 0) * (float)($ic['stock_actual'] ?? $ic['cantidad'] ?? 0);
-            $inv_prod = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
-            if (is_array($inv_prod)) foreach($inv_prod as $ip) $en_tot_inv += (float)($ip['inventarios'] ?? 0);
+            if (is_array($com_json)) {
+                foreach($com_json as $ic) {
+                    $stock = (float)($ic['stock_actual'] ?? $ic['cantidad'] ?? 0);
+                    $costo = (float)($ic['costo_compra'] ?? $ic['costo_unitario'] ?? $ic['costo'] ?? 0);
+                    $en_tot_inv += ($stock * $costo);
+                }
+            }
+            if (is_array($prod_json)) {
+                foreach($prod_json as $ip) {
+                    $en_tot_inv += (float)($ip['inventarios'] ?? 0);
+                }
+            }
             $encuesta_negocio['_calc_inv'] = $en_tot_inv;
+
+            // ─── Cálculos de Totales Activos / Pasivos ───────────────────
+            $tot_veh = 0; foreach($all_veh as $v) $tot_veh += (float)($v['valor'] ?? 0);
+            $tot_inm = 0; foreach($all_inm as $i) $tot_inm += (float)($i['valor'] ?? 0);
+            $tot_oa = 0;
+            foreach($all_act as $a) {
+                $cu = (float)($a['valor_unitario'] ?? $a['valor_comercial'] ?? $a['valor'] ?? 0);
+                $ct = (float)($a['cantidad'] ?? 1); if($ct <= 0) $ct = 1;
+                $tot_oa += (float)($a['valor_total'] ?? ($cu * $ct));
+            }
+
+            $total_activos = (float)($encuesta_negocio['caja_efectivo']??0) + (float)($encuesta_negocio['bancos_saldo']??0) + (float)($encuesta_negocio['cxp_netas']??0) + (float)($encuesta_negocio['inv_mat_prima']??0) + (float)($encuesta_negocio['inv_prod_proc']??0) + $en_tot_inv + $tot_veh + $tot_inm + $tot_oa;
+            $total_pasivos = (float)($encuesta_negocio['creditos_pagar']??0) + (float)($encuesta_negocio['proveedores']??0) + (float)($encuesta_negocio['otras_deudas_cp']??0) + (float)($encuesta_negocio['pasivos_lp']??0);
+            
+            $encuesta_negocio['_total_activos'] = $total_activos;
+            $encuesta_negocio['_total_pasivos'] = $total_pasivos;
+            $encuesta_negocio['_patrimonio']    = $total_activos - $total_pasivos;
         }
     } catch (PDOException $e) {}
 }
@@ -694,28 +747,13 @@ if (in_array('historial', $secciones)) {
                                 <tr><td>Caja / Efectivo</td><td>$<?= number_format((float)($encuesta_negocio['caja_efectivo']??0), 2) ?></td></tr>
                                 <tr><td>Bancos / Ahorros</td><td>$<?= number_format((float)($encuesta_negocio['bancos_saldo']??0), 2) ?></td></tr>
                                 <tr><td>Cuentas por Cobrar (Netas)</td><td>$<?= number_format((float)($encuesta_negocio['cxp_netas']??0), 2) ?></td></tr>
-                                <tr><td>Inventario (Mat. Prima / Productos / Mercadería)</td><td>$<?= number_format((float)($encuesta_negocio['inv_mat_prima']??0) + (float)($encuesta_negocio['inv_prod_proc']??0) + (float)($encuesta_negocio['_calc_inv']??0), 2) ?></td></tr>
-                                <?php 
-                                    $tot_veh = 0; if(!empty($all_veh)) foreach($all_veh as $v) $tot_veh += (float)($v['valor']??0);
-                                    $tot_inm = 0; if(!empty($all_inm)) foreach($all_inm as $i) $tot_inm += (float)($i['valor']??0);
-                                    
-                                    // Total otros activos (del JSON)
-                                    $tot_oa = 0; 
-                                    if(!empty($all_act)) {
-                                        foreach($all_act as $a) {
-                                            $cu = (float)($a['valor_unitario'] ?? $a['valor_comercial'] ?? $a['valor'] ?? 0);
-                                            $ct = (float)($a['cantidad'] ?? 1); if($ct <= 0) $ct = 1;
-                                            $tot_oa += (float)($a['valor_total'] ?? ($cu * $ct));
-                                        }
-                                    }
-                                ?>
+                                <tr><td>Inventario (Mat. Prima / Productos / Mercadería)</td><td>$<?= number_format((float)($encuesta_negocio['_calc_inv']??0) + (float)($encuesta_negocio['inv_mat_prima']??0) + (float)($encuesta_negocio['inv_prod_proc']??0), 2) ?></td></tr>
                                 <tr><td>Vehículos (Negocio + Hogar)</td><td>$<?= number_format($tot_veh, 2) ?></td></tr>
                                 <tr><td>Propiedades / Inmuebles</td><td>$<?= number_format($tot_inm, 2) ?></td></tr>
                                 <tr><td>Maquinaria / Enseres / Otros</td><td>$<?= number_format($tot_oa, 2) ?></td></tr>
                                 <tr style="background:#f1f5f9;">
                                     <td><strong>TOTAL ACTIVOS</strong></td>
-                                    <?php $total_activos = (float)($encuesta_negocio['caja_efectivo']??0) + (float)($encuesta_negocio['bancos_saldo']??0) + (float)($encuesta_negocio['cxp_netas']??0) + (float)($encuesta_negocio['inv_mat_prima']??0) + (float)($encuesta_negocio['inv_prod_proc']??0) + (float)($encuesta_negocio['_calc_inv']??0) + $tot_veh + $tot_inm + $tot_oa; ?>
-                                    <td><strong style="color:var(--success); font-size:13px;">$<?= number_format($total_activos, 2) ?></strong></td>
+                                    <td><strong style="color:var(--success); font-size:13px;">$<?= number_format($encuesta_negocio['_total_activos'], 2) ?></strong></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -731,28 +769,18 @@ if (in_array('historial', $secciones)) {
                                 <tr><td>Pasivos L.P. (Hipotecas/Otros)</td><td>$<?= number_format((float)($encuesta_negocio['pasivos_lp']??0), 2) ?></td></tr>
                                 <tr style="background:#f1f5f9;">
                                     <td><strong>TOTAL PASIVOS</strong></td>
-                                    <?php $total_pasivos = (float)($encuesta_negocio['creditos_pagar']??0) + (float)($encuesta_negocio['proveedores']??0) + (float)($encuesta_negocio['otras_deudas_cp']??0) + (float)($encuesta_negocio['pasivos_lp']??0); ?>
-                                    <td><strong style="color:var(--danger); font-size:13px;">$<?= number_format($total_pasivos, 2) ?></strong></td>
+                                    <td><strong style="color:var(--danger); font-size:13px;">$<?= number_format($encuesta_negocio['_total_pasivos'], 2) ?></strong></td>
                                 </tr>
                                 <tr style="background:#f1f5f9;">
                                     <td><strong>PATRIMONIO (Capital)</strong></td>
-                                    <td><strong style="color:var(--primary); font-size:13px;">$<?= number_format($total_activos - $total_pasivos, 2) ?></strong></td>
+                                    <td><strong style="color:var(--primary); font-size:13px;">$<?= number_format($encuesta_negocio['_patrimonio'], 2) ?></strong></td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- Activos Adicionales (Tabla de otros activos) -->
-                <?php 
-                $act_neg = json_decode($encuesta_negocio['activos_negocio_json'] ?? '[]', true);
-                $act_hog = json_decode($encuesta_negocio['activos_hogar_json'] ?? '[]', true);
-                $all_act = array_merge(
-                    array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($act_neg)?$act_neg:[]),
-                    array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($act_hog)?$act_hog:[])
-                );
-                if (!empty($all_act)):
-                ?>
+                <?php if (!empty($all_act)): ?>
                 <h3 class="subsection-title">Otros Activos / Maquinaria / Enseres</h3>
                 <table class="table-premium">
                     <thead><tr><th>Tipo</th><th>Descripción / Activo</th><th>Detalle/Serie</th><th>Cantidad</th><th>Estado</th><th>Valor Unit.</th><th>Total</th></tr></thead>
@@ -785,11 +813,7 @@ if (in_array('historial', $secciones)) {
                 </table>
                 <?php endif; ?>
 
-                <!-- Producción Detallada -->
-                <?php 
-                $prod_json = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
-                if (!empty($prod_json)):
-                ?>
+                <?php if (!empty($prod_json)): ?>
                 <h3 class="subsection-title" style="margin-top:20px;">Productos de Producción (Detalle)</h3>
                 <table class="table-premium">
                     <thead><tr><th>Producto</th><th>Unidad</th><th>Cant. Mensual</th><th>Costo Unit.</th><th>Precio Venta</th><th>Margen ($)</th><th>Total Venta Mes</th></tr></thead>
@@ -822,11 +846,7 @@ if (in_array('historial', $secciones)) {
                 </table>
                 <?php endif; ?>
 
-                <!-- Comercio / Inventario -->
-                <?php 
-                $com_json = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
-                if (!empty($com_json)):
-                ?>
+                <?php if (!empty($com_json)): ?>
                 <h3 class="subsection-title" style="margin-top:20px;">Inventario de Comercio / Mercadería</h3>
                 <table class="table-premium">
                     <thead><tr><th>Producto / Mercadería</th><th>Stock Actual</th><th>Costo Compra</th><th>Precio Venta</th><th>Margen %</th><th>Valor Inventario</th></tr></thead>
@@ -859,15 +879,7 @@ if (in_array('historial', $secciones)) {
                 </table>
                 <?php endif; ?>
 
-                <?php 
-                $veh_neg = json_decode($encuesta_negocio['vehiculos_negocio_json'] ?? '[]', true);
-                $veh_hog = json_decode($encuesta_negocio['vehiculos_hogar_json'] ?? '[]', true);
-                $all_veh = array_merge(
-                    array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($veh_neg)?$veh_neg:[]),
-                    array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($veh_hog)?$veh_hog:[])
-                );
-                if (!empty($all_veh)):
-                ?>
+                <?php if (!empty($all_veh)): ?>
                 <h3 class="subsection-title">Vehículos</h3>
                 <table class="table-premium">
                     <thead><tr><th>Tipo</th><th>Descripción</th><th>Marca/Modelo</th><th>Año</th><th>Valor Estimado</th></tr></thead>
@@ -885,15 +897,7 @@ if (in_array('historial', $secciones)) {
                 </table>
                 <?php endif; ?>
 
-                <?php 
-                $inm_neg = json_decode($encuesta_negocio['inmuebles_negocio_json'] ?? '[]', true);
-                $inm_hog = json_decode($encuesta_negocio['inmuebles_hogar_json'] ?? '[]', true);
-                $all_inm = array_merge(
-                    array_map(fn($v) => array_merge($v, ['tipo' => 'Negocio']), is_array($inm_neg)?$inm_neg:[]),
-                    array_map(fn($v) => array_merge($v, ['tipo' => 'Hogar']), is_array($inm_hog)?$inm_hog:[])
-                );
-                if (!empty($all_inm)):
-                ?>
+                <?php if (!empty($all_inm)): ?>
                 <h3 class="subsection-title">Inmuebles / Propiedades</h3>
                 <table class="table-premium">
                     <thead><tr><th>Tipo</th><th>Descripción</th><th>Ubicación</th><th>Área</th><th>Valor Estimado</th></tr></thead>
@@ -911,10 +915,7 @@ if (in_array('historial', $secciones)) {
                 </table>
                 <?php endif; ?>
                 
-                <?php 
-                $com_prods = json_decode($encuesta_negocio['comercio_productos_json'] ?? '[]', true);
-                if (!empty($com_prods)):
-                ?>
+                <?php if (!empty($com_json)): ?>
                 <h3 class="subsection-title">Inventario de Productos (Comercio)</h3>
                 <table class="table-premium">
                     <thead><tr><th>Producto</th><th>Costo Unit.</th><th>P. Venta</th><th>Cant. Mes</th><th>Venta Mes</th><th>Margen</th><th>Existencias</th></tr></thead>
@@ -934,10 +935,7 @@ if (in_array('historial', $secciones)) {
                 </table>
                 <?php endif; ?>
                 
-                <?php 
-                $prods = json_decode($encuesta_negocio['productos_json'] ?? '[]', true);
-                if (!empty($prods)):
-                ?>
+                <?php if (!empty($prod_json)): ?>
                 <h3 class="subsection-title">Estructura de Producción / Servicios</h3>
                 <?php foreach ($prods as $p): if (empty($p['nombre'])) continue; ?>
                 <div class="finance-summary mb-3">
