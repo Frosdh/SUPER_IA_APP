@@ -537,7 +537,7 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-<?php if ($is_supervisor_ui): ?>
+<?php if ($user_role === 'supervisor' || $user_role === 'asesor'): ?>
         :root {
             --brand-yellow: #ffdd00;
             --brand-yellow-deep: #f4c400;
@@ -550,16 +550,26 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
             --brand-shadow: 0 16px 34px rgba(18, 58, 109, 0.08);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: linear-gradient(180deg, #f8fafc 0%, var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
+        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--brand-bg); display: flex; height: 100vh; color: var(--brand-navy-deep); }
+        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; z-index: 100; }
+        .sidebar-brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
+        .sidebar-brand i { color:var(--brand-yellow); }
+        .sidebar-section { padding: 0 15px; margin-bottom: 22px; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.5); letter-spacing: 0.6px; padding: 0 10px; margin-bottom: 10px; font-weight: 700; }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 15px; margin-bottom: 4px; border-radius: 10px; color: rgba(255,255,255,0.82); text-decoration: none; font-size: 14px; border: 1px solid transparent; transition: all .22s; position: relative; }
+        .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
+        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; }
+        .badge-nav { background:#dc2626; color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:10px; margin-left:auto; }
+
         .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
-        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
+        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); position: sticky; top: 0; z-index: 50; }
+        .navbar-custom h2 { margin: 0; font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .navbar-custom h2 i { color: var(--brand-yellow); }
         .user-info { display: flex; align-items: center; gap: 15px; }
-        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; }
+        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; font-size: 13px; }
         .btn-logout:hover { background: rgba(255,221,0,0.24); color: white; }
+
         .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        .page-header { margin-bottom: 30px; }
-        .page-header h1 { margin: 0; font-size: 28px; font-weight: 800; color: var(--brand-navy-deep); }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
         .stat-card { background: var(--brand-card); padding: 20px; border-radius: 16px; box-shadow: var(--brand-shadow); text-align: center; border: 1px solid var(--brand-border); }
         .stat-card .number { font-size: 32px; font-weight: 800; color: var(--brand-navy-deep); }
@@ -572,7 +582,6 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
         .table tbody td { padding: 14px; vertical-align: middle; border-color: rgba(215,224,234,0.55); }
         .table tbody tr:hover { background: rgba(255,221,0,0.06); }
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 <?php else: ?>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -596,14 +605,6 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
         .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
         .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
         .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        @media (max-width: 1200px) {
-            .sidebar { width: 200px; }
-            .main-content { margin-left: 200px; }
-        }
-        @media (max-width: 768px) {
-            .sidebar { width: 180px; }
-            .main-content { margin-left: 180px; }
-        }
         .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }
@@ -627,7 +628,6 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
         .badge-pending { background: #f59e0b; }
         .badge-prospect { background: #3b82f6; }
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 <?php endif; ?>
     </style>
@@ -635,17 +635,85 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
 <body>
 
 <?php 
+// ── Lógica para Sidebar Asesor ────────────────────────────────
+if ($user_role === 'asesor') {
+    $tareas_pendientes = 0;
+    try {
+        if (isset($asesor_table_id) && $asesor_table_id) {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM tarea WHERE asesor_id = ? AND fecha_programada = CURRENT_DATE AND estado != 'completada'");
+            $st->execute([$asesor_table_id]);
+            $tareas_pendientes = (int)$st->fetchColumn();
+
+        }
+    } catch (PDOException $e) {}
+}
+
 if ($user_role === 'supervisor') {
-    $navTitle = 'Operaciones'; 
-    $navIcon = 'fas fa-handshake';
+    $navTitle = 'Operaciones'; $navIcon = 'fas fa-handshake';
     require_once '_sidebar_supervisor.php'; 
-} else { ?>
-<!-- SIDEBAR Y NAVBAR LEGACY PARA OTROS ROLES (Si aplica) -->
-<div class="sidebar">...</div>
-<div class="main-content">
-    <div class="navbar-custom">...</div>
-    <div class="content-area">
+} elseif ($user_role === 'asesor') {
+    $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';
+    require_once '_sidebar_asesor.php';
+} else {
+    // Sidebar genérico para otros roles (Admin / SuperAdmin)
+?>
+<div class="sidebar">
+    <div class="sidebar-brand"><i class="fas fa-chart-pie"></i><span>Super_IA</span></div>
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">PRINCIPAL</div>
+        <a href="index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa</a>
+    </div>
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">GESTIÓN</div>
+        <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> Clientes</a>
+        <a href="operaciones.php" class="sidebar-link active"><i class="fas fa-handshake"></i> Operaciones</a>
+        <a href="alertas.php" class="sidebar-link"><i class="fas fa-bell"></i> Alertas</a>
+    </div>
+</div>
 <?php } ?>
+
+
+<?php if ($user_role !== 'supervisor'): ?>
+<!-- MAIN CONTENT -->
+<div class="main-content">
+    <!-- NAVBAR -->
+    <div class="navbar-custom">
+        <?php if ($user_role === 'asesor'): ?>
+            <h2><i class="fas fa-handshake me-2" style="color: var(--brand-yellow);"></i> Mis Operaciones — Asesor</h2>
+        <?php else: ?>
+            <h2><?php echo $user_role === 'super_admin' ? '👑' : '🎯'; ?> Super_IA 
+                <?php 
+                if ($user_role === 'super_admin') echo '- SuperAdmin';
+                elseif ($user_role === 'admin') echo '- Admin';
+                ?>
+            </h2>
+        <?php endif; ?>
+
+        <div class="user-info">
+            <div style="text-align: right;">
+                <strong style="display:block;">
+                    <?php 
+                    if ($user_role === 'super_admin') echo htmlspecialchars($_SESSION['super_admin_nombre']);
+                    elseif ($user_role === 'admin') echo htmlspecialchars($_SESSION['admin_nombre']);
+                    else echo htmlspecialchars($_SESSION['asesor_nombre']);
+                    ?>
+                </strong>
+                <small style="opacity:0.7;">
+                    <?php 
+                    if ($user_role === 'super_admin') echo 'SuperAdministrador';
+                    elseif ($user_role === 'admin') echo 'Administrador';
+                    else echo 'Asesor de campo';
+                    ?>
+                </small>
+            </div>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt me-1"></i>Salir</a>
+        </div>
+    </div>
+    
+    <!-- CONTENT -->
+    <div class="content-area">
+<?php endif; ?>
 
         <div class="page-header">
             <h1><i class="fas fa-handshake me-2"></i><?= htmlspecialchars($page_title) ?></h1>

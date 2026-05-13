@@ -70,15 +70,6 @@ try {
 $tareas_pendientes = 0;
 foreach ($tareas_dia as $t) if (($t['estado'] ?? '') !== 'completada') $tareas_pendientes++;
 
-/* ---------- Alertas pendientes (asesor: las suyas) ---------- */
-$alertas_pendientes = 0;
-try {
-    if ($asesor_table_id) {
-        $st = $pdo->prepare("SELECT COUNT(*) FROM alerta_modificacion WHERE asesor_id = ? AND vista_supervisor = 0");
-        $st->execute([$asesor_table_id]);
-        $alertas_pendientes = (int)$st->fetchColumn();
-    }
-} catch (PDOException $e) {}
 
 /* ---------- Meta diaria (si existe) ---------- */
 $meta_dia = null;

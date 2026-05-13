@@ -346,9 +346,6 @@ if ($user_role === 'asesor') {
             $st->execute([$asesor_table_id]);
             $tareas_pendientes = (int)$st->fetchColumn();
 
-            $st = $pdo->prepare("SELECT COUNT(*) FROM alerta_modificacion WHERE asesor_id = ? AND vista_supervisor = 0");
-            $st->execute([$asesor_table_id]);
-            $alertas_pendientes = (int)$st->fetchColumn();
         }
     } catch (PDOException $e) {}
 }

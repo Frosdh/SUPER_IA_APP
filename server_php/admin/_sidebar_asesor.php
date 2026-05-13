@@ -60,13 +60,6 @@ $alertas_pendientes = $alertas_pendientes ?? 0;
            class="sidebar-link <?= ($currentPage === 'metas') ? 'active' : '' ?>">
             <i class="fas fa-bullseye"></i> Mis Metas
         </a>
-        <a href="alertas.php"
-           class="sidebar-link <?= ($currentPage === 'alertas') ? 'active' : '' ?>">
-            <i class="fas fa-bell"></i> Alertas
-            <?php if ($alertas_pendientes > 0): ?>
-                <span class="badge-nav"><?= $alertas_pendientes > 99 ? '99+' : $alertas_pendientes ?></span>
-            <?php endif; ?>
-        </a>
     </div>
 
     <!-- SESIÓN -->
