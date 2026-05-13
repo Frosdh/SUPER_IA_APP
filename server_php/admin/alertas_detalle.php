@@ -131,25 +131,137 @@ try {
 } catch (\Throwable $_) {}
 
 // ── Helpers ─────────────────────────────────────────────────────
+function render_json_to_html($val, $fieldName = '') {
+    if ($val === null || $val === '') return '<span class="dat-empty">Sin datos</span>';
+    
+    // Si es un string, intentamos decodificarlo
+    $data = is_string($val) ? json_decode($val, true) : $val;
+    
+    // Si no es un array o falla la decodificación, mostramos el valor original
+    if ($data === null || !is_array($data)) return htmlspecialchars((string)$val);
+    if (empty($data)) return '<span class="json-empty">Vacío</span>';
+
+    // Eliminar elementos vacíos
+    $data = array_filter($data, function($item) {
+        if (!is_array($item)) return !empty($item);
+        foreach ($item as $v) if (!empty($v)) return true;
+        return false;
+    });
+    if (empty($data)) return '<span class="json-empty">Sin datos registrados</span>';
+
+    $html = '<table class="json-table" style="border: 1px solid #e2e8f0;"><thead><tr>';
+    
+    $first = reset($data);
+    if (!is_array($first)) {
+        $html .= '<th style="background:#f8fafc;border-bottom:2px solid #cbd5e1;">Valor</th></tr></thead><tbody>';
+        foreach ($data as $v) $html .= '<tr><td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">' . htmlspecialchars((string)$v) . '</td></tr>';
+        $html .= '</tbody></table>';
+        return $html;
+    }
+
+    $cols = array_keys($first);
+    foreach ($cols as $col) {
+        if ($col === 'materias') continue;
+        $html .= '<th style="background:#f8fafc;border-bottom:2px solid #cbd5e1;">' . htmlspecialchars(ucwords(str_replace(['_','json'],' ',$col))) . '</th>';
+    }
+    if (isset($first['materias'])) $html .= '<th style="background:#f8fafc;border-bottom:2px solid #cbd5e1;">Materias Primas</th>';
+    $html .= '</tr></thead><tbody>';
+
+    foreach ($data as $item) {
+        $html .= '<tr>';
+        foreach ($cols as $col) {
+            if ($col === 'materias') continue;
+            $v = $item[$col] ?? '';
+            // Si es un valor numérico que no es año, ponerlo en negrita
+            $is_money = (is_numeric($v) && !preg_match('/^(20\d{2}|19\d{2})$/', $v) && strpos($col, 'cantidad') === false);
+            $html .= '<td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;">' . ($is_money ? '<strong>'.htmlspecialchars((string)$v).'</strong>' : htmlspecialchars((string)$v)) . '</td>';
+        }
+        if (isset($item['materias']) && is_array($item['materias'])) {
+            $html .= '<td style="padding:8px 12px;border-bottom:1px solid #f1f5f9;"><div class="nested-json">';
+            foreach ($item['materias'] as $m) {
+                if (!empty($m['nombre'])) {
+                    $html .= '<div style="margin-bottom:2px;"><span class="json-tag" style="background:#e0f2fe;color:#0369a1;">' . htmlspecialchars($m['nombre']) . '</span> <span style="font-weight:700;">$' . htmlspecialchars($m['valor'] ?? '0') . '</span></div>';
+                }
+            }
+            $html .= '</div></td>';
+        }
+        $html .= '</tr>';
+    }
+    $html .= '</tbody></table>';
+    return $html;
+}
+
 function normalize_for_compare($v) {
-    if ($v===null) return '';
-    if (is_bool($v)) return $v?'1':'0';
-    if (is_scalar($v)) return trim((string)$v);
-    if (is_array($v)||is_object($v)) { $a=is_array($v)?$v:(array)$v; ksort($a); return json_encode($a,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); }
+    if ($v === null || $v === '' || $v === 0 || $v === 0.0 || $v === '0' || $v === '0.00' || $v === '0.0000') return '';
+    if (is_bool($v)) return $v ? '1' : '0';
+    if (is_numeric($v)) return (string)round((float)$v, 4);
+    if (is_array($v) || is_object($v)) {
+        $a = (array)$v; ksort($a);
+        return json_encode($a, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
     return trim((string)$v);
 }
-function dat($v, $suf='') {
-    if ($v===null||trim((string)$v)==='') return '<span class="dat-empty">—</span>';
-    return '<strong>'.htmlspecialchars($v).'</strong>'.($suf?" $suf":'');
+
+function dat($v, $suf = '') {
+    $sv = trim((string)$v);
+    if ($v === null || $sv === '') return '<span class="dat-empty">—</span>';
+    // Si es un número puro 0, lo mostramos como 0.00 para finanzas
+    if (($v === 0 || $v === '0') && $suf === 'USD') return '<strong>0.00</strong> ' . $suf;
+    return '<strong>' . htmlspecialchars($sv) . '</strong>' . ($suf ? " $suf" : '');
 }
-function erow($label,$val,$suf='') {
-    return '<div class="d-row"><span class="d-lbl">'.htmlspecialchars($label).'</span><span class="d-val">'.dat($val,$suf).'</span></div>';
+
+function erow($label, $new_val, $old_val = null, $suf = '') {
+    $has_change = (normalize_for_compare($new_val) !== normalize_for_compare($old_val));
+    
+    // Si la etiqueta o el valor sugieren JSON
+    if (strpos(strtolower($label), 'json') !== false || (is_string($new_val) && (strpos($new_val, '[{') === 0 || strpos($new_val, '{"') === 0))) {
+        $cleanLabel = str_replace(['Json', 'JSON'], '', $label);
+        $html = '<tr><td colspan="3" style="background:#f8fafc;padding:12px;font-weight:800;color:var(--navy2);border-bottom:1px solid var(--border);">';
+        $html .= '<div style="display:flex;align-items:center;gap:8px;"><i class="fas fa-table-list" style="color:#f59e0b;"></i> ' . htmlspecialchars($cleanLabel) . ($has_change ? ' <span class="badge-cnt" style="margin-left:0;font-size:9px;">MODIFICADO</span>' : '') . '</div></td></tr>';
+        
+        if ($has_change) {
+            $html .= '<tr><td class="dk changed" style="width:20%;">Snapshot</td>';
+            $html .= '<td class="da" style="width:40%;"><div class="v-old" style="margin-bottom:4px;font-weight:700;">VALOR ANTERIOR:</div>' . render_json_to_html($old_val) . '</td>';
+            $html .= '<td class="db" style="width:40%;"><div class="v-new" style="margin-bottom:4px;font-weight:700;">VALOR ACTUALIZADO:</div>' . render_json_to_html($new_val) . '</td></tr>';
+        } else {
+            $html .= '<tr><td class="dk" style="width:20%;">Datos</td><td colspan="2" class="du">' . render_json_to_html($new_val) . '</td></tr>';
+        }
+        return $html;
+    }
+
+    $avs = dat($old_val, $suf);
+    $nvs = dat($new_val, $suf);
+    $ch = $has_change;
+
+    $html = '<tr>';
+    $html .= '<td class="dk' . ($ch ? ' changed' : '') . '">' . htmlspecialchars($label) . ($ch ? ' <i class="fas fa-pen v-ch-icon" style="color:#f59e0b;"></i>' : '') . '</td>';
+    $html .= '<td class="' . ($ch ? 'da' : 'du') . '">' . ($ch ? $avs : $nvs) . '</td>';
+    $html .= '<td class="' . ($ch ? 'db' : 'du') . '">' . $nvs . '</td>';
+    $html .= '</tr>';
+    
+    return $html;
 }
-function eyn($label,$v) {
-    if ($v===null||$v==='') $chip='<span class="dat-empty">—</span>';
-    elseif (intval($v)===1||$v==='si'||$v===true) $chip='<span class="chip-si">Sí</span>';
-    else $chip='<span class="chip-no">No</span>';
-    return '<div class="d-row"><span class="d-lbl">'.htmlspecialchars($label).'</span><span class="d-val">'.$chip.'</span></div>';
+
+function eyn($label, $new_val, $old_val = null) {
+    $has_change = (normalize_for_compare($new_val) !== normalize_for_compare($old_val));
+    
+    $render_chip = function($v) {
+        if ($v === null || $v === '') return '<span class="dat-empty">—</span>';
+        if (intval($v) === 1 || $v === 'si' || $v === '1') return '<span class="chip-si">Sí</span>';
+        return '<span class="chip-no">No</span>';
+    };
+
+    $ch = $has_change;
+    $avs = $render_chip($old_val);
+    $nvs = $render_chip($new_val);
+
+    $html = '<tr>';
+    $html .= '<td class="dk' . ($ch ? ' changed' : '') . '">' . htmlspecialchars($label) . ($ch ? ' <i class="fas fa-pen v-ch-icon" style="color:#f59e0b;"></i>' : '') . '</td>';
+    $html .= '<td class="' . ($ch ? 'da' : 'du') . '">' . ($ch ? $avs : $nvs) . '</td>';
+    $html .= '<td class="' . ($ch ? 'db' : 'du') . '">' . $nvs . '</td>';
+    $html .= '</tr>';
+    
+    return $html;
 }
 function estado_badge($e) {
     $map=['completada'=>['#ecfdf5','#065f46','✓'],'en_proceso'=>['#dbeafe','#1e40af','⚡'],'programada'=>['#fffbeb','#92400e','📅'],'pendiente'=>['#fffbeb','#92400e','⏳'],'cancelada'=>['#fef2f2','#991b1b','🚫'],'postergada'=>['#f3e8ff','#6b21a8','↺']];
@@ -215,10 +327,10 @@ if ($is_ajax) {
 .alm-detalle .diff-table thead th{background:#f8fafc;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;padding:9px 10px;text-align:left;border-bottom:2px solid #d7e0ea;}
 .alm-detalle .diff-table tbody td{padding:8px 10px;border-bottom:1px solid #f0f2f5;vertical-align:top;}
 .alm-detalle .diff-table tbody tr:last-child td{border-bottom:none;}
-.alm-detalle .dk{font-weight:700;color:#0a2748;width:25%;white-space:nowrap;}
+.alm-detalle .dk{font-weight:700;color:#0a2748;width:25%;}
 .alm-detalle .dk.changed{background:#fffbeb;}
-.alm-detalle .da{background:#fef2f2;max-width:35%;}
-.alm-detalle .db{background:#f0fdf4;max-width:35%;}
+.alm-detalle .da{background:#fef2f2;width:37.5%;}
+.alm-detalle .db{background:#f0fdf4;width:37.5%;}
 .alm-detalle .du{background:#fafbfc;}
 .alm-detalle .sec-sub{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#123a6d;margin:14px 0 7px;padding-bottom:4px;border-bottom:2px solid #ffdd00;display:flex;align-items:center;gap:6px;}
 .alm-detalle .empty-note{color:#9ca3af;font-style:italic;font-size:12.5px;padding:10px 0;}
@@ -305,10 +417,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
 .diff-table thead th{background:#f8fafc;color:var(--gray);font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid var(--border);}
 .diff-table tbody td{padding:9px 12px;border-bottom:1px solid #f0f2f5;vertical-align:top;}
 .diff-table tbody tr:last-child td{border-bottom:none;}
-.dk{font-weight:700;color:var(--navy);width:25%;white-space:nowrap;}
+.dk{font-weight:700;color:var(--navy);width:25%;}
 .dk.changed{background:#fffbeb;}
-.da{background:#fef2f2;max-width:35%;}
-.db{background:#f0fdf4;max-width:35%;}
+.da{background:#fef2f2;width:37.5%;}
+.db{background:#f0fdf4;width:37.5%;}
 .du{background:#fafbfc;}
 .sec-sub{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:var(--navy2);margin:16px 0 8px;padding-bottom:5px;border-bottom:2px solid var(--yellow);display:flex;align-items:center;gap:7px;}
 .empty-note{color:#9ca3af;font-style:italic;font-size:13px;padding:12px 0;}
@@ -333,6 +445,23 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
 
 /* Credit */
 .cred-estado{display:inline-block;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;}
+
+/* JSON Pretty Tables */
+.json-table{width:100%;border-collapse:collapse;font-size:11px;margin:8px 0;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.08);border:1px solid #e2e8f0;}
+.json-table th{background:#f8fafc;color:#475569;font-weight:700;padding:10px 12px;text-align:left;border-bottom:2px solid #cbd5e1;text-transform:uppercase;font-size:9px;white-space:nowrap;}
+.json-table td{padding:10px 12px;border-bottom:1px solid #f1f5f9;color:#1e293b;vertical-align:top;line-height:1.4;}
+.json-table tr:last-child td{border-bottom:none;}
+.json-table tr:hover td{background:#f8fafc;}
+.json-empty{color:#94a3b8;font-style:italic;padding:8px 0;}
+.json-tag{display:inline-block;background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;margin-right:4px;}
+.nested-json{margin:4px 0 0 10px;padding-left:10px;border-left:2px solid #e2e8f0;}
+
+/* Comparison in detail */
+.val-comp{display:flex;flex-direction:column;gap:2px;}
+.v-old{font-size:11px;color:#ef4444;text-decoration:line-through;opacity:0.7;margin-bottom:1px;}
+.v-new{font-weight:700;color:#10b981;}
+.v-same{font-weight:600;color:var(--navy);}
+.v-ch-icon{font-size:10px;margin-right:4px;color:#f59e0b;}
 
 @media(max-width:768px){.alert-hero{flex-direction:column;}.d-grid{grid-template-columns:1fr;}.page-body{padding:16px;}}
 </style>
@@ -388,79 +517,41 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
     </div>
     <div class="sec-body">
         <div class="legend">
+        <div class="diff-legend" style="margin-top:20px;">
             <span class="leg leg-b"><span class="leg-dot"></span> ANTES (valor previo)</span>
             <span class="leg leg-a"><span class="leg-dot"></span> AHORA (valor nuevo)</span>
             <span class="leg leg-c"><span class="leg-dot"></span> Campo con cambio</span>
         </div>
-        <?php
-        $hide_keys=['id','created_at','updated_at','tarea_id','cliente_prospecto_id','asesor_id','supervisor_id','fallback_from_db'];
-
-        function render_diff_section($title, $a, $b, $hide) {
-            $a=is_array($a)?$a:[]; $b=is_array($b)?$b:[];
-            $keys=array_values(array_filter(array_unique(array_merge(array_keys($a),array_keys($b))),fn($k)=>!in_array($k,$hide)));
-            $changed=0; foreach($keys as $k) if(normalize_for_compare($a[$k]??null)!==normalize_for_compare($b[$k]??null)) $changed++;
-            echo '<div class="sec-sub"><i class="fas fa-layer-group"></i>'.htmlspecialchars($title);
-            if($changed>0) echo ' <span style="background:#f59e0b;color:#fff;border-radius:5px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;">'.$changed.' cambio'.($changed===1?'':'s').'</span>';
-            else echo ' <span style="background:#10b981;color:#fff;border-radius:5px;padding:1px 7px;font-size:10px;font-weight:700;margin-left:6px;">Sin cambios</span>';
-            echo '</div>';
-            if(empty($keys)){echo '<p class="empty-note">Sin datos registrados</p>'; return;}
-            echo '<table class="diff-table"><thead><tr><th>Campo</th><th>ANTES</th><th>AHORA</th></tr></thead><tbody>';
-            foreach($keys as $k) {
-                $av=$a[$k]??null; $bv=$b[$k]??null;
-                $avs=is_array($av)||is_object($av)?json_encode($av,JSON_UNESCAPED_UNICODE):($av===null?'':htmlspecialchars((string)$av));
-                $bvs=is_array($bv)||is_object($bv)?json_encode($bv,JSON_UNESCAPED_UNICODE):($bv===null?'':htmlspecialchars((string)$bv));
-                $ch=(normalize_for_compare($av)!==normalize_for_compare($bv));
-                echo '<tr>';
-                echo '<td class="dk'.($ch?' changed':'').'">'.htmlspecialchars(ucwords(str_replace('_',' ',$k))).'</td>';
-                echo '<td class="'.($ch?'da':'du').'"><div style="max-height:120px;overflow:auto;word-break:break-all;">'.$avs.'</div></td>';
-                echo '<td class="'.($ch?'db':'du').'"><div style="max-height:120px;overflow:auto;word-break:break-all;">'.$bvs.'</div></td>';
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
-        }
-
-        render_diff_section('Datos del Cliente',      $ant['cliente']??null,            $new['cliente']??null,            $hide_keys);
-        render_diff_section('Encuesta Comercial',     $ant['encuesta_comercial']??null,  $new['encuesta_comercial']??null,  $hide_keys);
-        render_diff_section('Encuesta Negocio',       $ant['encuesta_negocio']??null,    $new['encuesta_negocio']??null,    $hide_keys);
-        render_diff_section('Acuerdo de Visita',      $ant['acuerdo_visita']??null,      $new['acuerdo_visita']??null,      $hide_keys);
-        ?>
     </div>
 </div>
 
-<!-- ══ DATOS COMPLETOS DEL CLIENTE ═══════════════════════════════ -->
-<?php if($cliente): ?>
+<!-- ══ DATOS DEL CLIENTE ════════════════════════════════════════ -->
 <div class="sec-card">
     <div class="sec-head">
         <div class="sec-icon ic-blue"><i class="fas fa-user"></i></div>
-        <h5>Datos Completos del Cliente</h5>
+        <h5>Datos del Cliente (Comparación)</h5>
     </div>
-    <div class="sec-body">
-        <div class="d-grid">
-            <?= erow('Nombre completo', ($cliente['nombre']??'').' '.($cliente['apellidos']??'')) ?>
-            <?= erow('Cédula / RUC', $cliente['cedula']??'') ?>
-            <?= erow('Teléfono', $cliente['telefono']??'') ?>
-            <?= erow('Celular', $cliente['celular']??'') ?>
-            <?= erow('Email', $cliente['email']??'') ?>
-            <?= erow('Ciudad', $cliente['ciudad']??'') ?>
-            <?= erow('Dirección', $cliente['direccion']??'') ?>
-            <?= erow('Zona', $cliente['zona']??'') ?>
-            <?= erow('Actividad económica', $cliente['actividad']??'') ?>
-            <?= erow('Género', $cliente['genero']??'') ?>
-            <?= erow('Fecha nacimiento', $cliente['fecha_nacimiento']??'') ?>
-            <?= erow('Estado civil', $cliente['estado_civil']??'') ?>
-            <?= erow('Nivel educación', $cliente['nivel_educacion']??'') ?>
-            <?= erow('Tipo vivienda', $cliente['tipo_vivienda']??'') ?>
-            <?= erow('Dependientes', $cliente['num_dependientes']??'') ?>
-            <?= eyn('Tiene RUC', $cliente['tiene_ruc']??null) ?>
-            <?= eyn('Tiene RISE', $cliente['tiene_rise']??null) ?>
-            <?= erow('Número RUC', $cliente['numero_ruc']??'') ?>
-            <?= erow('Asesor asignado', $cliente['asesor_nombre']??'') ?>
-            <?= erow('Origen prospecto', $cliente['origen_prospecto']??'') ?>
-            <?= erow('Fecha registro', !empty($cliente['created_at'])?date('d/m/Y H:i',strtotime($cliente['created_at'])):'') ?>
-        </div>
+    <div class="sec-body" style="padding:0;">
+        <table class="diff-table" style="margin-bottom:0;">
+            <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+            <tbody>
+            <?= erow('Nombre', ($new['cliente']['nombre']??$cliente['nombre']??'').' '.($new['cliente']['apellidos']??$cliente['apellidos']??''), ($ant['cliente']['nombre']??'').' '.($ant['cliente']['apellidos']??'')) ?>
+            <?= erow('Cédula / RUC', $new['cliente']['cedula']??$cliente['cedula']??'', $ant['cliente']['cedula']??'') ?>
+            <?= erow('Teléfono', $new['cliente']['telefono']??$cliente['telefono']??'', $ant['cliente']['telefono']??'') ?>
+            <?= erow('Celular', $new['cliente']['celular']??$cliente['celular']??'', $ant['cliente']['celular']??'') ?>
+            <?= erow('Email', $new['cliente']['email']??$cliente['email']??'', $ant['cliente']['email']??'') ?>
+            <?= erow('Ciudad', $new['cliente']['ciudad']??$cliente['ciudad']??'', $ant['cliente']['ciudad']??'') ?>
+            <?= erow('Dirección', $new['cliente']['direccion']??$cliente['direccion']??'', $ant['cliente']['direccion']??'') ?>
+            <?= erow('Zona', $new['cliente']['zona']??$cliente['zona']??'', $ant['cliente']['zona']??'') ?>
+            <?= erow('Actividad', $new['cliente']['actividad']??$cliente['actividad']??'', $ant['cliente']['actividad']??'') ?>
+            <?= eyn('Tiene RUC', $new['cliente']['tiene_ruc']??$cliente['tiene_ruc']??null, $ant['cliente']['tiene_ruc']??null) ?>
+            <?= eyn('Tiene RISE', $new['cliente']['tiene_rise']??$cliente['tiene_rise']??null, $ant['cliente']['tiene_rise']??null) ?>
+            </tbody>
+        </table>
     </div>
 </div>
-<?php endif; ?>
+
+
 
 <!-- ══ ENCUESTA COMERCIAL ══════════════════════════════════════ -->
 <?php if($encuesta_com): ?>
@@ -470,30 +561,62 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
         <h5>Encuesta Comercial</h5>
         <?php if(!empty($encuesta_com['created_at'])): ?><small style="margin-left:auto;color:var(--gray);font-size:12px;"><?= date('d/m/Y H:i',strtotime($encuesta_com['created_at'])) ?></small><?php endif; ?>
     </div>
-    <div class="sec-body">
-        <div class="d-grid">
-            <?= erow('Ingreso mensual', $encuesta_com['ingreso_mensual']??'', 'USD') ?>
-            <?= erow('Ingreso familiar', $encuesta_com['ingreso_familiar']??'', 'USD') ?>
-            <?= erow('Gasto mensual', $encuesta_com['gasto_mensual']??'', 'USD') ?>
-            <?= erow('Deuda actual', $encuesta_com['deuda_actual']??'', 'USD') ?>
-            <?= erow('Cuota máx. que puede pagar', $encuesta_com['cuota_maxima']??'', 'USD') ?>
-            <?= erow('Monto solicitado', $encuesta_com['monto_solicitado']??'', 'USD') ?>
-            <?= erow('Plazo deseado (meses)', $encuesta_com['plazo_deseado']??'') ?>
-            <?= erow('Destino del crédito', $encuesta_com['destino_credito']??'') ?>
-            <?= erow('Institución actual', $encuesta_com['institucion_actual']??'') ?>
-            <?= eyn('Tiene historial crediticio', $encuesta_com['tiene_historial']??null) ?>
-            <?= eyn('Está en buró sin problemas', $encuesta_com['buro_sin_problemas']??null) ?>
-            <?= erow('Calificación buró', $encuesta_com['calificacion_buro']??'') ?>
-            <?= erow('Observaciones', $encuesta_com['observaciones']??'') ?>
-        </div>
-        <?php
-        $prods_inter=[];
-        $pfull=['credito'=>'Crédito','cuenta_corriente'=>'Cuenta Corriente','cuenta_ahorros'=>'Cuenta de Ahorros','inversiones'=>'Inversiones','seguro_vida'=>'Seguro de Vida','tarjeta_credito'=>'Tarjeta de Crédito'];
-        foreach($pfull as $k=>$l) if(!empty($encuesta_com[$k])||!empty($encuesta_com['interes_'.$k])) $prods_inter[]=$l;
-        if($prods_inter): ?>
-        <div class="sec-sub" style="margin-top:12px;"><i class="fas fa-star"></i> Productos de Interés</div>
-        <div><?php foreach($prods_inter as $p) echo '<span class="chip-prod">'.$p.'</span> '; ?></div>
-        <?php endif; ?>
+    <div class="sec-body" style="padding:0;">
+        <table class="diff-table" style="margin-bottom:0;">
+            <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+            <tbody>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-university"></i> Cuentas y Bancos</td></tr>
+            <?= eyn('Mantiene Ahorros', $encuesta_com['mantiene_cuenta_ahorro']??null, $ant['encuesta_comercial']['mantiene_cuenta_ahorro']??null) ?>
+            <?= erow('Banco Ahorros', $encuesta_com['banco_ahorro']??'', $ant['encuesta_comercial']['banco_ahorro']??'') ?>
+            <?= eyn('Mantiene Corriente', $encuesta_com['mantiene_cuenta_corriente']??null, $ant['encuesta_comercial']['mantiene_cuenta_corriente']??null) ?>
+            <?= erow('Banco Corriente', $encuesta_com['banco_corriente']??'', $ant['encuesta_comercial']['banco_corriente']??'') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-piggy-bank"></i> Inversiones</td></tr>
+            <?= eyn('Tiene Inversiones', $encuesta_com['tiene_inversiones']??null, $ant['encuesta_comercial']['tiene_inversiones']??null) ?>
+            <?= erow('Institución Inversión', $encuesta_com['institucion_inversiones']??'', $ant['encuesta_comercial']['institucion_inversiones']??'') ?>
+            <?= erow('Valor Inversión', $encuesta_com['valor_inversion']??'', $ant['encuesta_comercial']['valor_inversion']??'', 'USD') ?>
+            <?= erow('Plazo Inversión', $encuesta_com['plazo_inversion']??'', $ant['encuesta_comercial']['plazo_inversion']??'') ?>
+            <?= erow('Vencimiento Inversión', $encuesta_com['fecha_vencimiento_inversion']??'', $ant['encuesta_comercial']['fecha_vencimiento_inversion']??'') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-hand-holding-dollar"></i> Créditos Vigentes</td></tr>
+            <?= eyn('Tiene Ops. Crediticias', $encuesta_com['tiene_operaciones_crediticias']??null, $ant['encuesta_comercial']['tiene_operaciones_crediticias']??null) ?>
+            <?= erow('Institución Crédito', $encuesta_com['institucion_credito']??'', $ant['encuesta_comercial']['institucion_credito']??'') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-star"></i> Intereses y Perfil</td></tr>
+            <?= erow('Nivel de Interés', $encuesta_com['nivel_interes_captado']??$encuesta_com['nivel_interes']??'', $ant['encuesta_comercial']['nivel_interes_captado']??$ant['encuesta_comercial']['nivel_interes']??'') ?>
+            <?= eyn('Interés Cuenta Ahorros', $encuesta_com['interes_ahorro']??null, $ant['encuesta_comercial']['interes_ahorro']??null) ?>
+            <?= eyn('Interés Cuenta Corriente', $encuesta_com['interes_cc']??null, $ant['encuesta_comercial']['interes_cc']??null) ?>
+            <?= eyn('Interés Inversión', $encuesta_com['interes_inversion']??null, $ant['encuesta_comercial']['interes_inversion']??null) ?>
+            <?= eyn('Interés Crédito', $encuesta_com['interes_credito']??null, $ant['encuesta_comercial']['interes_credito']??null) ?>
+            
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-question-circle"></i> Razones de no trabajar con nosotros</td></tr>
+            <?= eyn('Ya trabaja con institución', $encuesta_com['razon_ya_trabaja_institucion']??null, $ant['encuesta_comercial']['razon_ya_trabaja_institucion']??null) ?>
+            <?= eyn('Desconfía servicios', $encuesta_com['razon_desconfia_servicios']??null, $ant['encuesta_comercial']['razon_desconfia_servicios']??null) ?>
+            <?= eyn('A gusto con actual', $encuesta_com['razon_agusto_actual']??null, $ant['encuesta_comercial']['razon_agusto_actual']??null) ?>
+            <?= eyn('Mala experiencia', $encuesta_com['razon_mala_experiencia']??null, $ant['encuesta_comercial']['razon_mala_experiencia']??null) ?>
+            <?= erow('Otras Razones', $encuesta_com['razon_otros']??'', $ant['encuesta_comercial']['razon_otros']??'') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-search-plus"></i> ¿Qué busca en una Institución?</td></tr>
+            <?php
+            $busca_tags = [];
+            if(!empty($encuesta_com['que_busca_agilidad'])) $busca_tags[] = 'Agilidad';
+            if(!empty($encuesta_com['que_busca_cajeros'])) $busca_tags[] = 'Cajeros';
+            if(!empty($encuesta_com['que_busca_banca_linea'])) $busca_tags[] = 'Banca en Línea';
+            if(!empty($encuesta_com['que_busca_agencias'])) $busca_tags[] = 'Agencias';
+            if(!empty($encuesta_com['que_busca_credito_rapido'])) $busca_tags[] = 'Crédito Rápido';
+            if(!empty($encuesta_com['que_busca_tarjeta_debito'])) $busca_tags[] = 'T. Débito';
+            if(!empty($encuesta_com['que_busca_tarjeta_credito'])) $busca_tags[] = 'T. Crédito';
+            ?>
+            <tr>
+                <td class="dk">Preferencias</td>
+                <td colspan="2" class="du">
+                <?php if($busca_tags): foreach($busca_tags as $tag) echo '<span class="chip-prod">'.$tag.'</span> '; 
+                else: echo '<span class="dat-empty">—</span>'; endif; ?>
+                </td>
+            </tr>
+
+            </tbody>
+        </table>
     </div>
 </div>
 <?php endif; ?>
@@ -506,57 +629,104 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
         <h5>Encuesta de Negocio / Empresa</h5>
         <?php if(!empty($encuesta_neg['created_at'])): ?><small style="margin-left:auto;color:var(--gray);font-size:12px;"><?= date('d/m/Y H:i',strtotime($encuesta_neg['created_at'])) ?></small><?php endif; ?>
     </div>
-    <div class="sec-body">
-        <div class="d-grid">
-            <?= erow('Nombre negocio', $encuesta_neg['nombre_empresa']??$encuesta_neg['nombre_negocio']??'') ?>
-            <?= erow('Tipo negocio', $encuesta_neg['tipo_negocio']??'') ?>
-            <?= erow('Actividad', $encuesta_neg['actividad']??'') ?>
-            <?= erow('Antigüedad (años)', $encuesta_neg['antiguedad_anios']??'') ?>
-            <?= erow('Número empleados', $encuesta_neg['num_empleados']??'') ?>
+    <div class="sec-body" style="padding:0;">
+        <table class="diff-table" style="margin-bottom:0;">
+            <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+            <tbody>
+            <?= erow('Nombre negocio', $new['cliente']['nombre_empresa']??$cliente['nombre_empresa']??'', $ant['cliente']['nombre_empresa']??'', '') ?>
+            <?= erow('Actividad', $new['cliente']['actividad']??$cliente['actividad']??'', $ant['cliente']['actividad']??'', '') ?>
+            <?= erow('Tipo de Empresa', $new['cliente']['tipo_empresa']??$cliente['tipo_empresa']??'', $ant['cliente']['tipo_empresa']??'', '') ?>
             
-            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-chart-line"></i> Datos Financieros / Balance</div>
-            <?= erow('Caja / Efectivo', $encuesta_neg['caja_efectivo']??'', 'USD') ?>
-            <?= erow('Bancos / Saldo', $encuesta_neg['bancos_saldo']??'', 'USD') ?>
-            <?= erow('Cuentas por Cobrar', $encuesta_neg['cxp_netas']??'', 'USD') ?>
-            <?= erow('Inv. Materia Prima', $encuesta_neg['inv_mat_prima']??'', 'USD') ?>
-            <?= erow('Inv. Prod. Terminado', $encuesta_neg['inv_prod_proc']??'', 'USD') ?>
-            <?= erow('Costos de Ventas', $encuesta_neg['costos_ventas']??'', 'USD') ?>
+            <?php if(!empty($new['cliente']['tiene_ruc']) || !empty($cliente['tiene_ruc'])): ?>
+                <?= erow('RUC', $new['cliente']['numero_ruc']??$cliente['numero_ruc']??'', $ant['cliente']['numero_ruc']??'', '') ?>
+                <?= erow('Régimen', $new['cliente']['regimen_tributario']??$cliente['regimen_tributario']??'', $ant['cliente']['regimen_tributario']??'', '') ?>
+                <?= eyn('Declara IVA', $new['cliente']['declara_iva']??$cliente['declara_iva']??null, $ant['cliente']['declara_iva']??null) ?>
+                <?= eyn('Emite facturas', $new['cliente']['emite_facturas']??$cliente['emite_facturas']??null, $ant['cliente']['emite_facturas']??null) ?>
+                <?= eyn('Lleva contabilidad', $new['cliente']['lleva_contabilidad']??$cliente['lleva_contabilidad']??null, $ant['cliente']['lleva_contabilidad']??null) ?>
+            <?php endif; ?>
+
+            <?php if(!empty($new['cliente']['tiene_rise']) || !empty($cliente['tiene_rise'])): ?>
+                <?= erow('Régimen (RISE)', $new['cliente']['regimen_tributario']??$cliente['regimen_tributario']??'', $ant['cliente']['regimen_tributario']??'', '') ?>
+                <?= eyn('Paga Cuota RISE', $new['cliente']['paga_cuota_rise']??$cliente['paga_cuota_rise']??null, $ant['cliente']['paga_cuota_rise']??null) ?>
+                <?= eyn('Emite Notas Venta', $new['cliente']['emite_notas_venta']??$cliente['emite_notas_venta']??null, $ant['cliente']['emite_notas_venta']??null) ?>
+                <?= eyn('Conoce Límite RISE', $new['cliente']['conoce_limite_rise']??$cliente['conoce_limite_rise']??null, $ant['cliente']['conoce_limite_rise']??null) ?>
+            <?php endif; ?>
             
-            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-file-invoice-dollar"></i> Pasivos / Deudas</div>
-            <?= erow('Créditos por Pagar', $encuesta_neg['creditos_pagar']??'', 'USD') ?>
-            <?= erow('Proveedores', $encuesta_neg['proveedores']??'', 'USD') ?>
-            <?= erow('Otras Deudas CP', $encuesta_neg['otras_deudas_cp']??'', 'USD') ?>
-            <?= erow('Pasivos LP', $encuesta_neg['pasivos_lp']??'', 'USD') ?>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-chart-pie"></i> Balance General / Situación Financiera</td></tr>
+            <?= erow('Caja / Efectivo', $new['encuesta_negocio']['caja_efectivo']??$encuesta_neg['caja_efectivo']??'', $ant['encuesta_negocio']['caja_efectivo']??'', 'USD') ?>
+            <?= erow('Bancos / Saldo', $new['encuesta_negocio']['bancos_saldo']??$encuesta_neg['bancos_saldo']??'', $ant['encuesta_negocio']['bancos_saldo']??'', 'USD') ?>
+            <?= erow('Cuentas por Cobrar', $new['encuesta_negocio']['cxp_netas']??$encuesta_neg['cxp_netas']??'', $ant['encuesta_negocio']['cxp_netas']??'', 'USD') ?>
+            <?= erow('Inv. Materia Prima', $new['encuesta_negocio']['inv_mat_prima']??$encuesta_neg['inv_mat_prima']??'', $ant['encuesta_negocio']['inv_mat_prima']??'', 'USD') ?>
+            <?= erow('Inv. Prod. Terminado', $new['encuesta_negocio']['inv_prod_proc']??$encuesta_neg['inv_prod_proc']??'', $ant['encuesta_negocio']['inv_prod_proc']??'', 'USD') ?>
+            <?= erow('Costos de Ventas', $new['encuesta_negocio']['costos_ventas']??$encuesta_neg['costos_ventas']??'', $ant['encuesta_negocio']['costos_ventas']??'', 'USD') ?>
+            <?= erow('Gastos Negocio Tot.', $new['encuesta_negocio']['gastos_negocio']??$encuesta_neg['gastos_negocio']??'', $ant['encuesta_negocio']['gastos_negocio']??'', 'USD') ?>
+            <?= erow('Gastos Familia Tot.', $new['encuesta_negocio']['gastos_familiares']??$encuesta_neg['gastos_familiares']??'', $ant['encuesta_negocio']['gastos_familiares']??'', 'USD') ?>
+            <?= erow('Otros Ingresos Tot.', $new['encuesta_negocio']['otros_ingresos']??$encuesta_neg['otros_ingresos']??'', $ant['encuesta_negocio']['otros_ingresos']??'', 'USD') ?>
             
-            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-calendar-days"></i> Ventas y Compras</div>
-            <?= erow('Venta Lun-Vie', $encuesta_neg['venta_lv']??'', 'USD') ?>
-            <?= erow('Venta Sábado', $encuesta_neg['venta_sabado']??'', 'USD') ?>
-            <?= erow('Venta Domingo', $encuesta_neg['venta_domingo']??'', 'USD') ?>
-            <?= erow('Compra Lun-Vie', $encuesta_neg['compra_lv']??'', 'USD') ?>
-            <?= erow('Compra Sábado', $encuesta_neg['compra_sabado']??'', 'USD') ?>
-            <?= erow('Compra Domingo', $encuesta_neg['compra_domingo']??'', 'USD') ?>
-            <?= erow('Mes alta venta', $encuesta_neg['mes_alta_venta']??'') ?>
-            <?= erow('Mes baja venta', $encuesta_neg['mes_baja_venta']??'') ?>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-money-bill-transfer"></i> Desglose de Gastos Negocio</td></tr>
+            <?= erow('G. Neg Sueldos', $new['encuesta_negocio']['g_neg_sueldos']??$encuesta_neg['g_neg_sueldos']??'', $ant['encuesta_negocio']['g_neg_sueldos']??'', 'USD') ?>
+            <?= erow('G. Neg Arriendo', $new['encuesta_negocio']['g_neg_arriendo']??$encuesta_neg['g_neg_arriendo']??'', $ant['encuesta_negocio']['g_neg_arriendo']??'', 'USD') ?>
+            <?= erow('G. Neg Serv Bas.', $new['encuesta_negocio']['g_neg_serv_bas']??$encuesta_neg['g_neg_serv_bas']??'', $ant['encuesta_negocio']['g_neg_serv_bas']??'', 'USD') ?>
+            <?= erow('G. Neg Transp.', $new['encuesta_negocio']['g_neg_transporte']??$encuesta_neg['g_neg_transporte']??'', $ant['encuesta_negocio']['g_neg_transporte']??'', 'USD') ?>
+            <?= erow('G. Neg Mant.', $new['encuesta_negocio']['g_neg_mantenimiento']??$encuesta_neg['g_neg_mantenimiento']??'', $ant['encuesta_negocio']['g_neg_mantenimiento']??'', 'USD') ?>
+            <?= erow('G. Neg Otros', $new['encuesta_negocio']['g_neg_otros']??$encuesta_neg['g_neg_otros']??'', $ant['encuesta_negocio']['g_neg_otros']??'', 'USD') ?>
+            <?= erow('G. Neg Imprev.', $new['encuesta_negocio']['g_neg_imprevistos']??$encuesta_neg['g_neg_imprevistos']??'', $ant['encuesta_negocio']['g_neg_imprevistos']??'', 'USD') ?>
+
+
             
-            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-house-user"></i> Datos del Local</div>
-            <?= eyn('Declara IVA', $encuesta_neg['declara_iva']??null) ?>
-            <?= eyn('Emite facturas', $encuesta_neg['emite_facturas']??null) ?>
-            <?= eyn('Lleva contabilidad', $encuesta_neg['lleva_contabilidad']??null) ?>
-            <?= erow('Local (propio/arriendo)', $encuesta_neg['tipo_local']??'') ?>
-            <?= erow('Valor arriendo', $encuesta_neg['valor_arriendo']??'', 'USD') ?>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-file-invoice-dollar"></i> Pasivos y Deudas</td></tr>
+            <?= erow('Créditos por Pagar', $new['encuesta_negocio']['creditos_pagar']??$encuesta_neg['creditos_pagar']??'', $ant['encuesta_negocio']['creditos_pagar']??'', 'USD') ?>
+            <?= erow('Proveedores', $new['encuesta_negocio']['proveedores']??$encuesta_neg['proveedores']??'', $ant['encuesta_negocio']['proveedores']??'', 'USD') ?>
+            <?= erow('Otras Deudas CP', $new['encuesta_negocio']['otras_deudas_cp']??$encuesta_neg['otras_deudas_cp']??'', $ant['encuesta_negocio']['otras_deudas_cp']??'', 'USD') ?>
+            <?= erow('Pasivos Largo Plazo', $new['encuesta_negocio']['pasivos_lp']??$encuesta_neg['pasivos_lp']??'', $ant['encuesta_negocio']['pasivos_lp']??'', 'USD') ?>
+            <?= erow('Otras Deudas Detalle Json', $new['encuesta_negocio']['otras_deudas_json']??$encuesta_neg['otras_deudas_json']??'', $ant['encuesta_negocio']['otras_deudas_json']??'', '') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-calendar-alt"></i> Ventas Mensuales</td></tr>
+            <?= erow('Venta Lun-Vie', $new['encuesta_negocio']['venta_lv']??$encuesta_neg['venta_lv']??'', $ant['encuesta_negocio']['venta_lv']??'', 'USD') ?>
+            <?= erow('Venta Sábado', $new['encuesta_negocio']['venta_sabado']??$encuesta_neg['venta_sabado']??'', $ant['encuesta_negocio']['venta_sabado']??'', 'USD') ?>
+            <?= erow('Venta Domingo', $new['encuesta_negocio']['venta_domingo']??$encuesta_neg['venta_domingo']??'', $ant['encuesta_negocio']['venta_domingo']??'', 'USD') ?>
+            <?= erow('Venta Lunes', $new['encuesta_negocio']['venta_lunes']??$encuesta_neg['venta_lunes']??'', $ant['encuesta_negocio']['venta_lunes']??'', 'USD') ?>
+            <?= erow('Venta Martes', $new['encuesta_negocio']['venta_martes']??$encuesta_neg['venta_martes']??'', $ant['encuesta_negocio']['venta_martes']??'', 'USD') ?>
+            <?= erow('Venta Miércoles', $new['encuesta_negocio']['venta_miercoles']??$encuesta_neg['venta_miercoles']??'', $ant['encuesta_negocio']['venta_miercoles']??'', 'USD') ?>
+            <?= erow('Venta Jueves', $new['encuesta_negocio']['venta_jueves']??$encuesta_neg['venta_jueves']??'', $ant['encuesta_negocio']['venta_jueves']??'', 'USD') ?>
+            <?= erow('Venta Viernes', $new['encuesta_negocio']['venta_viernes']??$encuesta_neg['venta_viernes']??'', $ant['encuesta_negocio']['venta_viernes']??'', 'USD') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-truck-loading"></i> Compras Mensuales</td></tr>
+            <?= erow('Compra Lun-Vie', $new['encuesta_negocio']['compra_lv']??$encuesta_neg['compra_lv']??'', $ant['encuesta_negocio']['compra_lv']??'', 'USD') ?>
+            <?= erow('Compra Sábado', $new['encuesta_negocio']['compra_sabado']??$encuesta_neg['compra_sabado']??'', $ant['encuesta_negocio']['compra_sabado']??'', 'USD') ?>
+            <?= erow('Compra Domingo', $new['encuesta_negocio']['compra_domingo']??$encuesta_neg['compra_domingo']??'', $ant['encuesta_negocio']['compra_domingo']??'', 'USD') ?>
+            <?= erow('Compra Lunes', $new['encuesta_negocio']['compra_lunes']??$encuesta_neg['compra_lunes']??'', $ant['encuesta_negocio']['compra_lunes']??'', 'USD') ?>
+            <?= erow('Compra Martes', $new['encuesta_negocio']['compra_martes']??$encuesta_neg['compra_martes']??'', $ant['encuesta_negocio']['compra_martes']??'', 'USD') ?>
+            <?= erow('Compra Miércoles', $new['encuesta_negocio']['compra_miercoles']??$encuesta_neg['compra_miercoles']??'', $ant['encuesta_negocio']['compra_miercoles']??'', 'USD') ?>
+            <?= erow('Compra Jueves', $new['encuesta_negocio']['compra_jueves']??$encuesta_neg['compra_jueves']??'', $ant['encuesta_negocio']['compra_jueves']??'', 'USD') ?>
+            <?= erow('Compra Viernes', $new['encuesta_negocio']['compra_viernes']??$encuesta_neg['compra_viernes']??'', $ant['encuesta_negocio']['compra_viernes']??'', 'USD') ?>
             
-            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-building-circle-check"></i> Identificación Institucional</div>
-            <?= eyn('Conoce Institución', $encuesta_neg['p1_conoce_institucion']??null) ?>
-            <?= erow('Obs. Conoce', $encuesta_neg['p1_obs']??'') ?>
-            <?= eyn('Es Cliente', $encuesta_neg['p2_es_cliente']??null) ?>
-            <?= erow('Producto', $encuesta_neg['p2_producto']??'') ?>
-            <?= erow('Obs. Cliente', $encuesta_neg['p2_obs']??'') ?>
-            <?= erow('Satisfacción', $encuesta_neg['p3_satisfaccion']??'') ?>
-            <?= erow('Obs. Satisfacción', $encuesta_neg['p3_obs']??'') ?>
-            
-            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-comment"></i> Otros</div>
-            <?= erow('Observaciones', $encuesta_neg['observaciones']??'') ?>
-        </div>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-percent"></i> Porcentajes y Plazos</td></tr>
+            <?= erow('% Contado', $new['encuesta_negocio']['pct_contado']??$encuesta_neg['pct_contado']??'', $ant['encuesta_negocio']['pct_contado']??'', '%') ?>
+            <?= erow('% Crédito', $new['encuesta_negocio']['pct_credito']??$encuesta_neg['pct_credito']??'', $ant['encuesta_negocio']['pct_credito']??'', '%') ?>
+            <?= erow('% Efectivo', $new['encuesta_negocio']['pct_efectivo']??$encuesta_neg['pct_efectivo']??'', $ant['encuesta_negocio']['pct_efectivo']??'', '%') ?>
+            <?= erow('Recup. Crédito', $new['encuesta_negocio']['recuperacion_credito']??$encuesta_neg['recuperacion_credito']??'', $ant['encuesta_negocio']['recuperacion_credito']??'', 'USD') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-boxes-stacked"></i> Productos e Inventarios</td></tr>
+            <?php if (!empty($encuesta_neg['comercio_productos_json'])): ?>
+                <?= erow('Productos de Comercio Json', $new['encuesta_negocio']['comercio_productos_json']??$encuesta_neg['comercio_productos_json']??'', $ant['encuesta_negocio']['comercio_productos_json']??'', '') ?>
+            <?php endif; ?>
+            <?php if (!empty($encuesta_neg['productos_json'])): ?>
+                <?= erow('Productos de Producción Json', $new['encuesta_negocio']['productos_json']??$encuesta_neg['productos_json']??'', $ant['encuesta_negocio']['productos_json']??'', '') ?>
+            <?php endif; ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-car"></i> Activos Fijos</td></tr>
+            <?= erow('Vehículos Negocio Json', $new['encuesta_negocio']['vehiculos_negocio_json']??$encuesta_neg['vehiculos_negocio_json']??'', $ant['encuesta_negocio']['vehiculos_negocio_json']??'', '') ?>
+            <?= erow('Vehículos Hogar Json', $new['encuesta_negocio']['vehiculos_hogar_json']??$encuesta_neg['vehiculos_hogar_json']??'', $ant['encuesta_negocio']['vehiculos_hogar_json']??'', '') ?>
+            <?= erow('Inmuebles Negocio Json', $new['encuesta_negocio']['inmuebles_negocio_json']??$encuesta_neg['inmuebles_negocio_json']??'', $ant['encuesta_negocio']['inmuebles_negocio_json']??'', '') ?>
+            <?= erow('Inmuebles Hogar Json', $new['encuesta_negocio']['inmuebles_hogar_json']??$encuesta_neg['inmuebles_hogar_json']??'', $ant['encuesta_negocio']['inmuebles_hogar_json']??'', '') ?>
+            <?= erow('Activos Negocio Json', $new['encuesta_negocio']['activos_negocio_json']??$encuesta_neg['activos_negocio_json']??'', $ant['encuesta_negocio']['activos_negocio_json']??'', '') ?>
+            <?= erow('Activos Hogar Json', $new['encuesta_negocio']['activos_hogar_json']??$encuesta_neg['activos_hogar_json']??'', $ant['encuesta_negocio']['activos_hogar_json']??'', '') ?>
+
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-info-circle"></i> Otros Datos</td></tr>
+            <?= erow('Observaciones', $new['encuesta_negocio']['observaciones']??$encuesta_neg['observaciones']??'', $ant['encuesta_negocio']['observaciones']??'', '') ?>
+            </tbody>
+        </table>
     </div>
 </div>
 <?php endif; ?>
@@ -569,16 +739,19 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
         <h5>Acuerdo de Visita</h5>
         <?php if(!empty($acuerdo['created_at'])): ?><small style="margin-left:auto;color:var(--gray);font-size:12px;"><?= date('d/m/Y H:i',strtotime($acuerdo['created_at'])) ?></small><?php endif; ?>
     </div>
-    <div class="sec-body">
-        <div class="d-grid">
-            <?= erow('Acuerdo', $acuerdo['acuerdo']??'') ?>
-            <?= erow('Fecha acordada', $acuerdo['fecha_acuerdo']??'') ?>
-            <?= erow('Hora acordada', $acuerdo['hora_acuerdo']??'') ?>
-            <?= erow('Lugar', $acuerdo['lugar']??'') ?>
-            <?= eyn('Fue encuestado', $acuerdo['fue_encuestado']??null) ?>
-            <?= erow('Observaciones', $acuerdo['observaciones']??'') ?>
-            <?= erow('Resultado visita', $acuerdo['resultado']??'') ?>
-        </div>
+    <div class="sec-body" style="padding:0;">
+        <table class="diff-table" style="margin-bottom:0;">
+            <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+            <tbody>
+            <?= erow('Acuerdo', $acuerdo['acuerdo']??'', $ant['acuerdo_visita']['acuerdo']??'') ?>
+            <?= erow('Fecha acordada', $acuerdo['fecha_acuerdo']??'', $ant['acuerdo_visita']['fecha_acuerdo']??'') ?>
+            <?= erow('Hora acordada', $acuerdo['hora_acuerdo']??'', $ant['acuerdo_visita']['hora_acuerdo']??'') ?>
+            <?= erow('Lugar', $acuerdo['lugar']??'', $ant['acuerdo_visita']['lugar']??'') ?>
+            <?= eyn('Fue encuestado', $acuerdo['fue_encuestado']??null, $ant['acuerdo_visita']['fue_encuestado']??null) ?>
+            <?= erow('Observaciones', $acuerdo['observaciones']??'', $ant['acuerdo_visita']['observaciones']??'') ?>
+            <?= erow('Resultado visita', $acuerdo['resultado']??'', $ant['acuerdo_visita']['resultado']??'') ?>
+            </tbody>
+        </table>
     </div>
 </div>
 <?php endif; ?>
@@ -590,65 +763,82 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
         <div class="sec-icon ic-purple"><i class="fas fa-folder-open"></i></div>
         <h5>Fichas de Productos Solicitados</h5>
     </div>
-    <div class="sec-body">
+    <div class="sec-body" style="padding:0;">
+        <?php if($ficha_credito): ?>
+            <div class="sec-sub" style="margin:12px;"><i class="fas fa-hand-holding-usd" style="color:#d97706;"></i> Ficha de Crédito <small style="font-weight:400;font-size:11px;color:var(--gray);margin-left:6px;"><?= !empty($ficha_credito['created_at'])?date('d/m/Y H:i',strtotime($ficha_credito['created_at'])):'' ?></small></div>
+            <table class="diff-table" style="margin-bottom:0;">
+                <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+                <tbody>
+                <?= eyn('Requiere crédito', $ficha_credito['requiere_credito']??null) ?>
+                <?= erow('Monto solicitado', $ficha_credito['monto_credito']??'', '', 'USD') ?>
+                <?= erow('Plazo (meses)', $ficha_credito['plazo_credito_meses']??'') ?>
+                <?= erow('Solicitante', $ficha_credito['solicitante_nombre']??'') ?>
+                <?= erow('Cédula solicitante', $ficha_credito['solicitante_cedula']??'') ?>
+                <?= erow('Garante', $ficha_credito['garante_nombre']??'') ?>
+                <?= erow('Cédula garante', $ficha_credito['garante_cedula']??'') ?>
+                <?php
+                $dests=[];
+                if(!empty($ficha_credito['dest_capital_trabajo']))  $dests[]='Capital de trabajo';
+                if(!empty($ficha_credito['dest_activos_fijos']))    $dests[]='Activos fijos';
+                if(!empty($ficha_credito['dest_pago_deudas']))      $dests[]='Pago de deudas';
+                if(!empty($ficha_credito['dest_consolidacion']))    $dests[]='Consolidación';
+                if(!empty($ficha_credito['dest_vehiculo']))         $dests[]='Vehículo';
+                if(!empty($ficha_credito['dest_vivienda_compra']))  $dests[]='Compra vivienda';
+                if(!empty($ficha_credito['dest_arreglos_vivienda']))$dests[]='Arreglos vivienda';
+                if(!empty($ficha_credito['dest_educacion']))        $dests[]='Educación';
+                if(!empty($ficha_credito['dest_viajes']))           $dests[]='Viajes';
+                if(!empty($ficha_credito['dest_otros']))            $dests[]='Otros: '.htmlspecialchars($ficha_credito['dest_otros_detalle']??'');
+                if($dests): ?>
+                <tr>
+                    <td class="dk">Destino del crédito</td>
+                    <td colspan="2" class="du">
+                    <?php foreach($dests as $d) echo '<span class="chip-prod" style="background:linear-gradient(135deg,#d97706,#f59e0b);">'.$d.'</span> '; ?>
+                    </td>
+                </tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
 
-    <?php if($ficha_credito): ?>
-        <div class="sec-sub" style="margin-bottom:12px;"><i class="fas fa-hand-holding-usd" style="color:#d97706;"></i> Ficha de Crédito <small style="font-weight:400;font-size:11px;color:var(--gray);margin-left:6px;"><?= !empty($ficha_credito['created_at'])?date('d/m/Y H:i',strtotime($ficha_credito['created_at'])):'' ?></small></div>
-        <div class="d-grid">
-            <?= eyn('Requiere crédito', $ficha_credito['requiere_credito']??null) ?>
-            <?= erow('Monto solicitado', $ficha_credito['monto_credito']??'', 'USD') ?>
-            <?= erow('Plazo (meses)', $ficha_credito['plazo_credito_meses']??'') ?>
-            <?= erow('Solicitante', $ficha_credito['solicitante_nombre']??'') ?>
-            <?= erow('Cédula solicitante', $ficha_credito['solicitante_cedula']??'') ?>
-            <?= erow('Garante', $ficha_credito['garante_nombre']??'') ?>
-            <?= erow('Cédula garante', $ficha_credito['garante_cedula']??'') ?>
-        </div>
-        <?php
-        $dests=[];
-        if(!empty($ficha_credito['dest_capital_trabajo']))  $dests[]='Capital de trabajo';
-        if(!empty($ficha_credito['dest_activos_fijos']))    $dests[]='Activos fijos';
-        if(!empty($ficha_credito['dest_pago_deudas']))      $dests[]='Pago de deudas';
-        if(!empty($ficha_credito['dest_consolidacion']))    $dests[]='Consolidación';
-        if(!empty($ficha_credito['dest_vehiculo']))         $dests[]='Vehículo';
-        if(!empty($ficha_credito['dest_vivienda_compra']))  $dests[]='Compra vivienda';
-        if(!empty($ficha_credito['dest_arreglos_vivienda']))$dests[]='Arreglos vivienda';
-        if(!empty($ficha_credito['dest_educacion']))        $dests[]='Educación';
-        if(!empty($ficha_credito['dest_viajes']))           $dests[]='Viajes';
-        if(!empty($ficha_credito['dest_otros']))            $dests[]='Otros: '.htmlspecialchars($ficha_credito['dest_otros_detalle']??'');
-        if($dests): ?><div style="margin-top:8px;"><strong style="font-size:12px;color:var(--gray);">Destino del crédito:</strong><br><?php foreach($dests as $d) echo '<span class="chip-prod" style="background:linear-gradient(135deg,#d97706,#f59e0b);">'.$d.'</span> '; ?></div><?php endif; ?>
-    <?php endif; ?>
+        <?php if($ficha_corriente): ?>
+            <div class="sec-sub" style="margin:16px 12px 12px;"><i class="fas fa-university" style="color:#0d9488;"></i> Cuenta Corriente</div>
+            <table class="diff-table" style="margin-bottom:0;">
+                <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+                <tbody>
+                <?= eyn('Requiere cuenta corriente', $ficha_corriente['requiere_corriente']??null) ?>
+                <?= erow('Tipo uso', $ficha_corriente['tipo_uso']??'') ?>
+                <?= erow('Monto promedio', $ficha_corriente['monto_promedio']??'', '', 'USD') ?>
+                <?= erow('Observaciones', $ficha_corriente['observaciones']??'') ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
 
-    <?php if($ficha_corriente): ?>
-        <div class="sec-sub" style="margin:16px 0 12px;"><i class="fas fa-university" style="color:#0d9488;"></i> Cuenta Corriente</div>
-        <div class="d-grid">
-            <?= eyn('Requiere cuenta corriente', $ficha_corriente['requiere_corriente']??null) ?>
-            <?= erow('Tipo uso', $ficha_corriente['tipo_uso']??'') ?>
-            <?= erow('Monto promedio', $ficha_corriente['monto_promedio']??'', 'USD') ?>
-            <?= erow('Observaciones', $ficha_corriente['observaciones']??'') ?>
-        </div>
-    <?php endif; ?>
+        <?php if($ficha_ahorros): ?>
+            <div class="sec-sub" style="margin:16px 12px 12px;"><i class="fas fa-piggy-bank" style="color:#059669;"></i> Cuenta de Ahorros</div>
+            <table class="diff-table" style="margin-bottom:0;">
+                <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+                <tbody>
+                <?= eyn('Requiere cuenta de ahorros', $ficha_ahorros['requiere_ahorros']??null) ?>
+                <?= erow('Monto a depositar inicial', $ficha_ahorros['monto_inicial']??'', '', 'USD') ?>
+                <?= erow('Objetivo de ahorro', $ficha_ahorros['objetivo']??'') ?>
+                <?= erow('Observaciones', $ficha_ahorros['observaciones']??'') ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
 
-    <?php if($ficha_ahorros): ?>
-        <div class="sec-sub" style="margin:16px 0 12px;"><i class="fas fa-piggy-bank" style="color:#059669;"></i> Cuenta de Ahorros</div>
-        <div class="d-grid">
-            <?= eyn('Requiere cuenta de ahorros', $ficha_ahorros['requiere_ahorros']??null) ?>
-            <?= erow('Monto a depositar inicial', $ficha_ahorros['monto_inicial']??'', 'USD') ?>
-            <?= erow('Objetivo de ahorro', $ficha_ahorros['objetivo']??'') ?>
-            <?= erow('Observaciones', $ficha_ahorros['observaciones']??'') ?>
-        </div>
-    <?php endif; ?>
-
-    <?php if($ficha_inversiones): ?>
-        <div class="sec-sub" style="margin:16px 0 12px;"><i class="fas fa-chart-line" style="color:#7c3aed;"></i> Inversiones</div>
-        <div class="d-grid">
-            <?= eyn('Interesado en inversiones', $ficha_inversiones['requiere_inversiones']??null) ?>
-            <?= erow('Monto a invertir', $ficha_inversiones['monto_inversion']??'', 'USD') ?>
-            <?= erow('Plazo deseado (meses)', $ficha_inversiones['plazo_meses']??'') ?>
-            <?= erow('Perfil de riesgo', $ficha_inversiones['perfil_riesgo']??'') ?>
-            <?= erow('Observaciones', $ficha_inversiones['observaciones']??'') ?>
-        </div>
-    <?php endif; ?>
-
+        <?php if($ficha_inversiones): ?>
+            <div class="sec-sub" style="margin:16px 12px 12px;"><i class="fas fa-chart-line" style="color:#7c3aed;"></i> Inversiones</div>
+            <table class="diff-table" style="margin-bottom:0;">
+                <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+                <tbody>
+                <?= eyn('Interesado en inversiones', $ficha_inversiones['requiere_inversiones']??null) ?>
+                <?= erow('Monto a invertir', $ficha_inversiones['monto_inversion']??'', '', 'USD') ?>
+                <?= erow('Plazo deseado (meses)', $ficha_inversiones['plazo_meses']??'') ?>
+                <?= erow('Perfil de riesgo', $ficha_inversiones['perfil_riesgo']??'') ?>
+                <?= erow('Observaciones', $ficha_inversiones['observaciones']??'') ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
     </div>
 </div>
 <?php endif; ?>
