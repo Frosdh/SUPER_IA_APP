@@ -513,6 +513,22 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
             <?= erow('Actividad', $encuesta_neg['actividad']??'') ?>
             <?= erow('Antigüedad (años)', $encuesta_neg['antiguedad_anios']??'') ?>
             <?= erow('Número empleados', $encuesta_neg['num_empleados']??'') ?>
+            
+            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-chart-line"></i> Datos Financieros / Balance</div>
+            <?= erow('Caja / Efectivo', $encuesta_neg['caja_efectivo']??'', 'USD') ?>
+            <?= erow('Bancos / Saldo', $encuesta_neg['bancos_saldo']??'', 'USD') ?>
+            <?= erow('Cuentas por Cobrar', $encuesta_neg['cxp_netas']??'', 'USD') ?>
+            <?= erow('Inv. Materia Prima', $encuesta_neg['inv_mat_prima']??'', 'USD') ?>
+            <?= erow('Inv. Prod. Terminado', $encuesta_neg['inv_prod_proc']??'', 'USD') ?>
+            <?= erow('Costos de Ventas', $encuesta_neg['costos_ventas']??'', 'USD') ?>
+            
+            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-file-invoice-dollar"></i> Pasivos / Deudas</div>
+            <?= erow('Créditos por Pagar', $encuesta_neg['creditos_pagar']??'', 'USD') ?>
+            <?= erow('Proveedores', $encuesta_neg['proveedores']??'', 'USD') ?>
+            <?= erow('Otras Deudas CP', $encuesta_neg['otras_deudas_cp']??'', 'USD') ?>
+            <?= erow('Pasivos LP', $encuesta_neg['pasivos_lp']??'', 'USD') ?>
+            
+            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-calendar-days"></i> Ventas y Compras</div>
             <?= erow('Venta Lun-Vie', $encuesta_neg['venta_lv']??'', 'USD') ?>
             <?= erow('Venta Sábado', $encuesta_neg['venta_sabado']??'', 'USD') ?>
             <?= erow('Venta Domingo', $encuesta_neg['venta_domingo']??'', 'USD') ?>
@@ -521,11 +537,24 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
             <?= erow('Compra Domingo', $encuesta_neg['compra_domingo']??'', 'USD') ?>
             <?= erow('Mes alta venta', $encuesta_neg['mes_alta_venta']??'') ?>
             <?= erow('Mes baja venta', $encuesta_neg['mes_baja_venta']??'') ?>
+            
+            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-house-user"></i> Datos del Local</div>
             <?= eyn('Declara IVA', $encuesta_neg['declara_iva']??null) ?>
             <?= eyn('Emite facturas', $encuesta_neg['emite_facturas']??null) ?>
             <?= eyn('Lleva contabilidad', $encuesta_neg['lleva_contabilidad']??null) ?>
             <?= erow('Local (propio/arriendo)', $encuesta_neg['tipo_local']??'') ?>
             <?= erow('Valor arriendo', $encuesta_neg['valor_arriendo']??'', 'USD') ?>
+            
+            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-building-circle-check"></i> Identificación Institucional</div>
+            <?= eyn('Conoce Institución', $encuesta_neg['p1_conoce_institucion']??null) ?>
+            <?= erow('Obs. Conoce', $encuesta_neg['p1_obs']??'') ?>
+            <?= eyn('Es Cliente', $encuesta_neg['p2_es_cliente']??null) ?>
+            <?= erow('Producto', $encuesta_neg['p2_producto']??'') ?>
+            <?= erow('Obs. Cliente', $encuesta_neg['p2_obs']??'') ?>
+            <?= erow('Satisfacción', $encuesta_neg['p3_satisfaccion']??'') ?>
+            <?= erow('Obs. Satisfacción', $encuesta_neg['p3_obs']??'') ?>
+            
+            <div class="sec-sub" style="grid-column: 1 / -1;"><i class="fas fa-comment"></i> Otros</div>
             <?= erow('Observaciones', $encuesta_neg['observaciones']??'') ?>
         </div>
     </div>

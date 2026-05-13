@@ -70,6 +70,7 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
             'Modificación de tarea' as tipo,
             CONCAT('La tarea ', t.id, ' fue modificada por el asesor ', u_asesor.nombre) as mensaje,
             cp.nombre as cliente_nombre,
+            cp.cedula as cliente_cedula,
             u_asesor.nombre as asesor_nombre,
             am.created_at as fecha,
             CASE WHEN am.vista_supervisor = 0 THEN 'abierta' ELSE 'cerrada' END as estado
@@ -142,7 +143,7 @@ function extract_cliente_from_snapshot($txt) {
 }
 
 function extract_cliente_details($txt) {
-    $out = ['name'=>null,'phone'=>null,'email'=>null,'tramites'=>[]];
+    $out = ['name'=>null,'phone'=>null,'email'=>null,'tramites'=>[], 'cedula'=>null];
     if (empty($txt)) return $out;
     $d = json_decode($txt, true);
     if (!is_array($d)) return $out;
@@ -151,6 +152,7 @@ function extract_cliente_details($txt) {
         $out['name'] = $c['nombre'] ?? $c['nombre_completo'] ?? $out['name'];
         $out['phone'] = $c['telefono'] ?? $c['telefono2'] ?? $out['phone'];
         $out['email'] = $c['email'] ?? $c['email_cliente'] ?? $out['email'];
+        $out['cedula'] = $c['cedula'] ?? $c['identificacion'] ?? $c['dni'] ?? null;
     }
     if (!empty($d['encuesta_comercial']) && is_array($d['encuesta_comercial'])) {
         $e = $d['encuesta_comercial'];
@@ -224,24 +226,25 @@ foreach ($alertas as &$a) {
     $new_txt = $a['valor_nuevo'] ?? null;
     $ant_det = extract_cliente_details($ant_txt);
     $new_det = extract_cliente_details($new_txt);
+    
     if ($ant_det['name']) {
         $a['cliente_nombre_display'] = $ant_det['name'];
+        $a['cliente_cedula_display'] = $ant_det['cedula'] ?? ($a['cliente_cedula'] ?? 'S/N');
         $a['cliente_phone'] = $ant_det['phone'];
         $a['cliente_email'] = $ant_det['email'];
         $a['cliente_tramites'] = compare_tramites($ant_txt, $new_txt);
-        $a['cliente_display_source'] = 'antes';
     } elseif ($new_det['name']) {
         $a['cliente_nombre_display'] = $new_det['name'];
+        $a['cliente_cedula_display'] = $new_det['cedula'] ?? ($a['cliente_cedula'] ?? 'S/N');
         $a['cliente_phone'] = $new_det['phone'];
         $a['cliente_email'] = $new_det['email'];
         $a['cliente_tramites'] = compare_tramites($ant_txt, $new_txt);
-        $a['cliente_display_source'] = 'despues';
     } else {
         $a['cliente_nombre_display'] = $a['cliente_nombre'] ?? 'Sin cliente';
+        $a['cliente_cedula_display'] = $a['cliente_cedula'] ?? 'S/N';
         $a['cliente_phone'] = null;
         $a['cliente_email'] = null;
         $a['cliente_tramites'] = [];
-        $a['cliente_display_source'] = 'actual';
     }
 }
 unset($a);
@@ -386,6 +389,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
         .tram-danger  { background:#fee2e2; color:#7f1d1d; }
         .tram-warning { background:#fffbeb; color:#92400e; }
         .tram-secondary { background:#f3f4f6; color:#374151; }
+
+        /* Estilos específicos para Alertas */
+        .alerts-table-custom {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 12px; /* Espaciado entre filas */
+            margin-top: -12px;
+        }
+        .alerts-table-custom thead th {
+            padding: 12px 20px;
+            color: var(--brand-gray);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 700;
+            border: none;
+        }
+        .alerts-table-custom tbody tr {
+            background: #fff;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            transition: all 0.3s ease;
+            border-radius: 12px;
+        }
+        .alerts-table-custom tbody tr:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(18,58,109,0.08);
+            background: #fff !important;
+        }
+        .alerts-table-custom tbody td {
+            padding: 18px 20px;
+            border: none;
+            vertical-align: middle;
+        }
+        .alerts-table-custom tbody td:first-child { border-top-left-radius: 14px; border-bottom-left-radius: 14px; }
+        .alerts-table-custom tbody td:last-child { border-top-right-radius: 14px; border-bottom-right-radius: 14px; }
+        
+        .search-container-premium {
+            background: #fff;
+            padding: 20px;
+            border-radius: 16px;
+            margin-bottom: 25px;
+            border: 1px solid var(--brand-border);
+            box-shadow: var(--brand-shadow);
+        }
     </style>
 
     <!-- ================================================================
@@ -545,81 +592,105 @@ if ($user_role === 'supervisor') {
             </div>
         </div>
 
-        <!-- Tabla de alertas -->
-        <div class="table-card">
-            <div class="card-header-custom">
-                <h6>⚠️ Listado de Alertas</h6>
+        <!-- Buscador -->
+        <div class="search-container-premium">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <h5 class="mb-0 fw-800 text-navy"><i class="fas fa-list-ul me-2 text-primary"></i> Registro de Modificaciones</h5>
+                    <small class="text-muted">Gestiona y revisa los cambios realizados por tu equipo</small>
+                </div>
+                <div class="input-group" style="width: 350px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
+                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                    <input type="text" id="alertSearch" class="form-control border-start-0" style="padding: 10px;" placeholder="Buscar por cliente o cédula...">
+                </div>
             </div>
-            <table class="table table-hover" id="alertas-table">
+        </div>
+
+        <!-- Tabla de alertas -->
+        <div class="table-responsive">
+            <table class="alerts-table-custom" id="alertas-table">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Tipo</th>
-                        <th>Mensaje</th>
-                        <th>Cliente</th>
-                        <?php if ($col_asesor): ?><th>Asesor Asignado</th><?php endif; ?>
-                        <th>Fecha</th>
-                        <th>Estado</th>
-                        <th>Acciones</th>
+                        <th style="width: 25%;">Cliente</th>
+                        <th style="width: 20%;">Cédula / Prospecto</th>
+                        <th style="width: 15%;">Fecha Modificado</th>
+                        <?php if ($col_asesor): ?><th style="width: 20%;">Asesor</th><?php endif; ?>
+                        <th class="text-center" style="width: 10%;">Estado</th>
+                        <th class="text-center" style="width: 10%;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php if (empty($alertas)): ?>
                     <tr>
-                        <td colspan="<?php echo $col_asesor ? 8 : 7; ?>" class="text-center py-4">
-                            <i class="fas fa-check-circle me-2" style="color: #10b981;"></i>No hay alertas pendientes
+                        <td colspan="<?php echo $col_asesor ? 6 : 5; ?>" class="text-center py-5">
+                            <div class="text-muted">
+                                <i class="fas fa-check-circle fa-3x mb-3 d-block opacity-25"></i>
+                                No hay alertas pendientes por revisar
+                            </div>
                         </td>
                     </tr>
                     <?php else: ?>
                         <?php foreach ($alertas as $alerta): ?>
-                        <tr data-alerta-id="<?php echo htmlspecialchars($alerta['id_alerta']); ?>">
-                            <td><strong>#<?php echo htmlspecialchars(substr($alerta['id_alerta'], 0, 8)); ?></strong></td>
-                            <td><span class="badge" style="background: #3182fe;"><?php echo htmlspecialchars($alerta['tipo']); ?></span></td>
-                            <td><?php echo htmlspecialchars(substr($alerta['mensaje'], 0, 80) . (strlen($alerta['mensaje']) > 80 ? '…' : '')); ?></td>
+                        <tr class="alert-row" 
+                            data-alerta-id="<?php echo htmlspecialchars($alerta['id_alerta']); ?>"
+                            data-search-name="<?php echo strtolower(htmlspecialchars($alerta['cliente_nombre_display'])); ?>"
+                            data-search-id="<?php echo strtolower(htmlspecialchars($alerta['cliente_cedula_display'])); ?>">
+                            
                             <td>
-                                <?php echo htmlspecialchars($alerta['cliente_nombre_display'] ?? ($alerta['cliente_nombre'] ?? 'Sin cliente')); ?>
-                                <?php if (!empty($alerta['cliente_phone']) || !empty($alerta['cliente_email'])): ?>
-                                    <br/>
-                                    <small class="text-muted">
-                                        <?php if (!empty($alerta['cliente_phone'])): ?>📞 <?php echo htmlspecialchars($alerta['cliente_phone']); ?><?php endif; ?>
-                                        <?php if (!empty($alerta['cliente_phone']) && !empty($alerta['cliente_email'])): ?> — <?php endif; ?>
-                                        <?php if (!empty($alerta['cliente_email'])): ?>✉️ <?php echo htmlspecialchars($alerta['cliente_email']); ?><?php endif; ?>
-                                    </small>
-                                <?php endif; ?>
-                                <?php if (!empty($alerta['cliente_display_source'])): ?>
-                                    <br/><small class="text-muted">Mostrando: <?php echo $alerta['cliente_display_source'] === 'antes' ? 'Antes' : ($alerta['cliente_display_source'] === 'despues' ? 'Ahora' : 'Actual'); ?></small>
-                                <?php endif; ?>
+                                <div class="fw-bold text-navy"><?php echo htmlspecialchars($alerta['cliente_nombre_display']); ?></div>
                                 <?php if (!empty($alerta['cliente_tramites']) && is_array($alerta['cliente_tramites'])): ?>
-                                    <div style="margin-top:6px;">
-                                        <?php foreach ($alerta['cliente_tramites'] as $ct): ?>
-                                            <?php $info = tramite_label_and_color($ct['key']); $label = $info[0]; $color = $info[1]; ?>
-                                            <?php if ($ct['status'] === 'added'): ?>
-                                                <span class="badge bg-<?php echo $color; ?> text-white" style="margin-right:6px; font-weight:600;">+ <?php echo htmlspecialchars($label); ?></span>
-                                            <?php else: ?>
-                                                <span class="badge bg-<?php echo $color; ?> text-white" style="margin-right:6px; font-weight:600; opacity:0.85;">− <?php echo htmlspecialchars($label); ?></span>
-                                            <?php endif; ?>
+                                    <div class="mt-1">
+                                        <?php foreach (array_slice($alerta['cliente_tramites'], 0, 2) as $ct): ?>
+                                            <?php $info = tramite_label_and_color($ct['key']); ?>
+                                            <span class="badge-premium badge-info-soft" style="font-size:9px; padding:2px 6px;">
+                                                <?php echo htmlspecialchars($info[0]); ?>
+                                            </span>
                                         <?php endforeach; ?>
+                                        <?php if (count($alerta['cliente_tramites']) > 2): ?>
+                                            <span class="text-muted small" style="font-size:10px;">+<?php echo count($alerta['cliente_tramites']) - 2; ?></span>
+                                        <?php endif; ?>
                                     </div>
                                 <?php endif; ?>
                             </td>
-                            <?php if ($col_asesor): ?>
-                            <td><?php echo htmlspecialchars($alerta['asesor_nombre'] ?? 'N/A'); ?></td>
-                            <?php endif; ?>
-                            <td><?php echo date('d/m/Y H:i', strtotime($alerta['fecha'])); ?></td>
+                            
                             <td>
+                                <span class="badge-premium badge-navy-soft">
+                                    <i class="far fa-id-card me-1"></i>
+                                    <?php echo htmlspecialchars($alerta['cliente_cedula_display']); ?>
+                                </span>
+                            </td>
+                            
+                            <td>
+                                <div class="fw-bold"><?php echo date('d/m/Y', strtotime($alerta['fecha'])); ?></div>
+                                <div class="text-muted small"><?php echo date('H:i', strtotime($alerta['fecha'])); ?></div>
+                            </td>
+
+                            <?php if ($col_asesor): ?>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="act-dot dot-blue" style="width:28px; height:28px; font-size:10px;">
+                                        <i class="fas fa-user-tie"></i>
+                                    </div>
+                                    <span class="fw-600 small"><?php echo htmlspecialchars($alerta['asesor_nombre'] ?? 'N/A'); ?></span>
+                                </div>
+                            </td>
+                            <?php endif; ?>
+
+                            <td class="text-center">
                                 <?php if ($alerta['estado'] === 'abierta'): ?>
-                                    <span class="badge" style="background: #ef4444;">⏳ Abierta</span>
+                                    <span class="badge-premium badge-danger-soft">Pendiente</span>
                                 <?php else: ?>
-                                    <span class="badge" style="background: #10b981;">✓ Cerrada</span>
+                                    <span class="badge-premium badge-success-soft">Revisada</span>
                                 <?php endif; ?>
                             </td>
-                            <td>
+
+                            <td class="text-center">
                                 <button type="button"
                                         class="btn btn-sm btn-outline-primary open-alert-detail"
-                                        title="Ver detalles"
+                                        style="border-radius:10px; padding:6px 12px;"
                                         data-alerta-id="<?php echo htmlspecialchars($alerta['id_alerta']); ?>"
                                         data-estado="<?php echo htmlspecialchars($alerta['estado']); ?>">
-                                    <i class="fas fa-eye"></i>
+                                    <i class="fas fa-eye me-1"></i> Ver
                                 </button>
                             </td>
                         </tr>
@@ -765,6 +836,26 @@ if ($user_role === 'supervisor') {
     document.addEventListener('keydown', function(e){
         if (e.key === 'Escape' && backdrop.classList.contains('alm-open')) closeModal();
     });
+
+    // ── BUSCADOR EN TIEMPO REAL ──────────────────────────────────
+    var alertSearch = document.getElementById('alertSearch');
+    if (alertSearch) {
+        alertSearch.addEventListener('input', function() {
+            var val = this.value.toLowerCase().trim();
+            var rows = document.querySelectorAll('.alert-row');
+            
+            rows.forEach(function(row) {
+                var name = row.getAttribute('data-search-name') || '';
+                var id   = row.getAttribute('data-search-id') || '';
+                
+                if (name.includes(val) || id.includes(val)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+    }
 
     // ── MARCAR COMO REVISADA ──────────────────────────────────────
     btnMark.addEventListener('click', function(){

@@ -427,10 +427,11 @@ try {
 
     $conn->begin_transaction();
 
-    // Insert provisional alerta with valor_anterior so admin can see backup even before updates finish
-    try {
-        $campo_mod = 'Modificación de encuesta finalizada';
-        $alerta_id = genUUID();
+    // ── SNAPSHOT: Crear alerta solo si es un levantamiento de empresa ──
+    if ($tipo_tarea_db === 'levantamiento') {
+        try {
+            $campo_mod = 'Modificación de levantamiento de empresa';
+            $alerta_id = genUUID();
         // Prefer partial output on error so we keep as much snapshot as possible.
         $val_ant_json = @json_encode($prev_snapshot, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
         // If encoding still fails, store a short textual fallback summary
@@ -1163,6 +1164,7 @@ try {
     } catch (\Throwable $eAl) {
         error_log('[actualizar_encuesta_completa] Alerta: ' . $eAl->getMessage());
     }
+}
 
     $conn->commit();
     $GLOBALS['phase'] = 'DONE';

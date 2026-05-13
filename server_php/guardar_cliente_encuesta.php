@@ -1002,8 +1002,8 @@ try {
                 $stSup->close();
             }
 
-            // Obtener nombre del asesor para el resumen
-            $asesor_nombre_alerta = '';
+            if ($tipo_tarea === 'levantamiento') {
+                $asesor_nombre_alerta = '';
             $stNm = $conn->prepare(
                 'SELECT u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE a.id = ? LIMIT 1'
             );
@@ -1050,6 +1050,7 @@ try {
                     $stAl->close();
                 }
             }
+        }
         } catch (\Throwable $eAl) {
             // No bloquear el flujo principal por un error de alerta
             error_log('[guardar_encuesta] Error creando alerta: ' . $eAl->getMessage());
