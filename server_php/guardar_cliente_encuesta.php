@@ -197,7 +197,7 @@ $conoce_limite_rise = intOrNull($_POST['conoce_limite_rise'] ?? null);
 $origen_prospecto = strOrNull($_POST['origen_prospecto'] ?? '');
 if ($origen_prospecto !== null) {
     $origen_prospecto = strtolower($origen_prospecto);
-    $origen_ok = ['frio','seguidor'];
+    $origen_ok = ['frio','seguidor','cliente','leads_llamadas'];
     if (!in_array($origen_prospecto, $origen_ok, true)) $origen_prospecto = null;
 }
 

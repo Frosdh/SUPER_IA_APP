@@ -484,7 +484,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             <div class="step-pane active" data-pane="0">
                 <div class="form-card">
                     <h3><i class="fas fa-route"></i>Tipo de visita</h3>
-                    <p class="sub">¿Es la primera vez que contactas a este prospecto o es un seguimiento?</p>
+                    <p class="sub">¿Cuál es el tipo de prospecto o contacto?</p>
                     <div class="visit-grid">
                         <div class="visit-card frio" data-tipo="frio" onclick="selectVisita(this)">
                             <div class="v-icon"><i class="fas fa-snowflake"></i></div>
@@ -495,6 +495,16 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <div class="v-icon"><i class="fas fa-arrows-rotate"></i></div>
                             <h4>Seguimiento</h4>
                             <p>Ya existe contacto o visita anterior.</p>
+                        </div>
+                        <div class="visit-card cliente" data-tipo="cliente" onclick="selectVisita(this)">
+                            <div class="v-icon"><i class="fas fa-user-check"></i></div>
+                            <h4>Cliente</h4>
+                            <p>Ya es cliente de nuestra institución.</p>
+                        </div>
+                        <div class="visit-card leads" data-tipo="leads_llamadas" onclick="selectVisita(this)">
+                            <div class="v-icon"><i class="fas fa-phone"></i></div>
+                            <h4>Leads/Llamadas</h4>
+                            <p>Contacto por links o llamadas.</p>
                         </div>
                     </div>
                 </div>

@@ -597,6 +597,31 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
             <?= erow('Otras Razones', $encuesta_com['razon_otros']??'', $ant['encuesta_comercial']['razon_otros']??'') ?>
 
             <tr><td colspan="3" class="sec-sub"><i class="fas fa-search-plus"></i> ¿Qué busca en una Institución?</td></tr>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-building-columns"></i> Percepción e Identificación</td></tr>
+            <?= eyn('Conoce la Institución', $new['encuesta_comercial']['conoce_institucion']??$encuesta_com['conoce_institucion']??null, $ant['encuesta_comercial']['conoce_institucion']??null) ?>
+            <?= erow('Obs. Percepción', $new['encuesta_comercial']['observaciones_p1']??$encuesta_com['observaciones_p1']??'', $ant['encuesta_comercial']['observaciones_p1']??'') ?>
+            <?= eyn('Es Cliente Actual', $new['encuesta_comercial']['es_cliente']??$encuesta_com['es_cliente']??null, $ant['encuesta_comercial']['es_cliente']??null) ?>
+            <?= erow('Productos que tiene', $new['encuesta_comercial']['producto_p2']??$encuesta_com['producto_p2']??'', $ant['encuesta_comercial']['producto_p2']??'') ?>
+            <?= erow('Nivel Satisfacción', $new['encuesta_comercial']['satisfaccion_p3']??$encuesta_com['satisfaccion_p3']??'', $ant['encuesta_comercial']['satisfaccion_p3']??'') ?>
+            
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-heart-circle-check"></i> Interés y Fidelización</td></tr>
+            <?= eyn('Interés en trabajar', $new['encuesta_comercial']['interes_trabajar']??$encuesta_com['interes_trabajar']??null, $ant['encuesta_comercial']['interes_trabajar']??null) ?>
+            <?php
+            $razones_tags = [];
+            if(!empty($encuesta_com['razon_ya_trabaja'])) $razones_tags[] = 'Ya trabaja con otros';
+            if(!empty($encuesta_com['razon_desconfia']))  $razones_tags[] = 'Desconfía';
+            if(!empty($encuesta_com['razon_a_gusto']))    $razones_tags[] = 'Está a gusto';
+            if(!empty($encuesta_com['razon_mala_exp']))   $razones_tags[] = 'Mala experiencia';
+            ?>
+            <?php if($razones_tags): ?>
+            <tr>
+                <td class="dk">Razones No Interés</td>
+                <td colspan="2" class="du">
+                <?php foreach($razones_tags as $tag) echo '<span class="chip-no" style="background:#fecaca;color:#991b1b;border:none;">'.$tag.'</span> '; ?>
+                </td>
+            </tr>
+            <?php endif; ?>
+
             <?php
             $busca_tags = [];
             if(!empty($encuesta_com['que_busca_agilidad'])) $busca_tags[] = 'Agilidad';
@@ -608,13 +633,39 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
             if(!empty($encuesta_com['que_busca_tarjeta_credito'])) $busca_tags[] = 'T. Crédito';
             ?>
             <tr>
-                <td class="dk">Preferencias</td>
+                <td class="dk">¿Qué busca en una Inst.?</td>
                 <td colspan="2" class="du">
                 <?php if($busca_tags): foreach($busca_tags as $tag) echo '<span class="chip-prod">'.$tag.'</span> '; 
                 else: echo '<span class="dat-empty">—</span>'; endif; ?>
                 </td>
             </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
+<!-- ══ PRODUCTOS EXTERNOS / COMPETENCIA ════════════════════════ -->
+<div class="sec-card">
+    <div class="sec-head">
+        <div class="sec-icon ic-blue"><i class="fas fa-landmark"></i></div>
+        <h5>Benchmark: Productos en Competencia</h5>
+    </div>
+    <div class="sec-body" style="padding:0;">
+        <table class="diff-table">
+            <thead><tr><th>Campo</th><th>Antes</th><th>Ahora</th></tr></thead>
+            <tbody>
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-piggy-bank"></i> Cuentas y Ahorros Externos</td></tr>
+            <?= eyn('Tiene ahorros en otros', $new['encuesta_comercial']['tiene_ahorro_otra']??$encuesta_com['tiene_ahorro_otra']??null, $ant['encuesta_comercial']['tiene_ahorro_otra']??null) ?>
+            <?= erow('Institución Ahorro', $new['encuesta_comercial']['institucion_ahorro']??$encuesta_com['institucion_ahorro']??'', $ant['encuesta_comercial']['institucion_ahorro']??'') ?>
+            <?= eyn('Tiene corriente en otros', $new['encuesta_comercial']['tiene_cc_otra']??$encuesta_com['tiene_cc_otra']??null, $ant['encuesta_comercial']['tiene_cc_otra']??null) ?>
+            <?= erow('Institución Corriente', $new['encuesta_comercial']['institucion_cc']??$encuesta_com['institucion_cc']??'', $ant['encuesta_comercial']['institucion_cc']??'') ?>
+            
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-chart-line"></i> Inversiones y Créditos Externos</td></tr>
+            <?= eyn('Tiene Inversiones', $new['encuesta_comercial']['tiene_inversiones']??$encuesta_com['tiene_inversiones']??null, $ant['encuesta_comercial']['tiene_inversiones']??null) ?>
+            <?= erow('Monto Inversión Ext.', $new['encuesta_comercial']['valor_inv']??$encuesta_com['valor_inv']??'', $ant['encuesta_comercial']['valor_inv']??'', 'USD') ?>
+            <?= erow('Fecha Vencimiento', $new['encuesta_comercial']['fecha_venc_inv']??$encuesta_com['fecha_venc_inv']??'', $ant['encuesta_comercial']['fecha_venc_inv']??'') ?>
+            <?= eyn('Tiene Créditos Vigentes', $new['encuesta_comercial']['tiene_ops_cred']??$encuesta_com['tiene_ops_cred']??null, $ant['encuesta_comercial']['tiene_ops_cred']??null) ?>
+            <?= erow('Institución Crédito', $new['encuesta_comercial']['inst_cred']??$encuesta_com['inst_cred']??'', $ant['encuesta_comercial']['inst_cred']??'') ?>
             </tbody>
         </table>
     </div>
@@ -674,12 +725,21 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
 
 
             
+            <tr><td colspan="3" class="sec-sub"><i class="fas fa-house-chimney-user"></i> Otros Ingresos y Gastos Familiares</td></tr>
+            <?= erow('O. Ing. Conyuge', $new['encuesta_negocio']['o_ing_conyuge']??$encuesta_neg['o_ing_conyuge']??'', $ant['encuesta_negocio']['o_ing_conyuge']??'', 'USD') ?>
+            <?= erow('O. Ing. Arriendos', $new['encuesta_negocio']['o_ing_arriendos']??$encuesta_neg['o_ing_arriendos']??'', $ant['encuesta_negocio']['o_ing_arriendos']??'', 'USD') ?>
+            <?= erow('O. Ing. Otros', $new['encuesta_negocio']['o_ing_otros']??$encuesta_neg['o_ing_otros']??'', $ant['encuesta_negocio']['o_ing_otros']??'', 'USD') ?>
+            <?= erow('G. Fam. Alim.', $new['encuesta_negocio']['g_fam_alim']??$encuesta_neg['g_fam_alim']??'', $ant['encuesta_negocio']['g_fam_alim']??'', 'USD') ?>
+            <?= erow('G. Fam. Arriendo', $new['encuesta_negocio']['g_fam_arriendo']??$encuesta_neg['g_fam_arriendo']??'', $ant['encuesta_negocio']['g_fam_arriendo']??'', 'USD') ?>
+            <?= erow('G. Fam. Educación', $new['encuesta_negocio']['g_fam_educacion']??$encuesta_neg['g_fam_educacion']??'', $ant['encuesta_negocio']['g_fam_educacion']??'', 'USD') ?>
+            <?= erow('G. Fam. Salud', $new['encuesta_negocio']['g_fam_salud']??$encuesta_neg['g_fam_salud']??'', $ant['encuesta_negocio']['g_fam_salud']??'', 'USD') ?>
+
             <tr><td colspan="3" class="sec-sub"><i class="fas fa-file-invoice-dollar"></i> Pasivos y Deudas</td></tr>
             <?= erow('Créditos por Pagar', $new['encuesta_negocio']['creditos_pagar']??$encuesta_neg['creditos_pagar']??'', $ant['encuesta_negocio']['creditos_pagar']??'', 'USD') ?>
             <?= erow('Proveedores', $new['encuesta_negocio']['proveedores']??$encuesta_neg['proveedores']??'', $ant['encuesta_negocio']['proveedores']??'', 'USD') ?>
             <?= erow('Otras Deudas CP', $new['encuesta_negocio']['otras_deudas_cp']??$encuesta_neg['otras_deudas_cp']??'', $ant['encuesta_negocio']['otras_deudas_cp']??'', 'USD') ?>
             <?= erow('Pasivos Largo Plazo', $new['encuesta_negocio']['pasivos_lp']??$encuesta_neg['pasivos_lp']??'', $ant['encuesta_negocio']['pasivos_lp']??'', 'USD') ?>
-            <?= erow('Otras Deudas Detalle Json', $new['encuesta_negocio']['otras_deudas_json']??$encuesta_neg['otras_deudas_json']??'', $ant['encuesta_negocio']['otras_deudas_json']??'', '') ?>
+            <?= erow('Otras Deudas Detalle', $new['encuesta_negocio']['otras_deudas_json']??$encuesta_neg['otras_deudas_json']??'', $ant['encuesta_negocio']['otras_deudas_json']??'', '') ?>
 
             <tr><td colspan="3" class="sec-sub"><i class="fas fa-calendar-alt"></i> Ventas Mensuales</td></tr>
             <?= erow('Venta Lun-Vie', $new['encuesta_negocio']['venta_lv']??$encuesta_neg['venta_lv']??'', $ant['encuesta_negocio']['venta_lv']??'', 'USD') ?>
@@ -776,6 +836,29 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--bg);color:var(--
                 <?= erow('Cédula solicitante', $ficha_credito['solicitante_cedula']??'') ?>
                 <?= erow('Garante', $ficha_credito['garante_nombre']??'') ?>
                 <?= erow('Cédula garante', $ficha_credito['garante_cedula']??'') ?>
+                
+                <tr><td colspan="3" class="sec-sub"><i class="fas fa-file-circle-check"></i> Checklist de Documentos</td></tr>
+                <?php
+                $docs=[];
+                if(!empty($ficha_credito['doc_cedula']))        $docs[]='Cédula';
+                if(!empty($ficha_credito['doc_planilla']))      $docs[]='Planilla';
+                if(!empty($ficha_credito['doc_ruc_rise']))      $docs[]='RUC/RISE';
+                if(!empty($ficha_credito['doc_estados_cuenta']))$docs[]='Estados Cuenta';
+                if(!empty($ficha_credito['doc_declaraciones'])) $docs[]='Declaraciones';
+                if(!empty($ficha_credito['doc_matricula']))     $docs[]='Matrícula';
+                if(!empty($ficha_credito['doc_foto_negocio']))  $docs[]='Foto Negocio';
+                if(!empty($ficha_credito['doc_solicitud_credito']))$docs[]='Solicitud';
+                if(!empty($ficha_credito['doc_foto_cliente']))  $docs[]='Foto Cliente';
+                ?>
+                <tr>
+                    <td class="dk">Documentos Entregados</td>
+                    <td colspan="2" class="du">
+                    <?php if($docs): foreach($docs as $d) echo '<span class="chip-prod" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;">✓ '.$d.'</span> '; 
+                    else: echo '<span class="dat-empty">Ninguno entregado</span>'; endif; ?>
+                    </td>
+                </tr>
+
+                <tr><td colspan="3" class="sec-sub"><i class="fas fa-map-location-dot"></i> Destino del crédito</td></tr>
                 <?php
                 $dests=[];
                 if(!empty($ficha_credito['dest_capital_trabajo']))  $dests[]='Capital de trabajo';

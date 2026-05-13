@@ -2943,6 +2943,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13),
             ),
             const SizedBox(height: 16),
+            // Fila 1: Frío y Seguidor
             Row(
               children: [
                 Expanded(
@@ -2962,6 +2963,31 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     color: ConstantColors.primaryBlue,
                     icon: Icons.favorite_rounded,
                     onTap: () => setState(() => _origenProspecto = 'seguidor'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Fila 2: Cliente y Leads/Llamadas
+            Row(
+              children: [
+                Expanded(
+                  child: _botonRespuestaGrande(
+                    label: 'CLIENTE',
+                    sublabel: 'Ya es cliente nuestro',
+                    color: ConstantColors.success,
+                    icon: Icons.verified_user_rounded,
+                    onTap: () => setState(() => _origenProspecto = 'cliente'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _botonRespuestaGrande(
+                    label: 'LEADS/LLAMADAS',
+                    sublabel: 'Links o llamadas',
+                    color: ConstantColors.primaryViolet,
+                    icon: Icons.phone_rounded,
+                    onTap: () => setState(() => _origenProspecto = 'leads_llamadas'),
                   ),
                 ),
               ],

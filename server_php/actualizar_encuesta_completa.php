@@ -129,7 +129,7 @@ $conoce_limite_rise = intOrNull($_POST['conoce_limite_rise'] ?? null);
 $origen_prospecto = strOrNull($_POST['origen_prospecto'] ?? '');
 if ($origen_prospecto !== null) {
     $origen_prospecto = strtolower($origen_prospecto);
-    if (!in_array($origen_prospecto, ['frio','seguidor'], true)) $origen_prospecto = null;
+    if (!in_array($origen_prospecto, ['frio','seguidor','cliente','leads_llamadas'], true)) $origen_prospecto = null;
 }
 
 // Validar actividad (debe coincidir con ENUM de cliente_prospecto.actividad)
