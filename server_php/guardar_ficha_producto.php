@@ -490,6 +490,29 @@ try {
             );
             $st->execute();
             $st->close();
+
+            // ── Sincronizar destino_credito a encuesta_comercial ─────
+            // Si se capturó destino de crédito en la ficha, actualizar también la encuesta comercial
+            // para que el admin panel vea el valor (campo destino_credito_actual)
+            if ($dest && $cedula && table_exists($conn, 'encuesta_comercial')) {
+                try {
+                    $stSync = $conn->prepare("
+                        UPDATE encuesta_comercial ec
+                        INNER JOIN tarea t ON t.id = ec.tarea_id
+                        INNER JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+                        SET ec.destino_credito_actual = ?
+                        WHERE cp.cedula = ? AND ec.destino_credito_actual IS NULL
+                        LIMIT 1
+                    ");
+                    if ($stSync) {
+                        $stSync->bind_param('ss', $dest, $cedula);
+                        $stSync->execute();
+                        $stSync->close();
+                    }
+                } catch (\Throwable $_) {
+                    // No bloquea si falla sincronización
+                }
+            }
             break;
 
         case 'cuenta_corriente':
