@@ -32,14 +32,16 @@ $fecha_filtro = $_GET['fecha'] ?? $hoy;
 $meta = null;
 $avance = [
     'encuestas' => 0, 'clientes' => 0, 'creditos' => 0,
-    'c_ahorro' => 0, 'c_corriente' => 0, 'inversiones' => 0
+    'c_ahorro' => 0, 'c_corriente' => 0, 'inversiones' => 0,
+    'visitas' => 0
 ];
 
 try {
     // Intentar con la vista v_meta_asesor_avance
     $sql = "SELECT m.*, 
                    v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
-                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones
+                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
+                   v.avance_visitas
             FROM meta_asesor_diaria m
             LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
             WHERE m.asesor_id = ? AND m.fecha = ? LIMIT 1";
@@ -54,6 +56,7 @@ try {
         $avance['c_ahorro']    = (int)($meta['avance_cuenta_ahorros'] ?? 0);
         $avance['c_corriente'] = (int)($meta['avance_cuenta_corriente'] ?? 0);
         $avance['inversiones'] = (int)($meta['avance_inversiones'] ?? 0);
+        $avance['visitas']     = (int)($meta['avance_visitas'] ?? 0);
     }
 } catch (PDOException $e) {
     // Fallback si la vista no existe
@@ -228,6 +231,7 @@ function get_tipo_label($tipo) {
                     ['C. Ahorros', 'fa-piggy-bank', 'ki-purple', $avance['c_ahorro'], (int)$meta['meta_cuenta_ahorros']],
                     ['C. Corriente', 'fa-wallet', 'ki-navy', $avance['c_corriente'], (int)$meta['meta_cuenta_corriente']],
                     ['Inversiones', 'fa-chart-line', 'ki-red', $avance['inversiones'], (int)$meta['meta_inversiones']],
+                    ['Visitas', 'fa-walking', 'ki-yellow', $avance['visitas'], (int)$meta['meta_visitas']],
                 ];
                 
                 foreach ($goal_items as [$label, $icon, $colorClass, $cur, $target]):

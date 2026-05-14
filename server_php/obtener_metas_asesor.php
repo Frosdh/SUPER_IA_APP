@@ -68,8 +68,10 @@ try {
     $sql = "SELECT m.id AS meta_id, m.asesor_id, m.fecha, m.estado, m.observaciones,
                    m.meta_encuestas, m.meta_clientes_nuevos, m.meta_creditos,
                    m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones,
+                   m.meta_visitas,
                    v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
-                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones
+                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
+                   v.avance_visitas
             FROM meta_asesor_diaria m
             LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
             WHERE m.asesor_id = ? AND m.fecha = ?
@@ -85,7 +87,8 @@ try {
         // Fallback: sin avances (avances se devuelven como 0)
         $sql2 = "SELECT m.id AS meta_id, m.asesor_id, m.fecha, m.estado, m.observaciones,
                         m.meta_encuestas, m.meta_clientes_nuevos, m.meta_creditos,
-                        m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones
+                        m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones,
+                        m.meta_visitas
                  FROM meta_asesor_diaria m
                  WHERE m.asesor_id = ? AND m.fecha = ?
                  LIMIT 1";
@@ -105,6 +108,7 @@ try {
             $meta['avance_cuenta_ahorros'] = 0;
             $meta['avance_cuenta_corriente'] = 0;
             $meta['avance_inversiones'] = 0;
+            $meta['avance_visitas'] = 0;
         }
     }
 
@@ -120,8 +124,10 @@ try {
     // Normalizar numéricos
     $ints = ['meta_encuestas','meta_clientes_nuevos','meta_creditos',
              'meta_cuenta_ahorros','meta_cuenta_corriente','meta_inversiones',
+             'meta_visitas',
              'avance_encuestas','avance_clientes_nuevos','avance_creditos',
-             'avance_cuenta_ahorros','avance_cuenta_corriente','avance_inversiones'];
+             'avance_cuenta_ahorros','avance_cuenta_corriente','avance_inversiones',
+             'avance_visitas'];
     foreach ($ints as $k) { $meta[$k] = (int)($meta[$k] ?? 0); }
 
     // ── Evaluar estado automáticamente ───────────────────────
@@ -146,6 +152,7 @@ try {
         ['meta_cuenta_ahorros','avance_cuenta_ahorros'],
         ['meta_cuenta_corriente','avance_cuenta_corriente'],
         ['meta_inversiones','avance_inversiones'],
+        ['meta_visitas','avance_visitas'],
     ];
     foreach ($pares as [$mk, $ak]) {
         if ($meta[$mk] > 0 && $meta[$ak] < $meta[$mk]) { $cumplio = false; break; }
@@ -180,6 +187,7 @@ try {
         'cuenta_ahorros'   => ['label' => 'Cuentas de ahorro',  'icon' => 'piggy-bank'],
         'cuenta_corriente' => ['label' => 'Cuentas corrientes', 'icon' => 'wallet'],
         'inversiones'      => ['label' => 'Inversiones',        'icon' => 'chart-line'],
+        'visitas'          => ['label' => 'Visitas',            'icon' => 'walking'],
     ];
     $items = [];
     foreach ($labels as $k => $info) {

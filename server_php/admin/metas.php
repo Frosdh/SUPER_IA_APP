@@ -67,6 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
     $m_cah     = (int)($_POST['meta_cuenta_ahorros'] ?? 0);
     $m_cco     = (int)($_POST['meta_cuenta_corriente'] ?? 0);
     $m_inv     = (int)($_POST['meta_inversiones'] ?? 0);
+    $m_vis     = (int)($_POST['meta_visitas'] ?? 0);
     $obs       = trim($_POST['observaciones'] ?? '');
 
     if ($asesor_id) {
@@ -101,15 +102,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                 }
             }
 
-            if (!$has_actualizado_at) {
-                // Intento no destructivo de agregar la columna (si el hosting lo permite)
-                try {
-                    $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN actualizado_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
-                    $has_actualizado_at = true;
-                } catch (PDOException $e) {
-                    $has_actualizado_at = false;
+            // Auto-crear columnas si faltan (para evitar errores SQLSTATE[42S22])
+            try {
+                $cols_exist = $pdo->query("SHOW COLUMNS FROM meta_asesor_diaria")->fetchAll(PDO::FETCH_COLUMN);
+                if (!in_array('meta_visitas', $cols_exist)) {
+                    $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN meta_visitas INT DEFAULT 0 AFTER meta_inversiones");
                 }
-            }
+                
+                $cols_asesor = $pdo->query("SHOW COLUMNS FROM asesor")->fetchAll(PDO::FETCH_COLUMN);
+                if (!in_array('meta_visitas', $cols_asesor)) {
+                    $pdo->exec("ALTER TABLE asesor ADD COLUMN meta_visitas INT DEFAULT 0");
+                }
+            } catch (PDOException $e) {}
 
             // Algunas instalaciones agregaron meta_asesor_diaria.supervisor_id como NOT NULL.
             // Aun así, el filtrado se mantiene por asesor.supervisor_id.
@@ -118,11 +122,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                 'asesor_id', 'fecha',
                 'meta_encuestas', 'meta_clientes_nuevos', 'meta_creditos',
                 'meta_cuenta_ahorros', 'meta_cuenta_corriente', 'meta_inversiones',
+                'meta_visitas',
                 'observaciones'
             ];
             $vals = [
                 $asesor_id, $fecha,
-                $m_enc, $m_cli, $m_cre, $m_cah, $m_cco, $m_inv, $obs
+                $m_enc, $m_cli, $m_cre, $m_cah, $m_cco, $m_inv,
+                $m_vis, $obs
             ];
             if ($has_supervisor_id) {
                 $cols[] = 'supervisor_id';
@@ -142,6 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                       meta_cuenta_ahorros = VALUES(meta_cuenta_ahorros),
                       meta_cuenta_corriente = VALUES(meta_cuenta_corriente),
                       meta_inversiones = VALUES(meta_inversiones),
+                      meta_visitas = VALUES(meta_visitas),
                       observaciones = VALUES(observaciones)";
 
             if ($has_supervisor_id) {
@@ -153,6 +160,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
 
             $st = $pdo->prepare($sql);
             $st->execute($vals);
+
+            // También actualizar las metas base en la tabla asesor (como solicitó el usuario)
+            try {
+                $stBase = $pdo->prepare("UPDATE asesor SET 
+                    meta_encuestas = :m1, meta_clientes_nuevos = :m2, meta_creditos = :m3,
+                    meta_cuenta_ahorros = :m4, meta_cuenta_corriente = :m5, meta_inversiones = :m6,
+                    meta_visitas = :m7
+                    WHERE id = :aid");
+                $stBase->execute([
+                    ':m1' => $m_enc, ':m2' => $m_cli, ':m3' => $m_cre,
+                    ':m4' => $m_cah, ':m5' => $m_cco, ':m6' => $m_inv,
+                    ':m7' => $m_vis,
+                    ':aid' => $asesor_id
+                ]);
+            } catch (PDOException $e_base) {
+                // Si las columnas no existen en asesor, ignorar o manejar silenciosamente
+            }
+
             $flash = ['type' => 'success', 'msg' => 'Meta asignada correctamente'];
         } catch (PDOException $e) {
             $flash = ['type' => 'error', 'msg' => 'Error: ' . $e->getMessage()];
@@ -180,7 +205,8 @@ if ($supervisor_table_id && $metas_instaladas) {
     // Intentar con la vista de avances; si no existe, usar avances 0.
     $sql = "SELECT m.*, u.nombre AS asesor_nombre,
                    v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
-                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones
+                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
+                   v.avance_visitas
             FROM meta_asesor_diaria m
             JOIN asesor a ON a.id = m.asesor_id
             JOIN usuario u ON u.id = a.usuario_id
@@ -196,7 +222,8 @@ if ($supervisor_table_id && $metas_instaladas) {
         try {
             $sql2 = "SELECT m.*, u.nombre AS asesor_nombre,
                             0 AS avance_encuestas, 0 AS avance_clientes_nuevos, 0 AS avance_creditos,
-                            0 AS avance_cuenta_ahorros, 0 AS avance_cuenta_corriente, 0 AS avance_inversiones
+                            0 AS avance_cuenta_ahorros, 0 AS avance_cuenta_corriente, 0 AS avance_inversiones,
+                            0 AS avance_visitas
                      FROM meta_asesor_diaria m
                      JOIN asesor a ON a.id = m.asesor_id
                      JOIN usuario u ON u.id = a.usuario_id
@@ -235,6 +262,7 @@ if ($supervisor_table_id && $metas_instaladas) {
                 ['meta_cuenta_ahorros','avance_cuenta_ahorros'],
                 ['meta_cuenta_corriente','avance_cuenta_corriente'],
                 ['meta_inversiones','avance_inversiones'],
+                ['meta_visitas','avance_visitas'],
             ];
             $cumplio = true;
             foreach ($pares as [$mk, $ak]) {
@@ -547,29 +575,33 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
                             <div class="form-section h-100">
                                 <h4><i class="fas fa-bullseye"></i> Objetivos del Día</h4>
                                 <div class="row g-3">
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-poll me-1"></i> Encuestas</label>
                                         <input type="number" name="meta_encuestas" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-user-plus me-1"></i> Clientes</label>
                                         <input type="number" name="meta_clientes_nuevos" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-hand-holding-usd me-1"></i> Créditos</label>
                                         <input type="number" name="meta_creditos" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-piggy-bank me-1"></i> Ahorros</label>
                                         <input type="number" name="meta_cuenta_ahorros" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-money-check-alt me-1"></i> C. Corriente</label>
                                         <input type="number" name="meta_cuenta_corriente" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
-                                    <div class="col-6">
+                                    <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-chart-line me-1"></i> Inversiones</label>
                                         <input type="number" name="meta_inversiones" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
+                                    </div>
+                                    <div class="col-4">
+                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-walking me-1"></i> Visitas</label>
+                                        <input type="number" name="meta_visitas" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
                                 </div>
                             </div>
@@ -616,9 +648,10 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
                                 <th class="text-center">Encuestas</th>
                                 <th class="text-center">Clientes</th>
                                 <th class="text-center">Créditos</th>
-                                <th class="text-center">C. Ahorro</th>
+                                <th class="text-center">Ahorros</th>
                                 <th class="text-center">C. Corriente</th>
                                 <th class="text-center">Inversiones</th>
+                                <th class="text-center">Visitas</th>
                                 <th class="text-center">Estado</th>
                             </tr>
                         </thead>
@@ -653,6 +686,7 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
                                 <td class="text-center"><?= $fmtProgress($m['avance_cuenta_ahorros'], $m['meta_cuenta_ahorros']) ?></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_cuenta_corriente'], $m['meta_cuenta_corriente']) ?></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_inversiones'], $m['meta_inversiones']) ?></td>
+                                <td class="text-center"><?= $fmtProgress($m['avance_visitas'], $m['meta_visitas']) ?></td>
                                 <td class="text-center">
                                     <span class="badge-premium <?= $estClass ?>"><?= $estLabel ?></span>
                                 </td>
