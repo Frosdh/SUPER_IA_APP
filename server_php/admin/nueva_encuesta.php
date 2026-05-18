@@ -18,34 +18,37 @@ if (!$asesor_table_id) {
     } catch (PDOException $e) {}
 }
 
-$tareas_pendientes  = 0;
-$alertas_pendientes = 0;
-$tareas_hoy         = [];
-
-try {
-    if ($asesor_table_id) {
-        $st = $pdo->prepare("SELECT COUNT(*) FROM tarea WHERE asesor_id = ? AND fecha_programada = ? AND estado NOT IN ('completada','cancelada')");
-        $st->execute([$asesor_table_id, date('Y-m-d')]);
-        $tareas_pendientes = (int)$st->fetchColumn();
-
-        $st = $pdo->prepare("SELECT COUNT(*) FROM alerta_modificacion WHERE asesor_id = ? AND vista_supervisor = 0");
-        $st->execute([$asesor_table_id]);
-        $alertas_pendientes = (int)$st->fetchColumn();
-
+// Obtener el historial de encuestas del asesor
+$historico_encuestas = [];
+if ($asesor_table_id) {
+    try {
         $st = $pdo->prepare("
-            SELECT t.id, t.tipo_tarea, t.estado, t.hora_programada, t.hora_realizada,
-                   t.fecha_programada,
-                   cp.nombre AS prospecto_nombre, cp.cedula AS prospecto_cedula,
-                   (SELECT COUNT(*) FROM encuesta_comercial ec WHERE ec.tarea_id = t.id) AS tiene_encuesta
+            SELECT 
+                t.id AS tarea_id,
+                t.tipo_tarea AS tipo_tarea,
+                t.fecha_realizada,
+                t.hora_realizada,
+                cp.id AS cliente_id,
+                cp.nombre AS cliente_nombre,
+                cp.cedula AS cliente_cedula,
+                ec.acuerdo_logrado,
+                ec.nivel_interes_captado,
+                ec.interes_ahorro,
+                ec.interes_cc,
+                ec.interes_inversion,
+                ec.interes_credito
             FROM tarea t
-            LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-            WHERE t.asesor_id = ? AND t.fecha_programada = ?
-            ORDER BY (t.estado = 'completada') ASC, t.hora_programada ASC
+            JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+            JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+            WHERE t.asesor_id = ? AND t.estado = 'completada'
+            ORDER BY t.fecha_realizada DESC, t.hora_realizada DESC
         ");
-        $st->execute([$asesor_table_id, date('Y-m-d')]);
-        $tareas_hoy = $st->fetchAll(PDO::FETCH_ASSOC);
+        $st->execute([$asesor_table_id]);
+        $historico_encuestas = $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        // En caso de que no existan las columnas o tablas, fallar silenciosamente
     }
-} catch (PDOException $e) {}
+}
 
 $currentPage = 'encuesta';
 
@@ -171,6 +174,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .yn-opt:hover{background:#f3f4f6;}
 .yn-opt input{display:none;}
 .yn-opt.checked{background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));color:#fff;border-color:transparent;}
+.p2-prod-opt.checked{background:linear-gradient(135deg,#fffde7,#fff9c4) !important;color:var(--brand-navy-deep) !important;border-color:var(--brand-yellow-deep) !important;box-shadow:0 4px 12px rgba(255,221,0,.25) !important;}
 
 /* RÉGIMEN TILES */
 .regimen-tiles{display:flex;flex-direction:column;gap:10px;margin-top:12px;}
@@ -263,7 +267,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
     .prod-interest-grid{grid-template-columns:1fr 1fr;}
 }
 
-/* ══ BUSCA INSTITUCIÓN ══ */
+/* ── BUSCA INSTITUCI├ôN ── */
 .busca-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:4px;}
 .busca-item{cursor:pointer;}
 .busca-item input[type="checkbox"]{display:none;}
@@ -272,7 +276,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .busca-icon{font-size:22px;}
 .busca-item input:checked + .busca-card{border-color:var(--brand-yellow-deep);background:linear-gradient(135deg,#fef9c3,#fde68a);color:var(--brand-navy-deep);}
 
-/* ══ FICHA PANELS ══ */
+/* ── FICHA PANELS ── */
 .ficha-panel{
     background:#fff;
     border:2px solid var(--brand-border);
@@ -305,7 +309,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .fld-full{grid-column:1/-1;}
 
 
-/* ══ DOC CHECKLIST ══ */
+/* ── DOC CHECKLIST ── */
 .doc-check-list{display:flex;flex-direction:column;gap:8px;margin:8px 0;}
 .doc-item{display:flex;align-items:center;gap:12px;padding:10px 14px;
     border:1.5px solid var(--brand-border);border-radius:10px;cursor:pointer;
@@ -320,12 +324,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .doc-item .di-chk{width:22px;height:22px;border-radius:6px;border:2px solid #d1d5db;
     display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.7rem;color:transparent;}
 .doc-item.checked .di-chk{background:#3b82f6;border-color:#3b82f6;color:#fff;}
-/* ══ INSTITUTION PICKER ══ */
+/* ── INSTITUTION PICKER ── */
 .inst-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px 0 12px;}
 .inst-chip{padding:5px 12px;border-radius:20px;border:1.5px solid var(--brand-border);
     background:#fff;font-size:.8rem;cursor:pointer;transition:all .12s;}
 .inst-chip.sel{background:var(--brand-navy);border-color:var(--brand-navy);color:#fff;}
-/* ══ GARANTE / CÓNYUGE ══ */
+/* ── GARANTE / C├ôNYUGE ── */
 .subsec-divider{border:none;border-top:1.5px dashed var(--brand-border);margin:14px 0;}
 .subsec-title{font-size:.84rem;font-weight:700;color:#374151;margin:10px 0 8px;
     display:flex;align-items:center;gap:6px;}
@@ -355,76 +359,9 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
         </div>
         <?php endif; ?>
 
-        <!-- ══ TAREAS DE HOY ══ -->
-        <?php if (!empty($tareas_hoy)): ?>
-        <div class="form-card" style="margin-bottom:18px;">
-            <h3 style="margin-bottom:14px;">
-                <i class="fas fa-calendar-day"></i>
-                Tareas de hoy — <?= date('d/m/Y') ?>
-                <span style="margin-left:auto;font-size:12px;font-weight:600;color:var(--brand-gray);">
-                    <?= count(array_filter($tareas_hoy, fn($t)=>$t['estado']==='completada')) ?>/<?= count($tareas_hoy) ?> completadas
-                </span>
-            </h3>
-            <div style="display:flex;flex-direction:column;gap:8px;">
-            <?php foreach ($tareas_hoy as $tv):
-                $done  = $tv['estado'] === 'completada';
-                $tipo  = str_replace('_', ' ', ucfirst($tv['tipo_tarea'] ?? ''));
-                $nom   = htmlspecialchars($tv['prospecto_nombre'] ?? 'Sin nombre');
-                $ced   = htmlspecialchars($tv['prospecto_cedula'] ?? '');
-                $hora  = $tv['hora_realizada'] ?? $tv['hora_programada'] ?? '';
-                $hora  = $hora ? substr($hora, 0, 5) : '';
-                $tId   = htmlspecialchars($tv['id']);
-                $hasEnc = (int)($tv['tiene_encuesta'] ?? 0) > 0;
-            ?>
-            <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;
-                        border:1.5px solid <?= $done ? '#d1fae5' : 'var(--brand-border)' ?>;
-                        border-radius:12px;background:<?= $done ? '#f0fdf4' : '#fff' ?>;">
-                <span style="width:32px;height:32px;border-radius:50%;display:flex;align-items:center;
-                             justify-content:center;font-size:15px;flex-shrink:0;
-                             background:<?= $done ? '#10b981' : '#e5e7eb' ?>;
-                             color:<?= $done ? '#fff' : '#6b7280' ?>;">
-                    <i class="fas <?= $done ? 'fa-circle-check' : 'fa-clock' ?>"></i>
-                </span>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-weight:700;font-size:14px;color:var(--brand-navy-deep);
-                                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        <?= $nom ?><?= $ced ? " · <span style='font-weight:400;color:var(--brand-gray);'>".$ced."</span>" : '' ?>
-                    </div>
-                    <div style="font-size:12px;color:var(--brand-gray);">
-                        <?= $tipo ?><?= $hora ? " · $hora" : '' ?>
-                        <?php if($done && $hasEnc): ?>
-                            <span style="margin-left:6px;background:#d1fae5;color:#065f46;padding:1px 7px;
-                                         border-radius:99px;font-size:11px;font-weight:700;">Con encuesta</span>
-                        <?php elseif($done && !$hasEnc): ?>
-                            <span style="margin-left:6px;background:#fef3c7;color:#92400e;padding:1px 7px;
-                                         border-radius:99px;font-size:11px;font-weight:700;">Sin encuesta</span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-                <?php if ($done && $hasEnc): ?>
-                <a href="nueva_encuesta.php?tarea_id=<?= $tId ?>"
-                   style="flex-shrink:0;padding:7px 13px;border-radius:9px;
-                          background:var(--brand-yellow);color:var(--brand-navy-deep);
-                          font-size:12px;font-weight:800;text-decoration:none;
-                          border:none;display:flex;align-items:center;gap:5px;">
-                    <i class="fas fa-pen"></i> Editar
-                </a>
-                <?php elseif (!$done): ?>
-                <a href="nueva_encuesta.php?tarea_id=<?= $tId ?>"
-                   style="flex-shrink:0;padding:7px 13px;border-radius:9px;
-                          background:var(--brand-navy-deep);color:#fff;
-                          font-size:12px;font-weight:800;text-decoration:none;
-                          display:flex;align-items:center;gap:5px;">
-                    <i class="fas fa-clipboard-list"></i> Encuestar
-                </a>
-                <?php endif; ?>
-            </div>
-            <?php endforeach; ?>
-            </div>
-        </div>
-        <?php endif; ?>
 
-        <!-- ══ BÚSQUEDA POR CÉDULA ══ -->
+
+        <!-- ── B├ÜSQUEDA POR CÉDULA ── -->
         <div class="search-card">
             <h3><i class="fas fa-magnifying-glass"></i>Buscar prospecto / cliente</h3>
             <p class="sub">Ingresa la cédula para cargar los datos existentes, o llena el formulario si es nuevo.</p>
@@ -438,7 +375,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             <div id="search-result" style="display:none;"></div>
         </div>
 
-        <!-- ══ STEPPER ══ -->
+        <!-- ── STEPPER ── -->
         <div class="stepper" id="stepper" style="display:none;">
             <?php $steps = [
                 ['Tipo visita',  'fa-route'],
@@ -457,7 +394,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             <?php endforeach; ?>
         </div>
 
-        <!-- ══ FORMULARIO ══ -->
+        <!-- ── FORMULARIO ── -->
         <form id="formEncuesta" method="post" action="guardar_encuesta.php" autocomplete="off"
               style="display:none;">
             <input type="hidden" name="tarea_id"      id="hid-tarea_id">
@@ -478,10 +415,96 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             <input type="hidden" name="rise_emite_notas"   id="hid-rise_emite_notas">
             <input type="hidden" name="rise_conoce_limite" id="hid-rise_conoce_limite">
 
-            <!-- ══════════════════════════════════════
+            <!-- ──────────────────────────────────────
                  PASO 1 — TIPO DE VISITA
-            ═══════════════════════════════════════ -->
+            ─────────────────────────────────────── -->
+            <!-- ──────────────────────────────────────
+                 PASO 0 — IDENTIFICACIÓN INSTITUCIONAL
+            ─────────────────────────────────────── -->
             <div class="step-pane active" data-pane="0">
+                <div class="form-card">
+                    <h3><i class="fas fa-id-card"></i> Identificación Institucional</h3>
+                    <p class="sub">Preguntas iniciales de contacto.</p>
+
+                    <!-- Pregunta 1 -->
+                    <div class="sub-sec" style="margin-bottom:20px; border-bottom: 1px solid var(--brand-border); padding-bottom: 20px;">
+                        <h5 style="color: var(--brand-navy); font-weight: 600; margin-bottom: 10px;">¿Conoce nuestra institución?</h5>
+                        <div class="yn-group" style="margin-bottom: 12px;">
+                            <label class="yn-opt" id="p1-si">
+                                <input type="radio" name="p1_conoce_institucion" value="1"> Sí
+                            </label>
+                            <label class="yn-opt" id="p1-no">
+                                <input type="radio" name="p1_conoce_institucion" value="0"> No
+                            </label>
+                        </div>
+                        <div class="fld full">
+                            <label>Observaciones / Detalles</label>
+                            <input type="text" name="p1_obs" id="f-p1_obs" placeholder="Ej: Escuchó en radio, recomendación, etc.">
+                        </div>
+                    </div>
+
+                    <!-- Pregunta 2 -->
+                    <div class="sub-sec" style="margin-bottom:20px; border-bottom: 1px solid var(--brand-border); padding-bottom: 20px;">
+                        <h5 style="color: var(--brand-navy); font-weight: 600; margin-bottom: 10px;">¿Es o ha sido cliente de nuestra institución?</h5>
+                        <div class="yn-group" style="margin-bottom: 12px;">
+                            <label class="yn-opt" id="p2-si">
+                                <input type="radio" name="p2_es_cliente" value="1"> Sí
+                            </label>
+                            <label class="yn-opt" id="p2-no">
+                                <input type="radio" name="p2_es_cliente" value="0"> No
+                            </label>
+                        </div>
+                        <div class="fld full" id="p2-extra" style="display:none; margin-bottom: 10px;">
+                            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Productos que mantiene o mantuvo (Selección múltiple)</label>
+                            <div class="p2-prod-chips" id="grp-p2-productos" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <label class="p2-prod-opt" data-val="ahorro" onclick="toggleP2Prod(this)" style="padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--brand-border); background: #fff; cursor: pointer; transition: 0.15s; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="far fa-square" style="font-size:12px;"></i> Cuenta de Ahorro
+                                </label>
+                                <label class="p2-prod-opt" data-val="corriente" onclick="toggleP2Prod(this)" style="padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--brand-border); background: #fff; cursor: pointer; transition: 0.15s; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="far fa-square" style="font-size:12px;"></i> Cuenta Corriente
+                                </label>
+                                <label class="p2-prod-opt" data-val="inversion" onclick="toggleP2Prod(this)" style="padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--brand-border); background: #fff; cursor: pointer; transition: 0.15s; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="far fa-square" style="font-size:12px;"></i> Inversión / Depósito
+                                </label>
+                                <label class="p2-prod-opt" data-val="credito" onclick="toggleP2Prod(this)" style="padding: 8px 16px; border-radius: 20px; border: 1.5px solid var(--brand-border); background: #fff; cursor: pointer; transition: 0.15s; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i class="far fa-square" style="font-size:12px;"></i> Crédito
+                                </label>
+                            </div>
+                            <input type="hidden" name="p2_producto" id="f-p2_producto">
+                        </div>
+                        <div class="fld full">
+                            <label>Observaciones / Detalles</label>
+                            <input type="text" name="p2_obs" id="f-p2_obs" placeholder="Detalles de su relación previa">
+                        </div>
+                    </div>
+
+                    <!-- Pregunta 3 -->
+                    <div class="sub-sec">
+                        <h5 style="color: var(--brand-navy); font-weight: 600; margin-bottom: 10px;">¿Cuál es su nivel de satisfacción o percepción de la institución?</h5>
+                        <p style="font-size:13px;color:var(--brand-gray);margin-bottom:12px;">
+                            Selecciona una opción:
+                        </p>
+                        <div class="chip-grid small" id="chips-p3-satisfaccion" style="margin-bottom: 12px;">
+                            <div class="chip" data-val="excelente" onclick="selectSatisfaccion(this)">Excelente</div>
+                            <div class="chip" data-val="buena"     onclick="selectSatisfaccion(this)">Buena</div>
+                            <div class="chip" data-val="regular"   onclick="selectSatisfaccion(this)">Regular</div>
+                            <div class="chip" data-val="mala"      onclick="selectSatisfaccion(this)">Mala</div>
+                        </div>
+                        <input type="hidden" name="p3_satisfaccion" id="f-p3_satisfaccion">
+                        
+                        <div class="fld full" style="margin-top:10px;">
+                            <label>Observaciones / Detalles</label>
+                            <input type="text" name="p3_obs" id="f-p3_obs" placeholder="Comentarios sobre su percepción">
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- ──────────────────────────────────────
+                 PASO 1 — TIPO DE VISITA
+            ─────────────────────────────────────── -->
+            <div class="step-pane" data-pane="1">
                 <div class="form-card">
                     <h3><i class="fas fa-route"></i>Tipo de visita</h3>
                     <p class="sub">¿Cuál es el tipo de prospecto o contacto?</p>
@@ -510,10 +533,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
+            <!-- ──────────────────────────────────────
                  PASO 2 — DATOS PERSONALES
-            ═══════════════════════════════════════ -->
-            <div class="step-pane" data-pane="1">
+            ─────────────────────────────────────── -->
+            <div class="step-pane" data-pane="2">
                 <div class="form-card">
                     <h3><i class="fas fa-user"></i>Datos personales</h3>
                     <p class="sub">Verifica o completa la información del prospecto.</p>
@@ -532,10 +555,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <label>Cédula *</label>
                             <input type="text" name="cedula" id="f-cedula" required placeholder="Cédula de identidad">
                         </div>
-                        <div class="fld">
-                            <label>Cédula cónyuge</label>
-                            <input type="text" name="cedula_conyuge" id="f-cedula_conyuge" placeholder="Opcional">
-                        </div>
+                        
                         <div class="fld">
                             <label>Celular *</label>
                             <input type="tel" name="celular" id="f-celular" required placeholder="09XXXXXXXX">
@@ -557,26 +577,21 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <input type="text" name="ciudad" id="f-ciudad" placeholder="Ciudad">
                         </div>
                         <div class="fld">
-                            <label>Zona / Barrio</label>
-                            <input type="text" name="zona" id="f-zona" placeholder="Sector">
+                            <label>Sector</label>
+                            <input type="text" name="zona" id="f-zona" placeholder="Sector o barrio">
                         </div>
                         <div class="fld">
                             <label>Estado</label>
-                            <select name="estado" id="f-estado">
-                                <option value="prospecto">Prospecto</option>
-                                <option value="cliente">Cliente</option>
-                                <option value="pendiente">Pendiente</option>
-                                <option value="descartado">Descartado</option>
-                            </select>
+                            <input type="text" id="f-estado" readonly class="form-control-plaintext text-capitalize fw-bold" style="color: var(--brand-navy); background: #f3f4f6; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--brand-border); cursor: not-allowed;" value="prospecto">
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
+            <!-- ──────────────────────────────────────
                  PASO 3 — ACTIVIDAD + RÉGIMEN
-            ═══════════════════════════════════════ -->
-            <div class="step-pane" data-pane="2">
+            ─────────────────────────────────────── -->
+            <div class="step-pane" data-pane="3">
 
                 <!-- Actividad económica -->
                 <div class="form-card">
@@ -683,10 +698,6 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <button type="button" class="q-btn" data-hid="hid-rise_conoce_limite" data-val="0">No</button>
                             </div>
                         </div>
-                        <div class="q-card">
-                            <div class="q-label">Ingreso aproximado (RISE) — opcional</div>
-                            <div class="q-field"><input type="number" step="0.01" min="0" name="rise_ingreso_aprox" placeholder="USD 0.00"></div>
-                        </div>
                     </div>
                 </div>
 
@@ -709,7 +720,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <div class="fld">
                                 <label>Actividad de la empresa</label>
                                 <input type="text" name="actividad_empresa"
-                                       placeholder="Ej: comercio, manufactura…">
+                                       placeholder="Ej: comercio, manufacturaÔÇª">
                             </div>
                         </div>
                         <div class="warn-banner" style="margin-top:14px;">
@@ -732,10 +743,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
-                 PASO 4 — SITUACIÓN FINANCIERA
-            ═══════════════════════════════════════ -->
-            <div class="step-pane" data-pane="3">
+            <!-- ──────────────────────────────────────
+                 PASO 4 — SITUACI├ôN FINANCIERA
+            ─────────────────────────────────────── -->
+            <div class="step-pane" data-pane="4">
                 <div class="form-card">
                     <h3><i class="fas fa-piggy-bank"></i>Situación financiera</h3>
                     <p class="sub">Productos financieros que actualmente tiene el prospecto.</p>
@@ -750,11 +761,8 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <div class="cuenta-box">
                                 <h6>Detalle cuenta ahorro</h6>
                                 <div class="fld-grid">
-                                    <div class="fld"><label>Institución</label>
-                                        <input type="text" name="ec_institucion_ahorro" placeholder="Banco / Cooperativa">
-                                    </div>
-                                    <div class="fld"><label>Saldo aprox. (USD)</label>
-                                        <input type="number" step="0.01" min="0" name="ec_saldo_ahorro">
+                                    <div class="fld full" style="width: 100%;"><label>Institución</label>
+                                        <input type="text" name="ec_institucion_ahorro" placeholder="Banco / Cooperativa" style="width: 100%;">
                                     </div>
                                 </div>
                             </div>
@@ -804,6 +812,40 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 </div>
                             </div>
                         </div>
+                        <div id="sec-propuesta-vencimiento" style="display: none; margin-top: 12px;">
+                            <div class="cuenta-box" style="border: 1.5px solid var(--brand-yellow-deep); background: #fffcf0;">
+                                <h6 style="color: var(--brand-navy-deep);"><i class="fas fa-handshake"></i> Propuesta de Inversión</h6>
+                                <p style="font-size: 12.5px; color: var(--brand-gray); margin-bottom: 8px;">¿Le interesaría que le hagamos una propuesta previa al vencimiento?</p>
+                                
+                                <div class="yn-group" id="grp-crear-tarea-venc" style="margin-top: 6px; margin-bottom: 12px;">
+                                    <label class="yn-opt" id="venc-si" onclick="toggleVencProposal(1)">
+                                        <input type="radio" name="crear_tarea_prev_venc" value="1"> Sí
+                                    </label>
+                                    <label class="yn-opt" id="venc-no" onclick="toggleVencProposal(0)">
+                                        <input type="radio" name="crear_tarea_prev_venc" value="0"> No
+                                    </label>
+                                </div>
+
+                                <div id="extras-propuesta-vencimiento" class="fld-grid" style="display: none; gap: 10px;">
+                                    <div class="fld full">
+                                        <label>Propuesta de inversión</label>
+                                        <textarea name="propuesta_inversion" id="f-propuesta_inversion" placeholder="Detalla la propuesta comercial..."></textarea>
+                                    </div>
+                                    <div class="fld">
+                                        <label>Fecha de contacto para propuesta</label>
+                                        <input type="date" name="fecha_previa_vencimiento" id="f-fecha_previa_vencimiento">
+                                    </div>
+                                    <div class="fld">
+                                        <label>Hora de contacto</label>
+                                        <input type="time" name="hora_previa_vencimiento" id="f-hora_previa_vencimiento">
+                                    </div>
+                                    <div class="fld full">
+                                        <label>Fecha Vencimiento CDP</label>
+                                        <input type="date" name="fecha_vencimiento_cdp" id="f-fecha_vencimiento_cdp">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Crédito activo -->
@@ -816,21 +858,8 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <div class="cuenta-box">
                                 <h6>Detalle crédito activo</h6>
                                 <div class="fld-grid">
-                                    <div class="fld"><label>Institución</label>
-                                        <input type="text" name="ec_institucion_credito" placeholder="Banco / Cooperativa">
-                                    </div>
-                                    <div class="fld"><label>Monto aprox. (USD)</label>
-                                        <input type="number" step="0.01" min="0" name="ec_monto_credito_actual">
-                                    </div>
-                                    <div class="fld"><label>Destino del crédito</label>
-                                        <select name="ec_destino_credito_actual">
-                                            <option value="">—</option>
-                                            <option value="capital_trabajo">Capital de trabajo</option>
-                                            <option value="activos_fijos">Activos fijos</option>
-                                            <option value="consumo">Consumo</option>
-                                            <option value="pago_deudas">Pago de deudas</option>
-                                            <option value="otro">Otro</option>
-                                        </select>
+                                    <div class="fld full" style="width: 100%;"><label>Institución</label>
+                                        <input type="text" name="ec_institucion_credito" placeholder="Banco / Cooperativa" style="width: 100%;">
                                     </div>
                                 </div>
                             </div>
@@ -839,10 +868,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
+            <!-- ──────────────────────────────────────
                  PASO 5 — INTERÉS EN SERVICIOS
-            ═══════════════════════════════════════ -->
-            <div class="step-pane" data-pane="4">
+            ─────────────────────────────────────── -->
+            <div class="step-pane" data-pane="5">
                 <div class="form-card">
                     <h3><i class="fas fa-star"></i>¿Le interesa trabajar con nosotros?</h3>
                     <p class="sub">¿Cuánto interés mostró el prospecto en nuestros productos?</p>
@@ -1312,17 +1341,17 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                             <?= ynBlock('Mala experiencia previa',         'ec_razon_mala_experiencia') ?>
                             <div class="fld full">
                                 <label>Otras razones</label>
-                                <textarea name="ec_razon_otros" rows="2" placeholder="Describe brevemente…"></textarea>
+                                <textarea name="ec_razon_otros" rows="2" placeholder="Describe brevemente..."></textarea>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- ══════════════════════════════════════
+            <!-- ──────────────────────────────────────
                  PASO 6 — ACUERDO Y CIERRE
-            ═══════════════════════════════════════ -->
-            <div class="step-pane" data-pane="5">
+            ─────────────────────────────────────── -->
+            <div class="step-pane" data-pane="6">
                 <div class="form-card">
                     <h3><i class="fas fa-handshake"></i>Acuerdo y cierre</h3>
                     <p class="sub">Indica el resultado de la visita y el próximo paso pactado con el prospecto.</p>
@@ -1413,13 +1442,13 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                         <div class="fld full">
                             <label>Observaciones generales</label>
                             <textarea name="observaciones" rows="4"
-                                      placeholder="Anota cualquier detalle relevante de la visita…"></textarea>
+                                      placeholder="Anota cualquier detalle relevante de la visitaÔÇª"></textarea>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- FOOTER NAVEGACIÓN -->
+            <!-- FOOTER NAVEGACI├ôN -->
             <div class="form-footer">
                 <button type="button" class="btn btn-ghost" id="btn-prev">
                     <i class="fas fa-arrow-left"></i> Anterior
@@ -1438,13 +1467,188 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             </div>
         </form>
 
+        <!-- SECCIÓN HISTORIAL DE ENCUESTAS -->
+        <div class="search-card mt-5" id="historial-encuestas-card">
+            <div class="d-flex justify-content-between align-items-center flex-wrap mb-3 border-bottom pb-2">
+                <div>
+                    <h3 class="m-0"><i class="fas fa-history" style="color: var(--brand-navy-deep);"></i> Mis Encuestas Realizadas</h3>
+                    <p class="sub m-0 mt-1">Listado de encuestas completadas ordenadas por fecha. Puedes filtrar por cliente o por fecha.</p>
+                </div>
+                <div class="badge px-3 py-2 fs-6" style="background-color: var(--brand-navy-deep); color: white;">
+                    Total: <span id="cant-encuestas"><?= count($historico_encuestas) ?></span>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="row g-3 align-items-end mb-4">
+                <div class="col-md-5">
+                    <label class="form-label font-weight-bold text-secondary text-uppercase" style="font-size:11px; letter-spacing:0.5px; display: block; margin-bottom: 6px;">Buscar por Cliente</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-2 border-end-0" style="border-color: var(--brand-border);"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="filtro-cliente" class="form-control border-2 border-start-0" placeholder="Nombre o cédula del cliente..." style="font-size:14px; padding:10px; border-color: var(--brand-border);">
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label font-weight-bold text-secondary text-uppercase" style="font-size:11px; letter-spacing:0.5px; display: block; margin-bottom: 6px;">Filtrar por Fecha</label>
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-2 border-end-0" style="border-color: var(--brand-border);"><i class="fas fa-calendar-alt text-muted"></i></span>
+                        <input type="date" id="filtro-fecha" class="form-control border-2 border-start-0" style="font-size:14px; padding:10px; border-color: var(--brand-border);">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <button type="button" class="btn btn-ghost w-100 border-2" id="btn-limpiar-filtros" style="padding:11px; font-weight:700; height: 45px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-eraser"></i> Limpiar Filtros
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabla -->
+            <div class="table-responsive" style="border-radius:12px; border:1px solid var(--brand-border); overflow: hidden;">
+                <table class="table table-hover align-middle mb-0" id="tabla-encuestas">
+                    <thead style="background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white;">
+                        <tr>
+                            <th scope="col" class="py-3 px-3 border-0" style="font-size:12px; font-weight:700; text-transform:uppercase; color: white;">Fecha / Hora</th>
+                            <th scope="col" class="py-3 px-3 border-0" style="font-size:12px; font-weight:700; text-transform:uppercase; color: white;">Cliente / Cédula</th>
+                            <th scope="col" class="py-3 px-3 border-0" style="font-size:12px; font-weight:700; text-transform:uppercase; color: white;">Tipo Visita</th>
+                            <th scope="col" class="py-3 px-3 border-0" style="font-size:12px; font-weight:700; text-transform:uppercase; color: white;">Interés & Productos</th>
+                            <th scope="col" class="py-3 px-3 border-0" style="font-size:12px; font-weight:700; text-transform:uppercase; color: white;">Acuerdo</th>
+                            <th scope="col" class="py-3 px-3 border-0 text-center" style="font-size:12px; font-weight:700; text-transform:uppercase; color: white;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($historico_encuestas)): ?>
+                            <tr id="fila-vacia">
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="fas fa-clipboard-question fa-3x mb-3 text-warning"></i>
+                                    <p class="m-0 fw-bold">Aún no has registrado ninguna encuesta.</p>
+                                    <p class="m-0 text-sm">Usa el buscador de cédula superior para registrar una nueva encuesta.</p>
+                                </td>
+                            </tr>
+                        <?php else: ?>
+                            <?php foreach ($historico_encuestas as $row): 
+                                // Formatear tipo visita
+                                $tipo_visita_lbl = 'Desconocido';
+                                $tipo_visita_class = 'bg-secondary text-white';
+                                switch ($row['tipo_tarea']) {
+                                    case 'visita_frio':
+                                    case 'frio':
+                                        $tipo_visita_lbl = 'Visita en Frío';
+                                        $tipo_visita_class = 'bg-info text-dark';
+                                        break;
+                                    case 'evaluacion':
+                                    case 'seguimiento':
+                                        $tipo_visita_lbl = 'Seguimiento';
+                                        $tipo_visita_class = 'bg-success text-white';
+                                        break;
+                                    case 'prospecto_nuevo':
+                                        $tipo_visita_lbl = 'Prospecto Nuevo';
+                                        $tipo_visita_class = 'bg-warning text-dark';
+                                        break;
+                                    default:
+                                        $tipo_visita_lbl = ucwords(str_replace('_', ' ', $row['tipo_tarea']));
+                                        break;
+                                }
+
+                                // Formatear nivel de interés
+                                $nivel_interes = $row['nivel_interes_captado'] ?? 'ninguno';
+                                $nivel_class = 'bg-danger text-white';
+                                if ($nivel_interes === 'bajo') $nivel_class = 'bg-warning text-dark';
+                                elseif ($nivel_interes === 'alto') $nivel_class = 'bg-success text-white';
+
+                                // Formatear productos
+                                $productos_arr = [];
+                                if (!empty($row['interes_ahorro'])) $productos_arr[] = 'ahorro';
+                                if (!empty($row['interes_cc'])) $productos_arr[] = 'corriente';
+                                if (!empty($row['interes_inversion'])) $productos_arr[] = 'inversion';
+                                if (!empty($row['interes_credito'])) $productos_arr[] = 'credito';
+                                $productos_badges = [];
+                                foreach ($productos_arr as $prod) {
+                                    $prod_name = match ($prod) {
+                                        'ahorro'    => 'Ahorro',
+                                        'corriente' => 'Corriente',
+                                        'inversion' => 'Inversión',
+                                        'credito'   => 'Crédito',
+                                        default     => ucfirst($prod)
+                                    };
+                                    $productos_badges[] = '<span class="badge border border-primary text-primary bg-light me-1 mb-1">' . $prod_name . '</span>';
+                                }
+                                $productos_html = implode('', $productos_badges);
+                                if (empty($productos_html)) $productos_html = '<span class="text-muted">Ninguno</span>';
+
+                                // Formatear acuerdo
+                                $acuerdo_lbl = 'Ninguno';
+                                switch ($row['acuerdo_logrado']) {
+                                    case 'nueva_cita_campo':
+                                        $acuerdo_lbl = 'Nueva cita en campo';
+                                        break;
+                                    case 'nueva_cita_oficina':
+                                        $acuerdo_lbl = 'Nueva cita en oficina';
+                                        break;
+                                    case 'recolectar_documentacion':
+                                        $acuerdo_lbl = 'Recolectar documentación';
+                                        break;
+                                    case 'levantamiento_campo':
+                                        $acuerdo_lbl = 'Levantamiento en campo';
+                                        break;
+                                    case 'ninguno':
+                                    case '':
+                                    case null:
+                                        $acuerdo_lbl = 'Sin acuerdo';
+                                        break;
+                                }
+                            ?>
+                                <tr class="fila-encuesta" 
+                                    data-cliente="<?= htmlspecialchars(strtolower($row['cliente_nombre'] . ' ' . $row['cliente_cedula'])) ?>"
+                                    data-fecha="<?= htmlspecialchars($row['fecha_realizada']) ?>">
+                                    <td class="px-3">
+                                        <div class="fw-bold text-dark"><?= htmlspecialchars($row['fecha_realizada']) ?></div>
+                                        <div class="text-muted" style="font-size: 11px;"><i class="far fa-clock"></i> <?= htmlspecialchars($row['hora_realizada']) ?></div>
+                                    </td>
+                                    <td class="px-3">
+                                        <div class="fw-bold text-navy" style="color: var(--brand-navy);"><?= htmlspecialchars($row['cliente_nombre']) ?></div>
+                                        <div class="text-secondary" style="font-size: 12px;"><i class="far fa-id-card"></i> <?= htmlspecialchars($row['cliente_cedula']) ?></div>
+                                    </td>
+                                    <td class="px-3">
+                                        <span class="badge <?= $tipo_visita_class ?> px-2 py-1" style="font-size: 11px; font-weight: 700;"><?= $tipo_visita_lbl ?></span>
+                                    </td>
+                                    <td class="px-3">
+                                        <div class="mb-1">
+                                            <span class="badge <?= $nivel_class ?> px-2 py-1" style="font-size: 10px;">Interés: <?= ucfirst($nivel_interes) ?></span>
+                                        </div>
+                                        <div class="d-flex flex-wrap"><?= $productos_html ?></div>
+                                    </td>
+                                    <td class="px-3">
+                                        <div class="fw-semibold text-secondary" style="font-size: 13px;"><i class="fas fa-handshake text-muted me-1"></i> <?= $acuerdo_lbl ?></div>
+                                    </td>
+                                    <td class="px-3 text-center">
+                                        <a href="nueva_encuesta.php?tarea_id=<?= urlencode($row['tarea_id']) ?>" class="btn btn-sm btn-yellow py-1 px-3 fw-bold" style="font-size: 12px; border-radius: 6px;">
+                                            <i class="fas fa-edit"></i> Editar
+                                        </a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        
+                        <!-- Fila informativa cuando no hay resultados de búsqueda -->
+                        <tr id="no-results-row" style="display: none;">
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="fas fa-search-minus fa-3x mb-3 text-warning"></i>
+                                <p class="m-0 fw-bold">No se encontraron encuestas con los filtros aplicados.</p>
+                                <p class="m-0 text-sm">Prueba ajustando el nombre del cliente o la fecha seleccionada.</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </div><!-- /content-area -->
 </div><!-- /main-content -->
 
 <script>
-/* ══════════════════════════════════════════════════════
+/* ──────────────────────────────────────────────────────
    SOPORTE PARA EDITAR ENCUESTAS EXISTENTES
-══════════════════════════════════════════════════════ */
+────────────────────────────────────────────────────── */
 async function cargarEncuestaParaEditar() {
     const params  = new URLSearchParams(window.location.search);
     const tareaId = params.get('tarea_id');
@@ -1502,7 +1706,7 @@ async function cargarEncuestaParaEditar() {
         svById('f-zona',           cliente.zona           || '');
         svById('f-direccion',      cliente.direccion      || '');
         svById('f-estado',         cliente.estado         || 'prospecto');
-        svById('f-cedula_conyuge', cliente.cedula_conyuge || '');
+        
         const infoBanner = document.getElementById('info-cargado');
         if (infoBanner) infoBanner.style.display = 'flex';
 
@@ -1513,6 +1717,56 @@ async function cargarEncuestaParaEditar() {
             const vc  = document.querySelector(`.visit-card[data-tipo="${key}"]`);
             if (vc) selectVisita(vc);
         }
+
+        /* ── Identificación Institucional ── */
+        const p1Conoce = encuesta.p1_conoce_institucion ? '1' : '0';
+        const p2Cliente = encuesta.p2_es_cliente ? '1' : '0';
+        setRadioByName('p1_conoce_institucion', p1Conoce);
+        setRadioByName('p2_es_cliente', p2Cliente);
+        
+        document.getElementById('p1-si')?.classList.toggle('checked', p1Conoce === '1');
+        document.getElementById('p1-no')?.classList.toggle('checked', p1Conoce === '0');
+        document.getElementById('p2-si')?.classList.toggle('checked', p2Cliente === '1');
+        document.getElementById('p2-no')?.classList.toggle('checked', p2Cliente === '0');
+        document.getElementById('p2-extra').style.display = p2Cliente === '1' ? 'block' : 'none';
+
+        svById('f-p1_obs', encuesta.p1_obs || '' );
+        const p2Products = encuesta.p2_producto ? encuesta.p2_producto.split(',') : [];
+        document.querySelectorAll('#grp-p2-productos .p2-prod-opt').forEach(opt => {
+            const isChecked = p2Products.includes(opt.dataset.val);
+            opt.classList.toggle('checked', isChecked);
+            const icon = opt.querySelector('i');
+            if (icon) {
+                icon.className = isChecked ? 'fas fa-check-square' : 'far fa-square';
+            }
+        });
+        svById('f-p2_producto', encuesta.p2_producto || '');
+        svById('f-p2_obs', encuesta.p2_obs || '');
+        svById('f-p3_obs', encuesta.p3_obs || '');
+        
+        if (encuesta.p3_satisfaccion) {
+            document.querySelectorAll('#chips-p3-satisfaccion .chip').forEach(c => {
+                c.classList.toggle('selected', c.dataset.val === encuesta.p3_satisfaccion);
+            });
+            svById('f-p3_satisfaccion', encuesta.p3_satisfaccion);
+        }
+
+        svById('f-nombre_empresa', cliente.nombre_empresa || '');
+        svById('f-tipo_empresa',   cliente.tipo_empresa   || '');
+
+        const tieneInvPrev = encuesta.tiene_inversiones ? '1' : '0';
+        const crearTareaVenc = encuesta.interes_propuesta_previa ? '1' : '0';
+        
+        document.getElementById('sec-propuesta-vencimiento').style.display = tieneInvPrev === '1' ? 'block' : 'none';
+        
+        document.getElementById('venc-si')?.classList.toggle('checked', crearTareaVenc === '1');
+        document.getElementById('venc-no')?.classList.toggle('checked', crearTareaVenc === '0');
+        document.getElementById('extras-propuesta-vencimiento').style.display = crearTareaVenc === '1' ? 'grid' : 'none';
+        
+        svById('f-propuesta_inversion', encuesta.propuesta_inversion || '');
+        svById('f-fecha_previa_vencimiento', encuesta.fecha_previa_vencimiento || '');
+        svById('f-hora_previa_vencimiento', encuesta.hora_previa_vencimiento || '');
+        svById('f-fecha_vencimiento_cdp', encuesta.fecha_vencimiento_cdp || '');
 
         /* ── Situación financiera (radio Y/N) ────────────────── */
         const mantAhorro = encuesta.mantiene_cuenta_ahorro        ? '1' : '0';
@@ -1604,9 +1858,9 @@ async function cargarEncuestaParaEditar() {
 // Ejecutar al cargar la página
 window.addEventListener('DOMContentLoaded', cargarEncuestaParaEditar);
 
-/* ══════════════════════════════════════════════════════
-   BÚSQUEDA POR CÉDULA — bug fix: siempre muestra stepper+form
-══════════════════════════════════════════════════════ */
+/* ──────────────────────────────────────────────────────
+   B├ÜSQUEDA POR CÉDULA — bug fix: siempre muestra stepper+form
+────────────────────────────────────────────────────── */
 const btnBuscar = document.getElementById('btn-buscar');
 const inpCedula = document.getElementById('inp-cedula');
 const searchRes = document.getElementById('search-result');
@@ -1620,7 +1874,7 @@ async function buscarCedula() {
     const ced = inpCedula.value.trim();
     if (!ced) { showMsg('Ingresa una cédula primero.', 'warning'); return; }
     btnBuscar.disabled = true;
-    btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando…';
+    btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> BuscandoÔÇª';
 
     try {
         const fd = new FormData();
@@ -1633,7 +1887,7 @@ async function buscarCedula() {
                 <div class="found-chip found">
                     <i class="fas fa-circle-check"></i>
                     Encontrado: <strong>${esc(data.data.nombre||'')}</strong>
-                    &nbsp;·&nbsp; ${data.tipo === 'cliente' ? 'Cliente' : 'Prospecto'}
+                    &nbsp;┬À&nbsp; ${data.tipo === 'cliente' ? 'Cliente' : 'Prospecto'}
                 </div>`;
 
             // Pre-llenar campos
@@ -1646,6 +1900,7 @@ async function buscarCedula() {
             fill('f-ciudad',         data.data.ciudad);
             fill('f-zona',           data.data.zona);
             fill('f-nombre_empresa', data.data.nombre_empresa);
+            fill('f-tipo_empresa',   data.data.tipo_empresa);
             setVal('f-estado',       data.data.estado_db || 'prospecto');
             setVal('hid-cliente_id', data.data.id);
 
@@ -1688,6 +1943,87 @@ async function buscarCedula() {
     }
 }
 
+function toggleP2Prod(el) {
+    el.classList.toggle('checked');
+    const checkedOpts = el.parentNode.querySelectorAll('.p2-prod-opt.checked');
+    const vals = [];
+    checkedOpts.forEach(opt => vals.push(opt.dataset.val));
+    document.getElementById('f-p2_producto').value = vals.join(',');
+    
+    const icon = el.querySelector('i');
+    if (icon) {
+        if (el.classList.contains('checked')) {
+            icon.className = 'fas fa-check-square';
+        } else {
+            icon.className = 'far fa-square';
+        }
+    }
+}
+
+function toggleVencProposal(val) {
+    document.getElementById('venc-si').classList.toggle('checked', val === 1);
+    document.getElementById('venc-no').classList.toggle('checked', val === 0);
+    document.getElementById('extras-propuesta-vencimiento').style.display = val === 1 ? 'grid' : 'none';
+}
+
+function selectSatisfaccion(el) {
+    el.parentNode.querySelectorAll('.chip').forEach(c => c.classList.remove('selected'));
+    el.classList.add('selected');
+    document.getElementById('f-p3_satisfaccion').value = el.dataset.val;
+}
+
+function omitirBusqueda() {
+    searchRes.innerHTML = `
+        <div class="found-chip new-prosp">
+            <i class="fas fa-user-plus"></i>
+            Nuevo Prospecto — Llena los datos en el formulario.
+        </div>`;
+    
+    // Clear search & form fields
+    inpCedula.value = '';
+    document.getElementById('formEncuesta').reset();
+    
+    // Reset hidden inputs & states
+    setVal('hid-cliente_id', '');
+    setVal('hid-tarea_id', '');
+    setVal('hid-tipo_prospecto', '');
+    setVal('hid-actividad', '');
+    setVal('hid-tiene_ruc', '0');
+    setVal('hid-tiene_rise', '0');
+    setVal('hid-prod_interes', '');
+    setVal('hid-nivel_interes', '');
+    setVal('f-p3_satisfaccion', '');
+    setVal('f-estado', 'prospecto');
+    setVal('f-tipo_empresa', '');
+    setVal('f-nombre_empresa', '');
+    setVal('f-propuesta_inversion', '');
+    setVal('f-fecha_previa_vencimiento', '');
+    setVal('f-hora_previa_vencimiento', '');
+    setVal('f-fecha_vencimiento_cdp', '');
+    document.getElementById('sec-propuesta-vencimiento').style.display = 'none';
+    document.getElementById('extras-propuesta-vencimiento').style.display = 'none';
+    
+    // Hide info banner
+    document.getElementById('info-cargado').style.display = 'none';
+    
+    // Reset custom chip groups, level selections, and YN groups
+    document.querySelectorAll('.visit-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('#chips-actividad .chip').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('#chips-p3-satisfaccion .chip').forEach(c => c.classList.remove('selected'));
+    document.querySelectorAll('.yn-opt').forEach(o => o.classList.remove('checked'));
+    document.getElementById('p2-extra').style.display = 'none';
+    
+    // Show stepper and form
+    searchRes.style.display = 'block';
+    stepper.style.display   = 'flex';
+    formEnc.style.display   = 'block';
+    
+    // Go to step 0 (Identificación)
+    show(0);
+    stepper.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function fill(id, val) { const e = document.getElementById(id); if (e && val) e.value = val; }
 function setVal(id, val) { const e = document.getElementById(id); if (e) e.value = val||''; }
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -1696,9 +2032,9 @@ function showMsg(msg, type) {
     searchRes.style.display = 'block';
 }
 
-/* ══════════════════════════════════════════════════════
+/* ──────────────────────────────────────────────────────
    STEPPER NAVIGATION
-══════════════════════════════════════════════════════ */
+────────────────────────────────────────────────────── */
 const panes   = document.querySelectorAll('.step-pane');
 const stepEls = document.querySelectorAll('.step');
 let cur = 0;
@@ -1719,7 +2055,7 @@ function show(i) {
 }
 document.getElementById('btn-prev').onclick = () => show(cur - 1);
 document.getElementById('btn-next').onclick = () => {
-    if (cur === 0 && !document.getElementById('hid-tipo_prospecto').value) {
+    if (cur === 1 && !document.getElementById('hid-tipo_prospecto').value) {
         alert('Selecciona el tipo de visita para continuar.');
         return;
     }
@@ -1782,6 +2118,12 @@ document.addEventListener('click', function(e){
         'ec_tiene_operaciones_crediticias':'extras-credito'
     };
     if(map[name]) document.getElementById(map[name]).classList.toggle('show', val==='1');
+    if(name==='p2_es_cliente'){
+        document.getElementById('p2-extra').style.display = val==='1' ? 'block':'none';
+    }
+    if(name==='ec_tiene_inversiones'){
+        document.getElementById('sec-propuesta-vencimiento').style.display = val==='1' ? 'block':'none';
+    }
     if(name==='tiene_empresa'){
         tieneEmpresa = (val==='1');
         document.getElementById('extras-empresa').classList.toggle('show', tieneEmpresa);
@@ -1806,7 +2148,13 @@ document.querySelectorAll('.yn-group').forEach(function(g){
                 'ec_tiene_operaciones_crediticias':'extras-credito'
             };
             if(map[name]) document.getElementById(map[name]).classList.toggle('show', val==='1');
-            if(name==='tiene_empresa'){
+            if(name==='p2_es_cliente'){
+        document.getElementById('p2-extra').style.display = val==='1' ? 'block':'none';
+    }
+    if(name==='ec_tiene_inversiones'){
+        document.getElementById('sec-propuesta-vencimiento').style.display = val==='1' ? 'block':'none';
+    }
+    if(name==='tiene_empresa'){
                 tieneEmpresa = (val==='1');
                 document.getElementById('extras-empresa').classList.toggle('show', tieneEmpresa);
                 var s = document.getElementById('aviso-sin-empresa');
@@ -1826,7 +2174,7 @@ function chipSingle(el, hidId){
     el.classList.add('selected');
     var hid = document.getElementById(hidId);
     if(hid) hid.value = el.dataset.val;
-    /* special: ahorro programado → show frecuencia */
+    /* special: ahorro programado ÔåÆ show frecuencia */
     if(hidId === 'fa_tipo_ahorro'){
         var fw = document.getElementById('fa-frecuencia-wrap');
         if(fw) fw.style.display = (el.dataset.val === 'programado') ? 'block':'none';
@@ -1887,19 +2235,19 @@ if(navigator.geolocation){
     );
 }
 
-/* ══ DOC CHECKLIST ══ */
+/* ── DOC CHECKLIST ── */
 function toggleDoc(el){
     el.classList.toggle('checked');
     var h = el.querySelector('.doc-hidden');
     if(h) h.value = el.classList.contains('checked') ? '1':'0';
 }
-/* ══ INSTITUTION PICKER ══ */
+/* ── INSTITUTION PICKER ── */
 function selInst(el, hidId){
     el.closest('.inst-picker').querySelectorAll('.inst-chip').forEach(function(x){ x.classList.remove('sel'); });
     el.classList.add('sel');
     var h = document.getElementById(hidId); if(h) h.value = el.dataset.val;
 }
-/* ══ CÓNYUGE VISIBILITY ══ */
+/* ── C├ôNYUGE VISIBILITY ── */
 function toggleConyuge(prefix){
     var val = (document.getElementById(prefix+'_sol_ec')||{}).value||'';
     var w = document.getElementById(prefix+'-conyuge-wrap');
@@ -1910,13 +2258,64 @@ function toggleConyugeGar(){
     var w = document.getElementById('fk-conyuge-gar-wrap');
     if(w) w.style.display = (val==='casado'||val==='union_libre') ? 'block':'none';
 }
-/* ══ RADIO CHANGE → show/hide panels ══ */
+/* ── RADIO CHANGE ÔåÆ show/hide panels ── */
 document.addEventListener('change', function(e){
     var inp = e.target; if(!inp||inp.type!=='radio') return;
     var n=inp.name, v=inp.value;
     var pairs = {
     };
     if(pairs[n]){ var w=document.getElementById(pairs[n]); if(w) w.style.display=v==='1'?'block':'none'; }
+});
+
+/* FILTRADO INTERACTIVO DE HISTORIAL DE ENCUESTAS */
+document.addEventListener('DOMContentLoaded', function() {
+    const filtroCliente = document.getElementById('filtro-cliente');
+    const filtroFecha = document.getElementById('filtro-fecha');
+    const btnLimpiar = document.getElementById('btn-limpiar-filtros');
+    const filas = document.querySelectorAll('.fila-encuesta');
+    const noResultsRow = document.getElementById('no-results-row');
+    const cantEncuestas = document.getElementById('cant-encuestas');
+    const filaVacia = document.getElementById('fila-vacia');
+
+    function filtrar() {
+        if (!filas.length) return;
+
+        const valCliente = filtroCliente.value.trim().toLowerCase();
+        const valFecha = filtroFecha.value;
+
+        let visibles = 0;
+
+        filas.forEach(f => {
+            const matchCliente = !valCliente || f.dataset.cliente.includes(valCliente);
+            const matchFecha = !valFecha || f.dataset.fecha === valFecha;
+
+            if (matchCliente && matchFecha) {
+                f.style.display = '';
+                visibles++;
+            } else {
+                f.style.display = 'none';
+            }
+        });
+
+        // Actualizar contador de encuestas visibles
+        if (cantEncuestas) cantEncuestas.textContent = visibles;
+
+        // Mostrar u ocultar mensaje "no results"
+        if (noResultsRow) {
+            noResultsRow.style.display = (visibles === 0) ? '' : 'none';
+        }
+    }
+
+    if (filtroCliente) filtroCliente.addEventListener('input', filtrar);
+    if (filtroFecha) filtroFecha.addEventListener('change', filtrar);
+
+    if (btnLimpiar) {
+        btnLimpiar.addEventListener('click', function() {
+            if (filtroCliente) filtroCliente.value = '';
+            if (filtroFecha) filtroFecha.value = '';
+            filtrar();
+        });
+    }
 });
 
 </script>

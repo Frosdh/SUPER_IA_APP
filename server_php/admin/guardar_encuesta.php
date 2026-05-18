@@ -27,6 +27,7 @@ require_once __DIR__ . '/db_admin.php'; // $pdo  (PDO, ERRMODE_EXCEPTION)
 function p(string $k): string  { return trim((string)($_POST[$k] ?? '')); }
 function pn(string $k): ?string { $v = p($k); return $v !== '' ? $v : null; }
 function pb(string $k): int    { return p($k) === '1' ? 1 : 0; }
+function pin(string $k): ?int { $v = trim((string)($_POST[$k] ?? '')); return $v !== '' ? (int)$v : null; }
 function uuid4(): string {
     $d = random_bytes(16);
     $d[6] = chr(ord($d[6]) & 0x0f | 0x40);
@@ -63,6 +64,14 @@ $actividad   = pn('actividad');
 $nombre_emp  = pn('nombre_empresa');
 $tiene_ruc   = pb('tiene_ruc');
 $tiene_rise  = pb('tiene_rise');
+$tipo_empresa = pn('tipo_empresa');
+
+// Propuesta de inversión previa al vencimiento (CDP)
+$crear_tarea_prev_venc    = pb('crear_tarea_prev_venc');
+$propuesta_inversion      = pn('propuesta_inversion');
+$fecha_previa_vencimiento = pn('fecha_previa_vencimiento');
+$hora_previa_vencimiento  = pn('hora_previa_vencimiento');
+$fecha_vencimiento_cdp    = pn('fecha_vencimiento_cdp');
 $lat         = pn('lat');
 $lng         = pn('lng');
 $tipo_visita = pn('tipo_prospecto');   // frio | seguimiento | null
@@ -239,7 +248,7 @@ try {
                 (id, cedula, nombre, telefono, telefono2, email, direccion,
                  ciudad, zona, actividad, nombre_empresa,
                  tiene_ruc, tiene_rise, latitud, longitud, asesor_id, estado)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospecto')
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospecto')
         ")->execute([
             $cliente_id, $cedula, $nombre_full, $telefono, $celular,
             $email, $direccion, $ciudad, $zona, $actividad, $nombre_emp,
@@ -440,6 +449,30 @@ try {
     }
 
     // ────────────────────────────────────────────────────────
+    // PASO 4.5 — Tarea de propuesta previa al vencimiento (Inversiones / CDP)
+    if ($ec_inv && $crear_tarea_prev_venc && $fecha_previa_vencimiento) {
+        $st = $pdo->prepare("SELECT id FROM tarea WHERE cliente_prospecto_id = ? AND tipo_tarea = 'nueva_cita_inversion' AND estado = 'programada' LIMIT 1");
+        $st->execute([$cliente_id]);
+        $tarea_inv_existente = $st->fetchColumn();
+
+        $obs_inv = "💰 Nueva cita de inversión" . ($propuesta_inversion ? ": " . $propuesta_inversion : "") . ($ec_fecha_inv ? " (CDP vence: " . $ec_fecha_inv . ")" : "");
+
+        if ($tarea_inv_existente) {
+            $pdo->prepare("UPDATE tarea SET fecha_programada = ?, hora_programada = ?, observaciones = ? WHERE id = ?")
+                ->execute([$fecha_previa_vencimiento, $hora_previa_vencimiento ?: null, $obs_inv, $tarea_inv_existente]);
+        } else {
+            $pdo->prepare("
+                INSERT INTO tarea
+                    (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+                     fecha_programada, hora_programada, observaciones)
+                VALUES (?,?,?,?,'programada',?,?,?)
+            ")->execute([
+                uuid4(), $asesor_id, $cliente_id, 'nueva_cita_inversion',
+                $fecha_previa_vencimiento, $hora_previa_vencimiento ?: null, $obs_inv
+            ]);
+        }
+    }
+
     // PASO 5 — Fichas de producto
     // ────────────────────────────────────────────────────────
     $productos = array_filter(array_map('trim', explode(',', $prod_interes)));
