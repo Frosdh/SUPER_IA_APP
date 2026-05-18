@@ -101,23 +101,29 @@ $int_inv       = (str_contains($prod_interes, 'inversion') ? 1 : 0);
 $int_cred      = (str_contains($prod_interes, 'credito')   ? 1 : 0);
 
 // Acuerdo y fechas
-// DB ENUM válidos: 'nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'
-$raw_acuerdo     = pn('acuerdo_logrado') ?? pn('tipo_acuerdo');
-$db_enum_acuerdo = ['nueva_cita_campo','nueva_cita_oficina','recolectar_documentacion','ninguno','levantamiento_campo'];
-$acuerdo_map_form = [
-    'reprogramacion'         => 'ninguno',
-    'seguimiento_telefonico' => 'ninguno',
-    'solicitud_credito'      => 'nueva_cita_oficina',
-    'apertura_cuenta'        => 'nueva_cita_oficina',
-    'sin_interes'            => 'ninguno',
-    'otro'                   => 'ninguno',
-];
-if ($raw_acuerdo === null || $raw_acuerdo === '') {
+$raw_acuerdo = pn('acuerdo_logrado') ?? pn('tipo_acuerdo');
+$acuerdo_logrado_raw = $raw_acuerdo;
+
+// Map the stored $acuerdo_logrado to strictly match the DB ENUM options of encuesta_comercial/encuesta_crediticia:
+// 'nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas'
+$valid_db_enums = ['nueva_cita_campo', 'nueva_cita_oficina', 'reprogramacion', 'seguimiento', 'otro', 'tasas_competitivas'];
+if ($raw_acuerdo === null || $raw_acuerdo === '' || $raw_acuerdo === 'ninguno') {
     $acuerdo_logrado = null;
-} elseif (in_array($raw_acuerdo, $db_enum_acuerdo)) {
+} elseif (in_array($raw_acuerdo, $valid_db_enums)) {
     $acuerdo_logrado = $raw_acuerdo;
+} elseif ($raw_acuerdo === 'recolectar_documentacion' || $raw_acuerdo === 'levantamiento_campo') {
+    $acuerdo_logrado = 'otro';
 } else {
-    $acuerdo_logrado = $acuerdo_map_form[$raw_acuerdo] ?? 'ninguno';
+    // Map form fallbacks if any
+    $acuerdo_map_form = [
+        'reprogramacion'         => 'reprogramacion',
+        'seguimiento_telefonico' => 'seguimiento',
+        'solicitud_credito'      => 'nueva_cita_oficina',
+        'apertura_cuenta'        => 'nueva_cita_oficina',
+        'sin_interes'            => null,
+        'otro'                   => 'otro',
+    ];
+    $acuerdo_logrado = $acuerdo_map_form[$raw_acuerdo] ?? null;
 }
 
 $fecha_acuerdo = pn('fecha_acuerdo');
@@ -229,13 +235,14 @@ try {
                 nombre_empresa = COALESCE(NULLIF(?, ''), nombre_empresa),
                 tiene_ruc  = ?,
                 tiene_rise = ?,
+                tipo_empresa = COALESCE(NULLIF(?, ''), tipo_empresa),
                 latitud    = COALESCE(?, latitud),
                 longitud   = COALESCE(?, longitud)
             WHERE id = ?
         ")->execute([
             $nombre_full, $telefono, $celular, $email, $direccion,
             $ciudad, $zona, $actividad, $nombre_emp,
-            $tiene_ruc, $tiene_rise,
+            $tiene_ruc, $tiene_rise, $tipo_empresa,
             ($lat && is_numeric($lat) ? (float)$lat : null),
             ($lng && is_numeric($lng) ? (float)$lng : null),
             $cliente_id,
@@ -247,12 +254,12 @@ try {
             INSERT INTO cliente_prospecto
                 (id, cedula, nombre, telefono, telefono2, email, direccion,
                  ciudad, zona, actividad, nombre_empresa,
-                 tiene_ruc, tiene_rise, latitud, longitud, asesor_id, estado)
+                 tiene_ruc, tiene_rise, tipo_empresa, latitud, longitud, asesor_id, estado)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospecto')
         ")->execute([
             $cliente_id, $cedula, $nombre_full, $telefono, $celular,
             $email, $direccion, $ciudad, $zona, $actividad, $nombre_emp,
-            $tiene_ruc, $tiene_rise,
+            $tiene_ruc, $tiene_rise, $tipo_empresa,
             ($lat && is_numeric($lat) ? (float)$lat : null),
             ($lng && is_numeric($lng) ? (float)$lng : null),
             $asesor_id,
@@ -409,7 +416,7 @@ try {
     // ────────────────────────────────────────────────────────
     // PASO 4 — Acuerdo de visita + tarea de seguimiento
     // ────────────────────────────────────────────────────────
-    if ($acuerdo_logrado && $acuerdo_logrado !== 'ninguno' && $fecha_acuerdo) {
+    if ($acuerdo_logrado_raw && $acuerdo_logrado_raw !== 'ninguno' && $fecha_acuerdo) {
         // Registrar acuerdo de visita (upsert por tarea_id)
         $st = $pdo->prepare('SELECT id FROM acuerdo_visita WHERE tarea_id = ? LIMIT 1');
         $st->execute([$tarea_id]);
@@ -417,10 +424,10 @@ try {
 
         if ($av_existente) {
             $pdo->prepare("UPDATE acuerdo_visita SET tipo_acuerdo=?, fecha=?, hora=? WHERE id=?")
-                ->execute([$acuerdo_logrado, $fecha_acuerdo, $hora_acuerdo, $av_existente]);
+                ->execute([$acuerdo_logrado_raw, $fecha_acuerdo, $hora_acuerdo, $av_existente]);
         } else {
             $pdo->prepare("INSERT INTO acuerdo_visita (id,tarea_id,tipo_acuerdo,fecha,hora) VALUES (?,?,?,?,?)")
-                ->execute([uuid4(), $tarea_id, $acuerdo_logrado, $fecha_acuerdo, $hora_acuerdo]);
+                ->execute([uuid4(), $tarea_id, $acuerdo_logrado_raw, $fecha_acuerdo, $hora_acuerdo]);
         }
 
         // Crear tarea de seguimiento (solo en modo nuevo)
@@ -432,7 +439,7 @@ try {
                 'levantamiento_campo'      => 'levantamiento',
                 'ninguno'                  => null,
             ];
-            $tipo_follow = $tipo_map[$acuerdo_logrado] ?? 'evaluacion';
+            $tipo_follow = $tipo_map[$acuerdo_logrado_raw] ?? 'evaluacion';
             if ($tipo_follow) {
                 $pdo->prepare("
                     INSERT INTO tarea
@@ -442,7 +449,7 @@ try {
                 ")->execute([
                     uuid4(), $asesor_id, $cliente_id, $tipo_follow,
                     $fecha_acuerdo, $hora_acuerdo ?: null,
-                    "Seguimiento: " . str_replace('_', ' ', $acuerdo_logrado),
+                    "Seguimiento: " . str_replace('_', ' ', $acuerdo_logrado_raw),
                 ]);
             }
         }
@@ -559,8 +566,49 @@ try {
                     $fichas_ok[] = 'Inversión';
                     break;
                 case 'credito':
-                    $pdo->prepare("INSERT INTO ficha_credito (id,ficha_id,destino_credito,monto_credito,plazo_credito_meses,solicitante_nombre,solicitante_cedula,solicitante_celular) VALUES (?,?,?,?,?,?,?,?)")
-                        ->execute([uuid4(), $fid, pn('fk_destino'), pn('fk_monto'), pn('fk_plazo'), $nombre_full, $cedula, $celular]);
+                    $req_credito = pn('fk_requiere_credito') !== null ? (int)pn('fk_requiere_credito') : 1;
+                    
+                    $doc_cedula = pn('fk_doc_cedula') !== null ? (int)pn('fk_doc_cedula') : 0;
+                    $doc_planilla = pn('fk_doc_planilla') !== null ? (int)pn('fk_doc_planilla') : 0;
+                    $doc_ruc_rise = pn('fk_doc_ruc_rise') !== null ? (int)pn('fk_doc_ruc_rise') : 0;
+                    $doc_estados_cuenta = pn('fk_doc_estados_cuenta') !== null ? (int)pn('fk_doc_estados_cuenta') : 0;
+                    $doc_declaraciones = pn('fk_doc_declaraciones') !== null ? (int)pn('fk_doc_declaraciones') : 0;
+                    $doc_matricula = pn('fk_doc_matricula') !== null ? (int)pn('fk_doc_matricula') : 0;
+                    $doc_foto_negocio = pn('fk_doc_foto_negocio') !== null ? (int)pn('fk_doc_foto_negocio') : 0;
+                    $doc_solicitud_credito = pn('fk_doc_solicitud') !== null ? (int)pn('fk_doc_solicitud') : 0;
+                    $doc_foto_cliente = pn('fk_doc_foto_cliente') !== null ? (int)pn('fk_doc_foto_cliente') : 0;
+
+                    $pdo->prepare("INSERT INTO ficha_credito (
+                        id, ficha_id, requiere_credito,
+                        destino_credito, dest_otros_detalle, monto_credito, plazo_credito_meses,
+                        solicitante_nombre, solicitante_cedula, solicitante_celular, solicitante_estado_civil,
+                        solicitante_conyuge_nombre, solicitante_conyuge_cedula, solicitante_conyuge_celular,
+                        garante_nombre, garante_cedula, garante_celular, garante_estado_civil,
+                        garante_conyuge_nombre, garante_conyuge_cedula, garante_conyuge_celular,
+                        direccion_sitio,
+                        doc_cedula, doc_planilla, doc_ruc_rise, doc_estados_cuenta, doc_declaraciones, doc_matricula,
+                        doc_foto_negocio, doc_solicitud_credito, doc_foto_cliente
+                    ) VALUES (
+                        ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?,
+                        ?, ?, ?, ?,
+                        ?, ?, ?,
+                        ?,
+                        ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?
+                    )")->execute([
+                        uuid4(), $fid, $req_credito,
+                        pn('fk_destino'), pn('fk_destino_otros'), pn('fk_monto'), pn('fk_plazo'),
+                        pn('fk_sol_nombre') ?: $nombre_full, pn('fk_sol_cedula') ?: $cedula, pn('fk_sol_celular') ?: $celular, pn('fk_sol_ec'),
+                        pn('fk_sol_conyuge_nombre'), pn('fk_sol_conyuge_cedula'), pn('fk_sol_conyuge_celular'),
+                        pn('fk_gar_nombre'), pn('fk_gar_cedula'), pn('fk_gar_celular'), pn('fk_gar_ec'),
+                        pn('fk_gar_conyuge_nombre'), pn('fk_gar_conyuge_cedula'), pn('fk_gar_conyuge_celular'),
+                        pn('fk_direccion_sitio'),
+                        $doc_cedula, $doc_planilla, $doc_ruc_rise, $doc_estados_cuenta, $doc_declaraciones, $doc_matricula,
+                        $doc_foto_negocio, $doc_solicitud_credito, $doc_foto_cliente
+                    ]);
                     $fichas_ok[] = 'Crédito';
                     break;
             }

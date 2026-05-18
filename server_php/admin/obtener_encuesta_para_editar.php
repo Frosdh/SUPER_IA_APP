@@ -65,7 +65,7 @@ try {
         if ($fp_has_encuesta_id) {
             $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE encuesta_id = (SELECT id FROM encuesta_comercial WHERE tarea_id = ?)');
             $st->execute([$tarea_id]);
-            $fichas = $st->fetchAll(PDO::FETCH_ASSOC);
+            $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
         } else {
             // Fallback (cuando no hay encuesta_id): aproximación por cliente + asesor
             $ced = $cliente['cedula'] ?? null;
@@ -73,8 +73,30 @@ try {
             if ($ced && $aid) {
                 $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE cliente_cedula = ? AND asesor_id = ? ORDER BY created_at DESC LIMIT 50');
                 $st->execute([$ced, $aid]);
-                $fichas = $st->fetchAll(PDO::FETCH_ASSOC);
+                $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+            } else {
+                $fichas_raw = [];
             }
+        }
+        
+        $fichas = [];
+        foreach ($fichas_raw as $fp) {
+            $type = $fp['producto_tipo'];
+            $child_table = '';
+            if ($type === 'credito')          $child_table = 'ficha_credito';
+            elseif ($type === 'inversiones')  $child_table = 'ficha_inversiones';
+            elseif ($type === 'cuenta_ahorros') $child_table = 'ficha_cuenta_ahorros';
+            elseif ($type === 'cuenta_corriente') $child_table = 'ficha_cuenta_corriente';
+            
+            if ($child_table) {
+                try {
+                    $stc = $pdo->prepare("SELECT * FROM `$child_table` WHERE ficha_id = ? LIMIT 1");
+                    $stc->execute([$fp['id']]);
+                    $child_data = $stc->fetch(PDO::FETCH_ASSOC) ?: [];
+                    $fp = array_merge($fp, $child_data);
+                } catch (PDOException $ex) {}
+            }
+            $fichas[] = $fp;
         }
     } catch (PDOException $e) {
         // Si la tabla no existe o el esquema no coincide, omitir fichas

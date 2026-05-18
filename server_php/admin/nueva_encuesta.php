@@ -10,6 +10,23 @@ $asesor_usuario_id = $_SESSION['asesor_id'];
 $asesor_nombre     = $_SESSION['asesor_nombre'] ?? 'Asesor';
 $asesor_table_id   = $_SESSION['asesor_table_id'] ?? null;
 
+// Obtener lista de cooperativas/bancos desde la base de datos
+$unidades_bancarias = [];
+try {
+    $stmt = $pdo->query("SELECT nombre FROM unidad_bancaria WHERE activo = 1 ORDER BY nombre ASC");
+    $unidades_bancarias = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+} catch (Exception $e) {
+    error_log("Error cargando unidades bancarias: " . $e->getMessage());
+}
+if (empty($unidades_bancarias)) {
+    $unidades_bancarias = [
+        'Banco Pichincha', 'Banco Guayaquil', 'Banco del Austro', 
+        'Produbanco', 'Banco Bolivariano', 'Banco Internacional', 
+        'Cooperativa JEP', 'Cooperativa COAC', 'Cooperativa San José', 
+        'Cooperativa Policía Nacional', 'Cooperativa 29 de Octubre'
+    ];
+}
+
 if (!$asesor_table_id) {
     try {
         $st = $pdo->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
@@ -718,9 +735,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                        placeholder="Razón social o nombre comercial">
                             </div>
                             <div class="fld">
-                                <label>Actividad de la empresa</label>
-                                <input type="text" name="actividad_empresa"
-                                       placeholder="Ej: comercio, manufacturaÔÇª">
+                                <label>Tipo de empresa</label>
+                                <select name="tipo_empresa" id="f-tipo_empresa">
+                                    <option value="">— Seleccione —</option>
+                                    <option value="servicio_produccion">Servicio / Producción</option>
+                                    <option value="comercio">Comercio</option>
+                                </select>
                             </div>
                         </div>
                         <div class="warn-banner" style="margin-top:14px;">
@@ -762,7 +782,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle cuenta ahorro</h6>
                                 <div class="fld-grid">
                                     <div class="fld full" style="width: 100%;"><label>Institución</label>
-                                        <input type="text" name="ec_institucion_ahorro" placeholder="Banco / Cooperativa" style="width: 100%;">
+                                        <select name="ec_institucion_ahorro" style="width: 100%;">
+                                            <option value="">— Seleccione —</option>
+                                            <?php foreach ($unidades_bancarias as $ub): ?>
+                                                <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -780,7 +805,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle cuenta corriente</h6>
                                 <div class="fld-grid">
                                     <div class="fld"><label>Institución</label>
-                                        <input type="text" name="ec_institucion_corriente" placeholder="Banco / Cooperativa">
+                                        <select name="ec_institucion_corriente">
+                                            <option value="">— Seleccione —</option>
+                                            <?php foreach ($unidades_bancarias as $ub): ?>
+                                                <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -798,7 +828,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle inversión</h6>
                                 <div class="fld-grid">
                                     <div class="fld"><label>Institución</label>
-                                        <input type="text" name="ec_institucion_inversiones" placeholder="Banco / Cooperativa">
+                                        <select name="ec_institucion_inversiones">
+                                            <option value="">— Seleccione —</option>
+                                            <?php foreach ($unidades_bancarias as $ub): ?>
+                                                <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                     <div class="fld"><label>Valor (USD)</label>
                                         <input type="number" step="0.01" min="0" name="ec_valor_inversion">
@@ -826,22 +861,14 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                     </label>
                                 </div>
 
-                                <div id="extras-propuesta-vencimiento" class="fld-grid" style="display: none; gap: 10px;">
-                                    <div class="fld full">
-                                        <label>Propuesta de inversión</label>
-                                        <textarea name="propuesta_inversion" id="f-propuesta_inversion" placeholder="Detalla la propuesta comercial..."></textarea>
+                                <div id="extras-propuesta-vencimiento" style="display: none; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; margin-top: 10px;">
+                                    <div class="fld" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                        <label style="margin-bottom: 6px; display: block; font-size: 13px; font-weight: 600; color: #374151;">Fecha de contacto para propuesta</label>
+                                        <input type="date" name="fecha_previa_vencimiento" id="f-fecha_previa_vencimiento" style="width: 100%;">
                                     </div>
-                                    <div class="fld">
-                                        <label>Fecha de contacto para propuesta</label>
-                                        <input type="date" name="fecha_previa_vencimiento" id="f-fecha_previa_vencimiento">
-                                    </div>
-                                    <div class="fld">
-                                        <label>Hora de contacto</label>
-                                        <input type="time" name="hora_previa_vencimiento" id="f-hora_previa_vencimiento">
-                                    </div>
-                                    <div class="fld full">
-                                        <label>Fecha Vencimiento CDP</label>
-                                        <input type="date" name="fecha_vencimiento_cdp" id="f-fecha_vencimiento_cdp">
+                                    <div class="fld" style="flex: 1; min-width: 150px; margin-bottom: 0;">
+                                        <label style="margin-bottom: 6px; display: block; font-size: 13px; font-weight: 600; color: #374151;">Hora de contacto</label>
+                                        <input type="time" name="hora_previa_vencimiento" id="f-hora_previa_vencimiento" style="width: 100%;">
                                     </div>
                                 </div>
                             </div>
@@ -859,7 +886,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle crédito activo</h6>
                                 <div class="fld-grid">
                                     <div class="fld full" style="width: 100%;"><label>Institución</label>
-                                        <input type="text" name="ec_institucion_credito" placeholder="Banco / Cooperativa" style="width: 100%;">
+                                        <select name="ec_institucion_credito" style="width: 100%;">
+                                            <option value="">— Seleccione —</option>
+                                            <?php foreach ($unidades_bancarias as $ub): ?>
+                                                <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
                                     </div>
                                 </div>
                             </div>
@@ -873,23 +905,22 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             ─────────────────────────────────────── -->
             <div class="step-pane" data-pane="5">
                 <div class="form-card">
-                    <h3><i class="fas fa-star"></i>¿Le interesa trabajar con nosotros?</h3>
-                    <p class="sub">¿Cuánto interés mostró el prospecto en nuestros productos?</p>
+                    <h3><i class="fas fa-star"></i>¿Le interesa adquirir o trabajar con alguno de nuestros productos?</h3>
 
-                    <div class="level-grid">
-                        <div class="level-card ninguno" data-val="ninguno" onclick="selectLevel(this)">
-                            <div class="lv-icon">😐</div>
-                            <span>Ninguno</span>
-                        </div>
-                        <div class="level-card bajo" data-val="bajo" onclick="selectLevel(this)">
-                            <div class="lv-icon">🙂</div>
-                            <span>Bajo</span>
-                        </div>
-                        <div class="level-card alto" data-val="alto" onclick="selectLevel(this)">
-                            <div class="lv-icon">🔥</div>
-                            <span>Alto</span>
+                    <!-- ¿Está interesado en nuestros productos? -->
+                    <div class="sub-sec" style="border-top:none;padding-top:0;margin-top:0;margin-bottom:15px;">
+                        <h5 style="margin-bottom: 8px;"><i class="fas fa-heart"></i>¿Está interesado en nuestros productos?</h5>
+                        <div class="yn-group" id="grp-interesado-productos" style="margin-top: 6px;">
+                            <label class="yn-opt" id="opt-interes-si" onclick="toggleInteresProductos(1)">
+                                <input type="radio" name="interesado_productos" value="1"> Sí
+                            </label>
+                            <label class="yn-opt" id="opt-interes-no" onclick="toggleInteresProductos(0)">
+                                <input type="radio" name="interesado_productos" value="0"> No
+                            </label>
                         </div>
                     </div>
+
+                    <div id="sec-interes-detalles" style="display: none; margin-top: 15px;">
 
                     <div class="sub-sec">
                         <h5><i class="fas fa-tags"></i>Productos de interés</h5>
@@ -1182,8 +1213,22 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <div><div class="ficha-title">Ficha: Evaluaci&oacute;n de Cr&eacute;dito</div><div class="ficha-sub">Completa los datos para la solicitud</div></div>
                             </div>
                             <div class="ficha-body">
-                                <div class="ficha-sec-title"><i class="fas fa-credit-score"></i> Evaluaci&oacute;n de Cr&eacute;dito</div>
-                                <div id="fk-detalle-wrap">
+                                <!-- ¿Le gustaría adquirir un crédito? -->
+                                <div class="sub-sec" style="border-top:none;padding-top:0;margin-top:0;margin-bottom:15px;">
+                                    <h5 style="margin-bottom: 8px;"><i class="fas fa-question-circle"></i> ¿Le gustar&iacute;a adquirir un cr&eacute;dito?</h5>
+                                    <div class="yn-group" id="grp-requiere-credito" style="margin-top: 6px;">
+                                        <label class="yn-opt" id="opt-reqcredito-si" onclick="toggleRequiereCredito(1)">
+                                            <input type="radio" name="fk_requiere_credito" value="1"> S&iacute;
+                                        </label>
+                                        <label class="yn-opt" id="opt-reqcredito-no" onclick="toggleRequiereCredito(0)">
+                                            <input type="radio" name="fk_requiere_credito" value="0"> No
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="fk-evaluacion-completa" style="display: none; margin-top: 15px;">
+                                    <div class="ficha-sec-title"><i class="fas fa-credit-score"></i> Evaluaci&oacute;n de Cr&eacute;dito</div>
+                                    <div id="fk-detalle-wrap">
                                     <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Destino del cr&eacute;dito</div>
                                     <div class="chip-grid" style="margin-bottom:10px;">
                                         <div class="chip" data-val="capital_trabajo" onclick="chipSingle(this,'fk_destino')"><i class="fas fa-briefcase"></i> Capital de trabajo</div>
@@ -1318,6 +1363,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                         <input type="hidden" name="fk_doc_foto_cliente" value="0" class="doc-hidden">
                                     </div>
                                 </div>
+                                </div> <!-- Fin de fk-evaluacion-completa -->
                             </div>
                         </div>
 
@@ -1331,17 +1377,21 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                         </div>
                     </div>
 
-                    <div class="sub-sec">
-                        <h5><i class="fas fa-circle-xmark"></i>Razones para no contratar</h5>
-                        <p style="font-size:13px;color:var(--brand-gray);margin-bottom:12px;">Si no mostró interés, ¿cuál fue la razón?</p>
-                        <div class="fld-grid">
-                            <?= ynBlock('Ya trabaja con la institución',   'ec_razon_ya_trabaja') ?>
-                            <?= ynBlock('Desconfía de los servicios',      'ec_razon_desconfia') ?>
-                            <?= ynBlock('Está a gusto con su banco actual','ec_razon_agusto_actual') ?>
-                            <?= ynBlock('Mala experiencia previa',         'ec_razon_mala_experiencia') ?>
-                            <div class="fld full">
-                                <label>Otras razones</label>
-                                <textarea name="ec_razon_otros" rows="2" placeholder="Describe brevemente..."></textarea>
+                    </div> <!-- Fin de sec-interes-detalles -->
+
+                    <div id="sec-razones-no-interes" style="display: none; margin-top: 15px;">
+                        <div class="sub-sec">
+                            <h5><i class="fas fa-circle-xmark"></i>Razones para no contratar</h5>
+                            <p style="font-size:13px;color:var(--brand-gray);margin-bottom:12px;">Si no mostró interés, ¿cuál fue la razón?</p>
+                            <div class="fld-grid">
+                                <?= ynBlock('Ya trabaja con la institución',   'ec_razon_ya_trabaja') ?>
+                                <?= ynBlock('Desconfía de los servicios',      'ec_razon_desconfia') ?>
+                                <?= ynBlock('Está a gusto con su banco actual','ec_razon_agusto_actual') ?>
+                                <?= ynBlock('Mala experiencia previa',         'ec_razon_mala_experiencia') ?>
+                                <div class="fld full">
+                                    <label>Otras razones</label>
+                                    <textarea name="ec_razon_otros" rows="2" placeholder="Describe brevemente..."></textarea>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1442,7 +1492,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                         <div class="fld full">
                             <label>Observaciones generales</label>
                             <textarea name="observaciones" rows="4"
-                                      placeholder="Anota cualquier detalle relevante de la visitaÔÇª"></textarea>
+                                      placeholder="Anota cualquier detalle relevante de la visita..."></textarea>
                         </div>
                     </div>
                 </div>
@@ -1652,7 +1702,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 async function cargarEncuestaParaEditar() {
     const params  = new URLSearchParams(window.location.search);
     const tareaId = params.get('tarea_id');
-    if (!tareaId) return;   // No es modo edición
+    if (!tareaId) {
+        toggleRequiereCredito(1);
+        return;   // No es modo edición
+    }
 
     try {
         const url = `obtener_encuesta_para_editar.php?tarea_id=${encodeURIComponent(tareaId)}`;
@@ -1761,7 +1814,7 @@ async function cargarEncuestaParaEditar() {
         
         document.getElementById('venc-si')?.classList.toggle('checked', crearTareaVenc === '1');
         document.getElementById('venc-no')?.classList.toggle('checked', crearTareaVenc === '0');
-        document.getElementById('extras-propuesta-vencimiento').style.display = crearTareaVenc === '1' ? 'grid' : 'none';
+        document.getElementById('extras-propuesta-vencimiento').style.display = crearTareaVenc === '1' ? 'flex' : 'none';
         
         svById('f-propuesta_inversion', encuesta.propuesta_inversion || '');
         svById('f-fecha_previa_vencimiento', encuesta.fecha_previa_vencimiento || '');
@@ -1832,12 +1885,88 @@ async function cargarEncuestaParaEditar() {
             svById('hid-nivel_interes', encuesta.nivel_interes_captado);
         }
 
+        /* ── Cargar pregunta de Interés en Productos ─────────── */
+        const tieneInteres = (encuesta.nivel_interes_captado && encuesta.nivel_interes_captado !== 'ninguno') || interesesArr.length > 0;
+        toggleInteresProductos(tieneInteres ? 1 : 0);
+        const radInteresSi = document.querySelector('input[name="interesado_productos"][value="1"]');
+        const radInteresNo = document.querySelector('input[name="interesado_productos"][value="0"]');
+        if (radInteresSi && radInteresNo) {
+            radInteresSi.checked = tieneInteres;
+            radInteresNo.checked = !tieneInteres;
+            radInteresSi.closest('.yn-opt').classList.toggle('checked', tieneInteres);
+            radInteresNo.closest('.yn-opt').classList.toggle('checked', !tieneInteres);
+        }
+
         /* ── Acuerdo y cierre (select + inputs por name) ─────── */
         svByName('acuerdo_logrado',      encuesta.acuerdo_logrado      || '');
         svByName('fecha_acuerdo',        encuesta.fecha_acuerdo        || '');
         svByName('hora_acuerdo',         encuesta.hora_acuerdo         || '');
         svByName('fecha_nuevo_contacto', encuesta.fecha_nuevo_contacto || '');
         svByName('observaciones',        encuesta.observaciones        || '');
+
+        /* ── PREPOPULATE CREDIT SHEET (ficha_credito) ─────────── */
+        if (data.fichas && data.fichas.length > 0) {
+            const fc = data.fichas.find(f => f.producto_tipo === 'credito');
+            if (fc) {
+                const reqVal = (fc.requiere_credito !== null && fc.requiere_credito !== undefined) ? parseInt(fc.requiere_credito) : 1;
+                toggleRequiereCredito(reqVal);
+                
+                if (fc.destino_credito) {
+                    const chip = document.querySelector(`.chip[data-val="${fc.destino_credito}"]`);
+                    if (chip) chipSingle(chip, 'fk_destino');
+                }
+                svByName('fk_destino_otros', fc.dest_otros_detalle || '');
+                svByName('fk_monto', fc.monto_credito || '');
+                svByName('fk_plazo', fc.plazo_credito_meses || '');
+                
+                svByName('fk_sol_nombre', fc.solicitante_nombre || '');
+                svByName('fk_sol_cedula', fc.solicitante_cedula || '');
+                svByName('fk_sol_celular', fc.solicitante_celular || '');
+                
+                if (fc.solicitante_estado_civil) {
+                    const chip = document.querySelector(`.chip[data-val="${fc.solicitante_estado_civil}"]`);
+                    if (chip) chipSingle(chip, 'fk_sol_ec');
+                }
+                
+                svByName('fk_sol_conyuge_nombre', fc.solicitante_conyuge_nombre || '');
+                svByName('fk_sol_conyuge_cedula', fc.solicitante_conyuge_cedula || '');
+                svByName('fk_sol_conyuge_celular', fc.solicitante_conyuge_celular || '');
+                
+                svByName('fk_gar_nombre', fc.garante_nombre || '');
+                svByName('fk_gar_cedula', fc.garante_cedula || '');
+                svByName('fk_gar_celular', fc.garante_celular || '');
+                
+                if (fc.garante_estado_civil) {
+                    const chip = document.querySelector(`.chip[data-val="${fc.garante_estado_civil}"]`);
+                    if (chip) chipSingle(chip, 'fk_gar_ec');
+                }
+                
+                svByName('fk_gar_conyuge_nombre', fc.garante_conyuge_nombre || '');
+                svByName('fk_gar_conyuge_cedula', fc.garante_conyuge_cedula || '');
+                svByName('fk_gar_conyuge_celular', fc.garante_conyuge_celular || '');
+                
+                svByName('fk_direccion_sitio', fc.direccion_sitio || '');
+                
+                const docs = [
+                    'doc_cedula', 'doc_planilla', 'doc_ruc_rise', 'doc_estados_cuenta', 
+                    'doc_declaraciones', 'doc_matricula', 'doc_foto_negocio', 
+                    'doc_solicitud_credito', 'doc_foto_cliente'
+                ];
+                docs.forEach(d => {
+                    const isChecked = parseInt(fc[d]) === 1;
+                    const docItem = document.querySelector(`.doc-item[data-field="fk_${d}"]`);
+                    if (docItem) {
+                        docItem.classList.toggle('checked', isChecked);
+                        const hid = docItem.querySelector('.doc-hidden');
+                        if (hid) hid.value = isChecked ? '1' : '0';
+                    }
+                });
+            } else {
+                toggleRequiereCredito(1);
+            }
+        } else {
+            toggleRequiereCredito(1);
+        }
 
         /* Banner de edición */
         const titulo = document.querySelector('.navbar-custom h2');
@@ -1963,7 +2092,7 @@ function toggleP2Prod(el) {
 function toggleVencProposal(val) {
     document.getElementById('venc-si').classList.toggle('checked', val === 1);
     document.getElementById('venc-no').classList.toggle('checked', val === 0);
-    document.getElementById('extras-propuesta-vencimiento').style.display = val === 1 ? 'grid' : 'none';
+    document.getElementById('extras-propuesta-vencimiento').style.display = val === 1 ? 'flex' : 'none';
 }
 
 function selectSatisfaccion(el) {
@@ -2012,6 +2141,16 @@ function omitirBusqueda() {
     document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
     document.querySelectorAll('#chips-p3-satisfaccion .chip').forEach(c => c.classList.remove('selected'));
     document.querySelectorAll('.yn-opt').forEach(o => o.classList.remove('checked'));
+
+    // Reset de interés de productos (Omitir búsqueda)
+    toggleInteresProductos(0);
+    toggleRequiereCredito(1);
+    const radInteresNo = document.querySelector('input[name="interesado_productos"][value="0"]');
+    if (radInteresNo) {
+        radInteresNo.checked = true;
+        const opt = radInteresNo.closest('.yn-opt');
+        if (opt) opt.classList.add('checked');
+    }
     document.getElementById('p2-extra').style.display = 'none';
     
     // Show stepper and form
@@ -2165,6 +2304,24 @@ document.querySelectorAll('.yn-group').forEach(function(g){
     });
 });
 
+/* REQUIERE CREDITO TOGGLE */
+function toggleRequiereCredito(val) {
+    const siOpt = document.getElementById('opt-reqcredito-si');
+    const noOpt = document.getElementById('opt-reqcredito-no');
+    if (siOpt) siOpt.classList.toggle('checked', val === 1);
+    if (noOpt) noOpt.classList.toggle('checked', val === 0);
+    
+    const radios = document.getElementsByName('fk_requiere_credito');
+    radios.forEach(r => {
+        if (parseInt(r.value) === val) r.checked = true;
+    });
+    
+    const blockEval = document.getElementById('fk-evaluacion-completa');
+    if (blockEval) {
+        blockEval.style.display = val === 1 ? 'block' : 'none';
+    }
+}
+
 /* PRODUCTOS DE INTERES */
 var prodSeleccionados = new Set();
 /* single-select chip helper */
@@ -2211,13 +2368,53 @@ function toggleProd(el){
                     var fl2 = document.getElementById('fc-celular'); if(fl2) fl2.value = d.celular||d.telefono||'';
                 }
             }
-            if(isOn) fp.scrollIntoView({behavior:'smooth',block:'nearest'});
         }
     }
 }
 function actualizarAvisoCredito(){
     var a = document.getElementById('aviso-credito-empresa');
     if(a) a.style.display = (tieneEmpresa && prodSeleccionados.has('credito')) ? 'flex':'none';
+}
+
+/* TOGGLE INTERES PRODUCTOS (SÍ/NO) */
+function toggleInteresProductos(val) {
+    const blockInteres = document.getElementById('sec-interes-detalles');
+    const blockNoInteres = document.getElementById('sec-razones-no-interes');
+    if (blockInteres) {
+        blockInteres.style.display = val === 1 ? 'block' : 'none';
+    }
+    if (blockNoInteres) {
+        blockNoInteres.style.display = val === 0 ? 'block' : 'none';
+    }
+    if (val === 0) {
+        // Limpiar selección de nivel
+        document.querySelectorAll('.level-card').forEach(c => c.classList.remove('selected'));
+        const hidNivel = document.getElementById('hid-nivel_interes');
+        if (hidNivel) hidNivel.value = '';
+        
+        // Limpiar productos de interés seleccionados
+        document.querySelectorAll('.prod-interest-grid .prod-card').forEach(c => {
+            c.classList.remove('selected');
+            const check = c.querySelector('.pc-check');
+            if (check) check.style.display = 'none';
+        });
+        const hidProd = document.getElementById('hid-prod_interes');
+        if (hidProd) hidProd.value = '';
+        prodSeleccionados.clear();
+        
+        // Ocultar fichas de productos activas
+        document.querySelectorAll('.ficha-panel').forEach(p => p.style.display = 'none');
+        actualizarAvisoCredito();
+    } else {
+        // Limpiar razones para no contratar si cambia a "Sí"
+        document.querySelectorAll('#sec-razones-no-interes input[type="radio"]').forEach(r => {
+            r.checked = false;
+            const opt = r.closest('.yn-opt');
+            if (opt) opt.classList.remove('checked');
+        });
+        const textarea = document.querySelector('#sec-razones-no-interes textarea');
+        if (textarea) textarea.value = '';
+    }
 }
 
 /* NIVEL INTERES */
