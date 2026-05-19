@@ -450,7 +450,7 @@ $currentPage = 'dashboard';
                         <a href="mis_asesores.php"                      class="quick-btn q-blue"><i class="fas fa-users"></i>Mis Asesores</a>
                         <a href="alertas.php"                           class="quick-btn q-red"><i class="fas fa-bell"></i>Alertas <?= $alertas_pendientes > 0 ? "($alertas_pendientes)" : '' ?></a>
                         <a href="mapa_vivo_superIA.php"                 class="quick-btn q-navy"><i class="fas fa-map-marked-alt"></i>Mapa en Vivo</a>
-                        <a href="kpis.php"                          class="quick-btn q-light"><i class="fas fa-chart-bar"></i>Reportes KPI</a>
+                        <a href="kpi_penetracion.php"                   class="quick-btn q-light"><i class="fas fa-chart-bar"></i>Reportes KPIs</a>
                         <a href="administrar_solicitudes_asesor.php"    class="quick-btn q-light"><i class="fas fa-file-circle-check"></i>Solicitudes</a>
                     </div>
                 </div>

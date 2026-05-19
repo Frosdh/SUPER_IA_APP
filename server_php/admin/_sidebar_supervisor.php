@@ -86,10 +86,12 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
             <span class="badge-nav"><?= $alertas_pendientes > 99 ? '99+' : $alertas_pendientes ?></span>
             <?php endif; ?>
         </a>
-        <a href="kpis.php"
-           class="sidebar-link <?= ($currentPage === 'reportes') ? 'active' : '' ?>">
-            <i class="fas fa-chart-bar"></i> <span>Reportes KPI</span>
+
+        <a href="kpi_penetracion.php"
+           class="sidebar-link <?= ($currentPage === 'reportes_penetracion') ? 'active' : '' ?>">
+            <i class="fas fa-chart-bar"></i> <span>Reportes KPIs</span>
         </a>
+
         <a href="recuperacion.php"
            class="sidebar-link <?= ($currentPage === 'recuperacion') ? 'active' : '' ?>">
             <i class="fas fa-user-clock"></i> <span>Recuperación</span>

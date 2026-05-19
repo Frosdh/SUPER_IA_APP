@@ -78,6 +78,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool? _p1ConoceInstitucion;
   final TextEditingController _p1ObsCtrl      = TextEditingController();
   bool? _p2EsCliente;
+  bool _p2Ahorro = false;
+  bool _p2Corriente = false;
+  bool _p2Inversion = false;
+  bool _p2Credito = false;
   final TextEditingController _p2ProductoCtrl = TextEditingController();
   final TextEditingController _p2ObsCtrl      = TextEditingController();
   String? _p3Satisfaccion; // 'muy_a_gusto' | 'medianamente' | 'no_a_gusto'
@@ -844,6 +848,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _p1ObsCtrl.text      = _s(e['p1_obs']);
       _p2EsCliente         = _ib(e['p2_es_cliente']);
       _p2ProductoCtrl.text = _s(e['p2_producto']);
+      final prodStrP2      = _p2ProductoCtrl.text.toLowerCase();
+      _p2Ahorro            = prodStrP2.contains('ahorro');
+      _p2Corriente         = prodStrP2.contains('corriente');
+      _p2Inversion         = prodStrP2.contains('inversion');
+      _p2Credito           = prodStrP2.contains('credito');
       _p2ObsCtrl.text      = _s(e['p2_obs']);
       _p3Satisfaccion      = _s(e['p3_satisfaccion']).isEmpty ? null : _s(e['p3_satisfaccion']);
       _p3ObsCtrl.text      = _s(e['p3_obs']);
@@ -1143,6 +1152,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _p1ObsCtrl.text      = _s(d['p1_obs']);
     _p2EsCliente         = d['p2_es_cliente'] == null ? null : (_i(d['p2_es_cliente']) == 1);
     _p2ProductoCtrl.text = _s(d['p2_producto']);
+    final prodStrP2      = _p2ProductoCtrl.text.toLowerCase();
+    _p2Ahorro            = prodStrP2.contains('ahorro');
+    _p2Corriente         = prodStrP2.contains('corriente');
+    _p2Inversion         = prodStrP2.contains('inversion');
+    _p2Credito           = prodStrP2.contains('credito');
     _p2ObsCtrl.text      = _s(d['p2_obs']);
     _p3Satisfaccion      = d['p3_satisfaccion'];
     _p3ObsCtrl.text      = _s(d['p3_obs']);
@@ -1431,6 +1445,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     final double _cDom = _toDouble(_compraDomCtrl.text);
     final avgVentaLv = ((_vLun + _vMar + _vMie + _vJue + _vVie) / 5.0);
     final avgCompraLv = ((_cLun + _cMar + _cMie + _cJue + _cVie) / 5.0);
+
+    // Construir cadena de p2_producto a partir de los booleanos de selección múltiple
+    List<String> p2Prods = [];
+    if (_p2Ahorro) p2Prods.add('ahorro');
+    if (_p2Corriente) p2Prods.add('corriente');
+    if (_p2Inversion) p2Prods.add('inversion');
+    if (_p2Credito) p2Prods.add('credito');
+    _p2ProductoCtrl.text = p2Prods.join(',');
 
     final body = <String, String>{
       'usuario_id': usuarioId,
@@ -2691,27 +2713,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ),
             if (_p2EsCliente == true) ...[
               const SizedBox(height: 12),
-              Text('¿Con qué producto o servicio cuenta?',
+              Text('Productos que mantiene o mantuvo (Selección múltiple):',
                   style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ConstantColors.textDarkGrey)),
-              const SizedBox(height: 6),
-              TextField(
-                controller: _p2ProductoCtrl,
-                style: TextStyle(fontSize: 13, color: ConstantColors.textDark),
-                decoration: InputDecoration(
-                  hintText: 'Ej: Ahorro, Crédito, Cuenta Corriente...',
-                  hintStyle: TextStyle(fontSize: 12, color: ConstantColors.textDarkGrey.withOpacity(0.6)),
-                  filled: true,
-                  fillColor: ConstantColors.grey100,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: ConstantColors.borderLight)),
-                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: ConstantColors.borderLight)),
-                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: ConstantColors.primaryBlue, width: 1.5)),
-                ),
-                onChanged: (_) => setState(() {}),
+              const SizedBox(height: 8),
+              _simpleCheckboxItem(
+                label: 'Cuenta de Ahorro',
+                icono: Icons.savings_rounded,
+                color: const Color(0xFF10B981),
+                value: _p2Ahorro,
+                onChanged: (v) => setState(() => _p2Ahorro = v),
+              ),
+              _simpleCheckboxItem(
+                label: 'Cuenta Corriente',
+                icono: Icons.account_balance_wallet_rounded,
+                color: const Color(0xFF0EA5E9),
+                value: _p2Corriente,
+                onChanged: (v) => setState(() => _p2Corriente = v),
+              ),
+              _simpleCheckboxItem(
+                label: 'Inversión / Depósito',
+                icono: Icons.trending_up_rounded,
+                color: const Color(0xFF8B5CF6),
+                value: _p2Inversion,
+                onChanged: (v) => setState(() => _p2Inversion = v),
+              ),
+              _simpleCheckboxItem(
+                label: 'Crédito',
+                icono: Icons.credit_score_rounded,
+                color: const Color(0xFFF59E0B),
+                value: _p2Credito,
+                onChanged: (v) => setState(() => _p2Credito = v),
               ),
             ],
             const SizedBox(height: 12),
@@ -6796,6 +6827,59 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _simpleCheckboxItem({
+    required String label,
+    required IconData icono,
+    required Color color,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: value ? color.withOpacity(0.08) : ConstantColors.grey100,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: value ? color.withOpacity(0.4) : ConstantColors.borderLight,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              value ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+              color: value ? color : ConstantColors.textDarkGrey,
+              size: 22,
+            ),
+            const SizedBox(width: 10),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(7),
+              ),
+              child: Icon(icono, color: color, size: 16),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: value ? ConstantColors.textDark : ConstantColors.textDarkGrey,
+                  fontSize: 13,
+                  fontWeight: value ? FontWeight.w600 : FontWeight.w400,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
