@@ -29,6 +29,36 @@ $encuesta = null;
 $fichas = [];
 $debug_info = [];
 
+/**
+ * Elimina columnas binarias (POINT/geometry) y normaliza texto a UTF-8 válido.
+ * Sin esto, json_encode() devuelve false al encontrar bytes binarios
+ * (p.ej. la columna `georef_punto` de cliente_prospecto) y la respuesta
+ * llega VACÍA al navegador -> "La respuesta del servidor no es válida".
+ */
+function limpiar_para_json($valor) {
+    // Columnas binarias conocidas que nunca deben ir al JSON
+    static $columnas_binarias = ['georef_punto', 'punto', 'georef', 'geom'];
+
+    if (is_array($valor)) {
+        $limpio = [];
+        foreach ($valor as $k => $v) {
+            if (is_string($k) && in_array($k, $columnas_binarias, true)) {
+                continue; // descartar geometría binaria
+            }
+            $limpio[$k] = limpiar_para_json($v);
+        }
+        return $limpio;
+    }
+    if (is_string($valor)) {
+        // Forzar UTF-8 válido; descarta bytes inválidos
+        if (!mb_check_encoding($valor, 'UTF-8')) {
+            $valor = mb_convert_encoding($valor, 'UTF-8', 'UTF-8');
+        }
+        return $valor;
+    }
+    return $valor;
+}
+
 try {
     // Obtener datos de la tarea
     try {
@@ -187,23 +217,40 @@ try {
         $fichas = [];
     }
     
-    // Respuesta exitosa con los datos que se pudieron recuperar
+    // Respuesta exitosa con los datos que se pudieron recuperar.
+    // limpiar_para_json() elimina columnas binarias (georef_punto) y
+    // normaliza el texto para que json_encode() nunca devuelva false.
     $response = [
-        'status' => 'ok',
-        'tarea' => $tarea ?: (object)[],
-        'cliente' => $cliente ?: (object)[],
-        'encuesta' => $encuesta ?: (object)[],
-        'fichas' => $fichas,
-        'debug' => $debug_info  // HABILITADO PARA DIAGNOSTICAR
+        'status'  => 'ok',
+        'tarea'   => $tarea    ? limpiar_para_json($tarea)   : (object)[],
+        'cliente' => $cliente  ? limpiar_para_json($cliente) : (object)[],
+        'encuesta'=> $encuesta ? limpiar_para_json($encuesta): (object)[],
+        'fichas'  => limpiar_para_json($fichas),
+        'debug'   => $debug_info
     ];
-    
+
     // Limpiar TODO el buffer y enviar respuesta JSON 100% limpia
     if (ob_get_level() > 0) {
         ob_end_clean();
     }
     @header('Content-Type: application/json; charset=utf-8');
     @header('Access-Control-Allow-Origin: *');
-    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $json = json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR);
+
+    // Si aun así fallara la codificación, devolver un error JSON explícito
+    // en lugar de un cuerpo vacío (que produce "respuesta no es válida").
+    if ($json === false) {
+        error_log('obtener_encuesta: json_encode falló - ' . json_last_error_msg());
+        http_response_code(500);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'No se pudo codificar la encuesta: ' . json_last_error_msg()
+        ]);
+        exit;
+    }
+
+    echo $json;
     exit;
     
 } catch (Throwable $e) {

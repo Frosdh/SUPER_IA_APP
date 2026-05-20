@@ -1709,23 +1709,25 @@ async function cargarEncuestaParaEditar() {
         const url = `obtener_encuesta_para_editar.php?tarea_id=${encodeURIComponent(tareaId)}`;
         const res = await fetch(url, { method: 'GET' });
         
-        // Clone response FIRST before any reads to prevent "body stream already read" errors
-        const resClone = res.clone();
-        
+        // Clone response into two independent clones to avoid consuming the same stream twice
+        const resCloneForError = res.clone();
+        const resCloneForJson  = res.clone();
+
         // Verificar si la respuesta es OK en HTTP
         if (!res.ok) {
-            const errorText = await resClone.text();
+            const errorText = await resCloneForError.text();
             console.error('Error HTTP:', res.status, errorText);
             alert('Error al cargar la encuesta (HTTP ' + res.status + '). Detalles: ' + errorText);
             return;
         }
-        
+
         let data;
         try {
-            data = await resClone.json();
+            data = await resCloneForJson.json();
         } catch (parseErr) {
             console.error('Error parseando JSON:', parseErr);
-            const responseText = await resClone.text();
+            // Leer texto crudo desde el otro clone (no consumido aún)
+            const responseText = await resCloneForError.text();
             console.error('Respuesta recibida:', responseText);
             alert('Error: La respuesta del servidor no es válida.\n\nDetalles: ' + responseText);
             return;
@@ -1761,6 +1763,15 @@ async function cargarEncuestaParaEditar() {
         /* ── IDs ocultos ─────────────────────────────────────── */
         svById('hid-tarea_id',   tareaId);
         svById('hid-cliente_id', cliente.id || '');
+        // Si la tarea pertenece a otro asesor/usuario, actualizar los hidden inputs
+        const asesorInput = document.querySelector('input[name="asesor_id"]');
+        if (asesorInput && (tarea.asesor_id || tarea.asesorId)) {
+            asesorInput.value = tarea.asesor_id || tarea.asesorId;
+        }
+        const usuarioInput = document.querySelector('input[name="usuario_id"]');
+        if (usuarioInput && (tarea.usuario_id || tarea.usuarioId)) {
+            usuarioInput.value = tarea.usuario_id || tarea.usuarioId;
+        }
 
         /* Datos del prospecto para autocompletar fichas */
         window._prospectoData = {
@@ -1974,16 +1985,47 @@ async function cargarEncuestaParaEditar() {
             svById('hid-nivel_interes', encuesta.nivel_interes_captado);
         }
 
-        /* ── Cargar pregunta de Interés en Productos ─────────── */
-        const tieneInteres = (encuesta.nivel_interes_captado && encuesta.nivel_interes_captado !== 'ninguno') || interesesArr.length > 0;
-        toggleInteresProductos(tieneInteres ? 1 : 0);
+        /* ── Cargar la pregunta "¿Le interesa adquirir o trabajar
+              con alguno de nuestros productos?" ──────────────────
+           Se usa el valor REAL guardado en la encuesta
+           (interes_conocer_productos). Si hay productos marcados,
+           el interés es necesariamente "Sí". ── */
+        let interesVal;
+        const icpVal = encuesta.interes_conocer_productos;
+        if (icpVal !== null && icpVal !== undefined && String(icpVal) !== '') {
+            interesVal = (parseInt(icpVal) === 1) ? 1 : 0;
+        } else {
+            interesVal = ((encuesta.nivel_interes_captado && encuesta.nivel_interes_captado !== 'ninguno') || interesesArr.length > 0) ? 1 : 0;
+        }
+        if (interesesArr.length > 0) interesVal = 1;
+
+        toggleInteresProductos(interesVal);
+
+        /* Re-aplicar los productos guardados: toggleInteresProductos
+           pudo haber reseteado el grid de productos. */
+        if (interesVal === 1) {
+            prodSeleccionados.clear();
+            interesesArr.forEach(prod => {
+                prodSeleccionados.add(prod);
+                const card = document.querySelector(`.prod-card[data-prod="${prod}"]`);
+                if (card) {
+                    card.classList.add('selected');
+                    const chk = card.querySelector('.pc-check');
+                    if (chk) chk.style.display = 'flex';
+                }
+                const fp = document.getElementById(fichaMap[prod]);
+                if (fp) fp.style.display = 'block';
+            });
+            svById('hid-prod_interes', interesesArr.join(','));
+        }
+
         const radInteresSi = document.querySelector('input[name="interesado_productos"][value="1"]');
         const radInteresNo = document.querySelector('input[name="interesado_productos"][value="0"]');
         if (radInteresSi && radInteresNo) {
-            radInteresSi.checked = tieneInteres;
-            radInteresNo.checked = !tieneInteres;
-            radInteresSi.closest('.yn-opt')?.classList.toggle('checked', tieneInteres);
-            radInteresNo.closest('.yn-opt')?.classList.toggle('checked', !tieneInteres);
+            radInteresSi.checked = (interesVal === 1);
+            radInteresNo.checked = (interesVal === 0);
+            radInteresSi.closest('.yn-opt')?.classList.toggle('checked', interesVal === 1);
+            radInteresNo.closest('.yn-opt')?.classList.toggle('checked', interesVal === 0);
         }
 
         /* ── Acuerdo y cierre (select + inputs por name) ─────── */
@@ -2072,6 +2114,109 @@ async function cargarEncuestaParaEditar() {
             toggleRequiereCredito(1);
         }
 
+        /* ── PREPOBLAR FICHAS: Ahorro / Corriente / Inversión ───
+           Carga los datos guardados de cada ficha de producto que
+           el cliente/prospecto solicitó en esta encuesta. ── */
+        function setFichaChip(hidId, val) {
+            if (val === null || val === undefined || String(val) === '') return;
+            const chip = document.querySelector(`.chip[onclick*="'${hidId}'"][data-val="${val}"]`);
+            if (chip && typeof chipSingle === 'function') chipSingle(chip, hidId);
+        }
+        function setFichaDoc(field, val) {
+            const item = document.querySelector(`.doc-item[data-field="${field}"]`);
+            if (!item) return;
+            const on = (parseInt(val) === 1);
+            item.classList.toggle('checked', on);
+            const hid = item.querySelector('.doc-hidden');
+            if (hid) hid.value = on ? '1' : '0';
+        }
+        function marcarProductoFicha(prod) {
+            prodSeleccionados.add(prod);
+            const card = document.querySelector(`.prod-card[data-prod="${prod}"]`);
+            if (card) {
+                card.classList.add('selected');
+                const chk = card.querySelector('.pc-check');
+                if (chk) chk.style.display = 'flex';
+            }
+            const fp = document.getElementById(fichaMap[prod]);
+            if (fp) fp.style.display = 'block';
+            const hid = document.getElementById('hid-prod_interes');
+            if (hid) hid.value = Array.from(prodSeleccionados).join(',');
+        }
+
+        if (Array.isArray(data.fichas) && data.fichas.length > 0) {
+            // Si hay fichas guardadas, el interés es necesariamente "Sí"
+            toggleInteresProductos(1);
+            const rSi = document.querySelector('input[name="interesado_productos"][value="1"]');
+            const rNo = document.querySelector('input[name="interesado_productos"][value="0"]');
+            if (rSi && rNo) {
+                rSi.checked = true; rNo.checked = false;
+                rSi.closest('.yn-opt')?.classList.add('checked');
+                rNo.closest('.yn-opt')?.classList.remove('checked');
+            }
+
+            // Ficha: Cuenta de Ahorro
+            const fAhorro = data.fichas.find(f => f.producto_tipo === 'cuenta_ahorros');
+            if (fAhorro) {
+                marcarProductoFicha('ahorro');
+                svByName('fa_nombre',        fAhorro.titular_nombre  || '');
+                svByName('fa_cedula',        fAhorro.titular_cedula  || '');
+                svByName('fa_celular',       fAhorro.titular_celular || '');
+                svByName('fa_monto_inicial', fAhorro.monto_inicial   || '');
+                svByName('fa_objetivo',      fAhorro.objetivo_ahorro || '');
+                setFichaChip('fa_estado_civil', fAhorro.titular_estado_civil);
+                setFichaChip('fa_tipo_ahorro',  fAhorro.tipo_ahorro);
+                setFichaChip('fa_frecuencia',   fAhorro.frecuencia_deposito);
+                setFichaDoc('fa_doc_cedula',   fAhorro.doc_cedula);
+                setFichaDoc('fa_doc_papeleta', fAhorro.doc_papeleta);
+                setFichaDoc('fa_doc_planilla', fAhorro.doc_planilla);
+                setFichaDoc('fa_doc_correo',   fAhorro.doc_correo);
+                setFichaDoc('fa_doc_celular',  fAhorro.doc_celular);
+                setFichaDoc('fa_doc_deposito', fAhorro.doc_deposito_inicial);
+            }
+
+            // Ficha: Cuenta Corriente
+            const fCorr = data.fichas.find(f => f.producto_tipo === 'cuenta_corriente');
+            if (fCorr) {
+                marcarProductoFicha('corriente');
+                svByName('fc_nombre',          fCorr.titular_nombre      || '');
+                svByName('fc_cedula',          fCorr.titular_cedula      || '');
+                svByName('fc_celular',         fCorr.titular_celular     || '');
+                svByName('fc_proposito',       fCorr.proposito           || '');
+                svByName('fc_monto_deposito',  fCorr.monto_deposito_prom || '');
+                svByName('fc_ingreso_mensual', fCorr.ingreso_mensual     || '');
+                svByName('fc_observaciones',   fCorr.observaciones       || '');
+                setFichaChip('fc_tipo_cc',      fCorr.tipo_cc);
+                setFichaChip('fc_estado_civil', fCorr.titular_estado_civil);
+                setRadioByName('fc_usa_cheques',  fCorr.usa_cheques);
+                setRadioByName('fc_requiere_td',  fCorr.requiere_td);
+                setRadioByName('fc_tiene_nomina', fCorr.tiene_nomina);
+                setFichaDoc('fc_doc_cedula',   fCorr.doc_cedula);
+                setFichaDoc('fc_doc_papeleta', fCorr.doc_papeleta);
+                setFichaDoc('fc_doc_planilla', fCorr.doc_planilla);
+                setFichaDoc('fc_doc_correo',   fCorr.doc_correo);
+                setFichaDoc('fc_doc_celular',  fCorr.doc_celular);
+                setFichaDoc('fc_doc_deposito', fCorr.doc_deposito_inicial);
+            }
+
+            // Ficha: Inversiones
+            const fInv = data.fichas.find(f => f.producto_tipo === 'inversiones');
+            if (fInv) {
+                marcarProductoFicha('inversion');
+                svByName('fi_monto',         fInv.monto_inversion || '');
+                svByName('fi_plazo',         fInv.plazo_meses     || '');
+                svByName('fi_observaciones', fInv.observaciones   || '');
+                setFichaChip('fi_tipo',     fInv.tipo_inversion);
+                setFichaChip('fi_objetivo', fInv.objetivo_inversion);
+                setRadioByName('fi_renovacion_automatica', fInv.renovacion_auto);
+                setFichaDoc('fi_req_cuenta',   fInv.req_cuenta_activa);
+                setFichaDoc('fi_req_monto',    fInv.req_monto_minimo);
+                setFichaDoc('fi_req_contrato', fInv.doc_contrato_inversion);
+                setFichaDoc('fi_req_fondos',   fInv.doc_origen_fondos);
+                setFichaDoc('fi_req_kyc',      fInv.doc_actualizacion_kyc);
+            }
+        }
+
         /* Banner de edición */
         const titulo = document.querySelector('.navbar-custom h2');
         if (titulo) titulo.innerHTML = '<i class="fas fa-pen-to-square"></i> Editando encuesta';
@@ -2140,9 +2285,12 @@ async function buscarCedula() {
             setVal('f-estado',       data.data.estado_db || 'prospecto');
             setVal('hid-cliente_id', data.data.id);
 
-            // Guardar tarea_id existente para que al guardar modifique/actualice en lugar de duplicar o crear uno nuevo
-            const existingTareaId = (data.encuesta && data.encuesta.tarea_id) || (data.tarea && data.tarea.id) || '';
-            setVal('hid-tarea_id', existingTareaId);
+            // Buscar por cédula SIEMPRE genera una ENCUESTA NUEVA, aunque
+            // el cliente ya exista en la base. El tarea_id se deja vacío
+            // para que al guardar se cree una tarea/encuesta nueva (y
+            // productos nuevos). La modificación solo ocurre al entrar
+            // por el botón "Editar" (nueva_encuesta.php?tarea_id=...).
+            setVal('hid-tarea_id', '');
 
             // chip actividad
             if (data.data.actividad) {
@@ -2958,7 +3106,22 @@ async function guardarEncuestaFetch() {
         const tareaId = formData.get('tarea_id') || '';
         // Para coincidir con el patrón móvil, usar el endpoint de actualización en edición
         const endpoint = tareaId ? '../actualizar_encuesta_completa.php' : '../guardar_cliente_encuesta.php';
-        
+
+        /* ── Normalizar productos de interés ────────────────────
+           El formulario maneja los productos como una lista CSV
+           (prod_interes) y un radio (interesado_productos), pero el
+           servidor espera campos separados. Se convierten aquí para
+           que los productos modificados SÍ se guarden en la base. */
+        const prodCsv  = (formData.get('prod_interes') || '').toString();
+        const prodList = prodCsv.split(',').map(s => s.trim()).filter(Boolean);
+        formData.set('interes_ahorro',    prodList.includes('ahorro')    ? '1' : '0');
+        formData.set('interes_cc',        prodList.includes('corriente') ? '1' : '0');
+        formData.set('interes_inversion', prodList.includes('inversion') ? '1' : '0');
+        formData.set('interes_credito',   prodList.includes('credito')   ? '1' : '0');
+
+        const interesadoRadio = document.querySelector('input[name="interesado_productos"]:checked');
+        formData.set('interes_conocer_productos', interesadoRadio ? interesadoRadio.value : '0');
+
         // Enviar con fetch
         const response = await fetch(endpoint, {
             method: 'POST',
