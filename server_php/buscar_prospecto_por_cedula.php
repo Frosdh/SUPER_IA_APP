@@ -60,7 +60,8 @@ try {
                 cp.tiene_ruc, cp.tiene_rise, cp.asesor_id, cp.estado, cp.latitud, cp.longitud,
                 cp.created_at, cp.tiene_empresa, cp.ruc_val, cp.rise_val, cp.tipo_empresa,
                 cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
-                cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise
+                cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise,
+                cp.origen_prospecto
          FROM cliente_prospecto cp
          WHERE cp.cedula = ?
          LIMIT 1"
@@ -135,13 +136,49 @@ try {
     // Resolver etiqueta tipo
     $tipo = $es_cliente ? 'cliente' : (($estadoDb === 'descartado') ? 'descartado' : 'prospecto');
 
+    // Obtener la última encuesta comercial del cliente si existe (para prellenar en web)
+    $encuesta = null;
+    $cid = (string)($row['id'] ?? '');
+    try {
+        $stEnc = $conn->prepare(
+            "SELECT ec.* FROM encuesta_comercial ec
+             LEFT JOIN tarea t ON t.id = ec.tarea_id
+             WHERE t.cliente_prospecto_id = ?
+             ORDER BY t.fecha_realizada DESC, t.hora_realizada DESC, ec.id DESC
+             LIMIT 1"
+        );
+        if ($stEnc) {
+            $stEnc->bind_param('s', $cid);
+            $stEnc->execute();
+            $encuesta = $stEnc->get_result()->fetch_assoc();
+            $stEnc->close();
+        }
+    } catch (Throwable $ignored) {}
+
+    // Obtener la última tarea de este cliente para saber el tipo de visita
+    $tarea = null;
+    try {
+        $stTar = $conn->prepare(
+            "SELECT * FROM tarea 
+             WHERE cliente_prospecto_id = ?
+             ORDER BY fecha_realizada DESC, hora_realizada DESC, creado_at DESC
+             LIMIT 1"
+        );
+        if ($stTar) {
+            $stTar->bind_param('s', $cid);
+            $stTar->execute();
+            $tarea = $stTar->get_result()->fetch_assoc();
+            $stTar->close();
+        }
+    } catch (Throwable $ignored) {}
+
     respond_json(200, [
         'status'    => 'found',
         'tipo'      => $tipo,               // 'prospecto' | 'cliente' | 'descartado'
         'es_cliente'=> $es_cliente ? 1 : 0,
         'data' => [
-            'id'             => (string)($row['id'] ?? ''),
-            'cedula'         => (string)($row['cedula'] ?? ''),
+            'id'             => $cid,
+            'cedula'         => $row['cedula'] ?? $cedula,
             'nombre'         => $nombre_full,
             'nombres'        => $nombres,
             'apellidos'      => $apellidos,
@@ -172,7 +209,10 @@ try {
             'paga_cuota_rise' => (int)($row['paga_cuota_rise'] ?? 0),
             'emite_notas_venta' => (int)($row['emite_notas_venta'] ?? 0),
             'conoce_limite_rise' => (int)($row['conoce_limite_rise'] ?? 0),
+            'origen_prospecto' => (string)($row['origen_prospecto'] ?? ''),
         ],
+        'encuesta' => $encuesta,
+        'tarea'    => $tarea
     ]);
 } catch (Throwable $e) {
     respond_json(200, ['status' => 'error', 'message' => 'Error consultando: ' . $e->getMessage()]);

@@ -36,8 +36,12 @@ function uuid4(): string {
 }
 
 // ── Redirect helper ───────────────────────────────────────────
-function redirect(string $status, string $msg): void {
-    $q = http_build_query(['enc_status' => $status, 'enc_msg' => $msg]);
+function redirect(string $status, string $msg, ?string $tarea_id = null): void {
+    $params = ['enc_status' => $status, 'enc_msg' => $msg];
+    if ($tarea_id !== null && $tarea_id !== '') {
+        $params['tarea_id'] = $tarea_id;
+    }
+    $q = http_build_query($params);
     header("Location: nueva_encuesta.php?$q");
     exit;
 }
@@ -66,6 +70,22 @@ $tiene_ruc   = pb('tiene_ruc');
 $tiene_rise  = pb('tiene_rise');
 $tipo_empresa = pn('tipo_empresa');
 
+$regimen_tributario = pn('regimen_type'); // 'ruc' | 'rise' | 'none'
+$numero_ruc = null;
+if ($regimen_tributario === 'ruc') {
+    $numero_ruc = pn('ruc_numero');
+} elseif ($regimen_tributario === 'rise') {
+    $numero_ruc = pn('rise_numero');
+}
+
+$declara_iva        = pin('ruc_declara_iva');
+$emite_facturas     = pin('ruc_emite_facturas');
+$lleva_contabilidad = pin('ruc_lleva_contab');
+
+$paga_cuota_rise    = pin('rise_paga_cuota');
+$emite_notas_venta  = pin('rise_emite_notas');
+$conoce_limite_rise = pin('rise_conoce_limite');
+
 // Propuesta de inversión previa al vencimiento (CDP)
 $crear_tarea_prev_venc    = pb('crear_tarea_prev_venc');
 $propuesta_inversion      = pn('propuesta_inversion');
@@ -91,6 +111,16 @@ $ec_credito         = pb('ec_tiene_operaciones_crediticias');
 $ec_inst_cred       = pn('ec_institucion_credito');
 $ec_monto_cred      = pn('ec_monto_credito_actual');
 $ec_destino_cred    = pn('ec_destino_credito_actual');
+
+// Identificación Institucional (Paso 0)
+$p1_conoce        = ($_POST['p1_conoce_institucion'] ?? '') === '1' ? 1 : (($_POST['p1_conoce_institucion'] ?? '') === '0' ? 0 : null);
+$p1_obs           = pn('p1_obs');
+$p2_es_cliente    = ($_POST['p2_es_cliente'] ?? '') === '1' ? 1 : (($_POST['p2_es_cliente'] ?? '') === '0' ? 0 : null);
+$p2_producto      = pn('p2_producto');
+$p2_obs           = pn('p2_obs');
+$p3_satisfaccion  = pn('p3_satisfaccion');
+$p3_obs           = pn('p3_obs');
+$interes_conocer  = ($_POST['interesado_productos'] ?? '') === '1' ? 1 : (($_POST['interesado_productos'] ?? '') === '0' ? 0 : null);
 
 // Intereses
 $prod_interes  = pn('prod_interes') ?? '';  // comma-sep: ahorro,corriente,inversion,credito
@@ -130,6 +160,15 @@ $fecha_acuerdo = pn('fecha_acuerdo');
 $hora_acuerdo  = pn('hora_acuerdo');
 $fecha_nc      = pn('fecha_nuevo_contacto');
 $observaciones = pn('observaciones');
+
+// Qué busca de una institución financiera
+$qb_agilidad = isset($_POST['busca_agilidad']) ? 1 : 0;
+$qb_cajeros  = isset($_POST['busca_cajeros']) ? 1 : 0;
+$qb_banca    = isset($_POST['busca_banca_online']) ? 1 : 0;
+$qb_agencias = isset($_POST['busca_agencias']) ? 1 : 0;
+$qb_credito  = isset($_POST['busca_credito_rapido']) ? 1 : 0;
+$qb_debito   = isset($_POST['busca_tarjeta_debito']) ? 1 : 0;
+$qb_cred_t   = isset($_POST['busca_tarjeta_credito']) ? 1 : 0;
 
 // Validación básica
 if (!$cedula && !$cliente_id_post) {
@@ -221,49 +260,99 @@ try {
     }
 
     if ($cliente_id) {
-        // UPDATE
-        $pdo->prepare("
-            UPDATE cliente_prospecto SET
-                nombre    = COALESCE(NULLIF(?, ''), nombre),
-                telefono  = COALESCE(NULLIF(?, ''), telefono),
-                telefono2 = COALESCE(NULLIF(?, ''), telefono2),
-                email     = COALESCE(NULLIF(?, ''), email),
-                direccion = COALESCE(NULLIF(?, ''), direccion),
-                ciudad    = COALESCE(NULLIF(?, ''), ciudad),
-                zona      = COALESCE(NULLIF(?, ''), zona),
-                actividad = COALESCE(NULLIF(?, ''), actividad),
-                nombre_empresa = COALESCE(NULLIF(?, ''), nombre_empresa),
-                tiene_ruc  = ?,
-                tiene_rise = ?,
-                tipo_empresa = COALESCE(NULLIF(?, ''), tipo_empresa),
-                latitud    = COALESCE(?, latitud),
-                longitud   = COALESCE(?, longitud)
-            WHERE id = ?
-        ")->execute([
-            $nombre_full, $telefono, $celular, $email, $direccion,
-            $ciudad, $zona, $actividad, $nombre_emp,
-            $tiene_ruc, $tiene_rise, $tipo_empresa,
-            ($lat && is_numeric($lat) ? (float)$lat : null),
-            ($lng && is_numeric($lng) ? (float)$lng : null),
-            $cliente_id,
-        ]);
+        // UPDATE con mapeo dinámico de columnas para máxima inmunidad de esquema
+        $cp_payload = [
+            'nombre'             => $nombre_full,
+            'telefono'           => $telefono,
+            'telefono2'          => $celular,
+            'email'              => $email,
+            'direccion'          => $direccion,
+            'ciudad'             => $ciudad,
+            'zona'               => $zona,
+            'actividad'          => $actividad,
+            'nombre_empresa'     => $nombre_emp,
+            'tiene_ruc'          => $tiene_ruc,
+            'tiene_rise'         => $tiene_rise,
+            'tipo_empresa'       => $tipo_empresa,
+            'regimen_tributario' => $regimen_tributario,
+            'numero_ruc'         => $numero_ruc,
+            'declara_iva'        => $declara_iva,
+            'emite_facturas'     => $emite_facturas,
+            'lleva_contabilidad' => $lleva_contabilidad,
+            'paga_cuota_rise'    => $paga_cuota_rise,
+            'emite_notas_venta'  => $emite_notas_venta,
+            'conoce_limite_rise' => $conoce_limite_rise,
+            'origen_prospecto'   => $tipo_visita,
+            'latitud'            => ($lat && is_numeric($lat) ? (float)$lat : null),
+            'longitud'           => ($lng && is_numeric($lng) ? (float)$lng : null),
+        ];
+
+        $cp_cols = $get_cols('cliente_prospecto');
+        $cp_set_cols = [];
+        $cp_set_vals = [];
+        foreach ($cp_payload as $col => $val) {
+            if (isset($cp_cols[$col])) {
+                $cp_set_cols[] = $col;
+                $cp_set_vals[] = $val;
+            }
+        }
+
+        $set = implode(', ', array_map(fn($c) => "`$c` = ?", $cp_set_cols));
+        if ($set !== '') {
+            $pdo->prepare("UPDATE cliente_prospecto SET $set WHERE id = ?")
+                ->execute(array_merge($cp_set_vals, [$cliente_id]));
+        }
     } else {
-        // INSERT nuevo prospecto
+        // INSERT nuevo prospecto con mapeo dinámico de columnas
         $cliente_id = uuid4();
-        $pdo->prepare("
-            INSERT INTO cliente_prospecto
-                (id, cedula, nombre, telefono, telefono2, email, direccion,
-                 ciudad, zona, actividad, nombre_empresa,
-                 tiene_ruc, tiene_rise, tipo_empresa, latitud, longitud, asesor_id, estado)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'prospecto')
-        ")->execute([
-            $cliente_id, $cedula, $nombre_full, $telefono, $celular,
-            $email, $direccion, $ciudad, $zona, $actividad, $nombre_emp,
-            $tiene_ruc, $tiene_rise, $tipo_empresa,
-            ($lat && is_numeric($lat) ? (float)$lat : null),
-            ($lng && is_numeric($lng) ? (float)$lng : null),
-            $asesor_id,
-        ]);
+        $cp_payload = [
+            'nombre'             => $nombre_full,
+            'telefono'           => $telefono,
+            'telefono2'          => $celular,
+            'email'              => $email,
+            'direccion'          => $direccion,
+            'ciudad'             => $ciudad,
+            'zona'               => $zona,
+            'actividad'          => $actividad,
+            'nombre_empresa'     => $nombre_emp,
+            'tiene_ruc'          => $tiene_ruc,
+            'tiene_rise'         => $tiene_rise,
+            'tipo_empresa'       => $tipo_empresa,
+            'regimen_tributario' => $regimen_tributario,
+            'numero_ruc'         => $numero_ruc,
+            'declara_iva'        => $declara_iva,
+            'emite_facturas'     => $emite_facturas,
+            'lleva_contabilidad' => $lleva_contabilidad,
+            'paga_cuota_rise'    => $paga_cuota_rise,
+            'emite_notas_venta'  => $emite_notas_venta,
+            'conoce_limite_rise' => $conoce_limite_rise,
+            'origen_prospecto'   => $tipo_visita,
+            'latitud'            => ($lat && is_numeric($lat) ? (float)$lat : null),
+            'longitud'           => ($lng && is_numeric($lng) ? (float)$lng : null),
+        ];
+
+        $cp_cols = $get_cols('cliente_prospecto');
+        $cols = ['id', 'estado'];
+        $vals = [$cliente_id, 'prospecto'];
+        if (isset($cp_cols['asesor_id'])) {
+            $cols[] = 'asesor_id';
+            $vals[] = $asesor_id;
+        }
+        if ($cedula && isset($cp_cols['cedula'])) {
+            $cols[] = 'cedula';
+            $vals[] = $cedula;
+        }
+        foreach ($cp_payload as $col => $val) {
+            if ($col === 'id' || $col === 'estado' || $col === 'asesor_id' || $col === 'cedula') continue;
+            if (isset($cp_cols[$col])) {
+                $cols[] = $col;
+                $vals[] = $val;
+            }
+        }
+        $ph = implode(',', array_fill(0, count($cols), '?'));
+        $colList = implode(', ', array_map(fn($c) => "`$c`", $cols));
+        $pdo->prepare("INSERT INTO cliente_prospecto ($colList) VALUES ($ph)")
+            ->execute($vals);
     }
 
     // ────────────────────────────────────────────────────────
@@ -336,12 +425,23 @@ try {
         'cliente_cedula'     => $cedula,
         'asesor_id'          => $asesor_id,
         'usuario_id'         => ($_SESSION['usuario_id'] ?? null),
+        // Identificación Institucional (Paso 0)
+        'p1_conoce_institucion'     => $p1_conoce,
+        'p1_obs'                    => $p1_obs,
+        'p2_es_cliente'             => $p2_es_cliente,
+        'p2_producto'               => $p2_producto,
+        'p2_obs'                    => $p2_obs,
+        'p3_satisfaccion'           => $p3_satisfaccion,
+        'p3_obs'                    => $p3_obs,
+        'interes_conocer_productos' => $interes_conocer,
         // Situación financiera
         'mantiene_cuenta_ahorro'    => $ec_mantiene_ahorro,
         'institucion_ahorro'        => $ec_inst_ahorro,
+        'banco_ahorro'              => $ec_inst_ahorro,
         'saldo_ahorro'              => $ec_saldo_ahorro,
         'mantiene_cuenta_corriente' => $ec_mantiene_cc,
         'institucion_corriente'     => $ec_inst_cc,
+        'banco_corriente'           => $ec_inst_cc,
         'tiene_inversiones'         => $ec_inv,
         'institucion_inversiones'   => $ec_inst_inv,
         'valor_inversion'           => $ec_valor_inv,
@@ -359,11 +459,21 @@ try {
         'interes_credito'           => $int_cred,
         'nivel_interes_captado'     => $nivel_interes,
         // Razones por las que no firmó / no está interesado
+        'razon_ya_trabaja'             => pb('ec_razon_ya_trabaja'),
         'razon_ya_trabaja_institucion' => pb('ec_razon_ya_trabaja'),
+        'razon_desconfia'              => pb('ec_razon_desconfia'),
         'razon_desconfia_servicios'    => pb('ec_razon_desconfia'),
         'razon_agusto_actual'          => pb('ec_razon_agusto_actual'),
         'razon_mala_experiencia'       => pb('ec_razon_mala_experiencia'),
         'razon_otros'                  => pn('ec_razon_otros'),
+        // ¿Qué busca de una institución?
+        'que_busca_agilidad'        => $qb_agilidad,
+        'que_busca_cajeros'         => $qb_cajeros,
+        'que_busca_banca_linea'     => $qb_banca,
+        'que_busca_agencias'        => $qb_agencias,
+        'que_busca_credito_rapido'  => $qb_credito,
+        'que_busca_tarjeta_debito'  => $qb_debito,
+        'que_busca_tarjeta_credito' => $qb_cred_t,
         // Cierre
         'acuerdo_logrado'           => $acuerdo_logrado,
         'fecha_acuerdo'             => ($fecha_acuerdo ?: null),
@@ -487,25 +597,9 @@ try {
 
     $fp_cols = $get_cols('ficha_producto');
 
-    // En edición: si existe encuesta_id en ficha_producto, borramos fichas anteriores
-    // del mismo tipo para evitar duplicados al re-guardar.
-    if ($modo_edicion && isset($fp_cols['encuesta_id']) && !empty($productos)) {
-        $tipos_map_del = [
-            'ahorro'    => 'cuenta_ahorros',
-            'corriente' => 'cuenta_corriente',
-            'inversion' => 'inversiones',
-            'credito'   => 'credito',
-        ];
-        $tipos_del = [];
-        foreach ($productos as $p) {
-            if (isset($tipos_map_del[$p])) $tipos_del[] = $tipos_map_del[$p];
-        }
-        if (!empty($tipos_del)) {
-            $in = implode(',', array_fill(0, count($tipos_del), '?'));
-            $pdo->prepare("DELETE FROM ficha_producto WHERE encuesta_id = ? AND producto_tipo IN ($in)")
-                ->execute(array_merge([$enc_id], $tipos_del));
-        }
-    }
+    // En edición: removemos fichas anteriores de los tipos que se están guardando
+    // para evitar duplicación y registros huérfanos en tablas hijas.
+    // Realizado de forma segura y precisa por tipo de producto dentro del loop.
 
     foreach ($productos as $prod) {
         try {
@@ -520,6 +614,30 @@ try {
                 'credito'   => 'credito',
                 default     => $prod,
             };
+
+            // Evitar duplicados de ficha_producto y sus tablas hijas en modo edición
+            if ($modo_edicion) {
+                $fids_to_del = [];
+                if (isset($fp_cols['encuesta_id'])) {
+                    $st_fp = $pdo->prepare("SELECT id FROM ficha_producto WHERE encuesta_id = ? AND producto_tipo = ?");
+                    $st_fp->execute([$enc_id, $tipo_fp]);
+                    $fids_to_del = $st_fp->fetchAll(PDO::FETCH_COLUMN) ?: [];
+                } else {
+                    $st_fp = $pdo->prepare("SELECT id FROM ficha_producto WHERE cliente_cedula = ? AND producto_tipo = ? AND asesor_id = ?");
+                    $st_fp->execute([$cedula, $tipo_fp, $asesor_id]);
+                    $fids_to_del = $st_fp->fetchAll(PDO::FETCH_COLUMN) ?: [];
+                }
+                
+                foreach ($fids_to_del as $f_del_id) {
+                    $child_tables = ['ficha_cuenta_ahorros', 'ficha_cuenta_corriente', 'ficha_inversiones', 'ficha_credito'];
+                    foreach ($child_tables as $ct) {
+                        try {
+                            $pdo->prepare("DELETE FROM `$ct` WHERE ficha_id = ?")->execute([$f_del_id]);
+                        } catch (PDOException $_) {}
+                    }
+                    $pdo->prepare("DELETE FROM ficha_producto WHERE id = ?")->execute([$f_del_id]);
+                }
+            }
 
             // Insert dinámico para soportar esquemas con/ sin encuesta_id, gps, etc.
             $fp_insert_cols = ['id', 'usuario_id', 'asesor_id', 'producto_tipo', 'cliente_cedula', 'cliente_nombre'];
@@ -628,11 +746,11 @@ try {
     if (!empty($fichas_ok)) {
         $msg .= ' Fichas: ' . implode(', ', $fichas_ok) . '.';
     }
-    redirect('ok', $msg);
+    redirect('ok', $msg, null);
 
-} catch (PDOException $e) {
+} catch (Throwable $e) {
     try { $pdo->rollBack(); } catch (Throwable $_) {}
     $msg = $e->getMessage();
     error_log("[guardar_encuesta] ERROR: $msg | asesor=$asesor_id | tarea_id_edicion=" . ($tarea_id_edicion ?? 'null'));
-    redirect('error', 'Error guardando encuesta: ' . $msg);
+    redirect('error', 'Error guardando encuesta: ' . $msg, $modo_edicion ? $tarea_id_edicion : null);
 }

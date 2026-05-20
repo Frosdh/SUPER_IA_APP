@@ -3,8 +3,8 @@
 // Carga todos los datos de una encuesta existente para editarla
 // Parámetro GET: tarea_id
 
-header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+// Iniciar buffer de salida al extremo principio para capturar y evitar fugas de advertencias/BOM
+ob_start();
 
 // db_admin.php arranca la sesión y crea $pdo
 require_once 'db_admin.php';
@@ -22,11 +22,24 @@ if (empty($tarea_id)) {
     exit;
 }
 
+// Inicializar variables
+$tarea = null;
+$cliente = null;
+$encuesta = null;
+$fichas = [];
+$debug_info = [];
+
 try {
     // Obtener datos de la tarea
-    $st = $pdo->prepare('SELECT * FROM tarea WHERE id = ? LIMIT 1');
-    $st->execute([$tarea_id]);
-    $tarea = $st->fetch(PDO::FETCH_ASSOC);
+    try {
+        $st = $pdo->prepare('SELECT * FROM tarea WHERE id = ? LIMIT 1');
+        $st->execute([$tarea_id]);
+        $tarea = $st->fetch(PDO::FETCH_ASSOC);
+        $debug_info[] = 'Tarea: ' . ($tarea ? 'OK' : 'NOT FOUND');
+    } catch (Exception $e) {
+        $debug_info[] = 'Tarea ERROR: ' . $e->getMessage();
+        error_log('obtener_encuesta: Error obteniendo tarea - '.$e->getMessage());
+    }
     
     if (!$tarea) {
         http_response_code(404);
@@ -37,81 +50,171 @@ try {
     $cliente_id = $tarea['cliente_prospecto_id'] ?? null;
     
     // Obtener datos del cliente/prospecto
-    $cliente = null;
     if ($cliente_id) {
-        $st = $pdo->prepare('SELECT * FROM cliente_prospecto WHERE id = ? LIMIT 1');
-        $st->execute([$cliente_id]);
-        $cliente = $st->fetch(PDO::FETCH_ASSOC);
+        try {
+            $st = $pdo->prepare('SELECT * FROM cliente_prospecto WHERE id = ? LIMIT 1');
+            $st->execute([$cliente_id]);
+            $cliente = $st->fetch(PDO::FETCH_ASSOC);
+            $debug_info[] = 'Cliente: ' . ($cliente ? 'OK' : 'NOT FOUND');
+        } catch (Exception $e) {
+            $debug_info[] = 'Cliente ERROR: ' . $e->getMessage();
+            error_log('obtener_encuesta: Error obteniendo cliente - '.$e->getMessage());
+            $cliente = null;
+        }
+    } else {
+        $debug_info[] = 'Cliente: SKIP (no cliente_id)';
     }
     
-    // Obtener encuesta comercial
-    $st = $pdo->prepare('SELECT * FROM encuesta_comercial WHERE tarea_id = ? LIMIT 1');
-    $st->execute([$tarea_id]);
-    $encuesta = $st->fetch(PDO::FETCH_ASSOC);
+    // Obtener encuesta comercial - AQUÍ VAMOS A DEVOLVER TODOS LOS CAMPOS
+    try {
+        $st = $pdo->prepare('SELECT * FROM encuesta_comercial WHERE tarea_id = ? LIMIT 1');
+        $st->execute([$tarea_id]);
+        $encuesta = $st->fetch(PDO::FETCH_ASSOC);
+        
+        if ($encuesta) {
+            $debug_info[] = 'Encuesta: OK (campos: ' . count($encuesta) . ')';
+        } else {
+            $debug_info[] = 'Encuesta: NOT FOUND (se devolverá vacía)';
+            $encuesta = [];
+        }
+    } catch (Exception $e) {
+        $debug_info[] = 'Encuesta ERROR: ' . $e->getMessage();
+        error_log('obtener_encuesta: Error obteniendo encuesta_comercial - '.$e->getMessage());
+        $encuesta = [];
+    }
     
     // Obtener fichas de productos (si existen)
-    $fichas = [];
     try {
-        // Detectar si existe la columna encuesta_id
-        $fp_has_encuesta_id = false;
+        // Verificar si existe la tabla ficha_producto
+        $ficha_tabla_existe = false;
         try {
-            $stc = $pdo->prepare("SHOW COLUMNS FROM `ficha_producto` LIKE 'encuesta_id'");
+            $stc = $pdo->prepare("SELECT 1 FROM `ficha_producto` LIMIT 1");
             $stc->execute();
-            $fp_has_encuesta_id = (bool)$stc->fetch(PDO::FETCH_ASSOC);
-        } catch (PDOException $e) {
-            $fp_has_encuesta_id = false;
-        }
-
-        if ($fp_has_encuesta_id) {
-            $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE encuesta_id = (SELECT id FROM encuesta_comercial WHERE tarea_id = ?)');
-            $st->execute([$tarea_id]);
-            $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        } else {
-            // Fallback (cuando no hay encuesta_id): aproximación por cliente + asesor
-            $ced = $cliente['cedula'] ?? null;
-            $aid = $tarea['asesor_id'] ?? null;
-            if ($ced && $aid) {
-                $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE cliente_cedula = ? AND asesor_id = ? ORDER BY created_at DESC LIMIT 50');
-                $st->execute([$ced, $aid]);
-                $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
-            } else {
-                $fichas_raw = [];
-            }
+            $ficha_tabla_existe = true;
+        } catch (Exception $e) {
+            $ficha_tabla_existe = false;
         }
         
-        $fichas = [];
-        foreach ($fichas_raw as $fp) {
-            $type = $fp['producto_tipo'];
-            $child_table = '';
-            if ($type === 'credito')          $child_table = 'ficha_credito';
-            elseif ($type === 'inversiones')  $child_table = 'ficha_inversiones';
-            elseif ($type === 'cuenta_ahorros') $child_table = 'ficha_cuenta_ahorros';
-            elseif ($type === 'cuenta_corriente') $child_table = 'ficha_cuenta_corriente';
-            
-            if ($child_table) {
-                try {
-                    $stc = $pdo->prepare("SELECT * FROM `$child_table` WHERE ficha_id = ? LIMIT 1");
-                    $stc->execute([$fp['id']]);
-                    $child_data = $stc->fetch(PDO::FETCH_ASSOC) ?: [];
-                    $fp = array_merge($fp, $child_data);
-                } catch (PDOException $ex) {}
+        if ($ficha_tabla_existe) {
+            // Detectar si existe la columna encuesta_id
+            $fp_has_encuesta_id = false;
+            try {
+                $stc = $pdo->prepare("SHOW COLUMNS FROM `ficha_producto` LIKE 'encuesta_id'");
+                $stc->execute();
+                $fp_has_encuesta_id = (bool)$stc->fetch(PDO::FETCH_ASSOC);
+            } catch (Exception $e) {
+                $fp_has_encuesta_id = false;
             }
-            $fichas[] = $fp;
+
+            $fichas_raw = [];
+            
+            // Intenta por encuesta_id si existe la columna
+            if ($fp_has_encuesta_id && !empty($encuesta) && isset($encuesta['id'])) {
+                try {
+                    $enc_id = $encuesta['id'];
+                    $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE encuesta_id = ?');
+                    $st->execute([$enc_id]);
+                    $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                    $debug_info[] = 'Fichas por encuesta_id: ' . count($fichas_raw);
+                } catch (Exception $e) {
+                    $debug_info[] = 'Fichas encuesta_id ERROR: ' . $e->getMessage();
+                    error_log('obtener_encuesta: Error obteniendo fichas por encuesta_id - '.$e->getMessage());
+                }
+            }
+            
+            // Fallback: busca por tarea_id
+            if (empty($fichas_raw)) {
+                try {
+                    $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE tarea_id = ? ORDER BY created_at DESC LIMIT 50');
+                    $st->execute([$tarea_id]);
+                    $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                    $debug_info[] = 'Fichas por tarea_id: ' . count($fichas_raw);
+                } catch (Exception $e) {
+                    $debug_info[] = 'Fichas tarea_id ERROR: ' . $e->getMessage();
+                    error_log('obtener_encuesta: Error obteniendo fichas por tarea_id - '.$e->getMessage());
+                }
+            }
+            
+            // Fallback: busca por cliente + asesor si aún no encontró
+            if (empty($fichas_raw) && $cliente) {
+                try {
+                    $ced = $cliente['cedula'] ?? null;
+                    $aid = $tarea['asesor_id'] ?? null;
+                    if ($ced && $aid) {
+                        $st = $pdo->prepare('SELECT * FROM ficha_producto WHERE cliente_cedula = ? AND asesor_id = ? ORDER BY created_at DESC LIMIT 50');
+                        $st->execute([$ced, $aid]);
+                        $fichas_raw = $st->fetchAll(PDO::FETCH_ASSOC) ?: [];
+                        $debug_info[] = 'Fichas por cliente+asesor: ' . count($fichas_raw);
+                    }
+                } catch (Exception $e) {
+                    $debug_info[] = 'Fichas cliente+asesor ERROR: ' . $e->getMessage();
+                    error_log('obtener_encuesta: Error obteniendo fichas por cliente+asesor - '.$e->getMessage());
+                }
+            }
+            
+            // Procesar fichas con sus datos específicos
+            $fichas = [];
+            foreach ($fichas_raw as $fp) {
+                try {
+                    $type = $fp['producto_tipo'] ?? '';
+                    $child_table = '';
+                    if ($type === 'credito')          $child_table = 'ficha_credito';
+                    elseif ($type === 'inversiones')  $child_table = 'ficha_inversiones';
+                    elseif ($type === 'cuenta_ahorros') $child_table = 'ficha_cuenta_ahorros';
+                    elseif ($type === 'cuenta_corriente') $child_table = 'ficha_cuenta_corriente';
+                    
+                    if ($child_table) {
+                        try {
+                            $stc = $pdo->prepare("SELECT * FROM `$child_table` WHERE ficha_id = ? LIMIT 1");
+                            $stc->execute([$fp['id']]);
+                            $child_data = $stc->fetch(PDO::FETCH_ASSOC) ?: [];
+                            $fp = array_merge($fp, $child_data);
+                        } catch (Exception $ex) {
+                            error_log("obtener_encuesta: Error obteniendo datos de $child_table - ".$ex->getMessage());
+                        }
+                    }
+                    $fichas[] = $fp;
+                } catch (Exception $ex) {
+                    error_log('obtener_encuesta: Error procesando ficha - '.$ex->getMessage());
+                }
+            }
+        } else {
+            $debug_info[] = 'Fichas: tabla NO existe';
         }
-    } catch (PDOException $e) {
-        // Si la tabla no existe o el esquema no coincide, omitir fichas
+    } catch (Exception $e) {
+        $debug_info[] = 'Fichas bloque ERROR: ' . $e->getMessage();
+        error_log('obtener_encuesta: Error en bloque de fichas - '.$e->getMessage());
         $fichas = [];
     }
     
-    echo json_encode([
+    // Respuesta exitosa con los datos que se pudieron recuperar
+    $response = [
         'status' => 'ok',
-        'tarea' => $tarea,
-        'cliente' => $cliente,
-        'encuesta' => $encuesta,
-        'fichas' => $fichas
-    ]);
+        'tarea' => $tarea ?: (object)[],
+        'cliente' => $cliente ?: (object)[],
+        'encuesta' => $encuesta ?: (object)[],
+        'fichas' => $fichas,
+        'debug' => $debug_info  // HABILITADO PARA DIAGNOSTICAR
+    ];
     
-} catch (PDOException $e) {
+    // Limpiar TODO el buffer y enviar respuesta JSON 100% limpia
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    @header('Content-Type: application/json; charset=utf-8');
+    @header('Access-Control-Allow-Origin: *');
+    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+    
+} catch (Throwable $e) {
+    error_log('obtener_encuesta: Error fatal - '.$e->getMessage() . "\n" . $e->getTraceAsString());
+    if (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+    @header('Content-Type: application/json; charset=utf-8');
+    @header('Access-Control-Allow-Origin: *');
     http_response_code(500);
-    echo json_encode(['status'=>'error','message'=>$e->getMessage()]);
+    echo json_encode(['status'=>'error','message'=>'Error al cargar encuesta: '.$e->getMessage()]);
+    exit;
 }
+?>

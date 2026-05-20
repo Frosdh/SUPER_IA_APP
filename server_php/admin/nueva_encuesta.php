@@ -412,8 +412,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
         </div>
 
         <!-- ── FORMULARIO ── -->
-        <form id="formEncuesta" method="post" action="guardar_encuesta.php" autocomplete="off"
-              style="display:none;">
+        <form id="formEncuesta" method="post" autocomplete="off" style="display:none;">
             <input type="hidden" name="tarea_id"      id="hid-tarea_id">
             <input type="hidden" name="cliente_id"     id="hid-cliente_id">
             <input type="hidden" name="tipo_prospecto" id="hid-tipo_prospecto">
@@ -566,16 +565,16 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                     <div class="fld-grid">
                         <div class="fld full">
                             <label>Nombre completo *</label>
-                            <input type="text" name="nombre" id="f-nombre" required placeholder="Nombre y apellidos">
+                            <input type="text" name="nombre" id="f-nombre" placeholder="Nombre y apellidos">
                         </div>
                         <div class="fld">
                             <label>Cédula *</label>
-                            <input type="text" name="cedula" id="f-cedula" required placeholder="Cédula de identidad">
+                            <input type="text" name="cedula" id="f-cedula" placeholder="Cédula de identidad">
                         </div>
                         
                         <div class="fld">
                             <label>Celular *</label>
-                            <input type="tel" name="celular" id="f-celular" required placeholder="09XXXXXXXX">
+                            <input type="tel" name="celular" id="f-celular" placeholder="09XXXXXXXX">
                         </div>
                         <div class="fld">
                             <label>Teléfono convencional</label>
@@ -1468,13 +1467,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                     <div class="fld-grid">
                         <div class="fld full">
                             <label>Resultado / Acuerdo logrado *</label>
-                            <select name="acuerdo_logrado" required>
-                                <option value="">— Selecciona el resultado —</option>
+                            <select name="acuerdo_logrado">
+                                <option value="ninguno" selected>Ninguno / No es necesario</option>
                                 <option value="nueva_cita_campo">Nueva cita en campo</option>
                                 <option value="nueva_cita_oficina">Nueva cita en oficina / Solicitud</option>
                                 <option value="recolectar_documentacion">Recolectar documentación</option>
                                 <option value="levantamiento_campo">Levantamiento en campo</option>
-                                <option value="ninguno">Sin acuerdo / Sin interés</option>
                             </select>
                         </div>
                         <div class="fld">
@@ -1510,7 +1508,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                     <button type="button" class="btn btn-yellow" id="btn-next">
                         Siguiente <i class="fas fa-arrow-right"></i>
                     </button>
-                    <button type="submit" class="btn btn-primary" id="btn-save" style="display:none;">
+                    <button type="button" class="btn btn-primary" id="btn-save" onclick="guardarEncuestaFetch()" style="display:none;">
                         <i class="fas fa-circle-check"></i> Guardar encuesta
                     </button>
                 </div>
@@ -1710,10 +1708,33 @@ async function cargarEncuestaParaEditar() {
     try {
         const url = `obtener_encuesta_para_editar.php?tarea_id=${encodeURIComponent(tareaId)}`;
         const res = await fetch(url, { method: 'GET' });
-        const data = await res.json();
+        
+        // Clone response FIRST before any reads to prevent "body stream already read" errors
+        const resClone = res.clone();
+        
+        // Verificar si la respuesta es OK en HTTP
+        if (!res.ok) {
+            const errorText = await resClone.text();
+            console.error('Error HTTP:', res.status, errorText);
+            alert('Error al cargar la encuesta (HTTP ' + res.status + '). Detalles: ' + errorText);
+            return;
+        }
+        
+        let data;
+        try {
+            data = await resClone.json();
+        } catch (parseErr) {
+            console.error('Error parseando JSON:', parseErr);
+            const responseText = await resClone.text();
+            console.error('Respuesta recibida:', responseText);
+            alert('Error: La respuesta del servidor no es válida.\n\nDetalles: ' + responseText);
+            return;
+        }
 
-        if (data.status !== 'ok') {
-            alert('Error cargando encuesta: ' + (data.message || 'Desconocido'));
+        if (!data || data.status !== 'ok') {
+            const msg = data?.message || 'Respuesta inválida del servidor';
+            console.error('Error en response:', msg);
+            alert('Error al cargar la encuesta: ' + msg);
             return;
         }
 
@@ -1804,6 +1825,60 @@ async function cargarEncuestaParaEditar() {
             svById('f-p3_satisfaccion', encuesta.p3_satisfaccion);
         }
 
+        /* ── Datos de negocio y Régimen Tributario (Paso 3) ── */
+        if (cliente.actividad) {
+            const chip = document.querySelector(`#chips-actividad [data-val="${cliente.actividad}"]`);
+            if (chip) { 
+                document.querySelectorAll('#chips-actividad .chip').forEach(c => c.classList.remove('selected'));
+                chip.classList.add('selected'); 
+                const hidAct = document.getElementById('hid-actividad');
+                if (hidAct) hidAct.value = cliente.actividad; 
+            }
+        }
+
+        let regimen = cliente.regimen_tributario || '';
+        if (!regimen) {
+            if (parseInt(cliente.tiene_ruc) === 1) regimen = 'ruc';
+            else if (parseInt(cliente.tiene_rise) === 1) regimen = 'rise';
+            else regimen = 'none';
+        }
+        const regTile = document.querySelector(`.regimen-tile[data-val="${regimen}"]`);
+        if (regTile && typeof selectRegimen === 'function') {
+            selectRegimen(regTile);
+        }
+
+        if (regimen === 'ruc') {
+            const inpRuc = document.querySelector('input[name="ruc_numero"]');
+            if (inpRuc) inpRuc.value = cliente.numero_ruc || '';
+        } else if (regimen === 'rise') {
+            const inpRise = document.querySelector('input[name="rise_numero"]');
+            if (inpRise) inpRise.value = cliente.numero_ruc || '';
+        }
+        
+        const qFields = [
+            { hid: 'hid-ruc_declara_iva', val: cliente.declara_iva },
+            { hid: 'hid-ruc_emite_facturas', val: cliente.emite_facturas },
+            { hid: 'hid-ruc_lleva_contab', val: cliente.lleva_contabilidad },
+            { hid: 'hid-rise_paga_cuota', val: cliente.paga_cuota_rise },
+            { hid: 'hid-rise_emite_notas', val: cliente.emite_notas_venta },
+            { hid: 'hid-rise_conoce_limite', val: cliente.conoce_limite_rise }
+        ];
+        qFields.forEach(f => {
+            const valStr = String(f.val ?? '');
+            if (valStr !== '') {
+                const btn = document.querySelector(`.q-btn[data-hid="${f.hid}"][data-val="${valStr}"]`);
+                if (btn) btn.click();
+            }
+        });
+
+        const tieneEmp = (parseInt(cliente.tiene_empresa) === 1 || cliente.tiene_empresa === true) ? '1' : '0';
+        setRadioByName('tiene_empresa', tieneEmp);
+        const extEmp = document.getElementById('extras-empresa');
+        if (extEmp) extEmp.classList.toggle('show', tieneEmp === '1');
+        const avSinEmp = document.getElementById('aviso-sin-empresa');
+        if (avSinEmp) avSinEmp.style.display = tieneEmp === '1' ? 'none' : 'block';
+        if (typeof actualizarAvisoCredito === 'function') actualizarAvisoCredito();
+
         svById('f-nombre_empresa', cliente.nombre_empresa || '');
         svById('f-tipo_empresa',   cliente.tipo_empresa   || '');
 
@@ -1839,9 +1914,9 @@ async function cargarEncuestaParaEditar() {
         document.getElementById('extras-credito')?.classList.toggle('show',    tienCred   === '1');
 
         /* Detalles financieros (por name, sin id) */
-        svByName('ec_institucion_ahorro',          encuesta.institucion_ahorro          || '');
+        svByName('ec_institucion_ahorro',          encuesta.institucion_ahorro          || encuesta.banco_ahorro          || '');
         svByName('ec_saldo_ahorro',                encuesta.saldo_ahorro                || '');
-        svByName('ec_institucion_corriente',       encuesta.institucion_corriente       || '');
+        svByName('ec_institucion_corriente',       encuesta.institucion_corriente       || encuesta.banco_corriente       || '');
         svByName('ec_institucion_inversiones',     encuesta.institucion_inversiones     || '');
         svByName('ec_valor_inversion',             encuesta.valor_inversion             || '');
         svByName('ec_plazo_inversion',             encuesta.plazo_inversion             || '');
@@ -1851,10 +1926,24 @@ async function cargarEncuestaParaEditar() {
         svByName('ec_destino_credito_actual',      encuesta.destino_credito_actual      || '');
 
         /* Razones para no contratar */
-        setRadioByName('ec_razon_ya_trabaja',       encuesta.razon_ya_trabaja       ? '1' : '');
-        setRadioByName('ec_razon_desconfia',        encuesta.razon_desconfia        ? '1' : '');
-        setRadioByName('ec_razon_agusto_actual',    encuesta.razon_agusto_actual    ? '1' : '');
-        setRadioByName('ec_razon_mala_experiencia', encuesta.razon_mala_experiencia ? '1' : '');
+        function toYN(val) {
+            if (val === null || val === undefined || val === '') return '';
+            const s = String(val).trim();
+            return (s === '1' || s === 'true') ? '1' : '0';
+        }
+
+        const yaTrabaja = (encuesta.razon_ya_trabaja !== undefined && encuesta.razon_ya_trabaja !== null) 
+            ? encuesta.razon_ya_trabaja 
+            : (encuesta.razon_ya_trabaja_institucion ?? '');
+
+        const desconfia = (encuesta.razon_desconfia !== undefined && encuesta.razon_desconfia !== null) 
+            ? encuesta.razon_desconfia 
+            : (encuesta.razon_desconfia_servicios ?? '');
+
+        setRadioByName('ec_razon_ya_trabaja',       toYN(yaTrabaja));
+        setRadioByName('ec_razon_desconfia',        toYN(desconfia));
+        setRadioByName('ec_razon_agusto_actual',    toYN(encuesta.razon_agusto_actual));
+        setRadioByName('ec_razon_mala_experiencia', toYN(encuesta.razon_mala_experiencia));
         svByName('ec_razon_otros', encuesta.razon_otros || '');
 
         /* ── Productos de interés (prod-card[data-prod]) ─────── */
@@ -1893,8 +1982,8 @@ async function cargarEncuestaParaEditar() {
         if (radInteresSi && radInteresNo) {
             radInteresSi.checked = tieneInteres;
             radInteresNo.checked = !tieneInteres;
-            radInteresSi.closest('.yn-opt').classList.toggle('checked', tieneInteres);
-            radInteresNo.closest('.yn-opt').classList.toggle('checked', !tieneInteres);
+            radInteresSi.closest('.yn-opt')?.classList.toggle('checked', tieneInteres);
+            radInteresNo.closest('.yn-opt')?.classList.toggle('checked', !tieneInteres);
         }
 
         /* ── Acuerdo y cierre (select + inputs por name) ─────── */
@@ -1903,6 +1992,21 @@ async function cargarEncuestaParaEditar() {
         svByName('hora_acuerdo',         encuesta.hora_acuerdo         || '');
         svByName('fecha_nuevo_contacto', encuesta.fecha_nuevo_contacto || '');
         svByName('observaciones',        encuesta.observaciones        || '');
+
+        /* ── ¿Qué busca de una institución? Checkboxes ── */
+        function setCheckboxByName(name, val) {
+            const cb = document.querySelector(`input[name="${name}"]`);
+            if (cb) {
+                cb.checked = (String(val) === '1' || val === true);
+            }
+        }
+        setCheckboxByName('busca_agilidad',        encuesta.que_busca_agilidad);
+        setCheckboxByName('busca_cajeros',         encuesta.que_busca_cajeros);
+        setCheckboxByName('busca_banca_online',    encuesta.que_busca_banca_linea || encuesta.que_busca_banca_online);
+        setCheckboxByName('busca_agencias',        encuesta.que_busca_agencias);
+        setCheckboxByName('busca_credito_rapido',  encuesta.que_busca_credito_rapido);
+        setCheckboxByName('busca_tarjeta_debito',  encuesta.que_busca_tarjeta_debito);
+        setCheckboxByName('busca_tarjeta_credito', encuesta.que_busca_tarjeta_credito);
 
         /* ── PREPOPULATE CREDIT SHEET (ficha_credito) ─────────── */
         if (data.fichas && data.fichas.length > 0) {
@@ -1913,7 +2017,7 @@ async function cargarEncuestaParaEditar() {
                 
                 if (fc.destino_credito) {
                     const chip = document.querySelector(`.chip[data-val="${fc.destino_credito}"]`);
-                    if (chip) chipSingle(chip, 'fk_destino');
+                    if (chip) toggleChip(chip, 'fk_destino');
                 }
                 svByName('fk_destino_otros', fc.dest_otros_detalle || '');
                 svByName('fk_monto', fc.monto_credito || '');
@@ -1925,7 +2029,7 @@ async function cargarEncuestaParaEditar() {
                 
                 if (fc.solicitante_estado_civil) {
                     const chip = document.querySelector(`.chip[data-val="${fc.solicitante_estado_civil}"]`);
-                    if (chip) chipSingle(chip, 'fk_sol_ec');
+                    if (chip) toggleChip(chip, 'fk_sol_ec');
                 }
                 
                 svByName('fk_sol_conyuge_nombre', fc.solicitante_conyuge_nombre || '');
@@ -1938,7 +2042,7 @@ async function cargarEncuestaParaEditar() {
                 
                 if (fc.garante_estado_civil) {
                     const chip = document.querySelector(`.chip[data-val="${fc.garante_estado_civil}"]`);
-                    if (chip) chipSingle(chip, 'fk_gar_ec');
+                    if (chip) toggleChip(chip, 'fk_gar_ec');
                 }
                 
                 svByName('fk_gar_conyuge_nombre', fc.garante_conyuge_nombre || '');
@@ -1980,7 +2084,7 @@ async function cargarEncuestaParaEditar() {
 
     } catch (e) {
         console.error('Error cargando encuesta:', e);
-        alert('Error al cargar la encuesta. Recarga la página e intenta de nuevo.');
+        alert('Error inesperado al cargar la encuesta. Recarga la página e intenta de nuevo.\n\nDetalles: ' + e.message);
     }
 }
 
@@ -2003,7 +2107,10 @@ async function buscarCedula() {
     const ced = inpCedula.value.trim();
     if (!ced) { showMsg('Ingresa una cédula primero.', 'warning'); return; }
     btnBuscar.disabled = true;
-    btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> BuscandoÔÇª';
+    btnBuscar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Buscando…';
+    
+    // Asegurar que al buscar se cree una NUEVA encuesta/tarea sin modificar el historial
+    setVal('hid-tarea_id', '');
 
     try {
         const fd = new FormData();
@@ -2016,10 +2123,10 @@ async function buscarCedula() {
                 <div class="found-chip found">
                     <i class="fas fa-circle-check"></i>
                     Encontrado: <strong>${esc(data.data.nombre||'')}</strong>
-                    &nbsp;┬À&nbsp; ${data.tipo === 'cliente' ? 'Cliente' : 'Prospecto'}
+                    &nbsp;·&nbsp; ${data.tipo === 'cliente' ? 'Cliente' : 'Prospecto'}
                 </div>`;
 
-            // Pre-llenar campos
+            // Pre-llenar campos personales
             fill('f-nombre',         data.data.nombre);
             fill('f-cedula',         data.data.cedula);
             fill('f-celular',        data.data.celular);
@@ -2033,10 +2140,277 @@ async function buscarCedula() {
             setVal('f-estado',       data.data.estado_db || 'prospecto');
             setVal('hid-cliente_id', data.data.id);
 
+            // Guardar tarea_id existente para que al guardar modifique/actualice en lugar de duplicar o crear uno nuevo
+            const existingTareaId = (data.encuesta && data.encuesta.tarea_id) || (data.tarea && data.tarea.id) || '';
+            setVal('hid-tarea_id', existingTareaId);
+
             // chip actividad
             if (data.data.actividad) {
                 const chip = document.querySelector(`#chips-actividad [data-val="${data.data.actividad}"]`);
-                if (chip) { chip.classList.add('selected'); setVal('hid-actividad', data.data.actividad); }
+                if (chip) { 
+                    document.querySelectorAll('#chips-actividad .chip').forEach(c => c.classList.remove('selected'));
+                    chip.classList.add('selected'); 
+                    setVal('hid-actividad', data.data.actividad); 
+                }
+            }
+
+            function localSetRadioByName(name, val) {
+                document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
+                    r.checked = (String(r.value) === String(val));
+                    r.closest('.yn-opt')?.classList.toggle('checked', r.checked);
+                });
+            }
+
+            // Régimen tributario y sub-preguntas (Paso 3)
+            let regimen = data.data.regimen_tributario || '';
+            if (!regimen) {
+                if (data.data.tiene_ruc === 1) regimen = 'ruc';
+                else if (data.data.tiene_rise === 1) regimen = 'rise';
+                else regimen = 'none';
+            }
+            const regTile = document.querySelector(`.regimen-tile[data-val="${regimen}"]`);
+            if (regTile) selectRegimen(regTile);
+
+            if (regimen === 'ruc') {
+                const inpRuc = document.querySelector('input[name="ruc_numero"]');
+                if (inpRuc) inpRuc.value = data.data.numero_ruc || '';
+            } else if (regimen === 'rise') {
+                const inpRise = document.querySelector('input[name="rise_numero"]');
+                if (inpRise) inpRise.value = data.data.numero_ruc || '';
+            }
+            
+            const qFields = [
+                { hid: 'hid-ruc_declara_iva', val: data.data.declara_iva },
+                { hid: 'hid-ruc_emite_facturas', val: data.data.emite_facturas },
+                { hid: 'hid-ruc_lleva_contab', val: data.data.lleva_contabilidad },
+                { hid: 'hid-rise_paga_cuota', val: data.data.paga_cuota_rise },
+                { hid: 'hid-rise_emite_notas', val: data.data.emite_notas_venta },
+                { hid: 'hid-rise_conoce_limite', val: data.data.conoce_limite_rise }
+            ];
+            qFields.forEach(f => {
+                const valStr = String(f.val ?? '');
+                if (valStr !== '') {
+                    const btn = document.querySelector(`.q-btn[data-hid="${f.hid}"][data-val="${valStr}"]`);
+                    if (btn) btn.click();
+                }
+            });
+
+            // tiene_empresa toggle
+            const tieneEmp = data.data.tiene_empresa === 1 ? '1' : '0';
+            localSetRadioByName('tiene_empresa', tieneEmp);
+            const extEmp = document.getElementById('extras-empresa');
+            if (extEmp) extEmp.classList.toggle('show', tieneEmp === '1');
+            const avSinEmp = document.getElementById('aviso-sin-empresa');
+            if (avSinEmp) avSinEmp.style.display = tieneEmp === '1' ? 'none' : 'block';
+            if (typeof actualizarAvisoCredito === 'function') actualizarAvisoCredito();
+
+            // Limpiar e inicializar tipo de visita
+            document.querySelectorAll('.visit-card').forEach(c => c.classList.remove('selected'));
+            setVal('hid-tipo_prospecto', '');
+
+            // Limpiar intereses de productos previos (deben elegirse de nuevo)
+            if (typeof prodSeleccionados !== 'undefined' && prodSeleccionados.clear) {
+                prodSeleccionados.clear();
+            }
+            document.querySelectorAll('.prod-card').forEach(c => c.classList.remove('selected'));
+            document.querySelectorAll('.ficha-producto').forEach(fp => fp.style.display = 'none');
+            setVal('hid-prod_interes', '');
+            setVal('hid-nivel_interes', '');
+            
+            const radInteresSi = document.querySelector('input[name="interesado_productos"][value="1"]');
+            const radInteresNo = document.querySelector('input[name="interesado_productos"][value="0"]');
+            if (radInteresSi && radInteresNo) {
+                radInteresSi.checked = false;
+                radInteresNo.checked = true;
+                radInteresSi.closest('.yn-opt')?.classList.remove('checked');
+                radInteresNo.closest('.yn-opt')?.classList.add('checked');
+            }
+            if (typeof toggleInteresProductos === 'function') toggleInteresProductos(0);
+
+            // Pre-llenar tipo de visita desde origen_prospecto o la última tarea si existe (Paso 1)
+            const origenVisita = data.data.origen_prospecto || (data.tarea ? data.tarea.tipo_tarea : '');
+            if (origenVisita) {
+                const tipoMap = {
+                    'visita_frio': 'frio',
+                    'frio': 'frio',
+                    'evaluacion': 'seguimiento',
+                    'seguimiento': 'seguimiento',
+                    'prospecto_nuevo': 'frio',
+                    'leads_llamadas': 'leads_llamadas',
+                    'cliente': 'cliente'
+                };
+                const key = tipoMap[origenVisita] || origenVisita;
+                const vc = document.querySelector(`.visit-card[data-tipo="${key}"]`);
+                if (vc) {
+                    if (typeof selectVisita === 'function') {
+                        selectVisita(vc);
+                    } else {
+                        vc.classList.add('selected');
+                        setVal('hid-tipo_prospecto', key);
+                    }
+                }
+            }
+
+            // Pre-llenar datos de la encuesta comercial anterior (excepto productos)
+            if (data.encuesta) {
+                const encuesta = data.encuesta;
+
+                // 1. Identificación Institucional (Paso 0)
+                const p1Conoce = (encuesta.p1_conoce_institucion !== null && encuesta.p1_conoce_institucion !== undefined) ? String(encuesta.p1_conoce_institucion) : '';
+                const p2Cliente = (encuesta.p2_es_cliente !== null && encuesta.p2_es_cliente !== undefined) ? String(encuesta.p2_es_cliente) : '';
+                
+                if (p1Conoce !== '') {
+                    localSetRadioByName('p1_conoce_institucion', p1Conoce);
+                    document.getElementById('p1-si')?.classList.toggle('checked', p1Conoce === '1');
+                    document.getElementById('p1-no')?.classList.toggle('checked', p1Conoce === '0');
+                }
+                
+                if (p2Cliente !== '') {
+                    localSetRadioByName('p2_es_cliente', p2Cliente);
+                    document.getElementById('p2-si')?.classList.toggle('checked', p2Cliente === '1');
+                    document.getElementById('p2-no')?.classList.toggle('checked', p2Cliente === '0');
+                    const p2ExtraEl = document.getElementById('p2-extra');
+                    if (p2ExtraEl) p2ExtraEl.style.display = p2Cliente === '1' ? 'block' : 'none';
+                }
+
+                fill('f-p1_obs', encuesta.p1_obs || '');
+                
+                // Productos que ya posee
+                const p2Products = encuesta.p2_producto ? encuesta.p2_producto.split(',') : [];
+                document.querySelectorAll('#grp-p2-productos .p2-prod-opt').forEach(opt => {
+                    const isChecked = p2Products.includes(opt.dataset.val);
+                    opt.classList.toggle('checked', isChecked);
+                    const icon = opt.querySelector('i');
+                    if (icon) {
+                        icon.className = isChecked ? 'fas fa-check-square' : 'far fa-square';
+                    }
+                });
+                fill('f-p2_producto', encuesta.p2_producto || '');
+                fill('f-p2_obs', encuesta.p2_obs || '');
+                fill('f-p3_obs', encuesta.p3_obs || '');
+                
+                if (encuesta.p3_satisfaccion) {
+                    document.querySelectorAll('#chips-p3-satisfaccion .chip').forEach(c => {
+                        c.classList.toggle('selected', c.dataset.val === encuesta.p3_satisfaccion);
+                    });
+                    fill('f-p3_satisfaccion', encuesta.p3_satisfaccion);
+                }
+
+                // Cargar interés en conocer productos (radio e inicializador de productos)
+                const interesConocer = (encuesta.interes_conocer_productos !== null && encuesta.interes_conocer_productos !== undefined) ? String(encuesta.interes_conocer_productos) : '';
+                if (interesConocer !== '') {
+                    const radIntSi = document.querySelector('input[name="interesado_productos"][value="1"]');
+                    const radIntNo = document.querySelector('input[name="interesado_productos"][value="0"]');
+                    if (radIntSi && radIntNo) {
+                        radIntSi.checked = (interesConocer === '1');
+                        radIntNo.checked = (interesConocer === '0');
+                        radIntSi.closest('.yn-opt')?.classList.toggle('checked', radIntSi.checked);
+                        radIntNo.closest('.yn-opt')?.classList.toggle('checked', radIntNo.checked);
+                    }
+                    if (typeof toggleInteresProductos === 'function') toggleInteresProductos(parseInt(interesConocer));
+                }
+
+                // 3. Situación financiera (Paso 4 - radio Y/N)
+                function toYN(val) {
+                    if (val === null || val === undefined || val === '') return '';
+                    const s = String(val).trim();
+                    return (s === '1' || s === 'true') ? '1' : '0';
+                }
+
+                const mantAhorro = toYN(encuesta.mantiene_cuenta_ahorro);
+                const mantCorr   = toYN(encuesta.mantiene_cuenta_corriente);
+                const tienInv    = toYN(encuesta.tiene_inversiones);
+                const tienCred   = toYN(encuesta.tiene_operaciones_crediticias);
+
+                localSetRadioByName('ec_mantiene_cuenta_ahorro',        mantAhorro);
+                localSetRadioByName('ec_mantiene_cuenta_corriente',     mantCorr);
+                localSetRadioByName('ec_tiene_inversiones',             tienInv);
+                localSetRadioByName('ec_tiene_operaciones_crediticias', tienCred);
+
+                document.getElementById('extras-ahorro')?.classList.toggle('show',     mantAhorro === '1');
+                document.getElementById('extras-corriente')?.classList.toggle('show',  mantCorr   === '1');
+                document.getElementById('extras-inversiones')?.classList.toggle('show',tienInv    === '1');
+                document.getElementById('extras-credito')?.classList.toggle('show',    tienCred   === '1');
+
+                function localSvByName(name, val) {
+                    const el = document.querySelector(`[name="${name}"]`);
+                    if (el) {
+                        if (el.tagName === 'SELECT' && val) {
+                            let exists = false;
+                            for (let i = 0; i < el.options.length; i++) {
+                                if (el.options[i].value === val) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists) {
+                                const opt = document.createElement('option');
+                                opt.value = val;
+                                opt.textContent = val;
+                                el.appendChild(opt);
+                            }
+                        }
+                        el.value = val ?? '';
+                    }
+                }
+                
+                localSvByName('ec_institucion_ahorro',          encuesta.institucion_ahorro          || encuesta.banco_ahorro          || '');
+                localSvByName('ec_saldo_ahorro',                encuesta.saldo_ahorro                || '');
+                localSvByName('ec_institucion_corriente',       encuesta.institucion_corriente       || encuesta.banco_corriente       || '');
+                localSvByName('ec_institucion_inversiones',     encuesta.institucion_inversiones     || '');
+                localSvByName('ec_valor_inversion',             encuesta.valor_inversion             || '');
+                localSvByName('ec_plazo_inversion',             encuesta.plazo_inversion             || '');
+                localSvByName('ec_fecha_vencimiento_inversion', encuesta.fecha_vencimiento_inversion || '');
+                localSvByName('ec_institucion_credito',         encuesta.institucion_credito         || '');
+                localSvByName('ec_monto_credito_actual',        encuesta.monto_credito_actual        || '');
+                localSvByName('ec_destino_credito_actual',      encuesta.destino_credito_actual      || '');
+
+                // Propuesta de vencimiento
+                const tieneInvPrev = toYN(encuesta.tiene_inversiones);
+                const crearTareaVenc = toYN(encuesta.interes_propuesta_previa);
+                
+                const secPropVenc = document.getElementById('sec-propuesta-vencimiento');
+                if (secPropVenc) secPropVenc.style.display = tieneInvPrev === '1' ? 'block' : 'none';
+                
+                document.getElementById('venc-si')?.classList.toggle('checked', crearTareaVenc === '1');
+                document.getElementById('venc-no')?.classList.toggle('checked', crearTareaVenc === '0');
+                
+                const extPropVenc = document.getElementById('extras-propuesta-vencimiento');
+                if (extPropVenc) extPropVenc.style.display = crearTareaVenc === '1' ? 'flex' : 'none';
+                
+                fill('f-propuesta_inversion', encuesta.propuesta_inversion || '');
+                fill('f-fecha_previa_vencimiento', encuesta.fecha_previa_vencimiento || '');
+                fill('f-hora_previa_vencimiento', encuesta.hora_previa_vencimiento || '');
+                fill('f-fecha_vencimiento_cdp', encuesta.fecha_vencimiento_cdp || '');
+
+                // Razones para no contratar
+                localSetRadioByName('ec_razon_ya_trabaja',       toYN(encuesta.razon_ya_trabaja));
+                localSetRadioByName('ec_razon_desconfia',        toYN(encuesta.razon_desconfia));
+                localSetRadioByName('ec_razon_agusto_actual',    toYN(encuesta.razon_agusto_actual));
+                localSetRadioByName('ec_razon_mala_experiencia', toYN(encuesta.razon_mala_experiencia));
+                localSvByName('ec_razon_otros', encuesta.razon_otros || '');
+
+                // ¿Qué busca de una institución? Checkboxes
+                function localSetCheckbox(name, val) {
+                    const cb = document.querySelector(`input[name="${name}"]`);
+                    if (cb) {
+                        cb.checked = (String(val) === '1' || val === true);
+                    }
+                }
+                localSetCheckbox('busca_agilidad',        encuesta.que_busca_agilidad);
+                localSetCheckbox('busca_cajeros',         encuesta.que_busca_cajeros);
+                localSetCheckbox('busca_banca_online',    encuesta.que_busca_banca_linea);
+                localSetCheckbox('busca_agencias',        encuesta.que_busca_agencias);
+                localSetCheckbox('busca_credito_rapido',  encuesta.que_busca_credito_rapido);
+                localSetCheckbox('busca_tarjeta_debito',  encuesta.que_busca_tarjeta_debito);
+                localSetCheckbox('busca_tarjeta_credito', encuesta.que_busca_tarjeta_credito);
+
+                // Cierre y Acuerdo
+                localSvByName('acuerdo_logrado',          encuesta.acuerdo_logrado || 'ninguno');
+                localSvByName('fecha_acuerdo',            encuesta.fecha_acuerdo || '');
+                localSvByName('hora_acuerdo',             encuesta.hora_acuerdo || '');
+                localSvByName('fecha_nuevo_contacto',     encuesta.fecha_nuevo_contacto || '');
+                localSvByName('observaciones',            encuesta.observaciones || '');
             }
 
             document.getElementById('info-cargado').style.display = 'flex';
@@ -2057,7 +2431,11 @@ async function buscarCedula() {
         searchRes.style.display = 'block';
         stepper.style.display   = 'flex';
         formEnc.style.display   = 'block';
-        show(0);
+        if (data.status === 'found') {
+            show(2); // Ir directo a Datos personales
+        } else {
+            show(0); // Nuevo prospecto - Ir a Tipo visita
+        }
         stepper.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     } catch (err) {
@@ -2514,6 +2892,313 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+
+function validarFormulario() {
+    const fCed = document.getElementById('f-cedula');
+    const inpCed = document.getElementById('inp-cedula');
+    if (fCed && inpCed && inpCed.value.trim() && !fCed.value.trim()) {
+        fCed.value = inpCed.value.trim();
+    }
+
+    const nombre = document.getElementById('f-nombre').value.trim();
+    const cedula = document.getElementById('f-cedula').value.trim();
+    const celular = document.getElementById('f-celular').value.trim();
+
+    if (!nombre) {
+        alert('Por favor, ingresa el nombre completo del prospecto/cliente.');
+        if (typeof show === 'function') show(2); // Ir a la pestaña de Datos personales
+        document.getElementById('f-nombre').focus();
+        return false;
+    }
+    if (!cedula) {
+        alert('Por favor, ingresa la cédula del prospecto/cliente.');
+        if (typeof show === 'function') show(2); // Ir a la pestaña de Datos personales
+        document.getElementById('f-cedula').focus();
+        return false;
+    }
+    if (!celular) {
+        alert('Por favor, ingresa el celular del prospecto/cliente.');
+        if (typeof show === 'function') show(2); // Ir a la pestaña de Datos personales
+        document.getElementById('f-celular').focus();
+        return false;
+    }
+    return true;
+}
+
+/* ──────────────────────────────────────────────────────
+   GUARDAR ENCUESTA CON FETCH — Replica mobile (NuevaEncuestaScreen.dart)
+────────────────────────────────────────────────────── */
+const formEnc_ref = document.getElementById('formEncuesta');
+if (formEnc_ref) {
+    formEnc_ref.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        if (!validarFormulario()) return;
+        
+        await guardarEncuestaFetch();
+    });
+}
+
+let guardandoEncuesta = false;
+
+async function guardarEncuestaFetch() {
+    if (guardandoEncuesta) return;
+    guardandoEncuesta = true;
+    
+    const btnSave = document.getElementById('btn-save');
+    if (btnSave) {
+        btnSave.disabled = true;
+        btnSave.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
+    }
+    
+    try {
+        // Recopilar datos del formulario
+        const formData = new FormData(document.getElementById('formEncuesta'));
+        
+        // Determinar endpoint: si hay tarea_id, es edición
+        const tareaId = formData.get('tarea_id') || '';
+        // Para coincidir con el patrón móvil, usar el endpoint de actualización en edición
+        const endpoint = tareaId ? '../actualizar_encuesta_completa.php' : '../guardar_cliente_encuesta.php';
+        
+        // Enviar con fetch
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            body: formData
+        });
+        
+        // Clonar respuesta para poder leerla múltiples veces
+        const responseClone = response.clone();
+        
+        if (!response.ok) {
+            const errorText = await responseClone.text();
+            console.error('Error HTTP:', response.status, errorText);
+            mostrarErrorGuardado(errorText || `Error HTTP ${response.status}`);
+            return;
+        }
+        
+        // Intentar parsear JSON
+        let data;
+        try {
+            data = await responseClone.json();
+        } catch (parseErr) {
+            console.error('Error parseando JSON:', parseErr);
+            const rawText = await responseClone.text();
+            console.error('Respuesta recibida:', rawText);
+            mostrarErrorGuardado('La respuesta del servidor no es válida JSON');
+            return;
+        }
+        
+        // Validar estructura de respuesta
+        if (!data || data.status === 'error') {
+            const msg = data?.message || 'Error desconocido al guardar';
+            console.error('Error en respuesta:', msg);
+            mostrarErrorGuardado(msg);
+            return;
+        }
+        
+        // ÉXITO: mostrar diálogo según tipo (edición vs nueva)
+        if (tareaId) {
+            // Modo edición: mostrar "Cambios guardados"
+            mostrarDialogoModificacionOk();
+        } else {
+            // Modo creación: mostrar "Tarea finalizada"
+            mostrarDialogoFinalizadoOk();
+        }
+        
+    } catch (err) {
+        console.error('Error en guardar:', err);
+        mostrarErrorGuardado('No se pudo guardar en el servidor: ' + err.message);
+    } finally {
+        guardandoEncuesta = false;
+        if (btnSave) {
+            btnSave.disabled = false;
+            btnSave.innerHTML = '<i class="fas fa-circle-check"></i> Guardar encuesta';
+        }
+    }
+}
+
+function mostrarErrorGuardado(mensaje) {
+    // Modal de error (similar a mobile)
+    const div = document.createElement('div');
+    div.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    `;
+    
+    div.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        ">
+            <div style="
+                width: 64px;
+                height: 64px;
+                background: #fee2e2;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 18px;
+                font-size: 32px;
+            ">
+                <i class="fas fa-exclamation-circle" style="color: #dc2626;"></i>
+            </div>
+            <h3 style="color: #1f2937; font-size: 18px; font-weight: 700; margin-bottom: 10px;">
+                Error al guardar
+            </h3>
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px; line-height: 1.5;">
+                ${mensaje}
+            </p>
+            <button onclick="this.closest('div').remove()" style="
+                background: #dc2626;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-weight: 700;
+                cursor: pointer;
+                width: 100%;
+                font-size: 14px;
+            ">
+                Entendido
+            </button>
+        </div>
+    `;
+    document.body.appendChild(div);
+}
+
+function mostrarDialogoModificacionOk() {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    `;
+    
+    div.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        ">
+            <div style="
+                width: 64px;
+                height: 64px;
+                background: linear-gradient(135deg, #10b981, #123a6d);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 18px;
+                font-size: 32px;
+            ">
+                <i class="fas fa-save" style="color: white;"></i>
+            </div>
+            <h3 style="color: #1f2937; font-size: 18px; font-weight: 700; margin-bottom: 10px;">
+                Cambios guardados
+            </h3>
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">
+                Los datos de la encuesta se actualizaron correctamente.
+            </p>
+            <button onclick="window.location.href='nueva_encuesta.php'" style="
+                background: #ffdd00;
+                color: #123a6d;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-weight: 700;
+                cursor: pointer;
+                width: 100%;
+                font-size: 14px;
+            ">
+                Volver
+            </button>
+        </div>
+    `;
+    document.body.appendChild(div);
+}
+
+function mostrarDialogoFinalizadoOk() {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+    `;
+    
+    div.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 20px;
+            padding: 28px;
+            max-width: 400px;
+            text-align: center;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        ">
+            <div style="
+                width: 64px;
+                height: 64px;
+                background: linear-gradient(135deg, #ffdd00, #123a6d);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin: 0 auto 18px;
+                font-size: 32px;
+            ">
+                <i class="fas fa-check" style="color: white;"></i>
+            </div>
+            <h3 style="color: #1f2937; font-size: 18px; font-weight: 700; margin-bottom: 10px;">
+                Tarea Finalizada
+            </h3>
+            <p style="color: #6b7280; font-size: 14px; margin-bottom: 24px;">
+                Encuesta y datos del prospecto guardados correctamente.
+            </p>
+            <button onclick="window.location.href='nueva_encuesta.php'" style="
+                background: linear-gradient(135deg, #123a6d, #0a2748);
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 10px;
+                font-weight: 700;
+                cursor: pointer;
+                width: 100%;
+                font-size: 14px;
+            ">
+                Volver a Nueva Encuesta
+            </button>
+        </div>
+    `;
+    document.body.appendChild(div);
+}
 
 </script>
 </body>
