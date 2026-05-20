@@ -43,6 +43,10 @@ $alertas_pendientes = $alertas_pendientes ?? 0;
            class="sidebar-link <?= ($currentPage === 'encuesta') ? 'active' : '' ?>">
             <i class="fas fa-clipboard-list"></i> Nueva Encuesta
         </a>
+        <a href="levantamiento_empresa.php"
+           class="sidebar-link <?= ($currentPage === 'levantamiento') ? 'active' : '' ?>">
+            <i class="fas fa-building-user"></i> Levantamiento de Empresa
+        </a>
         <a href="clientes.php"
            class="sidebar-link <?= ($currentPage === 'clientes') ? 'active' : '' ?>">
             <i class="fas fa-address-book"></i> Mis Clientes

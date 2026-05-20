@@ -15,30 +15,45 @@ function respond_json($code, $payload) {
 }
 
 $nombre_empresa = trim($_POST['nombre_empresa'] ?? '');
-$limit = (int)($_POST['limit'] ?? 10);
-if ($nombre_empresa === '') {
-    respond_json(200, ['status'=>'error','message'=>'nombre_empresa requerido']);
-    exit;
-}
+$limit = (int)($_POST['limit'] ?? 100);
 
 try {
-    $q = "%" . $nombre_empresa . "%";
-    $st = $conn->prepare(
-        "SELECT cp.id, cp.nombre, cp.cedula, cp.telefono, cp.telefono2 AS celular, cp.email,
-                cp.nombre_empresa, cp.ciudad, cp.direccion, cp.estado,
-                cp.tiene_ruc, cp.tiene_rise, cp.ruc_val, cp.rise_val, cp.tipo_empresa,
-                cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
-                cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise,
-                cp.tiene_empresa,
-                (SELECT t.id FROM tarea t
-                 WHERE t.cliente_prospecto_id = cp.id
-                   AND t.tipo_tarea = 'levantamiento'
-                 ORDER BY t.created_at DESC LIMIT 1) as tarea_id
-         FROM cliente_prospecto cp
-         WHERE cp.nombre_empresa LIKE ?
-         LIMIT ?"
-    );
-    $st->bind_param('si', $q, $limit);
+    if ($nombre_empresa === '') {
+        $st = $conn->prepare(
+            "SELECT cp.id, cp.nombre, cp.cedula, cp.telefono, cp.telefono2 AS celular, cp.email,
+                    cp.nombre_empresa, cp.ciudad, cp.direccion, cp.estado,
+                    cp.tiene_ruc, cp.tiene_rise, cp.ruc_val, cp.rise_val, cp.tipo_empresa,
+                    cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
+                    cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise,
+                    cp.tiene_empresa,
+                    (SELECT t.id FROM tarea t
+                     WHERE t.cliente_prospecto_id = cp.id
+                       AND t.tipo_tarea = 'levantamiento'
+                     ORDER BY t.created_at DESC LIMIT 1) as tarea_id
+             FROM cliente_prospecto cp
+             WHERE cp.nombre_empresa IS NOT NULL AND cp.nombre_empresa != ''
+             LIMIT ?"
+        );
+        $st->bind_param('i', $limit);
+    } else {
+        $q = "%" . $nombre_empresa . "%";
+        $st = $conn->prepare(
+            "SELECT cp.id, cp.nombre, cp.cedula, cp.telefono, cp.telefono2 AS celular, cp.email,
+                    cp.nombre_empresa, cp.ciudad, cp.direccion, cp.estado,
+                    cp.tiene_ruc, cp.tiene_rise, cp.ruc_val, cp.rise_val, cp.tipo_empresa,
+                    cp.regimen_tributario, cp.numero_ruc, cp.declara_iva, cp.emite_facturas,
+                    cp.lleva_contabilidad, cp.paga_cuota_rise, cp.emite_notas_venta, cp.conoce_limite_rise,
+                    cp.tiene_empresa,
+                    (SELECT t.id FROM tarea t
+                     WHERE t.cliente_prospecto_id = cp.id
+                       AND t.tipo_tarea = 'levantamiento'
+                     ORDER BY t.created_at DESC LIMIT 1) as tarea_id
+             FROM cliente_prospecto cp
+             WHERE cp.nombre_empresa LIKE ?
+             LIMIT ?"
+        );
+        $st->bind_param('si', $q, $limit);
+    }
     $st->execute();
     $res = $st->get_result();
     $items = [];
