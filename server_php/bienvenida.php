@@ -567,12 +567,12 @@
       <p>
         <strong>SUPER_IA</strong> nació para resolver un problema real: la <strong>falta de visibilidad y control</strong>
         sobre la actividad de los asesores comerciales que trabajan fuera de la oficina.
-        Con esta plataforma, supervisores y administradores pueden ver <em>en tiempo real</em> dónde está
+        Con esta plataforma, supervisores y gerentes pueden ver <em>en tiempo real</em> dónde está
         cada asesor, qué encuestas completó, qué prospectos levantó y cuáles son sus métricas del día.
       </p>
       <p>
         La plataforma conecta una <strong>app móvil Flutter</strong> (para asesores en campo) con un
-        <strong>panel web PHP + MySQL</strong> (para supervisores y administradores), respaldado por
+        <strong>panel web PHP + MySQL</strong> (para supervisores y gerentes), respaldado por
         <strong>Firebase</strong> para autenticación y notificaciones push.
         Todo el ecosistema trabaja en sincronía para garantizar <em>gestión comercial</em> y
         <em>crédito cooperativo</em> eficientes, seguros y trazables.
@@ -612,7 +612,7 @@
       <div class="feat-card">
         <div class="feat-icon y"><i class="fa-solid fa-users-gear"></i></div>
         <h3>Gestión de Roles</h3>
-        <p>Paneles diferenciados para Asesor, Supervisor, Administrador y Super Admin.</p>
+        <p>Paneles diferenciados para Asesor, Supervisor, Gerente y Super Admin.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon b"><i class="fa-solid fa-chart-line"></i></div>
