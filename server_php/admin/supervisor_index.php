@@ -65,26 +65,52 @@ if ($supervisor_table_id) {
         $st->execute([$supervisor_table_id]);
         $alertas_pendientes = (int)$st->fetchColumn();
 
-        // Fichas de crédito (encuesta móvil)
-        $st = $pdo->prepare('SELECT COUNT(*) as cnt, SUM(fc.monto_credito) as monto
+        // Fichas de crédito aprobadas del mes
+        // Usa updated_at como fallback para capturar fichas aprobadas/actualizadas este mes
+        $mesI = date('Y-m-01'); $mesF = date('Y-m-t');
+        $st = $pdo->prepare('SELECT COUNT(DISTINCT fp.id) as cnt,
+                              COALESCE(SUM(CAST(fc.monto_credito AS DECIMAL(15,2))), 0) as monto
                               FROM ficha_producto fp
-                              JOIN ficha_credito fc ON fc.ficha_id=fp.id
-                              JOIN asesor a ON (a.id = fp.asesor_id) OR (a.usuario_id = fp.usuario_id) OR (a.id = fp.usuario_id)
-                              WHERE fp.producto_tipo="credito" AND a.supervisor_id=?');
-        $st->execute([$supervisor_table_id]);
+                              LEFT JOIN ficha_credito fc ON fc.ficha_id = fp.id
+                              JOIN asesor a ON a.id = fp.asesor_id
+                              WHERE fp.producto_tipo = \'credito\'
+                                AND fp.estado_revision IN (\'aprobada\',\'aprobado\')
+                                AND a.supervisor_id = ?
+                                AND DATE(COALESCE(fp.updated_at, fp.created_at)) BETWEEN ? AND ?');
+        $st->execute([$supervisor_table_id, $mesI, $mesF]);
         $rowF = $st->fetch();
         $fichas_credito = (int)($rowF['cnt']  ?? 0);
         $monto_fichas   = (float)($rowF['monto'] ?? 0);
 
-        // Procesos de crédito aprobados
-        $st = $pdo->prepare('SELECT COUNT(*) as cnt, SUM(cp.monto_aprobado) as monto
+        // Procesos de crédito aprobados/desembolsados del mes
+        // Prioriza fecha_desembolso, luego updated_at, luego created_at
+        // Así se capturan créditos creados antes pero desembolsados este mes
+        $st = $pdo->prepare('SELECT COUNT(DISTINCT cp.id) as cnt,
+                              COALESCE(SUM(cp.monto_aprobado), 0) as monto
                               FROM credito_proceso cp
-                              JOIN asesor a ON a.id=cp.asesor_id
-                              WHERE a.supervisor_id=? AND cp.estado_credito IN("aprobado","desembolsado")');
-        $st->execute([$supervisor_table_id]);
+                              JOIN asesor a ON a.id = cp.asesor_id
+                              WHERE a.supervisor_id = ?
+                                AND cp.estado_credito IN (\'aprobado\',\'desembolsado\')
+                                AND DATE(COALESCE(cp.fecha_desembolso, cp.updated_at, cp.created_at)) BETWEEN ? AND ?');
+        $st->execute([$supervisor_table_id, $mesI, $mesF]);
         $rowO = $st->fetch();
         $ops_aprobadas = (int)($rowO['cnt']  ?? 0);
         $monto_ops     = (float)($rowO['monto'] ?? 0);
+
+        // Fallback: si no hay data mensual en credito_proceso, intentar con cualquier estado que tenga monto
+        if ($ops_aprobadas === 0 && $fichas_credito === 0) {
+            $st = $pdo->prepare('SELECT COUNT(DISTINCT cp.id) as cnt,
+                                  COALESCE(SUM(cp.monto_aprobado), 0) as monto
+                                  FROM credito_proceso cp
+                                  JOIN asesor a ON a.id = cp.asesor_id
+                                  WHERE a.supervisor_id = ?
+                                    AND cp.monto_aprobado > 0
+                                    AND DATE(COALESCE(cp.fecha_desembolso, cp.updated_at, cp.created_at)) BETWEEN ? AND ?');
+            $st->execute([$supervisor_table_id, $mesI, $mesF]);
+            $rowFb = $st->fetch();
+            $ops_aprobadas = (int)($rowFb['cnt']  ?? 0);
+            $monto_ops     = (float)($rowFb['monto'] ?? 0);
+        }
 
     } catch (PDOException $e) { /* silencioso */ }
 }
@@ -165,599 +191,692 @@ if ($supervisor_table_id) {
 }
 
 $pct_tareas = $tareas_hoy > 0 ? round($tareas_completadas * 100 / $tareas_hoy) : 0;
+$periodo_inicio = date('Y-m-01');
+$periodo_fin    = date('Y-m-t');
+$asesor_ids_dashboard = [];
+$kpi_dash = [
+    'actividad_pct' => $pct_tareas,
+    'actividad_realizadas' => $tareas_completadas,
+    'actividad_total' => $tareas_hoy,
+    'penetracion_pct' => 0,
+    'penetracion_clientes' => 0,
+    'penetracion_visitas' => 0,
+    'interes_pct' => 0,
+    'interes_si' => 0,
+    'interes_total' => 0,
+    'prospeccion_pct' => 0,
+    'prospeccion_avance' => 0,
+    'prospeccion_meta' => 0,
+    'levantamiento_pct' => 0,
+    'levantamientos' => 0,
+    'interesados' => 0,
+    'frio_pct' => 0,
+    'frio_visitas' => 0,
+    'recuperacion_pct' => 0,
+    'recuperaciones' => 0,
+    'eficiencia_pct' => 0,
+    'postventa_pct' => 0,
+    'operaciones_total' => $total_ops_credito,
+    'operaciones_monto' => $monto_total,
+];
+
+if ($supervisor_table_id) {
+    try {
+        $st = $pdo->prepare('SELECT id FROM asesor WHERE supervisor_id = ?');
+        $st->execute([$supervisor_table_id]);
+        $asesor_ids_dashboard = $st->fetchAll(PDO::FETCH_COLUMN); // UUIDs — NO convertir con intval
+
+        if (!empty($asesor_ids_dashboard)) {
+            $phDash = implode(',', array_fill(0, count($asesor_ids_dashboard), '?'));
+            $paramsPeriodo = array_merge($asesor_ids_dashboard, [$periodo_inicio, $periodo_fin]);
+
+            $st = $pdo->prepare("SELECT COUNT(t.id) as visitas,
+                       SUM(CASE WHEN (ec.p2_es_cliente = 1 OR cp.estado = 'cliente') THEN 1 ELSE 0 END) as clientes
+                FROM tarea t
+                LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+                LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+                WHERE t.asesor_id IN ($phDash) AND t.estado = 'completada' AND DATE(COALESCE(t.fecha_realizada,t.fecha_programada)) BETWEEN ? AND ?");
+            $st->execute($paramsPeriodo);
+            $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+            $kpi_dash['penetracion_visitas'] = (int)($r['visitas'] ?? 0);
+            $kpi_dash['penetracion_clientes'] = (int)($r['clientes'] ?? 0);
+            $kpi_dash['penetracion_pct'] = $kpi_dash['penetracion_visitas'] > 0 ? round($kpi_dash['penetracion_clientes'] * 100 / $kpi_dash['penetracion_visitas'], 1) : 0;
+
+            $st = $pdo->prepare("SELECT COUNT(ec.id) as total,
+                       SUM(CASE WHEN ec.interes_conocer_productos = 1 THEN 1 ELSE 0 END) as si
+                FROM encuesta_comercial ec
+                JOIN tarea t ON t.id = ec.tarea_id
+                WHERE t.asesor_id IN ($phDash) AND t.estado = 'completada' AND DATE(COALESCE(t.fecha_realizada,t.fecha_programada)) BETWEEN ? AND ?");
+            $st->execute($paramsPeriodo);
+            $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
+            $kpi_dash['interes_total'] = (int)($r['total'] ?? 0);
+            $kpi_dash['interes_si'] = (int)($r['si'] ?? 0);
+            $kpi_dash['interes_pct'] = $kpi_dash['interes_total'] > 0 ? round($kpi_dash['interes_si'] * 100 / $kpi_dash['interes_total'], 1) : 0;
+
+            // meta_visitas_mes está en tabla asesor (no en meta_asesor_diaria)
+            $st = $pdo->prepare("SELECT COALESCE(SUM(meta_visitas_mes), 0) FROM asesor WHERE id IN ($phDash)");
+            $st->execute($asesor_ids_dashboard);
+            $kpi_dash['prospeccion_meta'] = (int)$st->fetchColumn();
+            $st = $pdo->prepare("SELECT COUNT(*) FROM tarea WHERE asesor_id IN ($phDash) AND estado = 'completada' AND DATE(COALESCE(fecha_realizada,fecha_programada)) BETWEEN ? AND ?");
+            $st->execute($paramsPeriodo);
+            $kpi_dash['prospeccion_avance'] = (int)$st->fetchColumn();
+            $kpi_dash['prospeccion_pct'] = $kpi_dash['prospeccion_meta'] > 0 ? round($kpi_dash['prospeccion_avance'] * 100 / $kpi_dash['prospeccion_meta'], 1) : 0;
+
+            $st = $pdo->prepare("SELECT COUNT(DISTINCT t.id) FROM tarea t WHERE t.asesor_id IN ($phDash) AND t.estado = 'completada' AND t.tipo_tarea = 'levantamiento' AND DATE(COALESCE(t.fecha_realizada,t.fecha_programada)) BETWEEN ? AND ?");
+            $st->execute($paramsPeriodo);
+            $kpi_dash['levantamientos'] = (int)$st->fetchColumn();
+            $kpi_dash['interesados'] = $kpi_dash['interes_si'];
+            $kpi_dash['levantamiento_pct'] = $kpi_dash['interesados'] > 0 ? round($kpi_dash['levantamientos'] * 100 / $kpi_dash['interesados'], 1) : 0;
+
+            $st = $pdo->prepare("SELECT COUNT(DISTINCT t.id)
+                FROM tarea t
+                LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+                WHERE t.asesor_id IN ($phDash) AND t.estado = 'completada' AND DATE(COALESCE(t.fecha_realizada,t.fecha_programada)) BETWEEN ? AND ?
+                  AND (t.tipo_tarea = 'visita_frio' OR cp.origen_prospecto = 'frio')");
+            $st->execute($paramsPeriodo);
+            $kpi_dash['frio_visitas'] = (int)$st->fetchColumn();
+            $kpi_dash['frio_pct'] = $kpi_dash['prospeccion_avance'] > 0 ? round($kpi_dash['frio_visitas'] * 100 / $kpi_dash['prospeccion_avance'], 1) : 0;
+
+            $st = $pdo->prepare("SELECT COUNT(DISTINCT t.id)
+                FROM tarea t
+                WHERE t.asesor_id IN ($phDash) AND t.estado = 'completada' AND DATE(COALESCE(t.fecha_realizada,t.fecha_programada)) BETWEEN ? AND ?
+                  AND (t.tipo_tarea = 'recuperacion' OR t.tipo_tarea LIKE '%recupera%')");
+            $st->execute($paramsPeriodo);
+            $kpi_dash['recuperaciones'] = (int)$st->fetchColumn();
+            $kpi_dash['recuperacion_pct'] = $kpi_dash['prospeccion_avance'] > 0 ? round($kpi_dash['recuperaciones'] * 100 / $kpi_dash['prospeccion_avance'], 1) : 0;
+            $kpi_dash['eficiencia_pct'] = $kpi_dash['penetracion_visitas'] > 0 ? round($kpi_dash['interes_si'] * 100 / $kpi_dash['penetracion_visitas'], 1) : 0;
+            $kpi_dash['postventa_pct'] = $clientes_activos > 0 ? round(min($ops_aprobadas, $clientes_activos) * 100 / $clientes_activos, 1) : 0;
+        }
+    } catch (Throwable $e) {
+        error_log('Dashboard KPI resumen: ' . $e->getMessage());
+    }
+}
+
+$kpi_cards_dash = [
+    ['key' => 'actividad', 'label' => 'Actividad', 'value' => $kpi_dash['actividad_pct'], 'meta' => $kpi_dash['actividad_realizadas'] . '/' . $kpi_dash['actividad_total'] . ' hoy', 'icon' => 'fa-bolt', 'color' => '#3b82f6', 'url' => 'kpi_penetracion.php?view=actividad'],
+    ['key' => 'penetracion', 'label' => 'Penetración', 'value' => $kpi_dash['penetracion_pct'], 'meta' => $kpi_dash['penetracion_clientes'] . '/' . $kpi_dash['penetracion_visitas'] . ' visitas', 'icon' => 'fa-chart-pie', 'color' => '#10b981', 'url' => 'kpi_penetracion.php?view=mercado'],
+    ['key' => 'interes', 'label' => 'Interés', 'value' => $kpi_dash['interes_pct'], 'meta' => $kpi_dash['interes_si'] . '/' . $kpi_dash['interes_total'] . ' encuestas', 'icon' => 'fa-heart', 'color' => '#f59e0b', 'url' => 'kpi_penetracion.php?view=interes'],
+    ['key' => 'prospeccion', 'label' => 'Prospección', 'value' => $kpi_dash['prospeccion_pct'], 'meta' => $kpi_dash['prospeccion_avance'] . '/' . $kpi_dash['prospeccion_meta'] . ' meta', 'icon' => 'fa-route', 'color' => '#8b5cf6', 'url' => 'kpi_penetracion.php?view=prospeccion'],
+    ['key' => 'levantamientos', 'label' => 'Levantamientos', 'value' => $kpi_dash['levantamiento_pct'], 'meta' => $kpi_dash['levantamientos'] . '/' . $kpi_dash['interesados'] . ' interesados', 'icon' => 'fa-clipboard-check', 'color' => '#0ea5e9', 'url' => 'kpi_penetracion.php?view=evaluacion'],
+    ['key' => 'operaciones', 'label' => 'Operaciones', 'value' => min(100, $kpi_dash['operaciones_total'] * 10), 'meta' => $kpi_dash['operaciones_total'] . ' / $' . number_format($kpi_dash['operaciones_monto'], 0), 'icon' => 'fa-hand-holding-dollar', 'color' => '#ef4444', 'url' => 'kpi_penetracion.php?view=operaciones'],
+];
+$kpi_cards_dash = array_merge(
+    array_slice($kpi_cards_dash, 0, 4),
+    [
+        ['key' => 'frio', 'label' => 'Visitas al Frio', 'value' => $kpi_dash['frio_pct'], 'meta' => $kpi_dash['frio_visitas'] . ' visitas frias', 'icon' => 'fa-snowflake', 'color' => '#f97316', 'url' => 'kpi_penetracion.php?view=frio'],
+    ],
+    array_slice($kpi_cards_dash, 4, 1),
+    [
+        ['key' => 'eficiencia', 'label' => 'Eficiencia', 'value' => $kpi_dash['eficiencia_pct'], 'meta' => $kpi_dash['interes_si'] . ' con interes', 'icon' => 'fa-bolt-lightning', 'color' => '#ec4899', 'url' => 'kpi_penetracion.php?view=eficiencia'],
+        ['key' => 'postventa', 'label' => 'Post-Venta', 'value' => $kpi_dash['postventa_pct'], 'meta' => $ops_aprobadas . ' aprobados', 'icon' => 'fa-rotate', 'color' => '#14b8a6', 'url' => 'kpi_penetracion.php?view=postventa'],
+        ['key' => 'recuperacion', 'label' => 'Recuperacion', 'value' => $kpi_dash['recuperacion_pct'], 'meta' => $kpi_dash['recuperaciones'] . ' gestiones', 'icon' => 'fa-shield-halved', 'color' => '#ef4444', 'url' => 'kpi_penetracion.php?view=recuperacion'],
+    ],
+    array_slice($kpi_cards_dash, 5)
+);
 $currentPage = 'dashboard';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Supervisor — Super_IA</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --brand-yellow:      #ffdd00;
-            --brand-yellow-deep: #f4c400;
-            --brand-navy:        #123a6d;
-            --brand-navy-deep:   #0a2748;
-            --brand-gray:        #6b7280;
-            --brand-border:      #d7e0ea;
-            --brand-card:        #ffffff;
-            --brand-bg:          #f4f6f9;
-            --brand-shadow:      0 16px 34px rgba(18,58,109,.08);
-        }
-        * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Inter','Segoe UI',sans-serif; background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%); display:flex; height:100vh; color:var(--brand-navy-deep); }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Super_IA — Dashboard Supervisor</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+<style>
+:root{
+  --y:#ffdd00; --yd:#f4c400;
+  --n1:#0a2748; --n2:#123a6d; --n3:#1e4d8c;
+  --bg:#f0f4f9;
+  --card:#ffffff;
+  --glass:rgba(255,221,0,.08);
+  --gborder:rgba(18,58,109,.15);
+  --nborder:#e2e8f0;
+  --tm:#1a2744; --td:#64748b;
+  --shadow:0 2px 12px rgba(18,58,109,.08);
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Inter','Segoe UI',sans-serif;}
+body{background:var(--bg);color:var(--tm);min-height:100vh;display:flex;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 20%,rgba(255,221,0,.04) 0%,transparent 45%),radial-gradient(ellipse at 85% 75%,rgba(18,58,109,.06) 0%,transparent 50%);pointer-events:none;z-index:0;}
 
-        /* ── SIDEBAR ── */
-        .sidebar { width:230px; background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%); color:#fff; padding:20px 0; overflow-y:auto; position:fixed; height:100vh; left:0; top:0; z-index:100; }
-        .sidebar-brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
-        .sidebar-brand i { color:var(--brand-yellow); }
-        .sidebar-section { padding:0 15px; margin-bottom:22px; }
-        .sidebar-section-title { font-size:11px; text-transform:uppercase; color:rgba(255,255,255,.5); letter-spacing:.6px; padding:0 10px; margin-bottom:10px; font-weight:700; }
-        .sidebar-link { display:flex; align-items:center; gap:12px; padding:11px 15px; margin-bottom:4px; border-radius:10px; color:rgba(255,255,255,.82); text-decoration:none; font-size:14px; border:1px solid transparent; transition:all .22s; }
-        .sidebar-link:hover { background:rgba(255,221,0,.12); color:#fff; padding-left:20px; border-color:rgba(255,221,0,.15); }
-        .sidebar-link.active { background:linear-gradient(90deg,var(--brand-yellow),var(--brand-yellow-deep)); color:var(--brand-navy-deep); font-weight:700; }
-        .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
+/* SIDEBAR */
+.sidebar{width:220px;background:linear-gradient(180deg,#06101e 0%,var(--n1) 100%);border-right:1px solid var(--nborder);position:fixed;height:100vh;left:0;top:0;z-index:100;padding:20px 0;overflow-y:auto;flex-shrink:0;}
+.sidebar-brand{padding:0 18px 22px;font-size:16px;font-weight:900;border-bottom:1px solid rgba(255,221,0,.12);margin-bottom:18px;display:flex;align-items:center;gap:8px;letter-spacing:.5px;}
+.sidebar-brand i{color:var(--y);font-size:18px;}
+.sidebar-brand span{background:linear-gradient(90deg,var(--y),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.sidebar-section{padding:0 12px;margin-bottom:20px;}
+.sidebar-section-title{font-size:10px;text-transform:uppercase;color:rgba(255,255,255,.3);letter-spacing:.8px;padding:0 8px;margin-bottom:8px;font-weight:700;}
+.sidebar-link{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:3px;border-radius:10px;color:rgba(255,255,255,.65);text-decoration:none;font-size:13px;border:1px solid transparent;transition:all .2s;}
+.sidebar-link:hover{background:rgba(255,221,0,.08);color:#fff;border-color:rgba(255,221,0,.12);}
+.sidebar-link.active{background:linear-gradient(90deg,var(--y),var(--yd));color:var(--n1);font-weight:800;}
+.badge-nav{background:#ef4444;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;margin-left:auto;font-weight:800;}
 
-        /* ── MAIN ── */
-        .main-content { flex:1; margin-left:230px; display:flex; flex-direction:column; overflow:hidden; }
-        .navbar-custom { background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); color:#fff; padding:15px 30px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 12px 28px rgba(18,58,109,.18); flex-shrink:0; }
-        .navbar-custom h2 { margin:0; font-size:20px; font-weight:700; }
-        .user-info { display:flex; align-items:center; gap:15px; }
-        .btn-logout { background:rgba(255,221,0,.15); color:#fff; border:1px solid rgba(255,221,0,.28); padding:8px 15px; border-radius:10px; text-decoration:none; font-weight:600; }
-        .btn-logout:hover { background:rgba(255,221,0,.26); color:#fff; }
-        .content-area { flex:1; overflow-y:auto; padding:28px 30px; }
+/* MAIN */
+.main-content{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1;}
 
-        /* ── WELCOME BANNER ── */
-        .welcome-card { background:linear-gradient(135deg,var(--brand-navy-deep) 0%,var(--brand-navy) 55%,#2b5b99 100%); color:#fff; padding:28px 32px; border-radius:20px; margin-bottom:26px; box-shadow:0 20px 42px rgba(18,58,109,.18); position:relative; overflow:hidden; display:flex; align-items:center; justify-content:space-between; gap:20px; }
-        .welcome-card::after { content:''; position:absolute; right:-50px; top:-50px; width:200px; height:200px; background:radial-gradient(circle,rgba(255,221,0,.25) 0%,transparent 70%); pointer-events:none; }
-        .welcome-card h2 { margin:0 0 6px; font-size:22px; font-weight:800; }
-        .welcome-card p { margin:0; opacity:.85; font-size:14px; }
-        .welcome-meta { display:flex; gap:16px; flex-shrink:0; }
-        .welcome-meta-item { background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.18); border-radius:12px; padding:10px 18px; text-align:center; }
-        .welcome-meta-item .wm-num { font-size:22px; font-weight:800; color:var(--brand-yellow); }
-        .welcome-meta-item .wm-lbl { font-size:11px; opacity:.75; text-transform:uppercase; letter-spacing:.4px; }
+/* NAVBAR */
+.topbar{background:rgba(6,16,30,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--nborder);padding:13px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;}
+.topbar-left{display:flex;align-items:center;gap:14px;}
+.topbar-logo{font-size:17px;font-weight:900;background:linear-gradient(90deg,var(--y),#7eb8ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.gpu-pill{display:flex;align-items:center;gap:6px;background:rgba(0,255,80,.06);border:1px solid rgba(0,255,80,.18);padding:4px 12px;border-radius:50px;font-size:11px;font-weight:700;color:#4ade80;}
+.pulse-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;animation:pulse 2s infinite;}
+@keyframes pulse{0%{transform:scale(.9);box-shadow:0 0 0 0 rgba(74,222,128,.7);}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(74,222,128,0);}100%{transform:scale(.9);}}
+.topbar-right{display:flex;align-items:center;gap:14px;}
+.user-chip{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);padding:6px 14px;border-radius:10px;font-size:12px;display:flex;align-items:center;gap:8px;color:#fff;}
+.user-chip strong{color:var(--y);}
+.user-chip span{color:rgba(255,255,255,.6);}
+.btn-salir{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171;padding:6px 13px;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;transition:.2s;}
+.btn-salir:hover{background:rgba(239,68,68,.22);color:#fff;}
 
-        /* ── KPI GRID ── */
-        .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:26px; }
-        .kpi-card { background:var(--brand-card); padding:20px 18px; border-radius:16px; box-shadow:var(--brand-shadow); border:1px solid var(--brand-border); position:relative; overflow:hidden; text-decoration:none; display:block; transition:transform .2s,box-shadow .2s; }
-        .kpi-card:hover { transform:translateY(-3px); box-shadow:0 20px 40px rgba(18,58,109,.12); }
-        .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
-        .kpi-yellow::before { background:linear-gradient(90deg,var(--brand-yellow),var(--brand-yellow-deep)); }
-        .kpi-blue::before   { background:linear-gradient(90deg,#3b82f6,#1d4ed8); }
-        .kpi-green::before  { background:linear-gradient(90deg,#10b981,#059669); }
-        .kpi-red::before    { background:linear-gradient(90deg,#ef4444,#dc2626); }
-        .kpi-purple::before { background:linear-gradient(90deg,#8b5cf6,#7c3aed); }
-        .kpi-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:17px; margin-bottom:12px; }
-        .kpi-yellow .kpi-icon { background:rgba(255,221,0,.15); color:#c59a00; }
-        .kpi-blue   .kpi-icon { background:rgba(59,130,246,.12); color:#3b82f6; }
-        .kpi-green  .kpi-icon { background:rgba(16,185,129,.12); color:#10b981; }
-        .kpi-red    .kpi-icon { background:rgba(239,68,68,.10);  color:#ef4444; }
-        .kpi-purple .kpi-icon { background:rgba(139,92,246,.12); color:#8b5cf6; }
-        .kpi-num { font-size:28px; font-weight:800; color:var(--brand-navy-deep); line-height:1; }
-        .kpi-label { font-size:12px; color:var(--brand-gray); margin-top:4px; font-weight:500; }
+/* CONTENT */
+.content-area{flex:1;padding:22px 26px 40px;overflow-y:auto;}
 
-        /* ── PROGRESS BAR ── */
-        .progress-bar-wrap { background:#e5e7eb; border-radius:6px; height:6px; margin-top:8px; overflow:hidden; }
-        .progress-bar-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,var(--brand-yellow),var(--brand-yellow-deep)); transition:width 1s ease; }
+/* WELCOME HERO */
+.hero{background:linear-gradient(135deg,rgba(10,39,72,.9) 0%,rgba(18,58,109,.7) 60%,rgba(30,77,140,.5) 100%);border:1px solid var(--gborder);border-radius:20px;padding:24px 28px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:relative;overflow:hidden;}
+.hero::before{content:'';position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,221,0,.2) 0%,transparent 68%);pointer-events:none;}
+.hero::after{content:'';position:absolute;left:-40px;bottom:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(18,58,109,.6) 0%,transparent 68%);pointer-events:none;}
+.hero-text h2{font-size:22px;font-weight:900;color:#fff;margin-bottom:4px;}
+.hero-text p{font-size:13px;color:rgba(255,255,255,.7);margin:0;}
+.hero-progress{margin-top:12px;max-width:260px;}
+.hp-label{font-size:11px;color:rgba(255,255,255,.65);display:flex;justify-content:space-between;margin-bottom:4px;}
+.hp-track{background:rgba(255,255,255,.15);border-radius:6px;height:6px;overflow:hidden;}
+.hp-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--y),var(--yd));transition:width 1.4s ease;}
+.hero-stats{display:flex;gap:10px;flex-shrink:0;position:relative;z-index:1;}
+.hs-item{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:11px 16px;text-align:center;min-width:72px;}
+.hs-num{font-size:22px;font-weight:900;color:var(--y);line-height:1;}
+.hs-lbl{font-size:9.5px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-top:2px;}
+.hs-item.red{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);}
+.hs-item.red .hs-num{color:#f87171;}
 
-        /* ── CARDS ── */
-        .section-card { background:var(--brand-card); border-radius:16px; box-shadow:var(--brand-shadow); border:1px solid var(--brand-border); overflow:hidden; margin-bottom:22px; }
-        .section-header { padding:16px 20px; border-bottom:1px solid var(--brand-border); display:flex; align-items:center; justify-content:space-between; background:#fafbfc; }
-        .section-header h5 { font-size:15px; font-weight:800; margin:0; color:var(--brand-navy-deep); display:flex; align-items:center; gap:10px; }
-        .sec-badge { font-size:11px; background:var(--brand-navy); color:#fff; padding:3px 9px; border-radius:10px; font-weight:700; }
-        .sec-link { font-size:12px; color:var(--brand-navy); font-weight:700; text-decoration:none; }
-        .sec-link:hover { text-decoration:underline; }
+/* METRICS BAR */
+.metrics-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.metric-card{background:#fff;border:1px solid var(--nborder);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;transition:.2s;box-shadow:var(--shadow);}
+.metric-card:hover{border-color:rgba(18,58,109,.25);box-shadow:0 4px 20px rgba(18,58,109,.12);transform:translateY(-2px);}
+.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--mc,var(--y));}
+.metric-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--td);font-weight:700;margin-bottom:4px;}
+.metric-value{font-size:26px;font-weight:900;color:var(--n1);line-height:1;}
+.metric-sub{font-size:11px;color:var(--td);margin-top:3px;}
+.metric-trend{font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;position:absolute;top:14px;right:14px;}
+.trend-up{background:rgba(74,222,128,.12);color:#4ade80;}
+.trend-dn{background:rgba(239,68,68,.12);color:#f87171;}
+.trend-nt{background:rgba(148,163,184,.1);color:#94a3b8;}
 
-        /* ── ACTIVITY LIST ── */
-        .act-item { display:flex; align-items:flex-start; gap:12px; padding:12px 20px; border-bottom:1px solid rgba(215,224,234,.4); }
-        .act-item:last-child { border-bottom:none; }
-        .act-dot { width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; margin-top:2px; }
-        .dot-ok    { background:#ecfdf5; color:#059669; }
-        .dot-pend  { background:#fffbeb; color:#d97706; }
-        .dot-alert { background:#fef2f2; color:#dc2626; }
-        .dot-blue  { background:#eff6ff; color:#3b82f6; }
-        .act-body { flex:1; min-width:0; }
-        .act-title { font-size:13.5px; font-weight:700; color:var(--brand-navy-deep); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .act-meta  { font-size:11.5px; color:var(--brand-gray); margin-top:2px; }
-        .act-date  { font-size:11px; color:#b0bac5; flex-shrink:0; white-space:nowrap; }
+/* KPI SECTION HEADER */
+.section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.section-hd h3{font-size:15px;font-weight:900;color:var(--n1);display:flex;align-items:center;gap:8px;}
+.section-hd h3 i{color:var(--y);}
+.live-badge{display:flex;align-items:center;gap:7px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;color:#4ade80;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;animation:pulse 1.8s infinite;}
+.all-link{font-size:12px;font-weight:700;color:var(--y);text-decoration:none;background:rgba(255,221,0,.08);border:1px solid rgba(255,221,0,.15);padding:5px 12px;border-radius:8px;}
+.all-link:hover{background:rgba(255,221,0,.16);color:var(--y);}
 
-        /* ── CLIENTE ROWS ── */
-        .cli-row { display:flex; align-items:center; gap:12px; padding:11px 20px; border-bottom:1px solid rgba(215,224,234,.4); text-decoration:none; color:inherit; transition:background .15s; }
-        .cli-row:hover { background:rgba(255,221,0,.05); }
-        .cli-row:last-child { border-bottom:none; }
-        .cli-avatar { width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; flex-shrink:0; }
-        .cli-name { font-size:13.5px; font-weight:700; color:var(--brand-navy-deep); }
-        .cli-sub  { font-size:11.5px; color:var(--brand-gray); }
-        .cli-estado { font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; margin-left:auto; flex-shrink:0; }
-        .est-prospecto { background:#eff6ff; color:#1d4ed8; }
-        .est-cliente   { background:#ecfdf5; color:#065f46; }
-        .est-pendiente { background:#fffbeb; color:#92400e; }
-        .est-descartado{ background:#fef2f2; color:#991b1b; }
+/* GAUGE GRID */
+.gauges-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;margin-bottom:22px;}
 
-        /* ── QUICK LINKS ── */
-        .quick-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:16px 20px; }
-        .quick-btn { display:flex; align-items:center; gap:10px; padding:13px 16px; border-radius:12px; text-decoration:none; font-weight:700; font-size:13.5px; transition:.22s; }
-        .quick-btn:hover { transform:translateY(-2px); }
-        .q-yellow { background:linear-gradient(135deg,var(--brand-yellow),var(--brand-yellow-deep)); color:var(--brand-navy-deep); }
-        .q-navy   { background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); color:#fff; }
-        .q-green  { background:linear-gradient(135deg,#059669,#10b981); color:#fff; }
-        .q-blue   { background:linear-gradient(135deg,#1d4ed8,#3b82f6); color:#fff; }
-        .q-red    { background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; }
-        .q-light  { background:#f0f4f9; color:var(--brand-navy-deep); border:1px solid var(--brand-border); }
+/* GAUGE CARD */
+.g-card{background:#fff;border:1px solid var(--nborder);border-radius:18px;padding:14px 10px 12px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;text-decoration:none;color:inherit;transition:transform .22s,box-shadow .22s,border-color .22s;cursor:pointer;box-shadow:var(--shadow);}
+.g-card:hover{transform:translateY(-5px);border-color:var(--gc,rgba(255,221,0,.4));box-shadow:0 0 30px rgba(var(--gc-rgb,255,221,0),.15);}
+.g-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gc,var(--y));border-radius:3px 3px 0 0;}
+.g-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(var(--gc-rgb,255,221,0),.06) 0%,transparent 60%);pointer-events:none;}
+.g-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:flex;align-items:center;gap:5px;margin-bottom:2px;}
+.g-title i{font-size:12px;color:var(--gc,var(--y));}
+.g-chart{width:100%;max-width:160px;height:130px;min-height:130px;}
+.g-pct-row{display:flex;align-items:center;gap:7px;margin-top:-8px;}
+.g-pct{font-size:24px;font-weight:900;color:var(--n1);line-height:1;}
+.g-badge{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;}
+.gb-good{background:rgba(74,222,128,.15);color:#4ade80;}
+.gb-warn{background:rgba(251,191,36,.15);color:#fbbf24;}
+.gb-bad{background:rgba(239,68,68,.15);color:#f87171;}
+.g-meta{font-size:11px;color:var(--td);margin-top:4px;text-align:center;font-weight:600;}
+.g-track{width:76%;height:4px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:7px;}
+.g-fill{height:100%;border-radius:999px;background:var(--gc,var(--y));transition:width 1.4s ease;}
 
-        .empty-msg { padding:24px; text-align:center; color:#b0bac5; font-size:13.5px; }
-        .empty-msg i { display:block; font-size:24px; margin-bottom:8px; }
+/* OPS SPECIAL */
+.g-card-ops{background:linear-gradient(135deg,var(--n1),var(--n2));border-color:rgba(255,221,0,.35);}
+.g-card-ops:hover{border-color:var(--y);}
+.ops-num{font-size:38px;font-weight:900;color:var(--y);line-height:1;margin:8px 0 3px;}
+.ops-money{font-size:16px;font-weight:700;color:rgba(255,255,255,.85);}
+.ops-lbl{font-size:9px;text-transform:uppercase;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.6px;margin-top:2px;}
 
-        ::-webkit-scrollbar { width:6px; }
-        ::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:3px; }
+/* FUNNEL FLOW */
+.funnel-section{background:#fff;border:1px solid var(--nborder);border-radius:18px;padding:20px 22px;margin-bottom:22px;position:relative;overflow:hidden;box-shadow:var(--shadow);}
+.funnel-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% -10%,rgba(255,221,0,.05) 0%,transparent 55%);pointer-events:none;}
+.funnel-steps{display:flex;align-items:center;justify-content:space-between;gap:0;position:relative;z-index:1;margin-top:16px;}
+.f-step{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;max-width:100px;}
+.f-ico{width:52px;height:52px;border-radius:14px;background:rgba(18,58,109,.06);border:1px solid var(--nborder);display:flex;align-items:center;justify-content:center;font-size:18px;transition:.2s;position:relative;}
+.f-ico::after{content:attr(data-pct);position:absolute;top:-6px;right:-6px;background:var(--fc,var(--y));color:var(--n1);font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;}
+.f-ico:hover{transform:scale(1.1);}
+.f-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#64748b;text-align:center;line-height:1.3;}
+.f-val{font-size:13px;font-weight:900;color:var(--n1);}
+.f-connector{flex:1;height:2px;background:linear-gradient(90deg,var(--y),rgba(255,221,0,.2));margin:0 4px;margin-bottom:26px;position:relative;overflow:hidden;}
+.f-connector::after{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);animation:flow 2.5s linear infinite;}
+@keyframes flow{0%{left:-60%;}100%{left:110%;}}
 
-        @media (max-width:900px) { .welcome-meta { display:none; } .kpi-grid { grid-template-columns:repeat(2,1fr); } }
-    </style>
+/* BOTTOM GRID */
+.bottom-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;}
+.b-card{background:#fff;border:1px solid var(--nborder);border-radius:16px;overflow:hidden;transition:border-color .2s,box-shadow .2s;box-shadow:var(--shadow);}
+.b-card:hover{border-color:rgba(18,58,109,.3);box-shadow:0 4px 20px rgba(18,58,109,.1);}
+.b-head{padding:12px 16px;border-bottom:1px solid var(--nborder);display:flex;align-items:center;gap:9px;background:rgba(18,58,109,.04);}
+.b-head h5{font-size:13px;font-weight:900;color:var(--n1);margin:0;flex:1;display:flex;align-items:center;gap:7px;}
+.bh-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;}
+.b-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:7px;background:rgba(18,58,109,.1);color:var(--n2);border:1px solid rgba(18,58,109,.2);}
+.b-badge-red{background:rgba(239,68,68,.2);color:#f87171;border-color:rgba(239,68,68,.25);}
+.b-link{font-size:11px;font-weight:700;color:var(--y);text-decoration:none;opacity:.8;}
+.b-link:hover{opacity:1;}
+
+/* Clients */
+.cli-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;text-decoration:none;color:inherit;transition:background .14s;}
+.cli-row:hover{background:rgba(18,58,109,.04);}
+.cli-row:last-child{border-bottom:none;}
+.cli-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--n1),var(--n2));border:1px solid rgba(255,221,0,.2);color:var(--y);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0;}
+.cli-name{font-size:12.5px;font-weight:700;color:var(--n1);}
+.cli-sub{font-size:10.5px;color:var(--td);}
+.cli-est{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin-left:auto;flex-shrink:0;}
+.est-c{background:rgba(74,222,128,.12);color:#4ade80;}
+.est-p{background:rgba(59,130,246,.12);color:#60a5fa;}
+.est-pe{background:rgba(251,191,36,.12);color:#fbbf24;}
+
+/* Quick */
+.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:10px 12px;}
+.qb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 6px;border-radius:13px;font-weight:800;font-size:11px;text-align:center;min-height:65px;text-decoration:none;transition:.2s;border:1px solid transparent;}
+.qb i{font-size:16px;}
+.qb:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.3);}
+.qb-y{background:linear-gradient(135deg,var(--y),var(--yd));color:var(--n1);}
+.qb-n{background:linear-gradient(135deg,var(--n1),var(--n2));color:#fff;border-color:var(--nborder);}
+.qb-g{background:linear-gradient(135deg,#065f46,#059669);color:#fff;}
+.qb-b{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;}
+.qb-r{background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;}
+.qb-p{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;}
+.qb-t{background:linear-gradient(135deg,#134e4a,#0d9488);color:#fff;}
+.qb-o{background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;}
+
+/* Alertas */
+.al-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;transition:background .14s;}
+.al-row:hover{background:rgba(239,68,68,.03);}
+.al-row:last-child{border-bottom:none;}
+.al-ico{width:34px;height:34px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);color:#f87171;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.al-campo{font-size:12.5px;font-weight:800;color:var(--n1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.al-asesor{font-size:10.5px;color:var(--td);}
+.al-valor{font-size:10.5px;color:#4ade80;font-weight:700;margin-top:2px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);padding:1px 7px;border-radius:5px;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.al-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
+.al-time{font-size:10px;color:var(--td);white-space:nowrap;}
+.btn-visto{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;cursor:pointer;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;}
+.btn-visto:hover{background:rgba(239,68,68,.2);}
+
+/* Actividad */
+.act-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;}
+.act-row:last-child{border-bottom:none;}
+.act-ico{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+.ai-ok{background:rgba(74,222,128,.12);color:#4ade80;}
+.ai-pe{background:rgba(251,191,36,.12);color:#fbbf24;}
+.act-name{font-size:12.5px;font-weight:700;color:var(--n1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.act-sub{font-size:10.5px;color:var(--td);}
+.act-date{font-size:10px;color:var(--td);flex-shrink:0;margin-left:auto;}
+
+/* empty */
+.empty-b{padding:24px;text-align:center;color:var(--td);font-size:12.5px;}
+.empty-b i{display:block;font-size:22px;margin-bottom:6px;opacity:.5;}
+
+/* scrollbar */
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-thumb{background:rgba(18,58,109,.3);border-radius:3px;}
+::-webkit-scrollbar-track{background:#f1f5f9;}
+
+@media(max-width:1400px){.gauges-grid{grid-template-columns:repeat(auto-fill,minmax(165px,1fr));}}
+@media(max-width:1200px){.bottom-grid,.metrics-bar{grid-template-columns:1fr 1fr;} .funnel-steps{flex-wrap:wrap;gap:10px;justify-content:center;} .f-connector{display:none;}}
+@media(max-width:900px){.main-content{margin-left:0;} .gauges-grid{grid-template-columns:repeat(2,1fr);} .bottom-grid{grid-template-columns:1fr;}}
+</style>
 </head>
 <body>
 
-<?php $navTitle = 'Dashboard'; $navIcon = 'fas fa-home'; require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle='Dashboard'; $navIcon='fas fa-home'; require_once '_sidebar_supervisor.php'; ?>
 
-        <!-- WELCOME BANNER -->
-        <div class="welcome-card">
-            <div>
-                <h2>¡Bienvenido, <?= htmlspecialchars(explode(' ', $supervisor_nombre)[0]) ?>!</h2>
-                <p>Supervisa tu equipo, revisa operaciones de crédito y monitorea clientes en tiempo real.</p>
-                <?php if ($tareas_hoy > 0): ?>
-                <div style="margin-top:12px;display:flex;align-items:center;gap:10px;">
-                    <div style="flex:1;max-width:220px;">
-                        <div style="font-size:12px;opacity:.75;margin-bottom:4px;">Tareas de hoy: <?= $tareas_completadas ?>/<?= $tareas_hoy ?> completadas</div>
-                        <div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:<?= $pct_tareas ?>%;"></div></div>
-                    </div>
-                    <span style="font-size:18px;font-weight:800;color:var(--brand-yellow);"><?= $pct_tareas ?>%</span>
-                </div>
-                <?php endif; ?>
-            </div>
-            <div class="welcome-meta">
-                <div class="welcome-meta-item">
-                    <div class="wm-num"><?= $total_asesores ?></div>
-                    <div class="wm-lbl">Asesores</div>
-                </div>
-                <div class="welcome-meta-item">
-                    <div class="wm-num"><?= $total_clientes ?></div>
-                    <div class="wm-lbl">Clientes</div>
-                </div>
-                <?php if ($alertas_pendientes > 0): ?>
-                <div class="welcome-meta-item" style="border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.12);">
-                    <div class="wm-num" style="color:#ef4444;"><?= $alertas_pendientes ?></div>
-                    <div class="wm-lbl">Alertas</div>
-                </div>
-                <?php endif; ?>
-            </div>
-        </div>
+<div class="main-content">
 
-        <!-- KPI CARDS -->
-        <div class="kpi-grid">
-            <a href="mis_asesores.php" class="kpi-card kpi-yellow">
-                <div class="kpi-icon"><i class="fas fa-users"></i></div>
-                <div class="kpi-num"><?= $total_asesores ?></div>
-                <div class="kpi-label">Asesores en mi equipo</div>
-            </a>
-            <a href="clientes.php" class="kpi-card kpi-blue">
-                <div class="kpi-icon"><i class="fas fa-address-book"></i></div>
-                <div class="kpi-num"><?= $total_clientes ?></div>
-                <div class="kpi-label">Total de clientes</div>
-            </a>
-            <a href="clientes.php" class="kpi-card kpi-green">
-                <div class="kpi-icon"><i class="fas fa-user-check"></i></div>
-                <div class="kpi-num"><?= $clientes_activos ?></div>
-                <div class="kpi-label">Clientes activos</div>
-            </a>
-            <a href="operaciones.php" class="kpi-card kpi-purple">
-                <div class="kpi-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-                <div class="kpi-num"><?= $total_ops_credito ?></div>
-                <div class="kpi-label">Trámites de crédito</div>
-            </a>
-            <a href="operaciones.php" class="kpi-card kpi-green" style="grid-column:span 1">
-                <div class="kpi-icon"><i class="fas fa-dollar-sign"></i></div>
-                <div class="kpi-num" style="font-size:22px;">$<?= number_format($monto_total, 0) ?></div>
-                <div class="kpi-label">Monto total en créditos</div>
-            </a>
-            <a href="alertas.php" class="kpi-card <?= $alertas_pendientes > 0 ? 'kpi-red' : 'kpi-blue' ?>">
-                <div class="kpi-icon"><i class="fas fa-bell"></i></div>
-                <div id="supervisor-alertas-pendientes" class="kpi-num"><?= $alertas_pendientes ?></div>
-                <div class="kpi-label">Alertas pendientes</div>
-            </a>
-        </div>
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="topbar-logo">⚡ Super_IA</div>
+    <div class="gpu-pill"><div class="pulse-dot"></div>SISTEMA ACTIVO</div>
+  </div>
+  <div class="topbar-right">
+    <div class="user-chip">
+      <i class="fas fa-user-shield" style="color:var(--y);font-size:13px;"></i>
+      <strong><?= htmlspecialchars(explode(' ',$supervisor_nombre)[0]) ?></strong>
+      <span style="color:var(--td);font-size:11px;"><?= htmlspecialchars($supervisor_rol) ?></span>
+    </div>
+    <a href="logout.php" class="btn-salir"><i class="fas fa-power-off me-1"></i>Salir</a>
+  </div>
+</div>
 
-        <!-- Recuperación: Créditos aprobados/desembolsados -->
-        <div class="section-card" style="margin-top:14px;">
-            <div class="section-header">
-                <h5><i class="fas fa-user-clock" style="color:#dc2626;"></i>Recuperación — Créditos Aprobados</h5>
-                <span class="sec-badge"><?= count($creditos_aprobados) ?></span>
-            </div>
-            <div style="padding:12px 18px;">
-                <?php if (empty($creditos_aprobados)): ?>
-                    <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>No hay créditos recientes aprobados/desembolsados</div>
-                <?php else: ?>
-                    <table class="table table-sm">
-                        <thead>
-                            <tr>
-                                <th></th>
-                                <th>Cliente</th>
-                                <th>Asesor</th>
-                                <th>Monto</th>
-                                <th>Desembolso</th>
-                                <th>Meses desde desemb.</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                        <?php foreach ($creditos_aprobados as $cr):
-                            $fecha = $cr['fecha_desembolso'] ?: $cr['created_at'];
-                            $dt0 = new DateTime($fecha);
-                            $dt1 = new DateTime();
-                            $diff = ($dt1->y - $dt0->y) * 12 + ($dt1->m - $dt0->m);
-                            $meses = max(0, (int)$diff);
-                        ?>
-                        <tr>
-                            <td><input type="checkbox" class="chk-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"></td>
-                            <td><?= htmlspecialchars($cr['cliente_nombre'] ?? $cr['cliente_cedula']) ?><br><small class="text-muted"><?= htmlspecialchars($cr['cliente_cedula'] ?? '') ?></small></td>
-                            <td><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></td>
-                            <td>$<?= number_format((float)($cr['monto_aprobado'] ?? 0),2) ?></td>
-                            <td><?= $fecha ? date('d/m/Y', strtotime($fecha)) : '—' ?></td>
-                            <td><?= $meses ?></td>
-                            <td style="white-space:nowrap;">
-                                <button class="btn btn-sm btn-warning btn-crear-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>" data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>" data-meses="<?= $meses ?>">Crear tarea recuperación</button>
-                            </td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <div style="display:flex;gap:10px;align-items:center;margin-top:8px;">
-                        <div>
-                            <select id="bulk_asesor_sel" class="form-select form-select-sm" style="width:260px;display:inline-block;margin-right:6px;">
-                                <option value="">Usar asesor original</option>
-                                <?php
-                                    // Lista de asesores del supervisor
-                                    try {
-                                        $st = $pdo->prepare('SELECT id, (SELECT nombre FROM usuario u WHERE u.id = a.usuario_id) as nombre FROM asesor a WHERE a.supervisor_id = ?');
-                                        $st->execute([$supervisor_table_id]);
-                                        $asesList = $st->fetchAll();
-                                    } catch (Throwable $_) { $asesList = []; }
-                                    foreach ($asesList as $as) echo '<option value="' . htmlspecialchars($as['id']) . '">' . htmlspecialchars($as['nombre'] ?? $as['id']) . '</option>';
-                                ?>
-                            </select>
-                        </div>
-                        <button id="bulk_create_rec" class="btn btn-sm btn-danger">Crear tareas (seleccionados)</button>
-                        <small class="text-muted">Puedes seleccionar varias filas y crear tareas de recuperación en lote.</small>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
+<div class="content-area">
 
-        <!-- GRID INFERIOR -->
-        <div class="row g-3">
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-text" style="position:relative;z-index:1;">
+    <h2>Panel de Supervisión — <?= htmlspecialchars(explode(' ',$supervisor_nombre)[0]) ?></h2>
+    <p>Monitoreo en tiempo real · <?= strtoupper(strftime('%B %Y') ?: date('M Y')) ?></p>
+    <?php if($tareas_hoy>0): ?>
+    <div class="hero-progress">
+      <div class="hp-label"><span>Progreso de tareas hoy</span><span><?= $tareas_completadas ?>/<?= $tareas_hoy ?></span></div>
+      <div class="hp-track"><div class="hp-fill" id="hp-fill" style="width:0%;"></div></div>
+    </div>
+    <?php endif; ?>
+  </div>
+  <div class="hero-stats" style="position:relative;z-index:1;">
+    <div class="hs-item"><div class="hs-num"><?= $total_asesores ?></div><div class="hs-lbl">Asesores</div></div>
+    <div class="hs-item"><div class="hs-num" id="cnt-clientes">0</div><div class="hs-lbl">Clientes</div></div>
+    <div class="hs-item"><div class="hs-num" id="cnt-activos">0</div><div class="hs-lbl">Activos</div></div>
+    <?php if($alertas_pendientes>0): ?>
+    <div class="hs-item red"><div class="hs-num"><?= $alertas_pendientes ?></div><div class="hs-lbl">Alertas</div></div>
+    <?php endif; ?>
+  </div>
+</div>
 
-            <!-- Acceso Rápido -->
-            <div class="col-md-5">
-                <div class="section-card" style="height:100%;">
-                    <div class="section-header">
-                        <h5><i class="fas fa-bolt" style="color:var(--brand-yellow);"></i>Acceso Rápido</h5>
-                    </div>
-                    <div class="quick-grid">
-                        <a href="registro_asesor.php"                  class="quick-btn q-yellow"><i class="fas fa-user-plus"></i>Crear Asesor</a>
-                        <a href="clientes.php"                          class="quick-btn q-navy"><i class="fas fa-address-book"></i>Ver Clientes</a>
-                        <a href="operaciones.php"                       class="quick-btn q-green"><i class="fas fa-handshake"></i>Operaciones</a>
-                        <a href="mis_asesores.php"                      class="quick-btn q-blue"><i class="fas fa-users"></i>Mis Asesores</a>
-                        <a href="alertas.php"                           class="quick-btn q-red"><i class="fas fa-bell"></i>Alertas <?= $alertas_pendientes > 0 ? "($alertas_pendientes)" : '' ?></a>
-                        <a href="mapa_vivo_superIA.php"                 class="quick-btn q-navy"><i class="fas fa-map-marked-alt"></i>Mapa en Vivo</a>
-                        <a href="kpi_penetracion.php"                   class="quick-btn q-light"><i class="fas fa-chart-bar"></i>Reportes KPIs</a>
-                        <a href="administrar_solicitudes_asesor.php"    class="quick-btn q-light"><i class="fas fa-file-circle-check"></i>Solicitudes</a>
-                    </div>
-                </div>
-            </div>
+<!-- METRICS BAR -->
+<div class="metrics-bar">
+  <div class="metric-card" style="--mc:#ffdd00;">
+    <div class="metric-trend <?= $pct_tareas>=70?'trend-up':($pct_tareas>=35?'trend-nt':'trend-dn') ?>"><?= $pct_tareas ?>%</div>
+    <div class="metric-label">Actividad Hoy</div>
+    <div class="metric-value" id="cnt-act">0</div>
+    <div class="metric-sub"><?= $tareas_completadas ?>/<?= $tareas_hoy ?> tareas completadas</div>
+  </div>
+  <div class="metric-card" style="--mc:#4ade80;">
+    <div class="metric-trend trend-nt"><?= $kpi_dash['penetracion_pct'] ?>%</div>
+    <div class="metric-label">Penetración Mensual</div>
+    <div class="metric-value" id="cnt-pen">0</div>
+    <div class="metric-sub"><?= $kpi_dash['penetracion_clientes'] ?>/<?= $kpi_dash['penetracion_visitas'] ?> visitas</div>
+  </div>
+  <div class="metric-card" style="--mc:#60a5fa;">
+    <div class="metric-trend trend-nt"><?= $kpi_dash['operaciones_total'] ?></div>
+    <div class="metric-label">Créditos <?=date('M Y')?></div>
+    <div class="metric-value" id="cnt-ops" style="color:var(--n2);">$<?= number_format($kpi_dash['operaciones_monto'],0,'.',',') ?></div>
+    <div class="metric-sub"><?= $kpi_dash['operaciones_total'] ?> crédito<?= $kpi_dash['operaciones_total']!=1?'s':'' ?> desembolsado<?= $kpi_dash['operaciones_total']!=1?'s':'' ?></div>
+  </div>
+  <div class="metric-card" style="--mc:#f87171;">
+    <div class="metric-trend b-badge-red"><?= $alertas_pendientes ?></div>
+    <div class="metric-label">Alertas Sin Ver</div>
+    <div class="metric-value" style="color:#f87171;" id="cnt-alerta">0</div>
+    <div class="metric-sub">Pendientes de revisión</div>
+  </div>
+</div>
 
-            <!-- Últimos clientes -->
-            <div class="col-md-7">
-                <div class="section-card">
-                    <div class="section-header">
-                        <h5><i class="fas fa-address-book" style="color:#3b82f6;"></i>Últimos Clientes</h5>
-                        <a href="clientes.php" class="sec-link">Ver todos →</a>
-                    </div>
-                    <?php if (empty($ultimos_clientes)): ?>
-                    <div class="empty-msg"><i class="fas fa-inbox"></i>Sin clientes registrados aún</div>
-                    <?php else: ?>
-                        <?php foreach ($ultimos_clientes as $cli):
-                            $ini = '';
-                            foreach (explode(' ', $cli['nombre']) as $p) { $ini .= strtoupper(mb_substr($p,0,1)); if (strlen($ini)>=2) break; }
-                            $estadoDb = strtolower((string)($cli['estado'] ?? 'prospecto'));
-                            $esDesc = ($estadoDb === 'descartado');
+<!-- KPI GAUGES -->
+<div class="section-hd">
+  <h3><i class="fas fa-gauge-high"></i> KPIs del Equipo — Tacómetros en Vivo</h3>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
+    <a href="kpi_penetracion.php" class="all-link"><i class="fas fa-external-link-alt me-1"></i>Ver reportes</a>
+  </div>
+</div>
 
-                            // Regla: Cliente solo si tiene al menos una aprobación
-                            $esCliente = false;
-                            if (!$esDesc) {
-                                try {
-                                    $ced = (string)($cli['cedula'] ?? '');
-                                    $cid = (string)($cli['id'] ?? '');
+<div class="gauges-grid">
+<?php
+$gkpis=[
+  ['k'=>'actividad',    'lbl'=>'Actividad',      'ico'=>'fa-bolt',            'c'=>'#60a5fa', 'cr'=>'96,165,250',  'v'=>$kpi_dash['actividad_pct'],     'meta'=>$kpi_dash['actividad_realizadas'].'/'.$kpi_dash['actividad_total'].' hoy',          'url'=>'kpi_penetracion.php?view=actividad'],
+  ['k'=>'penetracion',  'lbl'=>'Penetración',    'ico'=>'fa-chart-pie',       'c'=>'#4ade80', 'cr'=>'74,222,128',  'v'=>$kpi_dash['penetracion_pct'],   'meta'=>$kpi_dash['penetracion_clientes'].'/'.$kpi_dash['penetracion_visitas'].' visitas', 'url'=>'kpi_penetracion.php?view=mercado'],
+  ['k'=>'interes',      'lbl'=>'Interés',        'ico'=>'fa-heart-pulse',     'c'=>'#fbbf24', 'cr'=>'251,191,36',  'v'=>$kpi_dash['interes_pct'],       'meta'=>$kpi_dash['interes_si'].'/'.$kpi_dash['interes_total'].' encuestas',              'url'=>'kpi_penetracion.php?view=interes'],
+  ['k'=>'prospeccion',  'lbl'=>'Prospección',    'ico'=>'fa-route',           'c'=>'#c084fc', 'cr'=>'192,132,252', 'v'=>$kpi_dash['prospeccion_pct'],   'meta'=>$kpi_dash['prospeccion_avance'].'/'.$kpi_dash['prospeccion_meta'].' meta',        'url'=>'kpi_penetracion.php?view=prospeccion'],
+  ['k'=>'levantamiento','lbl'=>'Levantamientos', 'ico'=>'fa-clipboard-check', 'c'=>'#38bdf8', 'cr'=>'56,189,248',  'v'=>$kpi_dash['levantamiento_pct'], 'meta'=>$kpi_dash['levantamientos'].'/'.$kpi_dash['interesados'].' interesados',         'url'=>'kpi_penetracion.php?view=evaluacion'],
+  ['k'=>'frio',         'lbl'=>'Visitas Frío',   'ico'=>'fa-snowflake',       'c'=>'#fb923c', 'cr'=>'251,146,60',  'v'=>$kpi_dash['frio_pct'],          'meta'=>$kpi_dash['frio_visitas'].' visitas frías',                                      'url'=>'kpi_penetracion.php?view=frio'],
+  ['k'=>'eficiencia',   'lbl'=>'Eficiencia',     'ico'=>'fa-bolt-lightning',  'c'=>'#f472b6', 'cr'=>'244,114,182', 'v'=>$kpi_dash['eficiencia_pct'],    'meta'=>$kpi_dash['interes_si'].' con interés',                                          'url'=>'kpi_penetracion.php?view=eficiencia'],
+  ['k'=>'postventa',    'lbl'=>'Post-Venta',     'ico'=>'fa-rotate',          'c'=>'#2dd4bf', 'cr'=>'45,212,191',  'v'=>$kpi_dash['postventa_pct'],     'meta'=>$ops_aprobadas.' aprobados',                                                     'url'=>'kpi_penetracion.php?view=postventa'],
+  ['k'=>'recuperacion', 'lbl'=>'Recuperación',   'ico'=>'fa-shield-halved',   'c'=>'#f87171', 'cr'=>'248,113,113', 'v'=>$kpi_dash['recuperacion_pct'],  'meta'=>$kpi_dash['recuperaciones'].' gestiones',                                        'url'=>'kpi_penetracion.php?view=recuperacion'],
+];
+foreach($gkpis as $g):
+  $v=(float)$g['v'];
+  $bc=$v>=70?'gb-good':($v>=35?'gb-warn':'gb-bad');
+  $bt=$v>=70?'▲ OK':($v>=35?'~ Med':'▼ Bajo');
+?>
+<a href="<?=htmlspecialchars($g['url'])?>" class="g-card" style="--gc:<?=$g['c']?>;--gc-rgb:<?=$g['cr']?>;"
+   data-val="<?=$v?>" data-color="<?=htmlspecialchars($g['c'])?>" data-key="<?=htmlspecialchars($g['k'])?>">
+  <div class="g-title"><i class="fas <?=$g['ico']?>"></i><?=htmlspecialchars($g['lbl'])?></div>
+  <div class="g-chart" id="gc-<?=htmlspecialchars($g['k'])?>"></div>
+  <div class="g-pct-row">
+    <span class="g-pct"><?=$v?>%</span>
+    <span class="g-badge <?=$bc?>"><?=$bt?></span>
+  </div>
+  <div class="g-meta"><?=htmlspecialchars($g['meta'])?></div>
+  <div class="g-track"><div class="g-fill" style="width:<?=min(100,$v)?>%;background:<?=$g['c']?>;"></div></div>
+</a>
+<?php endforeach; ?>
 
-                                    // fichas aprobadas
-                                    $hasFp = (bool)$pdo->query("SHOW TABLES LIKE 'ficha_producto'")->fetchColumn();
-                                    $hasRev = $hasFp ? (bool)$pdo->query("SHOW COLUMNS FROM ficha_producto LIKE 'estado_revision'")->fetchColumn() : false;
-                                    if ($ced && $hasFp && $hasRev) {
-                                        $st = $pdo->prepare("SELECT 1 FROM ficha_producto WHERE cliente_cedula = ? AND estado_revision = 'aprobada' LIMIT 1");
-                                        $st->execute([$ced]);
-                                        $esCliente = (bool)$st->fetchColumn();
-                                    }
+<!-- OPERACIONES — dark card especial -->
+<a href="kpi_penetracion.php?view=operaciones" class="g-card g-card-ops" style="--gc:#ffdd00;justify-content:center;">
+  <div class="g-title"><i class="fas fa-hand-holding-dollar" style="color:var(--y);"></i>Créditos <?=date('M Y')?></div>
+  <div class="ops-num" id="cnt-ops-big">0</div>
+  <div style="font-size:11px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-top:2px;">
+    <?=$kpi_dash['operaciones_total']==1?'crédito desembolsado':'créditos desembolsados'?>
+  </div>
+  <div class="ops-money" style="margin-top:10px;">
+    $<?=number_format($kpi_dash['operaciones_monto'],0,'.',',')?>
+  </div>
+  <div class="ops-lbl">Monto prestado este mes</div>
+  <div class="g-track" style="background:rgba(255,255,255,.1);width:80%;margin-top:10px;">
+    <div class="g-fill" style="width:<?=min(100,$kpi_dash['operaciones_total']*10)?>%;background:var(--y);"></div>
+  </div>
+</a>
+</div><!-- /gauges-grid -->
 
-                                    // crédito formal aprobado/desembolsado
-                                    if (!$esCliente) {
-                                        $hasCp = (bool)$pdo->query("SHOW TABLES LIKE 'credito_proceso'")->fetchColumn();
-                                        if ($cid && $hasCp) {
-                                            $hasEstadoCred = (bool)$pdo->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado_credito'")->fetchColumn();
-                                            $hasEstado = (bool)$pdo->query("SHOW COLUMNS FROM credito_proceso LIKE 'estado'")->fetchColumn();
-                                            $col = $hasEstadoCred ? 'estado_credito' : ($hasEstado ? 'estado' : null);
-                                            if ($col) {
-                                                $st = $pdo->prepare("SELECT 1 FROM credito_proceso WHERE cliente_prospecto_id = ? AND $col IN ('aprobado','desembolsado') LIMIT 1");
-                                                $st->execute([$cid]);
-                                                $esCliente = (bool)$st->fetchColumn();
-                                            }
-                                        }
-                                    }
-                                } catch (Throwable $e) {
-                                    $esCliente = ($estadoDb === 'cliente');
-                                }
-                            }
+<!-- FUNNEL FLOW -->
+<div class="funnel-section">
+  <div class="section-hd" style="margin-bottom:0;">
+    <h3 style="color:var(--n1);"><i class="fas fa-diagram-project"></i> Flujo de Conversión del Equipo</h3>
+    <span style="font-size:12px;color:var(--td);"><?= strtoupper(date('M Y')) ?></span>
+  </div>
+  <div class="funnel-steps">
+    <?php
+    $fsteps=[
+      ['lbl'=>'Prospección', 'ico'=>'fas fa-route',           'c'=>'#c084fc', 'v'=>$kpi_dash['prospeccion_pct'],    'n'=>$kpi_dash['prospeccion_avance']],
+      ['lbl'=>'Visitas',     'ico'=>'fas fa-map-marker-alt',  'c'=>'#60a5fa', 'v'=>$kpi_dash['penetracion_pct'],    'n'=>$kpi_dash['penetracion_visitas']],
+      ['lbl'=>'Interés',     'ico'=>'fas fa-heart-pulse',     'c'=>'#fbbf24', 'v'=>$kpi_dash['interes_pct'],        'n'=>$kpi_dash['interes_si']],
+      ['lbl'=>'Levantam.',   'ico'=>'fas fa-clipboard-check', 'c'=>'#38bdf8', 'v'=>$kpi_dash['levantamiento_pct'],  'n'=>$kpi_dash['levantamientos']],
+      ['lbl'=>'Eficiencia',  'ico'=>'fas fa-bolt',            'c'=>'#f472b6', 'v'=>$kpi_dash['eficiencia_pct'],     'n'=>$kpi_dash['interes_si']],
+      ['lbl'=>'Operaciones', 'ico'=>'fas fa-handshake',       'c'=>'#ffdd00', 'v'=>min(100,$kpi_dash['operaciones_total']*10), 'n'=>$kpi_dash['operaciones_total']],
+    ];
+    foreach($fsteps as $i=>$fs):
+    ?>
+    <div class="f-step">
+      <div class="f-ico" style="color:<?=$fs['c']?>;border-color:<?=$fs['c']?>33;background:<?=$fs['c']?>12;" data-pct="<?=(int)$fs['v']?>%">
+        <i class="<?=$fs['ico']?>"></i>
+      </div>
+      <div class="f-label"><?=htmlspecialchars($fs['lbl'])?></div>
+      <div class="f-val" style="color:<?=$fs['c']?>"><?=$fs['n']?></div>
+    </div>
+    <?php if($i<count($fsteps)-1): ?><div class="f-connector"></div><?php endif; ?>
+    <?php endforeach; ?>
+  </div>
+</div>
 
-                            if ($esDesc) {
-                                $estClass = 'est-descartado';
-                                $estLabel = 'Descartado';
-                            } else {
-                                $estClass = $esCliente ? 'est-cliente' : 'est-prospecto';
-                                $estLabel = $esCliente ? 'Cliente' : 'Prospecto';
-                            }
-                        ?>
-                        <a href="ver_cliente.php?id=<?= urlencode($cli['cedula'] ?? '') ?>" class="cli-row" style="text-decoration:none;">
-                            <div class="cli-avatar"><?= htmlspecialchars($ini ?: '?') ?></div>
-                            <div style="flex:1;min-width:0;">
-                                <div class="cli-name"><?= htmlspecialchars($cli['nombre']) ?></div>
-                                <div class="cli-sub"><?= htmlspecialchars($cli['asesor_nombre']) ?> · <?= htmlspecialchars($cli['ciudad'] ?? '—') ?> · <?= date('d/m/Y', strtotime($cli['created_at'])) ?></div>
-                            </div>
-                            <span class="cli-estado <?= $estClass ?>"><?= htmlspecialchars($estLabel) ?></span>
-                        </a>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
+<!-- BOTTOM 4 -->
+<div class="bottom-grid">
 
-            <!-- Actividad reciente (tareas) -->
-            <div class="col-md-6">
-                <div class="section-card">
-                    <div class="section-header">
-                        <h5><i class="fas fa-clock" style="color:#10b981;"></i>Actividad Reciente</h5>
-                        <span class="sec-badge"><?= count($recientes) ?></span>
-                    </div>
-                    <?php if (empty($recientes)): ?>
-                    <div class="empty-msg"><i class="fas fa-calendar-times"></i>Sin actividad registrada</div>
-                    <?php else: ?>
-                        <?php foreach ($recientes as $t):
-                            $dotClass = $t['estado'] === 'completada' ? 'dot-ok' : ($t['estado'] === 'cancelada' ? 'dot-alert' : 'dot-pend');
-                            $icon = $t['estado'] === 'completada' ? 'fa-check' : ($t['estado'] === 'cancelada' ? 'fa-times' : 'fa-clock');
-                            $tipoLabel = ucfirst(str_replace('_',' ',$t['tipo_tarea']));
-                        ?>
-                        <div class="act-item">
-                            <div class="act-dot <?= $dotClass ?>"><i class="fas <?= $icon ?>"></i></div>
-                            <div class="act-body">
-                                <div class="act-title"><?= htmlspecialchars($tipoLabel) ?><?= $t['cliente_nombre'] ? ' — ' . htmlspecialchars($t['cliente_nombre']) : '' ?></div>
-                                <div class="act-meta">Asesor: <?= htmlspecialchars($t['asesor_nombre'] ?? '—') ?></div>
-                            </div>
-                            <div class="act-date"><?= $t['fecha_programada'] ? date('d/m', strtotime($t['fecha_programada'])) : '—' ?></div>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
+  <!-- ÚLTIMOS CLIENTES -->
+  <div class="b-card">
+    <div class="b-head">
+      <div class="bh-ico" style="background:rgba(18,58,109,.5);color:var(--y);"><i class="fas fa-users"></i></div>
+      <h5>Últimos Clientes</h5>
+      <a href="clientes.php" class="b-link">Ver todos →</a>
+    </div>
+    <?php if(empty($ultimos_clientes)): ?>
+      <div class="empty-b"><i class="fas fa-user-slash"></i>Sin registros</div>
+    <?php else: foreach($ultimos_clientes as $cl):
+      $in=mb_strtoupper(mb_substr(trim($cl['nombre']??'C'),0,1));
+      $ec='est-'.($cl['estado']??'prospecto'); ?>
+    <a href="ver_cliente.php?id=<?=urlencode($cl['cedula']??'')?>" class="cli-row">
+      <div class="cli-av"><?=htmlspecialchars($in)?></div>
+      <div style="flex:1;min-width:0;">
+        <div class="cli-name"><?=htmlspecialchars($cl['nombre']??'—')?></div>
+        <div class="cli-sub"><?=htmlspecialchars($cl['ciudad']??'')?> · <?=htmlspecialchars($cl['asesor_nombre']??'')?></div>
+      </div>
+      <span class="cli-est <?=$ec?>"><?=ucfirst($cl['estado']??'prospecto')?></span>
+    </a>
+    <?php endforeach; endif; ?>
+  </div>
 
-            <!-- Alertas recientes -->
-            <div class="col-md-6">
-                <div class="section-card" id="alertas-section">
-                    <div class="section-header">
-                        <h5><i class="fas fa-bell" style="color:#ef4444;"></i>Alertas Sin Ver</h5>
-                        <a href="alertas.php" class="sec-link">Ver todas →</a>
-                    </div>
-                    <?php if (empty($ultimas_alertas)): ?>
-                    <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>Sin alertas pendientes 🎉</div>
-                    <?php else: ?>
-                        <?php foreach ($ultimas_alertas as $al): ?>
-                        <div class="act-item open-alert-detail" data-alerta-id="<?= htmlspecialchars($al['id_alerta'] ?? $al['id'] ?? '') ?>" style="cursor:pointer;">
-                            <div class="act-dot dot-alert"><i class="fas fa-exclamation"></i></div>
-                            <div class="act-body">
-                                <div class="act-title"><?= htmlspecialchars($al['campo_modificado'] ?? 'Modificación detectada') ?></div>
-                                <div class="act-meta"><?= htmlspecialchars(mb_substr($al['valor_nuevo'] ?? '', 0, 80)) ?>…</div>
-                                <div class="act-meta">Asesor: <?= htmlspecialchars($al['asesor_nombre'] ?? '—') ?></div>
-                            </div>
-                            <div class="act-date"><?= date('d/m H:i', strtotime($al['created_at'])) ?></div>
-                        </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-            </div>
+  <!-- ACCESO RÁPIDO -->
+  <div class="b-card">
+    <div class="b-head">
+      <div class="bh-ico" style="background:rgba(255,221,0,.12);color:var(--y);"><i class="fas fa-bolt"></i></div>
+      <h5>Acceso Rápido</h5>
+    </div>
+    <div class="quick-grid">
+      <a href="registro_asesor.php"    class="qb qb-y"><i class="fas fa-user-plus"></i>Crear Asesor</a>
+      <a href="clientes.php"           class="qb qb-n"><i class="fas fa-address-book"></i>Clientes</a>
+      <a href="operaciones.php"        class="qb qb-g"><i class="fas fa-handshake"></i>Operaciones</a>
+      <a href="mapa_vivo_asesor.php"   class="qb qb-b"><i class="fas fa-map-marked-alt"></i>Mapa Vivo</a>
+      <a href="alertas.php"            class="qb qb-r"><i class="fas fa-bell"></i>Alertas<?=$alertas_pendientes>0?" ($alertas_pendientes)":''?></a>
+      <a href="kpi_penetracion.php"    class="qb qb-p"><i class="fas fa-chart-line"></i>KPI Report</a>
+      <a href="mis_asesores.php"       class="qb qb-t"><i class="fas fa-users-cog"></i>Asesores</a>
+      <a href="metas.php"              class="qb qb-o"><i class="fas fa-bullseye"></i>Metas</a>
+    </div>
+  </div>
 
-        </div><!-- /.row -->
-    </div><!-- /.content-area -->
-</div><!-- /.main-content -->
+  <!-- ALERTAS SIN VER -->
+  <div class="b-card">
+    <div class="b-head">
+      <div class="bh-ico" style="background:rgba(239,68,68,.15);color:#f87171;"><i class="fas fa-bell"></i></div>
+      <h5>Alertas Sin Ver</h5>
+      <?php if($alertas_pendientes>0): ?><span class="b-badge b-badge-red"><?=$alertas_pendientes?></span><?php endif; ?>
+      <a href="alertas.php" class="b-link" style="margin-left:4px;">Ver →</a>
+    </div>
+    <?php if(empty($ultimas_alertas)): ?>
+      <div class="empty-b"><i class="fas fa-check-circle" style="color:#4ade80;opacity:1;font-size:22px;"></i>¡Sin alertas!</div>
+    <?php else: foreach($ultimas_alertas as $al):
+      $cr=trim($al['campo_modificado']??'');
+      $clbl=empty($cr)||$cr==='null'?'Modificación registrada':ucwords(str_replace(['_','-'],' ',$cr));
+      $vr=trim($al['valor_nuevo']??'');
+      $vd='';
+      if(!empty($vr)&&$vr!=='null'){
+        $dec=json_decode($vr,true);
+        if(json_last_error()===JSON_ERROR_NONE&&is_array($dec)){
+          $res=[];foreach(['nombre','estado','telefono','ciudad','cedula','email'] as $k){if(!empty($dec[$k])){$res[]=ucfirst($k).': '.$dec[$k];if(count($res)>=2)break;}}
+          $vd=!empty($res)?implode(' · ',$res):'Datos actualizados';
+        }else{ $vd=mb_strlen($vr)>38?mb_substr($vr,0,36).'…':$vr; }
+      }
+      $icos=['telefono'=>'fa-phone','email'=>'fa-envelope','direccion'=>'fa-location-dot','estado'=>'fa-circle-dot','nombre'=>'fa-user','encuesta'=>'fa-clipboard-list'];
+      $ico='fa-bell'; foreach($icos as $k=>$v){if(stripos($cr,$k)!==false){$ico=$v;break;}}
+    ?>
+    <div class="al-row">
+      <div class="al-ico"><i class="fas <?=$ico?>"></i></div>
+      <div style="flex:1;min-width:0;">
+        <div class="al-campo"><?=htmlspecialchars($clbl)?></div>
+        <div class="al-asesor"><i class="fas fa-user-tie" style="font-size:9px;opacity:.6;"></i> <?=htmlspecialchars($al['asesor_nombre']??'—')?></div>
+        <?php if(!empty($vd)): ?><span class="al-valor">→ <?=htmlspecialchars($vd)?></span><?php endif; ?>
+      </div>
+      <div class="al-right">
+        <span class="al-time"><?=$al['created_at']?date('d/m H:i',strtotime($al['created_at'])):''?></span>
+        <a href="marcar_alerta_revisada.php?id=<?=urlencode($al['id_alerta'])?>" class="btn-visto">✓ Visto</a>
+      </div>
+    </div>
+    <?php endforeach; endif; ?>
+  </div>
 
-    <script>
-    document.addEventListener('click', function(e){
-        // Crear tarea individual
-        if (e.target && e.target.matches('.btn-crear-rec')){
-            var btn = e.target;
-            var creditoId = btn.getAttribute('data-credito-id');
-            var asesorId = btn.getAttribute('data-asesor-id') || '';
-            var meses = btn.getAttribute('data-meses') || 0;
-            var mensaje = 'Cliente con crédito aprobado — pendiente desde hace ' + meses + ' meses.';
-            btn.disabled = true;
-            fetch('crear_tarea_recuperacion.php', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ credito_id: creditoId, asesor_id: asesorId, mensaje: mensaje })
-            }).then(r=>r.json()).then(j=>{ btn.disabled=false; if (j.status==='success') alert('Tarea creada'); else alert('Error: '+(j.message||'')) }).catch(x=>{btn.disabled=false; alert('Error de red')});
-        }
+  <!-- ACTIVIDAD RECIENTE -->
+  <div class="b-card">
+    <div class="b-head">
+      <div class="bh-ico" style="background:rgba(74,222,128,.12);color:#4ade80;"><i class="fas fa-clock-rotate-left"></i></div>
+      <h5>Actividad Reciente</h5>
+      <span class="b-badge"><?=count($recientes)?></span>
+    </div>
+    <?php if(empty($recientes)): ?>
+      <div class="empty-b"><i class="fas fa-inbox"></i>Sin actividad</div>
+    <?php else: foreach($recientes as $r):
+      $done=($r['estado']??'')==='completada';
+      $tipo=ucfirst(str_replace('_',' ',$r['tipo_tarea']??'visita'));
+    ?>
+    <div class="act-row">
+      <div class="act-ico <?=$done?'ai-ok':'ai-pe'?>"><i class="fas <?=$done?'fa-check':'fa-clock'?>"></i></div>
+      <div style="flex:1;min-width:0;">
+        <div class="act-name"><?=htmlspecialchars($r['cliente_nombre']??'—')?></div>
+        <div class="act-sub"><?=htmlspecialchars($tipo)?> · <?=htmlspecialchars($r['asesor_nombre']??'')?></div>
+      </div>
+      <span class="act-date"><?=$r['fecha_programada']?date('d/m',strtotime($r['fecha_programada'])):''?></span>
+    </div>
+    <?php endforeach; endif; ?>
 
-        // Bulk create
-        if (e.target && e.target.id === 'bulk_create_rec'){
-            var checks = Array.from(document.querySelectorAll('.chk-rec:checked')).map(function(c){return c.getAttribute('data-credito-id');});
-            if (checks.length === 0) { alert('Seleccione al menos un crédito'); return; }
-            var asesorSel = document.getElementById('bulk_asesor_sel');
-            var asesorId = asesorSel ? asesorSel.value : '';
-            var mensaje = 'Tarea de recuperación generada por supervisor';
-            e.target.disabled = true;
-            fetch('crear_tarea_recuperacion.php', {
-                method: 'POST', headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ credito_ids: checks, asesor_id: asesorId, mensaje: mensaje })
-            }).then(r=>r.json()).then(j=>{ e.target.disabled=false; if (j.status==='success') { alert('Tareas creadas: '+ j.created.length); window.location.reload(); } else alert('Error: '+(j.message||'')) }).catch(x=>{e.target.disabled=false; alert('Error de red')});
-        }
+  </div>
+
+</div><!-- /bottom-grid -->
+</div><!-- /content-area -->
+</div><!-- /main-content -->
+
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+
+  // ── ANIMATED COUNTERS ─────────────────────────────────────
+  function counter(el, target, duration, prefix, suffix){
+    if(!el) return;
+    var start=0, step=target/(duration/16);
+    var t=setInterval(function(){
+      start+=step;
+      if(start>=target){start=target;clearInterval(t);}
+      el.textContent=prefix+Math.round(start).toLocaleString()+suffix;
+    },16);
+  }
+  setTimeout(function(){
+    counter(document.getElementById('cnt-clientes'), <?=$total_clientes?>, 1200,'','');
+    counter(document.getElementById('cnt-activos'),  <?=$clientes_activos?>, 1200,'','');
+    counter(document.getElementById('cnt-act'),      <?=$pct_tareas?>, 900,'','%');
+    counter(document.getElementById('cnt-pen'),      <?=$kpi_dash['penetracion_pct']?>, 900,'','%');
+    counter(document.getElementById('cnt-ops-big'),  <?=$kpi_dash['operaciones_total']?>, 1000,'','');
+    counter(document.getElementById('cnt-alerta'),   <?=$alertas_pendientes?>, 700,'','');
+    // progress bar hero
+    var hf=document.getElementById('hp-fill');
+    if(hf) setTimeout(function(){ hf.style.width='<?=$pct_tareas?>%'; },200);
+    // g-fill bars
+    document.querySelectorAll('.g-fill').forEach(function(el){
+      var w=el.style.width; el.style.width='0';
+      setTimeout(function(){ el.style.width=w; },300);
     });
-    </script>
-            <!-- Modal: Detalle de Alerta -->
-            <div class="modal fade" id="alertDetailModal" tabindex="-1" aria-hidden="true">
-                <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                    <div class="modal-content">
-                        <div id="alertDetailContent">
-                            <!-- Cargado dinámicamente -->
-                        </div>
-                    </div>
-                </div>
-            </div>
+  },400);
 
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-            <script>
-            (function(){
-                // Helper: set HTML and execute embedded scripts
-                function setHTMLWithScripts(container, html) {
-                    var parser = new DOMParser();
-                    var doc = parser.parseFromString(html, 'text/html');
-                    // clear container
-                    container.innerHTML = '';
-                    // move children
-                    Array.from(doc.body.childNodes).forEach(function(n){
-                        if (n.tagName && n.tagName.toLowerCase() === 'script') return; // skip scripts for now
-                        container.appendChild(document.importNode(n, true));
-                    });
-                    // execute scripts separately
-                    Array.from(doc.scripts || []).forEach(function(s){
-                        var ns = document.createElement('script');
-                        if (s.src) { ns.src = s.src; }
-                        ns.type = s.type || 'text/javascript';
-                        ns.text = s.textContent || s.innerText || '';
-                        container.appendChild(ns);
-                    });
-                }
+  // ── APEX GAUGE FACTORY ────────────────────────────────────
+  function makeGauge(elId, value, color){
+    var el=document.getElementById(elId);
+    if(!el) return;
+    var fill = value>=70? color : (value>=35? '#fbbf24' : '#f87171');
+    new ApexCharts(el,{
+      series:[Math.min(100,Math.max(0,value))],
+      chart:{type:'radialBar',height:130,width:'100%',
+        toolbar:{show:false},
+        animations:{enabled:true,easing:'easeinout',speed:1200,animateGradually:{enabled:true,delay:100}}},
+      plotOptions:{radialBar:{
+        startAngle:-130, endAngle:130,
+        track:{background:'#e2e8f0',strokeWidth:'70%',margin:3},
+        dataLabels:{show:true,name:{show:false},value:{
+          offsetY:6, fontSize:'17px', fontWeight:'900',
+          fontFamily:'Inter,sans-serif', color:'#1a2744',
+          formatter:function(v){return Math.round(v)+'%';}
+        }},
+        hollow:{margin:4, size:'48%', background:'transparent'}
+      }},
+      fill:{type:'gradient',gradient:{shade:'light',type:'horizontal',
+        shadeIntensity:.15, gradientToColors:[fill], inverseColors:false,
+        opacityFrom:1, opacityTo:.9, stops:[0,100]}},
+      colors:[color],
+      stroke:{lineCap:'round'},
+      tooltip:{enabled:false},
+      grid:{padding:{top:-10,bottom:-10,left:-10,right:-10}}
+    }).render();
+  }
 
-                // Restore original alertas section HTML and refresh main content area partially
-                window.cerrarModalAlerta = window.cerrarModalAlerta || function(){
-                    try {
-                        var sec = document.getElementById('alertas-section');
-                        if (window._originalAlertasHTML && sec) sec.innerHTML = window._originalAlertasHTML;
-                        // rebind alert click handlers
-                        rebindAlertClicks();
-                        // Refresh small parts of content-area if needed (counts, badges)
-                        fetch(window.location.href, { cache:'no-store' }).then(function(r){ return r.text(); }).then(function(t){
-                            try {
-                                var m = t.match(/<div class="content-area">([\s\S]*?)<\/div>\s*<\/div>\s*<\/div>/i);
-                                if (m && m[1]) {
-                                    var contentEl = document.querySelector('.content-area');
-                                    if (contentEl) contentEl.innerHTML = m[1];
-                                }
-                            } catch (err) { /* ignore */ }
-                        }).catch(function(){ /* ignore */ });
-                    } catch (err) { console.error(err); }
-                };
+  // ── RENDER GAUGES ─────────────────────────────────────────
+  var gd=<?php $ga=[];foreach($gkpis as $g) $ga[]=['k'=>$g['k'],'v'=>(float)$g['v'],'c'=>$g['c']];echo json_encode($ga);?>;
+  gd.forEach(function(g){ makeGauge('gc-'+g.k, g.v, g.c); });
 
-                function openAlertInCenter(id){
-                    if (!id) return;
-                    var sec = document.getElementById('alertas-section');
-                    if (!sec) return;
-                    // save original if not saved
-                    if (!window._originalAlertasHTML) window._originalAlertasHTML = sec.innerHTML;
-                    // show loading (keep styling similar to section)
-                    sec.innerHTML = '<div class="p-4">Cargando detalle…</div>';
-                    fetch('alertas_detalle.php?id=' + encodeURIComponent(id) + '&ajax=1')
-                        .then(function(r){ if (!r.ok) throw new Error('Error al cargar'); return r.text(); })
-                        .then(function(html){ setHTMLWithScripts(sec, html); })
-                        .catch(function(err){ sec.innerHTML = '<div class="p-4 text-danger">No se pudo cargar el detalle.</div>'; console.error(err); });
-                }
 
-                function openAlertInSidebar(id){
-                    // fallback: inject into sidebar (for pages that expect sidebar behavior)
-                    if (!id) return;
-                    var side = document.querySelector('.sidebar');
-                    if (!side) return;
-                    if (!window._originalSidebarHTML) window._originalSidebarHTML = side.innerHTML;
-                    side.innerHTML = '<div style="padding:18px;color:#fff;">Cargando detalle…</div>';
-                    fetch('alertas_detalle.php?id=' + encodeURIComponent(id) + '&ajax=1')
-                        .then(function(r){ if (!r.ok) throw new Error('Error al cargar'); return r.text(); })
-                        .then(function(html){ setHTMLWithScripts(side, html); })
-                        .catch(function(err){ side.innerHTML = '<div style="padding:18px;color:#fff;">No se pudo cargar el detalle.</div>'; console.error(err); });
-                }
+  // ── CARD HOVER GLOW ───────────────────────────────────────
+  document.querySelectorAll('.g-card').forEach(function(c){
+    c.addEventListener('mouseenter',function(){
+      var col=getComputedStyle(c).getPropertyValue('--gc').trim();
+      if(col) c.style.boxShadow='0 0 32px '+col+'28';
+    });
+    c.addEventListener('mouseleave',function(){ c.style.boxShadow=''; });
+  });
 
-                // Global entrypoint: prefer center (#alertas-section) then fallback to sidebar/modal
-                window.openAlertDetail = window.openAlertDetail || function(id){
-                    if (document.getElementById('alertas-section')) return openAlertInCenter(id);
-                    return openAlertInSidebar(id);
-                };
-
-                function onClickAlert(e){
-                    var el = e.currentTarget || this;
-                    var id = el.getAttribute('data-alerta-id');
-                    if (!id) return;
-                    // If user holds ctrl/cmd or middle click, open full page
-                    if (e.ctrlKey || e.metaKey || e.which === 2) { window.open('alertas_detalle.php?id='+encodeURIComponent(id),'_blank'); return; }
-                    // prefer global entrypoint
-                    window.openAlertDetail(id);
-                }
-
-                function rebindAlertClicks(){
-                    document.querySelectorAll('.open-alert-detail').forEach(function(node){
-                        node.removeEventListener('click', onClickAlert);
-                        node.addEventListener('click', onClickAlert);
-                    });
-                }
-
-                document.addEventListener('DOMContentLoaded', function(){
-                    // store original alertas section HTML
-                    var sec = document.getElementById('alertas-section');
-                    if (sec && !window._originalAlertasHTML) window._originalAlertasHTML = sec.innerHTML;
-                    rebindAlertClicks();
-                    // Listen for alertaRevisada events to update KPI and quick links
-                    window.addEventListener('alertaRevisada', function(ev){
-                        try {
-                            var k = document.getElementById('supervisor-alertas-pendientes');
-                            if (k) {
-                                var n = parseInt(k.textContent||k.innerText||0)||0; if (n>0) n = n-1; k.textContent = n;
-                            }
-                            var quick = document.querySelector('.quick-btn.q-red');
-                            if (quick) {
-                                var txt = quick.textContent || quick.innerText || '';
-                                var m = txt.match(/Alertas\s*\((\d+)\)/);
-                                if (m) {
-                                    var nn = parseInt(m[1]) - 1; if (nn < 0) nn = 0;
-                                    quick.innerHTML = '<i class="fas fa-bell"></i>Alertas' + (nn>0 ? ' ('+nn+')' : '');
-                                }
-                            }
-                        } catch (err) { /* ignore */ }
-                    });
-                });
-                // Intercept clicks on links with class ajax-center to load their page into the center
-                document.body.addEventListener('click', function(e){
-                    var a = e.target.closest && e.target.closest('a.ajax-center');
-                    if (!a) return;
-                    var href = a.getAttribute('href');
-                    if (!href) return;
-                    e.preventDefault();
-                    var center = document.getElementById('alertas-section') || document.querySelector('.content-area');
-                    if (!center) { window.location.href = href; return; }
-                    center.innerHTML = '<div class="p-4">Cargando…</div>';
-                    fetch(href + (href.indexOf('?')===-1? '?':'&') + 'ajax_center=1').then(function(r){ if(!r.ok) throw new Error('Error'); return r.text(); }).then(function(html){ center.innerHTML = html; if (typeof initAlertBindings === 'function') initAlertBindings(); if (typeof rebindAlertClicks === 'function') rebindAlertClicks(); }).catch(function(){ center.innerHTML = '<div class="p-4 text-danger">No se pudo cargar la sección.</div>'; });
-                });
-            })();
-            </script>
-    </body>
-    </html>
+});
+</script>
+</body>
+</html>

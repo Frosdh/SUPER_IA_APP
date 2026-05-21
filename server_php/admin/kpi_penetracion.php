@@ -26,10 +26,13 @@ $user_nombre = $_SESSION['gerente_nombre'] ?? $_SESSION['supervisor_nombre'] ?? 
 $user_rol = $_SESSION['rol'] ?? 'Supervisor';
 
 // ── Subdivisiones Principales ───────────────────────────────
-$view = $_GET['view'] ?? 'mercado';
+$vistas_orden = ['actividad', 'mercado', 'interes', 'prospeccion', 'frio', 'evaluacion', 'eficiencia', 'postventa', 'recuperacion', 'operaciones'];
+$view = $_GET['view'] ?? 'actividad';
+if (!in_array($view, $vistas_orden, true)) {
+    $view = 'actividad';
+}
 
 // Orden de vistas para navegación secuencial
-$vistas_orden = ['mercado', 'interes', 'prospeccion', 'frio', 'evaluacion', 'eficiencia', 'postventa', 'recuperacion', 'operaciones'];
 $idx_actual   = array_search($view, $vistas_orden);
 $prev_view    = ($idx_actual > 0) ? $vistas_orden[$idx_actual - 1] : null;
 $next_view    = ($idx_actual < count($vistas_orden) - 1) ? $vistas_orden[$idx_actual + 1] : null;
@@ -122,7 +125,6 @@ $data = [
         'detalle_asesores' => []
     ]
 ];
-
 if (!empty($target_ids)) {
     $params = array_merge($target_ids, [$fecha_inicio, $fecha_fin]);
     $si_fichas = 0;
@@ -982,6 +984,158 @@ if (!empty($target_ids)) {
     }
 }
 
+// ── ACTIVIDAD KPI DATA ──────────────────────────────────────
+$data['actividad'] = [
+    'asesores_detalle' => [],
+    'resumen' => [
+        'total_meta' => 0, 'total_avance' => 0, 'total_pct' => 0,
+        'total_postergadas' => 0, 'tasa_posterg' => 0,
+        'asesores_al_dia' => 0, 'asesores_en_riesgo' => 0, 'asesores_sin_actividad' => 0
+    ]
+];
+
+if (!empty($target_ids)) {
+    try {
+        // ── ¿Tiene agenda_dia datos para este período? ────────────
+        $stChkAg = $pdo->prepare("SELECT COUNT(*) FROM agenda_dia WHERE asesor_id IN ($ph) AND fecha BETWEEN ? AND ?");
+        $stChkAg->execute(array_merge($target_ids, [$fecha_inicio, $fecha_fin]));
+        $tieneAgenda = (int)$stChkAg->fetchColumn() > 0;
+
+        // ── Días laborables L-V en el período (para calcular meta) ─
+        $dias_lab = 0;
+        $dCur = new \DateTime($fecha_inicio);
+        $dFin = new \DateTime($fecha_fin);
+        while ($dCur <= $dFin) {
+            if ((int)$dCur->format('N') < 6) $dias_lab++;
+            $dCur->modify('+1 day');
+        }
+        $dias_lab = max($dias_lab, 1);
+
+        // Días laborables transcurridos hasta HOY dentro del período
+        // (para calcular el % real de avance respecto a lo esperado a la fecha)
+        $hoy       = new \DateTime(date('Y-m-d'));
+        $d_ini_p   = new \DateTime($fecha_inicio);
+        $d_fin_p   = new \DateTime($fecha_fin);
+        $d_ref_hoy = ($hoy < $d_ini_p) ? $d_ini_p : (($hoy > $d_fin_p) ? $d_fin_p : $hoy);
+        $dias_lab_hasta_hoy = 0;
+        $dH = clone $d_ini_p;
+        while ($dH <= $d_ref_hoy) {
+            if ((int)$dH->format('N') < 6) $dias_lab_hasta_hoy++;
+            $dH->modify('+1 day');
+        }
+        $dias_lab_hasta_hoy = max($dias_lab_hasta_hoy, 1);
+
+        if ($tieneAgenda) {
+            // Estrategia A: agenda_dia tiene datos → usarla
+            $sqlActv = "SELECT
+                u.nombre, a.id AS asesor_id, a.meta_tareas_diarias,
+                COALESCE(SUM(ad.total_tareas_programadas), (a.meta_tareas_diarias * $dias_lab)) AS meta,
+                COALESCE(SUM(ad.tareas_realizadas), 0) AS avance,
+                COALESCE(SUM(ad.tareas_postergadas), 0) AS postergadas,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.estado='completada' AND t.tipo_tarea='visita_frio'   AND t.fecha_realizada BETWEEN ? AND ?) AS visitas_frio_act,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.estado='completada' AND t.tipo_tarea='levantamiento' AND t.fecha_realizada BETWEEN ? AND ?) AS levantamientos_act,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.tipo_tarea='prospecto_nuevo' AND t.fecha_programada BETWEEN ? AND ?) AS prospectos_nuevos,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.fuera_de_zona=1 AND t.fecha_programada BETWEEN ? AND ?) AS tareas_fuera_zona
+                FROM asesor a
+                JOIN usuario u ON u.id = a.usuario_id
+                LEFT JOIN agenda_dia ad ON ad.asesor_id = a.id AND ad.fecha BETWEEN ? AND ?
+                WHERE a.id IN ($ph)
+                GROUP BY a.id, u.nombre, a.meta_tareas_diarias
+                ORDER BY u.nombre";
+            $actvParams = array_merge(
+                [$fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin,
+                 $fecha_inicio, $fecha_fin, $fecha_inicio, $fecha_fin,
+                 $fecha_inicio, $fecha_fin],
+                $target_ids
+            );
+        } else {
+            // Estrategia B: sin agenda_dia → 100% desde tabla tarea
+            $sqlActv = "SELECT
+                u.nombre, a.id AS asesor_id, a.meta_tareas_diarias,
+                (a.meta_tareas_diarias * $dias_lab) AS meta,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.estado='completada' AND t.fecha_realizada BETWEEN ? AND ?) AS avance,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.estado='postergada' AND t.fecha_programada BETWEEN ? AND ?) AS postergadas,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.estado='completada' AND t.tipo_tarea='visita_frio'   AND t.fecha_realizada BETWEEN ? AND ?) AS visitas_frio_act,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.estado='completada' AND t.tipo_tarea='levantamiento' AND t.fecha_realizada BETWEEN ? AND ?) AS levantamientos_act,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.tipo_tarea='prospecto_nuevo' AND t.fecha_programada BETWEEN ? AND ?) AS prospectos_nuevos,
+                (SELECT COUNT(*) FROM tarea t WHERE t.asesor_id = a.id AND t.fuera_de_zona=1 AND t.fecha_programada BETWEEN ? AND ?) AS tareas_fuera_zona
+                FROM asesor a
+                JOIN usuario u ON u.id = a.usuario_id
+                WHERE a.id IN ($ph)
+                ORDER BY u.nombre";
+            $actvParams = array_merge(
+                [$fecha_inicio, $fecha_fin, // avance
+                 $fecha_inicio, $fecha_fin, // postergadas
+                 $fecha_inicio, $fecha_fin, // visitas_frio
+                 $fecha_inicio, $fecha_fin, // levantamientos
+                 $fecha_inicio, $fecha_fin, // prospectos_nuevos
+                 $fecha_inicio, $fecha_fin],// fuera_de_zona
+                $target_ids
+            );
+        }
+
+        $stActv = $pdo->prepare($sqlActv);
+        $stActv->execute($actvParams);
+        $rows_actv = $stActv->fetchAll(PDO::FETCH_ASSOC);
+
+        $tot_meta = 0; $tot_avance = 0; $tot_posterg = 0;
+        $tot_meta_esperada = 0;
+        $al_dia = 0; $en_riesgo = 0; $sin_act = 0;
+
+        foreach ($rows_actv as &$ra) {
+            // Meta esperada a la fecha de HOY (ritmo diario × días transcurridos)
+            $meta_diaria = (int)($ra['meta_tareas_diarias'] ?? 8);
+            $ra['meta_esperada_hoy'] = $meta_diaria * $dias_lab_hasta_hoy;
+
+            // pct basado en meta esperada a la fecha (refleja ritmo actual)
+            $ra['pct'] = ($ra['meta_esperada_hoy'] > 0)
+                ? round(($ra['avance'] / $ra['meta_esperada_hoy']) * 100, 1)
+                : 0;
+
+            // Si el período ya terminó (fecha_fin < hoy), usar meta completa
+            if ($d_fin_p < $hoy) {
+                $ra['pct'] = ($ra['meta'] > 0) ? round(($ra['avance'] / $ra['meta']) * 100, 1) : 0;
+            }
+
+            $ra['tasa_posterg'] = ($ra['avance'] + $ra['postergadas'] > 0)
+                ? round(($ra['postergadas'] / ($ra['avance'] + $ra['postergadas'])) * 100, 1)
+                : 0;
+            $tot_meta            += $ra['meta'];
+            $tot_meta_esperada   += $ra['meta_esperada_hoy'];
+            $tot_avance          += $ra['avance'];
+            $tot_posterg         += $ra['postergadas'];
+            if ($ra['pct'] >= 90) $al_dia++;
+            elseif ($ra['pct'] >= 60) $en_riesgo++;
+            else $sin_act++;
+        }
+        unset($ra);
+
+        $pct_global = ($tot_meta_esperada > 0)
+            ? round(($tot_avance / $tot_meta_esperada) * 100, 1)
+            : 0;
+
+        $data['actividad']['asesores_detalle'] = $rows_actv;
+        $data['actividad']['resumen'] = [
+            'total_meta'               => $tot_meta,
+            'total_meta_esperada'      => $tot_meta_esperada,
+            'total_avance'             => $tot_avance,
+            'total_pct'                => $pct_global,
+            'total_postergadas'        => $tot_posterg,
+            'tasa_posterg'             => ($tot_avance + $tot_posterg > 0) ? round(($tot_posterg / ($tot_avance + $tot_posterg)) * 100, 1) : 0,
+            'asesores_al_dia'          => $al_dia,
+            'asesores_en_riesgo'       => $en_riesgo,
+            'asesores_sin_actividad'   => $sin_act,
+            'dias_lab_periodo'         => $dias_lab,
+            'dias_lab_hasta_hoy'       => $dias_lab_hasta_hoy,
+        ];
+    } catch (\Throwable $e) {
+        error_log("Error Actividad KPI: " . $e->getMessage());
+        if (ini_get('display_errors')) {
+            $data['actividad']['_error'] = $e->getMessage();
+        }
+    }
+}
+
 $currentPage = 'reportes_penetracion';
 $titulos_kpi = [
     'mercado' => 'Análisis de Penetración y Mercado',
@@ -992,7 +1146,8 @@ $titulos_kpi = [
     'eficiencia' => 'Eficiencia del Proceso Comercial',
     'postventa' => 'Fidelización y Post-Venta (Représtamos)',
     'recuperacion' => 'Gestión de Recuperación',
-    'operaciones' => 'Análisis de Operaciones y Desembolsos'
+    'operaciones' => 'Análisis de Operaciones y Desembolsos',
+    'actividad' => '📊 Actividad y Cumplimiento de Asesores'
 ];
 $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
 ?>
@@ -1136,7 +1291,29 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             border-radius: 20px;
             padding: 22px;
             position: sticky;
-            top: 90px;
+            top: 18px;
+            max-height: calc(100vh - 36px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            align-self: flex-start;
+        }
+
+        .ia-sidebar.ia-follow {
+            position: relative;
+            top: auto;
+            will-change: transform;
+            z-index: 20;
+        }
+
+        @media (max-width: 991.98px) {
+            .ia-sidebar,
+            .ia-sidebar.ia-follow {
+                position: relative;
+                top: auto;
+                max-height: none;
+                overflow: visible;
+                transform: none !important;
+            }
         }
 
         .insight-pill {
@@ -1146,6 +1323,98 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             margin-bottom: 10px;
             border-left: 4px solid #ffdd00;
             font-size: 11.5px;
+        }
+
+        .kpi-visual-band {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 16px;
+            margin-bottom: 22px;
+        }
+
+        .kpi-speed-card {
+            border-radius: 18px;
+            padding: 18px;
+            min-height: 255px;
+            background:
+                radial-gradient(circle at 18% 16%, rgba(255, 221, 0, .2), transparent 30%),
+                linear-gradient(145deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 14px 35px rgba(15, 23, 42, .07);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .kpi-speed-card::after {
+            content: '';
+            position: absolute;
+            inset: auto -30px -45px auto;
+            width: 145px;
+            height: 145px;
+            border-radius: 999px;
+            background: rgba(18, 58, 109, .06);
+        }
+
+        .kpi-speed-card .speed-title {
+            font-size: 11px;
+            font-weight: 900;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .kpi-speed-card .speed-caption {
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 700;
+            text-align: center;
+            margin-top: -12px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .kpi-flow-strip {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 22px;
+        }
+
+        .kpi-flow-step {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-left: 4px solid var(--flow-color, #3b82f6);
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, .04);
+        }
+
+        .kpi-flow-step small {
+            display: block;
+            color: #64748b;
+            font-size: 9px;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+        }
+
+        .kpi-flow-step strong {
+            display: block;
+            color: #0f172a;
+            font-size: 1.45rem;
+            line-height: 1.1;
+            margin-top: 4px;
+        }
+
+        @media (max-width: 992px) {
+            .kpi-visual-band { grid-template-columns: 1fr; }
+            .kpi-flow-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+
+        @media (max-width: 576px) {
+            .kpi-flow-strip { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -1239,6 +1508,9 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
 
                 <div class="kpi-tabs-wrapper">
                     <div class="kpi-tabs" id="kpiTabsContainer">
+                        <a href="?view=actividad<?= $filtros_query ?>"
+                            class="kpi-tab <?= ($view === 'actividad') ? 'active' : '' ?>" style="<?= ($view === 'actividad') ? '' : 'background:linear-gradient(135deg,#e0e7ff,#dbeafe);color:#3730a3;' ?>">
+                            <i class="fas fa-bolt me-1"></i>ACTIVIDAD</a>
                         <a href="?view=mercado<?= $filtros_query ?>"
                             class="kpi-tab <?= ($view === 'mercado') ? 'active' : '' ?>">PENETRACIÓN</a>
                         <a href="?view=interes<?= $filtros_query ?>"
@@ -1266,17 +1538,46 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             </div>
 
             <div class="row g-4">
-                <div class="<?= $view === 'operaciones' ? 'col-lg-12' : 'col-lg-8' ?>">
+                <div class="<?= in_array($view, ['operaciones']) ? 'col-lg-12' : 'col-lg-8' ?>">
                     <?php if ($view === 'mercado'): ?>
+                        <?php
+                        $mercado_total = (int)($data['mercado']['cobertura']['total'] ?? 0);
+                        $mercado_clientes = (int)($data['mercado']['cobertura']['valor'] ?? 0);
+                        $mercado_prospectos = max(0, $mercado_total - $mercado_clientes);
+                        $mercado_competencia = (int)($data['mercado']['participacion']['competencia'] ?? 0);
+                        ?>
+                        <div class="kpi-visual-band">
+                            <div class="kpi-speed-card">
+                                <div class="speed-title"><i class="fas fa-gauge-high me-2 text-primary"></i>Cobertura institucional</div>
+                                <div id="gauge-mercado-cobertura" style="min-height:205px;"></div>
+                                <div class="speed-caption"><?= $mercado_clientes ?> clientes identificados de <?= $mercado_total ?> visitas</div>
+                            </div>
+                            <div class="kpi-speed-card">
+                                <div class="speed-title"><i class="fas fa-chart-pie me-2 text-success"></i>Participación propia</div>
+                                <div id="gauge-mercado-share" style="min-height:205px;"></div>
+                                <div class="speed-caption">Balance nosotros vs competencia en el periodo</div>
+                            </div>
+                            <div class="kpi-speed-card">
+                                <div class="speed-title"><i class="fas fa-bolt me-2 text-warning"></i>Flujo de extracción</div>
+                                <div id="gauge-mercado-flujo" style="min-height:205px;"></div>
+                                <div class="speed-caption"><?= $mercado_prospectos ?> prospectos nuevos detectados</div>
+                            </div>
+                        </div>
+                        <div class="kpi-flow-strip">
+                            <div class="kpi-flow-step" style="--flow-color:#3b82f6;"><small>Extracciones</small><strong><?= $mercado_total ?></strong></div>
+                            <div class="kpi-flow-step" style="--flow-color:#10b981;"><small>Clientes institución</small><strong><?= $mercado_clientes ?></strong></div>
+                            <div class="kpi-flow-step" style="--flow-color:#f59e0b;"><small>Prospectos</small><strong><?= $mercado_prospectos ?></strong></div>
+                            <div class="kpi-flow-step" style="--flow-color:#ef4444;"><small>Competencia</small><strong><?= $mercado_competencia ?></strong></div>
+                        </div>
                         <!-- LOS 4 BLOQUES DE PENETRACIÓN (G1-G4) -->
                         <div class="segment-card" id="segment-g1">
                             <div class="sec-header">
                                 <div class="sec-title">1. Cobertura Institucional</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('g1', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('g1', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('g1', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1301,18 +1602,18 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-g1" style="width: 240px;"></div>
                             </div>
                         </div>
                         <div class="segment-card" id="segment-g2">
                             <div class="sec-header">
                                 <div class="sec-title">2. Interés Prospectos (Nuevos)</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('g2', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('g2', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('g2', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1341,18 +1642,18 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-g2" style="width: 100%;"></div>
                             </div>
                         </div>
                         <div class="segment-card" id="segment-g3">
                             <div class="sec-header">
                                 <div class="sec-title">3. Tenencia Productos (Clientes)</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('g3', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('g3', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('g3', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1381,18 +1682,18 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-g3" style="width: 100%;"></div>
                             </div>
                         </div>
                         <div class="segment-card" id="segment-g4">
                             <div class="sec-header">
                                 <div class="sec-title">4. Cuota de Mercado</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('g4', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('g4', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('g4', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1421,7 +1722,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-g4" style="width: 100%;"></div>
                             </div>
                         </div>
@@ -1430,11 +1731,11 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                             <div class="sec-header">
                                 <div class="sec-title">5. ¿Qué busca de una institución financiera?</div>
                                 <div class="view-toggle">
-                                    <button class="view-btn active" onclick="toggleView('g5', 'table')">TABLA</button>
-                                    <button class="view-btn" onclick="toggleView('g5', 'chart')">GRÁFICA</button>
+                                    <button class="view-btn" onclick="toggleView('g5', 'table')">TABLA</button>
+                                    <button class="view-btn active" onclick="toggleView('g5', 'chart')">GRÁFICA</button>
                                 </div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1463,7 +1764,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                 </table>
                                 <div class="text-muted mt-2 small text-center">Total Encuestados: <?= $qb['total'] ?></div>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-g5" style="width: 100%;"></div>
                             </div>
                         </div>
@@ -1472,11 +1773,11 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                             <div class="sec-header">
                                 <div class="sec-title">6. Acuerdos Logrados</div>
                                 <div class="view-toggle">
-                                    <button class="view-btn active" onclick="toggleView('g6', 'table')">TABLA</button>
-                                    <button class="view-btn" onclick="toggleView('g6', 'chart')">GRÁFICA</button>
+                                    <button class="view-btn" onclick="toggleView('g6', 'table')">TABLA</button>
+                                    <button class="view-btn active" onclick="toggleView('g6', 'chart')">GRÁFICA</button>
                                 </div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1505,20 +1806,58 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                 </table>
                                 <div class="text-muted mt-2 small text-center">Total Encuestados: <?= $al['total'] ?></div>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-g6" style="width: 100%;"></div>
                             </div>
                         </div>
                     <?php elseif ($view === 'interes'): ?>
+                        <?php
+                        $interes_total = (int)($data['interes']['general']['total'] ?? 0);
+                        $interes_si = (int)($data['interes']['general']['si'] ?? 0);
+                        $interes_no = (int)($data['interes']['general']['no'] ?? 0);
+                        $productos_interes = [
+                            'Ahorro' => (int)($data['interes']['productos']['ahorro'] ?? 0),
+                            'Crédito' => (int)($data['interes']['productos']['credito'] ?? 0),
+                            'Inversión' => (int)($data['interes']['productos']['inversion'] ?? 0),
+                        ];
+                        arsort($productos_interes);
+                        $producto_top = key($productos_interes) ?: 'Sin datos';
+                        $destinos_top = $data['interes']['destinos'] ?? [];
+                        arsort($destinos_top);
+                        $destino_top = key($destinos_top) ?: 'Sin destino';
+                        ?>
+                        <div class="kpi-visual-band">
+                            <div class="kpi-speed-card">
+                                <div class="speed-title"><i class="fas fa-gauge-high me-2 text-primary"></i>Interés captado</div>
+                                <div id="gauge-interes-general" style="min-height:205px;"></div>
+                                <div class="speed-caption"><?= $interes_si ?> interesados de <?= $interes_total ?> extracciones</div>
+                            </div>
+                            <div class="kpi-speed-card">
+                                <div class="speed-title"><i class="fas fa-route me-2 text-success"></i>Producto dominante</div>
+                                <div id="gauge-interes-producto" style="min-height:205px;"></div>
+                                <div class="speed-caption">Mayor tracción: <?= htmlspecialchars($producto_top) ?></div>
+                            </div>
+                            <div class="kpi-speed-card">
+                                <div class="speed-title"><i class="fas fa-filter me-2 text-warning"></i>Destino principal</div>
+                                <div id="gauge-interes-destino" style="min-height:205px;"></div>
+                                <div class="speed-caption"><?= htmlspecialchars($destino_top) ?></div>
+                            </div>
+                        </div>
+                        <div class="kpi-flow-strip">
+                            <div class="kpi-flow-step" style="--flow-color:#3b82f6;"><small>Extracciones</small><strong><?= $interes_total ?></strong></div>
+                            <div class="kpi-flow-step" style="--flow-color:#10b981;"><small>Con interés</small><strong><?= $interes_si ?></strong></div>
+                            <div class="kpi-flow-step" style="--flow-color:#64748b;"><small>Sin interés</small><strong><?= $interes_no ?></strong></div>
+                            <div class="kpi-flow-step" style="--flow-color:#f59e0b;"><small>Base destinos</small><strong><?= (int)($data['interes']['destinos_base_si'] ?? 0) ?></strong></div>
+                        </div>
                         <!-- NUEVOS BLOQUES DE INTERÉS (I1-I3) -->
                         <div class="segment-card" id="segment-i1">
                             <div class="sec-header">
                                 <div class="sec-title">1. Disposición Comercial (SI/NO)</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('i1', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('i1', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('i1', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1545,18 +1884,18 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-i1" style="width: 240px;"></div>
                             </div>
                         </div>
                         <div class="segment-card" id="segment-i2">
                             <div class="sec-header">
                                 <div class="sec-title">2. Preferencia de Productos</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('i2', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('i2', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('i2', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1590,18 +1929,18 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-i2" style="width: 100%;"></div>
                             </div>
                         </div>
                         <div class="segment-card" id="segment-i3">
                             <div class="sec-header">
                                 <div class="sec-title">3. Destino del Crédito (Estratégico)</div>
-                                <div class="view-toggle"><button class="view-btn active"
-                                        onclick="toggleView('i3', 'table')">TABLA</button><button class="view-btn"
+                                <div class="view-toggle"><button class="view-btn"
+                                        onclick="toggleView('i3', 'table')">TABLA</button><button class="view-btn active"
                                         onclick="toggleView('i3', 'chart')">GRÁFICA</button></div>
                             </div>
-                            <div class="table-view active">
+                            <div class="table-view">
                                 <table class="kpi-table">
                                     <thead>
                                         <tr>
@@ -1626,7 +1965,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="chart-view">
+                            <div class="chart-view active">
                                 <div id="chart-i3" style="width: 100%;"></div>
                             </div>
                         </div>
@@ -2236,6 +2575,337 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                 </tbody>
                             </table>
                         </div>
+                    <?php elseif ($view === 'actividad'): ?>
+                        <!-- ════════════ VISTA ACTIVIDAD ════════════ -->
+
+                        <!-- KPI SUMMARY CARDS -->
+                        <?php
+                        $res_act  = $data['actividad']['resumen'];
+                        $det_act  = $data['actividad']['asesores_detalle'];
+                        $pct_gbl  = $res_act['total_pct'];
+                        $gradColor = $pct_gbl >= 90 ? '#10b981' : ($pct_gbl >= 60 ? '#f59e0b' : '#ef4444');
+                        // Calcular totales de los campos nuevos directamente del detalle
+                        $tot_prospectos_nuevos = array_sum(array_column($det_act, 'prospectos_nuevos'));
+                        $tot_fuera_zona        = array_sum(array_column($det_act, 'tareas_fuera_zona'));
+                        ?>
+                        <div class="row g-3 mb-4">
+                            <div class="col-6 col-md-2">
+                                <div class="segment-card text-center py-3 px-2" style="border-top:4px solid #3b82f6;">
+                                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Visitas Hechas</div>
+                                    <div style="font-size:2rem;font-weight:900;color:#1e293b;line-height:1.1;"><?= $res_act['total_avance'] ?></div>
+                                    <div style="font-size:10px;color:#94a3b8;">de <?= $res_act['total_meta_esperada'] ?> esperadas a hoy</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="segment-card text-center py-3 px-2" style="border-top:4px solid <?= $gradColor ?>;">
+                                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">% Cumplimiento</div>
+                                    <div style="font-size:2rem;font-weight:900;color:<?= $gradColor ?>;line-height:1.1;"><?= $pct_gbl ?>%</div>
+                                    <div style="font-size:10px;color:#94a3b8;">sobre meta actual</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="segment-card text-center py-3 px-2" style="border-top:4px solid #f59e0b;">
+                                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Tasa Postergación</div>
+                                    <div style="font-size:2rem;font-weight:900;color:#d97706;line-height:1.1;"><?= $res_act['tasa_posterg'] ?>%</div>
+                                    <div style="font-size:10px;color:#94a3b8;"><?= $res_act['total_postergadas'] ?> postergadas</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="segment-card text-center py-3 px-2" style="border-top:4px solid #8b5cf6;">
+                                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Asesores al Día</div>
+                                    <div style="font-size:2rem;font-weight:900;color:#7c3aed;line-height:1.1;"><?= $res_act['asesores_al_dia'] ?></div>
+                                    <div style="font-size:10px;color:#94a3b8;">≥ 90% ritmo esperado</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="segment-card text-center py-3 px-2" style="border-top:4px solid #10b981;">
+                                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Prospectos Nuevos</div>
+                                    <div style="font-size:2rem;font-weight:900;color:#059669;line-height:1.1;"><?= $tot_prospectos_nuevos ?></div>
+                                    <div style="font-size:10px;color:#94a3b8;">tipo prospecto_nuevo</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-2">
+                                <div class="segment-card text-center py-3 px-2" style="border-top:4px solid #ef4444;">
+                                    <div style="font-size:10px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.5px;">Fuera de Zona</div>
+                                    <div style="font-size:2rem;font-weight:900;color:#dc2626;line-height:1.1;"><?= $tot_fuera_zona ?></div>
+                                    <div style="font-size:10px;color:#94a3b8;">tareas fuera_de_zona=1</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- STATUS PILLS -->
+                        <div class="segment-card mb-4">
+                            <div class="sec-header">
+                                <div class="sec-title"><i class="fas fa-traffic-light me-2"></i> Estado del Equipo</div>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-4">
+                                    <div class="rounded-4 p-4 text-center" style="background:linear-gradient(135deg,#10b981,#059669);">
+                                        <div style="font-size:2rem;font-weight:900;color:#fff;"><?= $res_act['asesores_al_dia'] ?></div>
+                                        <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase;"><i class="fas fa-check-circle me-1"></i> Al Día</div>
+                                        <div style="font-size:10px;color:rgba(255,255,255,.6);">≥ 90% ritmo actual</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="rounded-4 p-4 text-center" style="background:linear-gradient(135deg,#f59e0b,#d97706);">
+                                        <div style="font-size:2rem;font-weight:900;color:#fff;"><?= $res_act['asesores_en_riesgo'] ?></div>
+                                        <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase;"><i class="fas fa-exclamation-triangle me-1"></i> En Riesgo</div>
+                                        <div style="font-size:10px;color:rgba(255,255,255,.6);">60% – 89% ritmo actual</div>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="rounded-4 p-4 text-center" style="background:linear-gradient(135deg,#ef4444,#b91c1c);">
+                                        <div style="font-size:2rem;font-weight:900;color:#fff;"><?= $res_act['asesores_sin_actividad'] ?></div>
+                                        <div style="font-size:11px;color:rgba(255,255,255,.8);font-weight:700;text-transform:uppercase;"><i class="fas fa-times-circle me-1"></i> Crítico</div>
+                                        <div style="font-size:10px;color:rgba(255,255,255,.6);">< 60% ritmo actual</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+
+
+                        <!-- ════ DASHBOARD TACÓMETROS ════ -->
+                        <?php if (!empty($det_act)):
+                        $act_nombres    = array_map(fn($r) => addslashes($r['nombre']), $det_act);
+                        $act_avance     = array_column($det_act, 'avance');
+                        $act_meta       = array_column($det_act, 'meta');
+                        $act_posterg    = array_column($det_act, 'tasa_posterg');
+                        $act_prospectos = array_column($det_act, 'prospectos_nuevos');
+                        $act_pcts       = array_column($det_act, 'pct');
+                        $criticos_list  = array_filter($det_act, fn($r) => $r['pct'] < 60);
+                        ?>
+
+                        <!-- FILA 1: 3 Tacómetros Principales -->
+                        <div class="row g-4 mb-4">
+                            <!-- VELOCÍMETRO GLOBAL -->
+                            <div class="col-md-4">
+                                <div class="segment-card h-100 text-center" style="border-top:5px solid <?= $gradColor ?>;">
+                                    <div class="sec-header"><div class="sec-title"><i class="fas fa-gauge-high me-2" style="color:<?= $gradColor ?>;"></i> Cumplimiento Global</div></div>
+                                    <div id="gauge-cumplimiento-global" style="min-height:240px;"></div>
+                                    <div style="margin-top:-12px;padding:0 16px 16px;">
+                                        <div class="rounded-3 py-2 px-3 fw-bold small" style="background:<?= $pct_gbl>=90 ? '#ecfdf5' : ($pct_gbl>=60 ? '#fffbeb' : '#fef2f2') ?>;color:<?= $gradColor ?>;">
+                                            <?php if($pct_gbl>=90): ?>✅ Equipo en ÓPTIMO rendimiento
+                                            <?php elseif($pct_gbl>=60): ?>⚠️ Equipo REQUIERE atención
+                                            <?php else: ?>🚨 ALERTA: Rendimiento CRÍTICO
+                                            <?php endif; ?>
+                                        </div>
+                                        <div style="font-size:11px;color:#94a3b8;margin-top:6px;"><?= $res_act['total_avance'] ?> realizadas de <?= $res_act['total_meta_esperada'] ?> esperadas a hoy</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TACÓMETRO POSTERGACIÓN -->
+                            <div class="col-md-4">
+                                <?php $pc = $res_act['tasa_posterg']; $pcCol = $pc<=10?'#10b981':($pc<=25?'#f59e0b':'#ef4444'); ?>
+                                <div class="segment-card h-100 text-center" style="border-top:5px solid <?= $pcCol ?>;">
+                                    <div class="sec-header"><div class="sec-title"><i class="fas fa-clock-rotate-left me-2" style="color:<?= $pcCol ?>;"></i> Tasa Postergación</div></div>
+                                    <div id="gauge-postergacion" style="min-height:240px;"></div>
+                                    <div style="margin-top:-12px;padding:0 16px 16px;">
+                                        <div class="rounded-3 py-2 px-3 fw-bold small" style="background:<?= $pc<=10?'#ecfdf5':($pc<=25?'#fffbeb':'#fef2f2') ?>;color:<?= $pcCol ?>;">
+                                            <?php if($pc<=10): ?>✅ Postergación BAJO CONTROL
+                                            <?php elseif($pc<=25): ?>⚠️ Postergación MODERADA — revisar
+                                            <?php else: ?>🚨 Postergación EXCESIVA — intervenir
+                                            <?php endif; ?>
+                                        </div>
+                                        <div style="font-size:11px;color:#94a3b8;margin-top:6px;"><?= $res_act['total_postergadas'] ?> tareas postergadas en total</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- TACÓMETRO PROSPECTOS NUEVOS -->
+                            <div class="col-md-4">
+                                <div class="segment-card h-100 text-center" style="border-top:5px solid #10b981;">
+                                    <div class="sec-header"><div class="sec-title"><i class="fas fa-user-plus me-2" style="color:#059669;"></i> Captación de Prospectos</div></div>
+                                    <div id="gauge-prospectos" style="min-height:240px;"></div>
+                                    <div style="margin-top:-12px;padding:0 16px 16px;">
+                                        <div class="rounded-3 py-2 px-3 fw-bold small" style="background:#ecfdf5;color:#059669;">
+                                            <?= $tot_prospectos_nuevos ?> prospectos nuevos captados
+                                        </div>
+                                        <div style="font-size:11px;color:#94a3b8;margin-top:6px;"><?= $tot_fuera_zona ?> tareas fuera de zona detectadas</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FILA 2: Velocímetros individuales por asesor -->
+                        <div class="segment-card mb-4">
+                            <div class="sec-header">
+                                <div class="sec-title"><i class="fas fa-users me-2 text-primary"></i> Velocímetro Individual por Asesor</div>
+                                <span style="font-size:11px;color:#94a3b8;">Verde ≥90% · Ámbar 60–89% · Rojo &lt;60%</span>
+                            </div>
+                            <div class="row g-2 pb-2">
+                                <?php foreach ($det_act as $i_a => $ra_a):
+                                    $pct_a = $ra_a['pct'];
+                                    $col_a = $pct_a>=90?'#10b981':($pct_a>=60?'#f59e0b':'#ef4444');
+                                    $lbl_a = $pct_a>=90?'ÓPTIMO':($pct_a>=60?'EN RIESGO':'CRÍTICO');
+                                    $nom_corto = explode(' ', $ra_a['nombre'])[0];
+                                ?>
+                                <div class="col-6 col-md-4 col-lg-2 text-center" style="min-width:130px;">
+                                    <div id="gauge-asesor-<?= $i_a ?>" style="min-height:150px;"></div>
+                                    <div style="font-size:11px;font-weight:800;color:#1e293b;margin-top:-14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 4px;"><?= htmlspecialchars($nom_corto) ?></div>
+                                    <span style="font-size:9px;background:<?= $col_a ?>20;color:<?= $col_a ?>;padding:2px 10px;border-radius:999px;font-weight:800;display:inline-block;margin-top:2px;"><?= $lbl_a ?></span>
+                                    <div style="font-size:10px;color:#94a3b8;margin-top:2px;"><?= $ra_a['avance'] ?>/<?= $ra_a['meta_esperada_hoy'] ?> vis.</div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+
+                        <!-- FILA 3: Barras comparativas + Panel de Alertas de Impacto -->
+                        <div class="row g-4 mb-4">
+                            <div class="col-md-7">
+                                <div class="segment-card h-100">
+                                    <div class="sec-header">
+                                        <div class="sec-title"><i class="fas fa-chart-bar me-2 text-primary"></i> Visitas Realizadas vs Programadas</div>
+                                    </div>
+                                    <div id="chart-actividad-bar" style="width:100%;min-height:250px;"></div>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="segment-card h-100">
+                                    <div class="sec-header">
+                                        <div class="sec-title"><i class="fas fa-triangle-exclamation me-2" style="color:#ef4444;"></i> Panel de Alertas de Impacto</div>
+                                    </div>
+                                    <div class="d-flex flex-column gap-2 p-2" style="max-height:260px;overflow-y:auto;">
+                                        <?php foreach ($det_act as $ra_alert):
+                                            if ($ra_alert['pct'] < 60): ?>
+                                        <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:10px 14px;">
+                                            <div style="font-weight:700;font-size:12px;color:#b91c1c;"><?= htmlspecialchars($ra_alert['nombre']) ?></div>
+                                            <div style="font-size:11px;color:#64748b;"><?= $ra_alert['avance'] ?>/<?= $ra_alert['meta_esperada_hoy'] ?> visitas — <strong><?= $ra_alert['pct'] ?>%</strong></div>
+                                            <?php if($ra_alert['postergadas']>0): ?><div style="font-size:10px;color:#d97706;margin-top:2px;">⏰ <?= $ra_alert['postergadas'] ?> postergadas</div><?php endif; ?>
+                                            <?php if($ra_alert['tareas_fuera_zona']>0): ?><div style="font-size:10px;color:#7c3aed;margin-top:2px;">📍 <?= $ra_alert['tareas_fuera_zona'] ?> fuera de zona</div><?php endif; ?>
+                                        </div>
+                                        <?php elseif($ra_alert['pct'] < 90 && $ra_alert['postergadas'] > 3): ?>
+                                        <div style="background:#fffbeb;border-left:4px solid #f59e0b;border-radius:8px;padding:8px 14px;">
+                                            <div style="font-weight:700;font-size:12px;color:#92400e;"><?= htmlspecialchars($ra_alert['nombre']) ?></div>
+                                            <div style="font-size:10px;color:#64748b;"><?= $ra_alert['pct'] ?>% cumpl. · <?= $ra_alert['postergadas'] ?> postergadas</div>
+                                        </div>
+                                        <?php endif; endforeach; ?>
+                                        <?php if(empty($criticos_list)): ?>
+                                        <div style="background:#ecfdf5;border-left:4px solid #10b981;border-radius:10px;padding:20px;text-align:center;">
+                                            <i class="fas fa-check-circle fa-2x" style="color:#10b981;"></i>
+                                            <div style="font-weight:800;color:#059669;margin-top:8px;font-size:13px;">¡Sin alertas críticas!</div>
+                                            <div style="font-size:11px;color:#64748b;margin-top:4px;">Todo el equipo supera el 60%</div>
+                                        </div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
+
+                        <script>
+                        (function(){
+                        <?php
+                        if (!empty($det_act)):
+                        $act_nombres    = array_map(fn($r) => addslashes($r['nombre']), $det_act);
+                        $act_avance     = array_column($det_act, 'avance');
+                        $act_meta       = array_column($det_act, 'meta');
+                        $act_posterg    = array_column($det_act, 'tasa_posterg');
+                        $act_prospectos = array_column($det_act, 'prospectos_nuevos');
+                        $act_pcts       = array_column($det_act, 'pct');
+                        endif;
+                        ?>
+                        var actNombres   = <?= json_encode(array_values($act_nombres ?? []), JSON_UNESCAPED_UNICODE) ?>;
+                        var actAvance    = <?= json_encode(array_values($act_avance ?? [])) ?>;
+                        var actMeta      = <?= json_encode(array_values($act_meta ?? [])) ?>;
+                        var actPosterg   = <?= json_encode(array_values($act_posterg ?? [])) ?>;
+                        var actProspectos= <?= json_encode(array_values($act_prospectos ?? [])) ?>;
+                        var actPcts      = <?= json_encode(array_values($act_pcts ?? [])) ?>;
+                        var pctGlobal    = <?= (float)($pct_gbl ?? 0) ?>;
+                        var tasaPosterg  = <?= (float)($res_act['tasa_posterg'] ?? 0) ?>;
+                        var totProspectos= <?= (int)($tot_prospectos_nuevos ?? 0) ?>;
+
+                        function gColor(p){ return p>=90?'#10b981':(p>=60?'#f59e0b':'#ef4444'); }
+                        function gTrack(p){ return p>=90?'#ecfdf5':(p>=60?'#fffbeb':'#fef2f2'); }
+
+                        var gaugeBase = function(el, series, label, color, track, fmt, h){
+                            if(!document.getElementById(el)) return;
+                            new ApexCharts(document.getElementById(el), {
+                                chart:{ type:'radialBar', height:h||260, toolbar:{show:false}, fontFamily:'inherit', animations:{enabled:true,easing:'easeinout',speed:900} },
+                                series:[series],
+                                plotOptions:{ radialBar:{
+                                    startAngle:-135, endAngle:135,
+                                    hollow:{ size:'58%', background:'transparent' },
+                                    track:{ background:track, strokeWidth:'100%', margin:5 },
+                                    dataLabels:{
+                                        name:{ offsetY:-10, fontSize:'12px', color:'#64748b', fontWeight:700, show:!!label },
+                                        value:{ offsetY:10, fontSize:'2.4rem', fontWeight:900, color:color, formatter:fmt||function(v){return v+'%';} }
+                                    }
+                                }},
+                                fill:{ type:'gradient', gradient:{ shade:'dark', type:'horizontal', gradientToColors:[color], stops:[0,100] } },
+                                colors:[color],
+                                labels:[label||''],
+                                stroke:{ lineCap:'round' }
+                            }).render();
+                        };
+
+                        // ── TACÓMETROS PRINCIPALES ──────────────────────────────────
+                        gaugeBase('gauge-cumplimiento-global', pctGlobal, 'del equipo', gColor(pctGlobal), gTrack(pctGlobal), function(v){return v+'%';}, 250);
+
+                        // Postergación (invertido: rojo si alto)
+                        var pcCol = tasaPosterg<=10?'#10b981':(tasaPosterg<=25?'#f59e0b':'#ef4444');
+                        gaugeBase('gauge-postergacion', Math.min(tasaPosterg, 100), 'postergado', pcCol, '#f1f5f9', function(v){return v+'%';}, 250);
+
+                        // Prospectos: serie es pct relativo a visitas realizadas
+                        var totMeta = actMeta.reduce(function(a,b){return a+b;},0);
+                        var pctProsp = totMeta>0 ? Math.min(Math.round(totProspectos/totMeta*100),100) : 0;
+                        if(document.getElementById('gauge-prospectos')){
+                            new ApexCharts(document.getElementById('gauge-prospectos'), {
+                                chart:{type:'radialBar',height:250,toolbar:{show:false},fontFamily:'inherit',animations:{enabled:true,easing:'easeinout',speed:900}},
+                                series:[pctProsp],
+                                plotOptions:{radialBar:{
+                                    startAngle:-135,endAngle:135,
+                                    hollow:{size:'58%',background:'transparent'},
+                                    track:{background:'#ecfdf5',strokeWidth:'100%',margin:5},
+                                    dataLabels:{
+                                        name:{offsetY:-10,fontSize:'12px',color:'#64748b',fontWeight:700,show:true},
+                                        value:{offsetY:10,fontSize:'2rem',fontWeight:900,color:'#059669',
+                                            formatter:function(){ return totProspectos+' nuevos'; }}
+                                    }
+                                }},
+                                fill:{type:'gradient',gradient:{shade:'dark',type:'horizontal',gradientToColors:['#059669'],stops:[0,100]}},
+                                colors:['#10b981'],labels:['prospectos'],stroke:{lineCap:'round'}
+                            }).render();
+                        }
+
+                        // ── VELOCÍMETROS POR ASESOR ─────────────────────────────────
+                        actPcts.forEach(function(pct, i){
+                            var el = 'gauge-asesor-'+i;
+                            if(!document.getElementById(el)) return;
+                            new ApexCharts(document.getElementById(el),{
+                                chart:{type:'radialBar',height:148,sparkline:{enabled:true},toolbar:{show:false},fontFamily:'inherit',animations:{enabled:true,easing:'easeinout',speed:700}},
+                                series:[pct],
+                                plotOptions:{radialBar:{
+                                    startAngle:-135,endAngle:135,
+                                    hollow:{size:'48%'},
+                                    track:{background:gTrack(pct)},
+                                    dataLabels:{
+                                        name:{show:false},
+                                        value:{offsetY:6,fontSize:'1.15rem',fontWeight:900,color:gColor(pct),formatter:function(v){return v+'%';}}
+                                    }
+                                }},
+                                colors:[gColor(pct)],stroke:{lineCap:'round'}
+                            }).render();
+                        });
+
+                        // ── BARRAS: Realizadas vs Programadas ───────────────────────
+                        if(document.getElementById('chart-actividad-bar') && actNombres.length>0){
+                            new ApexCharts(document.getElementById('chart-actividad-bar'),{
+                                chart:{type:'bar',height:250,toolbar:{show:false},fontFamily:'inherit'},
+                                series:[{name:'Realizadas',data:actAvance},{name:'Programadas',data:actMeta}],
+                                xaxis:{categories:actNombres,labels:{style:{fontSize:'10px'}}},
+                                colors:['#3b82f6','#e2e8f0'],
+                                plotOptions:{bar:{borderRadius:5,columnWidth:'60%',dataLabels:{position:'top'}}},
+                                dataLabels:{enabled:true,style:{fontSize:'9px',colors:['#1e293b','#94a3b8']}},
+                                legend:{position:'top',fontSize:'11px'},
+                                grid:{borderColor:'#f1f5f9'},
+                                tooltip:{y:{formatter:function(v){return v+' visitas';}}}
+                            }).render();
+                        }
+                        })();
+                        </script>
+
                     <?php elseif ($view === 'operaciones'): ?>
                         <div class="row g-4 mb-4">
                             <div class="col-lg-8">
@@ -2281,7 +2951,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                             </div>
                             
                             <div class="col-lg-4">
-                                <div class="ia-sidebar shadow-lg m-0">
+                                <div class="ia-sidebar ia-follow shadow-lg m-0">
                                     <div class="d-flex align-items-center gap-3 mb-4">
                                         <div class="bg-warning rounded-circle p-2"><i class="fas fa-brain text-dark"></i></div>
                                         <h6 class="m-0 fw-bold">IA Vector Intelligence</h6>
@@ -2740,9 +3410,9 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             </div>
         <?php endif; ?>
             </div>
-                <?php if ($view !== 'operaciones'): ?>
+                <?php if (!in_array($view, ['operaciones'])): ?>
                 <div class="col-lg-4">
-                    <div class="ia-sidebar shadow-lg">
+                    <div class="ia-sidebar ia-follow shadow-lg">
                         <div class="d-flex align-items-center gap-3 mb-4">
                             <div class="bg-warning rounded-circle p-2"><i class="fas fa-brain text-dark"></i></div>
                             <h6 class="m-0 fw-bold">IA Vector Intelligence</h6>
@@ -2759,7 +3429,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
 
                             <?php if ($view === 'mercado' || $view === 'interes'): ?>
                                 <div class="mb-3">
-                                    <?php 
+                                    <?php
                                         $top_prod = 'Crédito';
                                         $max_v = max($data['interes']['productos']['ahorro'], $data['interes']['productos']['credito'], $data['interes']['productos']['inversion']);
                                         if($max_v == $data['interes']['productos']['ahorro']) $top_prod = 'Ahorro';
@@ -2776,7 +3446,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                 </div>
                             <?php elseif ($view === 'prospeccion'): ?>
                                 <div class="mb-3">
-                                    <?php 
+                                    <?php
                                         $pct_p = $data['prospeccion']['pct_total'] ?? 0;
                                         $meta_restante = max(0, ($data['prospeccion']['meta_total'] ?? 0) - ($data['prospeccion']['avance_total'] ?? 0));
                                     ?>
@@ -2865,6 +3535,22 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                         Estrategia: Incentivar représtamos en clientes con > 6 meses de antigüedad.
                                     </div>
                                 </div>
+                            <?php elseif ($view === 'actividad'): ?>
+                                <div class="mb-3">
+                                    <?php
+                                        $alerta_riesgo = ($res_act['asesores_en_riesgo'] ?? 0) + ($res_act['asesores_sin_actividad'] ?? 0);
+                                        $al_dia = $res_act['asesores_al_dia'] ?? 0;
+                                        $pct_equipo = $res_act['total_pct'] ?? 0;
+                                    ?>
+                                    <div class="insight-pill" style="border-left-color: <?= $pct_equipo >= 90 ? '#10b981' : '#ef4444' ?>;">
+                                        <i class="fas fa-tachometer-alt me-2"></i>
+                                        Ritmo Global: <strong><?= $pct_equipo ?>%</strong>. <?= $pct_equipo >= 90 ? 'Excelente tracción del equipo.' : 'Equipo por debajo de la meta esperada.' ?>
+                                    </div>
+                                    <div class="insight-pill" style="border-left-color: <?= $al_dia >= $alerta_riesgo ? '#3b82f6' : '#f59e0b' ?>;">
+                                        <i class="fas fa-users-cog me-2"></i>
+                                        Composición: <?= $al_dia ?> asesores al día vs <?= $alerta_riesgo ?> con problemas de ritmo.
+                                    </div>
+                                </div>
                             <?php endif; ?>
 
                             <div class="mt-4 pt-3 border-top border-secondary">
@@ -2906,11 +3592,142 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             card.querySelector('.chart-view').classList.toggle('active', view === 'chart');
             if (view === 'chart') window.dispatchEvent(new Event('resize'));
         }
+        function moveKpiPercentColumnsFirst() {
+            const percentKeys = ['%', 'pct', 'share', 'cobertura', 'eficiencia', 'aprobacion', 'aprobación', 'recuperacion', 'recuperación', 'fidelizacion', 'fidelización', 'levantamiento', 'postergacion', 'postergación'];
+
+            document.querySelectorAll('.kpi-table').forEach(table => {
+                if (table.dataset.percentFirstReady === '1') return;
+
+                const headerRow = table.tHead ? table.tHead.rows[0] : table.querySelector('thead tr');
+                if (!headerRow) return;
+
+                const headers = Array.from(headerRow.cells);
+                const percentIndex = headers.findIndex(cell => {
+                    const text = cell.textContent.trim().toLowerCase();
+                    return percentKeys.some(key => text.includes(key));
+                });
+
+                if (percentIndex <= 0) return;
+
+                Array.from(table.rows).forEach(row => {
+                    if (row.cells.length <= percentIndex) return;
+                    row.insertBefore(row.cells[percentIndex], row.cells[0]);
+                });
+
+                table.dataset.percentFirstReady = '1';
+            });
+        }
+        window.addEventListener('DOMContentLoaded', moveKpiPercentColumnsFirst);
+        function initIaFollowPanels() {
+            const panels = Array.from(document.querySelectorAll('.ia-sidebar.ia-follow'));
+            if (!panels.length) return;
+
+            const scrollRoot = document.querySelector('.content-area') || window;
+            const getRootRect = () => scrollRoot === window
+                ? { top: 0, bottom: window.innerHeight }
+                : scrollRoot.getBoundingClientRect();
+
+            panels.forEach(panel => {
+                const holder = panel.parentElement;
+                if (holder && !holder.dataset.iaFollowReady) {
+                    holder.dataset.iaFollowReady = '1';
+                    holder.style.position = 'relative';
+                }
+            });
+
+            const update = () => {
+                if (window.innerWidth < 992) {
+                    panels.forEach(panel => {
+                        panel.style.position = '';
+                        panel.style.top = '';
+                        panel.style.left = '';
+                        panel.style.width = '';
+                        panel.style.transform = '';
+                    });
+                    return;
+                }
+
+                const rootRect = getRootRect();
+                const anchorTop = rootRect.top + 18;
+
+                panels.forEach(panel => {
+                    const row = panel.closest('.row');
+                    const holder = panel.parentElement;
+                    if (!row || !holder) return;
+
+                    const rowRect = row.getBoundingClientRect();
+                    const holderRect = holder.getBoundingClientRect();
+                    const panelHeight = panel.offsetHeight;
+                    const maxShift = Math.max(0, row.offsetHeight - panelHeight);
+                    const shouldFix = rowRect.top <= anchorTop && rowRect.bottom - panelHeight >= anchorTop;
+                    const shouldPinBottom = rowRect.bottom - panelHeight < anchorTop;
+
+                    panel.style.width = `${holderRect.width}px`;
+
+                    if (shouldFix) {
+                        panel.style.position = 'fixed';
+                        panel.style.top = `${anchorTop}px`;
+                        panel.style.left = `${holderRect.left}px`;
+                        panel.style.transform = '';
+                    } else {
+                        panel.style.position = 'relative';
+                        panel.style.top = '';
+                        panel.style.left = '';
+                        panel.style.transform = shouldPinBottom ? `translateY(${maxShift}px)` : '';
+                    }
+                });
+            };
+
+            let ticking = false;
+            const requestUpdate = () => {
+                if (ticking) return;
+                ticking = true;
+                window.requestAnimationFrame(() => {
+                    update();
+                    ticking = false;
+                });
+            };
+
+            if (scrollRoot === window) {
+                window.addEventListener('scroll', requestUpdate, { passive: true });
+            } else {
+                scrollRoot.addEventListener('scroll', requestUpdate, { passive: true });
+            }
+            window.addEventListener('resize', requestUpdate);
+            update();
+        }
+        window.addEventListener('DOMContentLoaded', initIaFollowPanels);
         const commonOpt = { chart: { toolbar: { show: false }, fontFamily: 'Inter, sans-serif' }, dataLabels: { enabled: false }, legend: { position: 'bottom', fontSize: '11px' } };
         const palette = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#f97316', '#84cc16', '#14b8a6'];
+        function renderSpeedGauge(selector, value, label, color, formatter) {
+            const el = document.querySelector(selector);
+            if (!el) return;
+            new ApexCharts(el, {
+                chart: { type: 'radialBar', height: 220, sparkline: { enabled: true }, toolbar: { show: false }, fontFamily: 'Inter, sans-serif' },
+                series: [Math.max(0, Math.min(100, Number(value) || 0))],
+                colors: [color],
+                plotOptions: {
+                    radialBar: {
+                        startAngle: -135,
+                        endAngle: 135,
+                        hollow: { size: '58%' },
+                        track: { background: '#e2e8f0', strokeWidth: '97%' },
+                        dataLabels: {
+                            name: { show: true, offsetY: 74, fontSize: '10px', fontWeight: 900, color: '#64748b' },
+                            value: { offsetY: -8, fontSize: '32px', fontWeight: 900, color: color, formatter: formatter || ((v) => v + '%') }
+                        }
+                    }
+                },
+                labels: [label],
+                stroke: { lineCap: 'round' }
+            }).render();
+        }
 
         <?php if ($view === 'mercado'): ?>
             try {
+                renderSpeedGauge("#gauge-mercado-cobertura", <?= (float)($data['mercado']['cobertura']['pct'] ?? 0) ?>, 'COBERTURA', '#3b82f6');
+                renderSpeedGauge("#gauge-mercado-share", <?= (float)($data['mercado']['participacion']['nosotros_pct'] ?? 0) ?>, 'NOSOTROS', '#10b981');
+                renderSpeedGauge("#gauge-mercado-flujo", <?= (float)($data['mercado']['cobertura']['total'] ?? 0) > 0 ? round((max(0, (int)($data['mercado']['cobertura']['total'] ?? 0) - (int)($data['mercado']['cobertura']['valor'] ?? 0)) / max(1, (int)($data['mercado']['cobertura']['total'] ?? 0))) * 100, 1) : 0 ?>, 'PROSPECTOS', '#f59e0b');
                 new ApexCharts(document.querySelector("#chart-g1"), { ...commonOpt, series: [<?= (int) ($data['mercado']['cobertura']['valor'] ?? 0) ?>, <?= max(0, (int) ($data['mercado']['cobertura']['total'] ?? 0) - (int) ($data['mercado']['cobertura']['valor'] ?? 0)) ?>], chart: { type: 'donut', height: 230 }, labels: ['Clientes', 'Prospectos'], colors: ['#3b82f6', '#cbd5e1'], plotOptions: { pie: { donut: { size: '75%', labels: { show: true, total: { show: true, label: 'Cobertura', formatter: () => '<?= $data['mercado']['cobertura']['pct'] ?? 0 ?>%' } } } } } }).render();
                 new ApexCharts(document.querySelector("#chart-g2"), { ...commonOpt, series: [{ name: 'Interés', data: [<?= (int) ($data['mercado']['tipo_cuenta_enc']['ahorro'] ?? 0) ?>, <?= (int) ($data['mercado']['tipo_cuenta_enc']['corriente'] ?? 0) ?>] }], chart: { type: 'bar', height: 230 }, xaxis: { categories: ['Ahorro', 'Corriente'] }, colors: [palette[0], palette[1]], plotOptions: { bar: { distributed: true, borderRadius: 8 } } }).render();
                 new ApexCharts(document.querySelector("#chart-g3"), { ...commonOpt, series: [{ name: 'Ahorro', data: [<?= (int) ($data['mercado']['tipo_cuenta_cli']['ahorro'] ?? 0) ?>] }, { name: 'Corriente', data: [<?= (int) ($data['mercado']['tipo_cuenta_cli']['corriente'] ?? 0) ?>] }], chart: { type: 'bar', height: 230, stacked: true }, plotOptions: { bar: { horizontal: false, columnWidth: '40%', borderRadius: 4 } }, colors: ['#f59e0b', '#3b82f6'], xaxis: { categories: ['Clientes Actuales'] } }).render();
@@ -2920,6 +3737,9 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             } catch (e) { console.error(e); }
         <?php elseif ($view === 'interes'): ?>
             try {
+                renderSpeedGauge("#gauge-interes-general", <?= (float)($data['interes']['general']['si_pct'] ?? 0) ?>, 'INTERÉS', '#3b82f6');
+                renderSpeedGauge("#gauge-interes-producto", <?= max((float)($data['interes']['productos']['ahorro_pct'] ?? 0), (float)($data['interes']['productos']['credito_pct'] ?? 0), (float)($data['interes']['productos']['inversion_pct'] ?? 0)) ?>, 'TOP PRODUCTO', '#10b981');
+                renderSpeedGauge("#gauge-interes-destino", <?= (float)($data['interes']['destinos_base_si'] ?? 0) > 0 && !empty($data['interes']['destinos']) ? round((max($data['interes']['destinos']) / max(1, (int)($data['interes']['destinos_base_si'] ?? 0))) * 100, 1) : 0 ?>, 'TOP DESTINO', '#f59e0b');
                 new ApexCharts(document.querySelector("#chart-i1"), { ...commonOpt, series: [<?= (int) ($data['interes']['general']['si'] ?? 0) ?>, <?= (int) ($data['interes']['general']['no'] ?? 0) ?>], chart: { type: 'donut', height: 230 }, labels: ['Interesados (SI)', 'Sin Interés (NO)'], colors: [palette[0], '#cbd5e1'] }).render();
                 new ApexCharts(document.querySelector("#chart-i2"), { ...commonOpt, series: [{ name: 'Vectores', data: [<?= (int) ($data['interes']['productos']['ahorro'] ?? 0) ?>, <?= (int) ($data['interes']['productos']['credito'] ?? 0) ?>, <?= (int) ($data['interes']['productos']['inversion'] ?? 0) ?>] }], chart: { type: 'bar', height: 230 }, xaxis: { categories: ['Ahorro', 'Crédito', 'Inversión'] }, colors: [palette[1], palette[2], palette[0]], plotOptions: { bar: { distributed: true, borderRadius: 8 } } }).render();
 
