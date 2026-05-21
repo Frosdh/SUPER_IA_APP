@@ -292,6 +292,30 @@ body {
 .badge-secondary{ background: #f1f5f9; color: #475569; }
 .badge-orange   { background: #ffedd5; color: #9a3412; }
 
+/* Animated sidebar alert badge (created dynamically) */
+.sidebar-alert-badge {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 22px;
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 12px;
+    transition: transform .28s cubic-bezier(.2,.9,.2,1), opacity .22s ease, background-color .18s ease;
+    transform-origin: center center;
+}
+.sidebar-alert-badge.badge-pop {
+    transform: scale(1.18);
+}
+.sidebar-alert-badge.badge-fade {
+    opacity: 0; transform: translateY(-4px) scale(.98);
+}
+.badge-primary  { background: #ede9fe; color: #5b21b6; }
+.badge-secondary{ background: #f1f5f9; color: #475569; }
+.badge-orange   { background: #ffedd5; color: #9a3412; }
+
 /* ── Botones ───────────────────────────────────────────────── */
 .btn-premium {
     background: linear-gradient(135deg, var(--primary), var(--primary-end));
@@ -488,6 +512,48 @@ img, video, canvas, svg, iframe {
     top:   max(12px, 1vh)       !important;
 }
 
+/* ── Alert toasts (esquina inferior derecha) ──────────────*/
+#alert-toast-container {
+    position: fixed;
+    bottom: max(12px, 1vh);
+    right:  max(12px, 1vw);
+    z-index: 99999;
+    display: flex;
+    flex-direction: column-reverse; /* newest at bottom visually, but we append top-down */
+    gap: 10px;
+    align-items: flex-end;
+    pointer-events: none; /* allow clicks only on children */
+}
+
+.alert-toast {
+    pointer-events: auto;
+    width: 320px;
+    max-width: min(92vw, 380px);
+    background: linear-gradient(135deg, #ffffff, #f8fafc);
+    border: 1px solid rgba(15,23,42,0.06);
+    box-shadow: 0 10px 30px rgba(2,6,23,0.12);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    padding: 12px 12px 12px 14px;
+    transition: transform .25s ease, opacity .25s ease;
+    transform: translateY(6px);
+    opacity: 0;
+}
+.alert-toast .alert-body { flex:1; min-width:0; }
+.alert-toast .alert-title { font-weight:800; color:#0f172a; font-size:14px; margin-bottom:4px; }
+.alert-toast .alert-msg   { color: #475569; font-size:13px; line-height:1.15; max-height:3.6em; overflow:hidden; text-overflow:ellipsis; }
+.alert-toast .alert-close { background:transparent; border:none; color:#6b7280; font-size:18px; line-height:1; padding:6px 8px; border-radius:8px; cursor:pointer; }
+.alert-toast.hide { transform: translateY(12px); opacity: 0; }
+.alert-toast:not(.hide) { transform: translateY(0); opacity: 1; }
+
+@media (max-width: 640px) {
+    #alert-toast-container { right: 8px; left: 8px; align-items: center; }
+    .alert-toast { width: calc(100% - 16px); max-width: 100%; }
+}
+
 /* ── Mapas Leaflet ───────────────────────────────────────────*/
 .leaflet-container,
 [id*="map"],
@@ -540,6 +606,7 @@ img, video, canvas, svg, iframe {
     .col-md-3, .col-md-4, .col-6 {
         flex: 0 0 100% !important;
         max-width: 100% !important;
+        
     }
 }
 

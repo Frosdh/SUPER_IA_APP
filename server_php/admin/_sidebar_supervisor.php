@@ -97,6 +97,17 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
         </a>
     </div>
 
+    <!-- ANÁLISIS -->
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">ANÁLISIS</div>
+        <a href="alertas.php" class="sidebar-link <?= ($currentPage === 'alertas') ? 'active' : '' ?>">
+            <i class="fas fa-bell"></i> <span>Alertas</span>
+            <?php if (!empty($alertas_pendientes) && $alertas_pendientes > 0): ?>
+                <span class="badge bg-danger ms-auto sidebar-alert-badge" style="font-size:10px;padding:3px 7px;border-radius:10px;"><?= $alertas_pendientes ?></span>
+            <?php endif; ?>
+        </a>
+    </div>
+
     <!-- MI EQUIPO -->
     <div class="sidebar-section">
         <div class="sidebar-section-title">MI EQUIPO</div>
