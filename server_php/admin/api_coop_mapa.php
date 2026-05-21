@@ -36,6 +36,8 @@ $conductores = $stmt->fetchAll();
 $totales = ['libre' => 0, 'ocupado' => 0];
 foreach ($conductores as $c) {
     $totales[$c['estado']] = ($totales[$c['estado']] ?? 0) + 1;
+
+    
 }
 
 echo json_encode([

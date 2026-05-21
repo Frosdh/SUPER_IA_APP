@@ -58,6 +58,8 @@ class Super_IAUI {
         this._knownAlertIds = new Set();
         this.pollInterval = 8000;
         this._pollHandle = setInterval(() => this.pollAlerts(), this.pollInterval);
+        // Ejecutar un primer poll inmediato para mostrar alertas sin esperar el intervalo
+        setTimeout(() => this.pollAlerts(), 200);
     }
 
     /**
@@ -153,16 +155,20 @@ class Super_IAUI {
 
     async pollAlerts() {
         try {
+            console.debug('[Super_IA] pollAlerts -> requesting api_alertas_recientes.php');
             const res = await fetch('api_alertas_recientes.php?_ts=' + Date.now(), { credentials: 'same-origin' });
-            if (!res.ok) return;
+            console.debug('[Super_IA] pollAlerts -> http status', res.status);
+            if (!res.ok) return console.warn('[Super_IA] pollAlerts -> non-ok response');
             const data = await res.json();
-            if (!data || !Array.isArray(data.alerts)) return;
+            console.debug('[Super_IA] pollAlerts -> data', data);
+            if (!data || !Array.isArray(data.alerts)) return console.warn('[Super_IA] pollAlerts -> invalid payload');
 
             // recorrer en orden (más reciente primero)
             let unseen = 0;
             for (const a of data.alerts) {
                 if ((a.vista === 0 || a.vista === '0' || a.vista === null) ) unseen++;
                 if (!this._knownAlertIds.has(a.id)) {
+                    console.debug('[Super_IA] New alert:', a.id, a.title, a.message);
                     this.pushAlert({ id: a.id, title: a.title, message: a.message, author: a.author, initials: a.initials });
                     this._knownAlertIds.add(a.id);
                 }
@@ -174,8 +180,7 @@ class Super_IAUI {
                 this._knownAlertIds = new Set(Array.from(this._knownAlertIds).slice(0,100));
             }
         } catch (err) {
-            // silenciar errores de red
-            // console.warn('pollAlerts error', err);
+            console.warn('[Super_IA] pollAlerts error', err);
         }
     }
 
