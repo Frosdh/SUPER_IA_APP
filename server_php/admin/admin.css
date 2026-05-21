@@ -418,3 +418,124 @@ body {
 [data-theme="dark"] input, [data-theme="dark"] select, [data-theme="dark"] textarea {
     background-color: var(--bg) !important; color: #fff !important; border-color: var(--border) !important;
 }
+
+/* =============================================================
+   ZOOM & RESPONSIVE FIX — admin.css
+   Garantiza que los paneles internos se vean bien a cualquier
+   nivel de zoom del navegador (75% — 200%).
+   ============================================================= */
+
+/* ── Body y layout raíz ──────────────────────────────────────*/
+body {
+    overflow-x: hidden !important;
+    overflow-y: auto   !important;
+    height: auto       !important;
+}
+
+/* ── Sidebar: sticky en lugar de fixed ───────────────────────
+   position:fixed usa coordenadas de ventana; al hacer zoom
+   el sidebar queda flotando fuera del flujo del documento.    */
+.sidebar {
+    position: sticky  !important;
+    top: 0            !important;
+    height: 100vh     !important;
+    overflow-y: auto  !important;
+    flex-shrink: 0    !important;
+    align-self: flex-start !important;
+}
+
+/* ── Content area: scroll propio ────────────────────────────*/
+.content-area,
+main,
+[class*="main-content"] {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* ── Cards y wrappers: nunca salirse ─────────────────────────*/
+.card, .card-body,
+[class*="card-wrap"],
+[class*="panel-wrap"] {
+    max-width: 100% !important;
+    overflow-x: auto;
+}
+
+/* ── Tablas: scroll horizontal en vez de romper el layout ───*/
+.table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { min-width: 0 !important; }
+
+/* ── Imágenes y media ────────────────────────────────────────*/
+img, video, canvas, svg, iframe {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ── Toast: nunca fuera del viewport ────────────────────────*/
+.toast-container {
+    max-width: min(360px, 96vw) !important;
+    right: max(12px, 1vw)       !important;
+    top:   max(12px, 1vh)       !important;
+}
+
+/* ── Mapas Leaflet ───────────────────────────────────────────*/
+.leaflet-container,
+[id*="map"],
+[class*="map-wrap"] {
+    max-width: 100%  !important;
+    width: 100%      !important;
+    height: clamp(300px, 55vh, 750px) !important;
+}
+
+/* ── Responsive breakpoints para zoom alto ───────────────────
+   150 % zoom en 1920px → ~1280px efectivos
+   200 % zoom en 1920px → ~960px efectivos
+   ----------------------------------------------------------- */
+@media (max-width: 1100px) {
+    .sidebar { width: 200px !important; }
+}
+
+@media (max-width: 900px) {
+    /* Sidebar colapsa a iconos */
+    .sidebar { width: 60px !important; }
+    .sidebar .brand span,
+    .sidebar .sidebar-link span,
+    .sidebar .sidebar-link small,
+    .sidebar [class*="label"],
+    .sidebar [class*="text"] { display: none !important; }
+    .sidebar .sidebar-link { justify-content: center; padding: 10px !important; }
+    .sidebar .brand { justify-content: center; padding: 14px 0 !important; }
+}
+
+@media (max-width: 640px) {
+    /* Sidebar se oculta, layout de una columna */
+    .sidebar { display: none !important; }
+    .content-area, main { padding: 16px !important; }
+
+    /* Grids de métricas → 1 columna */
+    [class*="metrics-grid"],
+    [class*="stats-grid"],
+    [class*="kpi-grid"] {
+        grid-template-columns: 1fr !important;
+    }
+    .row { --bs-gutter-x: 0.75rem; }
+    .col-md-3, .col-md-4, .col-lg-3, .col-lg-4 {
+        flex: 0 0 50% !important;
+        max-width: 50% !important;
+    }
+    .col-md-6 { flex: 0 0 100% !important; max-width: 100% !important; }
+}
+
+@media (max-width: 400px) {
+    .col-md-3, .col-md-4, .col-6 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+    }
+}
+
+/* ── Scrollbar elegante ──────────────────────────────────────*/
+::-webkit-scrollbar       { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(251,191,36,.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(251,191,36,.55); }

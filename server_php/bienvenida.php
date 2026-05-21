@@ -6,6 +6,7 @@
   <title>SUPER_IA — Bienvenido</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+  <link rel="stylesheet" href="admin/zoom-fix.css" />
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,7 +35,9 @@
       background: var(--navy);
       color: var(--white);
       min-height: 100vh;
+      height: auto;
       overflow-x: hidden;
+      overflow-y: auto;
     }
 
     /* ── FONDO CON CÍRCULOS (estilo auth) ────────────────── */
@@ -75,9 +78,10 @@
     /* ── PÁGINA ──────────────────────────────────────────── */
     .page {
       position: relative; z-index: 1;
-      max-width: 1080px;
+      width: min(1080px, 100%);
+      max-width: 100%;
       margin: 0 auto;
-      padding: 0 28px 80px;
+      padding: 0 clamp(16px, 4vw, 40px) 80px;
     }
 
     /* ── NAVBAR ──────────────────────────────────────────── */
@@ -130,8 +134,8 @@
     /* ── HERO ────────────────────────────────────────────── */
     .hero {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 56px;
+      grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+      gap: clamp(24px, 4vw, 56px);
       align-items: center;
       margin-bottom: 96px;
     }
@@ -252,7 +256,7 @@
     /* ── ACRÓNIMO ────────────────────────────────────────── */
     .acronym-wrap {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
       gap: 12px;
     }
     .acr-row {
@@ -293,7 +297,7 @@
     /* ── FEATURES GRID ───────────────────────────────────── */
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr));
       gap: 14px;
     }
     .feat-card {
@@ -567,12 +571,12 @@
       <p>
         <strong>SUPER_IA</strong> nació para resolver un problema real: la <strong>falta de visibilidad y control</strong>
         sobre la actividad de los asesores comerciales que trabajan fuera de la oficina.
-        Con esta plataforma, supervisores y administradores pueden ver <em>en tiempo real</em> dónde está
+        Con esta plataforma, supervisores y gerentes pueden ver <em>en tiempo real</em> dónde está
         cada asesor, qué encuestas completó, qué prospectos levantó y cuáles son sus métricas del día.
       </p>
       <p>
         La plataforma conecta una <strong>app móvil Flutter</strong> (para asesores en campo) con un
-        <strong>panel web PHP + MySQL</strong> (para supervisores y administradores), respaldado por
+        <strong>panel web PHP + MySQL</strong> (para supervisores y gerentes), respaldado por
         <strong>Firebase</strong> para autenticación y notificaciones push.
         Todo el ecosistema trabaja en sincronía para garantizar <em>gestión comercial</em> y
         <em>crédito cooperativo</em> eficientes, seguros y trazables.
@@ -612,7 +616,7 @@
       <div class="feat-card">
         <div class="feat-icon y"><i class="fa-solid fa-users-gear"></i></div>
         <h3>Gestión de Roles</h3>
-        <p>Paneles diferenciados para Asesor, Supervisor, Administrador y Super Admin.</p>
+        <p>Paneles diferenciados para Asesor, Supervisor, Gerente y Super Admin.</p>
       </div>
       <div class="feat-card">
         <div class="feat-icon b"><i class="fa-solid fa-chart-line"></i></div>

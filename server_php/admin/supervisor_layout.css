@@ -16,18 +16,29 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Inter','Segoe UI',sans-serif; background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%); display:flex; height:100vh; color:var(--brand-navy-deep); }
+body {
+    font-family:'Inter','Segoe UI',sans-serif;
+    background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%);
+    display:flex;
+    min-height:100vh;
+    height:auto;
+    overflow-x:hidden;
+    overflow-y:auto;
+    color:var(--brand-navy-deep);
+}
 
 /* ── SIDEBAR ── */
-.sidebar { 
-    width:230px; 
-    background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%); 
-    color:#fff; 
-    padding:20px 0; 
-    overflow-y:auto; 
-    position:fixed; 
-    height:100vh; 
-    left:0; 
+.sidebar {
+    width:230px;
+    background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%);
+    color:#fff;
+    padding:20px 0;
+    overflow-y:auto;
+    position:sticky;
+    top:0;
+    height:100vh;
+    align-self:flex-start;
+    flex-shrink:0; 
     top:0; 
     z-index:1000; 
     transition: all 0.3s ease; 
@@ -90,13 +101,14 @@ body { font-family:'Inter','Segoe UI',sans-serif; background:linear-gradient(180
 }
 
 /* ── LAYOUT WRAPPERS ── */
-.main-content { 
-    flex:1; 
-    margin-left:230px; 
-    display:flex; 
-    flex-direction:column; 
-    overflow:hidden; 
-    min-width: 0; 
+.main-content {
+    flex:1;
+    margin-left: 0;   /* sidebar es sticky, no fixed → no necesita margin */
+    display:flex;
+    flex-direction:column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    min-width: 0;
 }
 .navbar-custom { 
     background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); 
@@ -761,4 +773,33 @@ table tbody tr:hover { background: #f8fafc; }
     display: inline-flex;
     align-items: center;
     gap: 10px;
+}
+
+/* =============================================================
+   ZOOM & RESPONSIVE FIX — supervisor_layout.css
+   ============================================================= */
+img, video, canvas, svg, iframe { max-width:100%; height:auto; }
+.table-responsive { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+.leaflet-container,[id*="map"],[class*="map-wrap"] { max-width:100% !important; width:100% !important; height:clamp(280px,50vh,700px) !important; }
+::-webkit-scrollbar { width:6px; height:6px; }
+::-webkit-scrollbar-track { background:transparent; }
+::-webkit-scrollbar-thumb { background:rgba(244,196,0,.35); border-radius:3px; }
+::-webkit-scrollbar-thumb:hover { background:rgba(244,196,0,.6); }
+
+@media (max-width:1100px) { .sidebar { width:200px !important; } }
+@media (max-width:900px) {
+    .sidebar { width:60px !important; }
+    .sidebar .brand-text, .sidebar .nav-text,
+    .sidebar .sidebar-label, .sidebar span { display:none !important; }
+    .sidebar .nav-link { justify-content:center; padding:10px !important; }
+}
+@media (max-width:640px) {
+    .sidebar { display:none !important; }
+    .content-area, .main-content, main { padding:14px !important; }
+    .row { --bs-gutter-x:0.5rem; }
+    [class*="col-md-3"],[class*="col-md-4"],[class*="col-lg-3"] { flex:0 0 50% !important; max-width:50% !important; }
+    [class*="col-md-6"],[class*="col-lg-6"] { flex:0 0 100% !important; max-width:100% !important; }
+}
+@media (max-width:400px) {
+    [class*="col-"] { flex:0 0 100% !important; max-width:100% !important; }
 }
