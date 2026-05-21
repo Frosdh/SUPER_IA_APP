@@ -25,6 +25,7 @@ body {
     overflow-x:hidden;
     overflow-y:auto;
     color:var(--brand-navy-deep);
+    zoom: 90%;
 }
 
 /* ── SIDEBAR ── */

@@ -74,6 +74,15 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         title: 'SUPER_IA - Gestión Comercial',
         debugShowCheckedModeBanner: false,
+        builder: (context, child) {
+          final mediaQueryData = MediaQuery.of(context);
+          return MediaQuery(
+            data: mediaQueryData.copyWith(
+              textScaleFactor: mediaQueryData.textScaleFactor * 0.9,
+            ),
+            child: child!,
+          );
+        },
         theme: ThemeData(
           brightness: Brightness.dark,
           primaryColor: ConstantColors.primaryViolet,

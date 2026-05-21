@@ -355,19 +355,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 /* MAIN */
 .main-content{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1;}
 
-/* NAVBAR */
-.topbar{background:rgba(6,16,30,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--nborder);padding:13px 28px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:50;}
-.topbar-left{display:flex;align-items:center;gap:14px;}
-.topbar-logo{font-size:17px;font-weight:900;background:linear-gradient(90deg,var(--y),#7eb8ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.gpu-pill{display:flex;align-items:center;gap:6px;background:rgba(0,255,80,.06);border:1px solid rgba(0,255,80,.18);padding:4px 12px;border-radius:50px;font-size:11px;font-weight:700;color:#4ade80;}
-.pulse-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade80;animation:pulse 2s infinite;}
-@keyframes pulse{0%{transform:scale(.9);box-shadow:0 0 0 0 rgba(74,222,128,.7);}70%{transform:scale(1);box-shadow:0 0 0 8px rgba(74,222,128,0);}100%{transform:scale(.9);}}
-.topbar-right{display:flex;align-items:center;gap:14px;}
-.user-chip{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);padding:6px 14px;border-radius:10px;font-size:12px;display:flex;align-items:center;gap:8px;color:#fff;}
-.user-chip strong{color:var(--y);}
-.user-chip span{color:rgba(255,255,255,.6);}
-.btn-salir{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:#f87171;padding:6px 13px;border-radius:9px;text-decoration:none;font-size:12px;font-weight:700;transition:.2s;}
-.btn-salir:hover{background:rgba(239,68,68,.22);color:#fff;}
+
 
 /* CONTENT */
 .content-area{flex:1;padding:22px 26px 40px;overflow-y:auto;}
@@ -454,7 +442,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 @keyframes flow{0%{left:-60%;}100%{left:110%;}}
 
 /* BOTTOM GRID */
-.bottom-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;}
+.bottom-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;}
 .b-card{background:#fff;border:1px solid var(--nborder);border-radius:16px;overflow:hidden;transition:border-color .2s,box-shadow .2s;box-shadow:var(--shadow);}
 .b-card:hover{border-color:rgba(18,58,109,.3);box-shadow:0 4px 20px rgba(18,58,109,.1);}
 .b-head{padding:12px 16px;border-bottom:1px solid var(--nborder);display:flex;align-items:center;gap:9px;background:rgba(18,58,109,.04);}
@@ -530,25 +518,9 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 </head>
 <body>
 
-<?php $navTitle='Dashboard'; $navIcon='fas fa-home'; require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle=''; $navIcon=''; require_once '_sidebar_supervisor.php'; ?>
 
 <div class="main-content">
-
-<!-- TOPBAR -->
-<div class="topbar">
-  <div class="topbar-left">
-    <div class="topbar-logo">⚡ Super_IA</div>
-    <div class="gpu-pill"><div class="pulse-dot"></div>SISTEMA ACTIVO</div>
-  </div>
-  <div class="topbar-right">
-    <div class="user-chip">
-      <i class="fas fa-user-shield" style="color:var(--y);font-size:13px;"></i>
-      <strong><?= htmlspecialchars(explode(' ',$supervisor_nombre)[0]) ?></strong>
-      <span style="color:var(--td);font-size:11px;"><?= htmlspecialchars($supervisor_rol) ?></span>
-    </div>
-    <a href="logout.php" class="btn-salir"><i class="fas fa-power-off me-1"></i>Salir</a>
-  </div>
-</div>
 
 <div class="content-area">
 
@@ -733,45 +705,7 @@ foreach($gkpis as $g):
     </div>
   </div>
 
-  <!-- ALERTAS SIN VER -->
-  <div class="b-card">
-    <div class="b-head">
-      <div class="bh-ico" style="background:rgba(239,68,68,.15);color:#f87171;"><i class="fas fa-bell"></i></div>
-      <h5>Alertas Sin Ver</h5>
-      <?php if($alertas_pendientes>0): ?><span class="b-badge b-badge-red"><?=$alertas_pendientes?></span><?php endif; ?>
-      <a href="alertas.php" class="b-link" style="margin-left:4px;">Ver →</a>
-    </div>
-    <?php if(empty($ultimas_alertas)): ?>
-      <div class="empty-b"><i class="fas fa-check-circle" style="color:#4ade80;opacity:1;font-size:22px;"></i>¡Sin alertas!</div>
-    <?php else: foreach($ultimas_alertas as $al):
-      $cr=trim($al['campo_modificado']??'');
-      $clbl=empty($cr)||$cr==='null'?'Modificación registrada':ucwords(str_replace(['_','-'],' ',$cr));
-      $vr=trim($al['valor_nuevo']??'');
-      $vd='';
-      if(!empty($vr)&&$vr!=='null'){
-        $dec=json_decode($vr,true);
-        if(json_last_error()===JSON_ERROR_NONE&&is_array($dec)){
-          $res=[];foreach(['nombre','estado','telefono','ciudad','cedula','email'] as $k){if(!empty($dec[$k])){$res[]=ucfirst($k).': '.$dec[$k];if(count($res)>=2)break;}}
-          $vd=!empty($res)?implode(' · ',$res):'Datos actualizados';
-        }else{ $vd=mb_strlen($vr)>38?mb_substr($vr,0,36).'…':$vr; }
-      }
-      $icos=['telefono'=>'fa-phone','email'=>'fa-envelope','direccion'=>'fa-location-dot','estado'=>'fa-circle-dot','nombre'=>'fa-user','encuesta'=>'fa-clipboard-list'];
-      $ico='fa-bell'; foreach($icos as $k=>$v){if(stripos($cr,$k)!==false){$ico=$v;break;}}
-    ?>
-    <div class="al-row">
-      <div class="al-ico"><i class="fas <?=$ico?>"></i></div>
-      <div style="flex:1;min-width:0;">
-        <div class="al-campo"><?=htmlspecialchars($clbl)?></div>
-        <div class="al-asesor"><i class="fas fa-user-tie" style="font-size:9px;opacity:.6;"></i> <?=htmlspecialchars($al['asesor_nombre']??'—')?></div>
-        <?php if(!empty($vd)): ?><span class="al-valor">→ <?=htmlspecialchars($vd)?></span><?php endif; ?>
-      </div>
-      <div class="al-right">
-        <span class="al-time"><?=$al['created_at']?date('d/m H:i',strtotime($al['created_at'])):''?></span>
-        <a href="marcar_alerta_revisada.php?id=<?=urlencode($al['id_alerta'])?>" class="btn-visto">✓ Visto</a>
-      </div>
-    </div>
-    <?php endforeach; endif; ?>
-  </div>
+
 
   <!-- ACTIVIDAD RECIENTE -->
   <div class="b-card">

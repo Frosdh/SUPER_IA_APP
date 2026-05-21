@@ -10,6 +10,8 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once 'db_admin.php'; // Asegurar conexión PDO disponible
 
 $currentPage        = trim((string) ($currentPage ?? ''));
+$navTitle           = $navTitle ?? 'Super_IA — Supervisor';
+$navIcon            = $navIcon ?? 'fas fa-shield-halved';
 // Compatibilidad con nombres legacy usados en algunas páginas heredadas
 switch ($currentPage) {
     case 'solicitudes_asesor':
@@ -119,13 +121,7 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
         </a>
     </div>
 
-    <!-- SESIÓN -->
-    <div style="border-top:1px solid rgba(255,255,255,.1);padding-top:14px;margin:0 10px;">
-        <div class="sidebar-section-title" style="padding:0 5px;">SESIÓN</div>
-        <a href="logout.php" class="sidebar-link" style="color:rgba(252,165,165,.8)!important;">
-            <i class="fas fa-sign-out-alt"></i> <span>Cerrar Sesión</span>
-        </a>
-    </div>
+
 </div>
 
 <!-- ══════════ MAIN WRAPPER ══════════ -->
@@ -133,10 +129,14 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
     <!-- NAVBAR -->
     <div class="navbar-custom">
         <div class="nav-title-group">
+            <?php if ($navTitle !== ''): ?>
             <h2>
-                <i class="<?= $navIcon ?? 'fas fa-shield-halved' ?> me-2" style="color:var(--brand-yellow);"></i>
-                <?= $navTitle ?? 'Super_IA — Supervisor' ?>
+                <?php if ($navIcon !== ''): ?>
+                <i class="<?= htmlspecialchars($navIcon) ?> me-2" style="color:var(--brand-yellow);"></i>
+                <?php endif; ?>
+                <?= htmlspecialchars($navTitle) ?>
             </h2>
+            <?php endif; ?>
             <?php if (!empty($navSubtitle)): ?>
                 <small class="navbar-subtitle"><?= htmlspecialchars($navSubtitle) ?></small>
             <?php endif; ?>
