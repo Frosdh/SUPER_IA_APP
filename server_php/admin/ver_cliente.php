@@ -419,7 +419,7 @@ if ($user_role === 'supervisor') {
 }
 
 if ($user_role === 'supervisor') {
-    $navTitle = 'Detalle de Cliente'; $navIcon = 'fas fa-user'; require_once '_sidebar_supervisor.php'; 
+    $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; 
 } else {
 ?>
 <!-- SIDEBAR OTROS ROLES -->

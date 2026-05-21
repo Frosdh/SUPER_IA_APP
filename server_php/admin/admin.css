@@ -45,12 +45,12 @@
 /* ── Reset / Base ──────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
+html { zoom: 90%; }
 body {
     background: var(--bg);
     font-family: 'Inter', 'Segoe UI', sans-serif;
     color: var(--text);
     margin: 0;
-    zoom: 90%;
 }
 
 /* ── Sidebar ───────────────────────────────────────────────── */

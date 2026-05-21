@@ -62,7 +62,7 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
         <div class="sidebar-section-title">PRINCIPAL</div>
         <a href="supervisor_index.php"
            class="sidebar-link <?= ($currentPage === 'dashboard') ? 'active' : '' ?>">
-            <i class="fas fa-home"></i> <span>Dashboard</span>
+            <i class="fas fa-gauge-high"></i> <span>Dashboard</span>
         </a>
         <a href="mapa_vivo_superIA.php"
            class="sidebar-link <?= ($currentPage === 'mapa') ? 'active' : '' ?>">
@@ -80,13 +80,6 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
         <a href="operaciones.php"
            class="sidebar-link <?= ($currentPage === 'operaciones') ? 'active' : '' ?>">
             <i class="fas fa-handshake"></i> <span>Operaciones</span>
-        </a>
-        <a href="alertas.php"
-           class="sidebar-link <?= ($currentPage === 'alertas') ? 'active' : '' ?>">
-            <i class="fas fa-bell"></i> <span>Alertas</span>
-            <?php if ($alertas_pendientes > 0): ?>
-            <span class="badge-nav"><?= $alertas_pendientes > 99 ? '99+' : $alertas_pendientes ?></span>
-            <?php endif; ?>
         </a>
 
         <a href="kpi_penetracion.php"
@@ -129,24 +122,13 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
     <!-- NAVBAR -->
     <div class="navbar-custom">
         <div class="nav-title-group">
-            <?php if ($navTitle !== ''): ?>
-            <h2>
-                <?php if ($navIcon !== ''): ?>
-                <i class="<?= htmlspecialchars($navIcon) ?> me-2" style="color:var(--brand-yellow);"></i>
-                <?php endif; ?>
-                <?= htmlspecialchars($navTitle) ?>
-            </h2>
-            <?php endif; ?>
-            <?php if (!empty($navSubtitle)): ?>
-                <small class="navbar-subtitle"><?= htmlspecialchars($navSubtitle) ?></small>
-            <?php endif; ?>
+            <!-- Título y subtítulos removidos por solicitud del supervisor -->
         </div>
         <div class="user-info">
             <div>
                 <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
                 <small><?= htmlspecialchars($supervisor_rol) ?></small>
             </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
         </div>
     </div>
 

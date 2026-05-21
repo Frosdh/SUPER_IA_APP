@@ -350,7 +350,7 @@ if ($user_role === 'asesor') {
     } catch (PDOException $e) {}
 }
 if ($user_role === 'supervisor') {
-    $navTitle = 'Mis Clientes'; $navIcon = 'fas fa-address-book'; 
+    $navTitle = ''; $navIcon = ''; $navSubtitle = ''; 
     require_once '_sidebar_supervisor.php'; 
 } elseif ($user_role === 'asesor') {
     $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';

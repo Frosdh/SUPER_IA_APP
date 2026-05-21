@@ -45,14 +45,7 @@ input, button, select, textarea {
     padding-right: clamp(12px, 4vw, 40px) !important;
 }
 
-/* Inner max-width centrado */
-.page-inner,
-.page-wrap > *,
-.page > * {
-    max-width: 1120px;
-    margin-left: auto;
-    margin-right: auto;
-}
+/* Inner max-width: removed — supervisor panel pages need full width */
 
 /* ── 4. FLEX LAYOUTS — SIEMPRE WRAPPEAN ─────────────────────*/
 .login-card,

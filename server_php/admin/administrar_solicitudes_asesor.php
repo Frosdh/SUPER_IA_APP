@@ -328,8 +328,9 @@ $currentPage = 'solicitudes_asesor';
 <body>
 
 <?php
-$navTitle = 'Solicitudes de Asesores';
-$navIcon = 'fas fa-users';
+$navTitle = '';
+$navIcon = '';
+$navSubtitle = '';
 require_once '_sidebar_supervisor.php';
 ?>
 

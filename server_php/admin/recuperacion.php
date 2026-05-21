@@ -598,7 +598,7 @@ $currentPage = 'recuperacion';
 </head>
 
 <body>
-  <?php $navTitle = 'Recuperación'; $navIcon = 'fas fa-user-clock'; require_once '_sidebar_supervisor.php'; ?>
+  <?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
 
       <div class="page-header">
         <h1><i class="fas fa-user-clock"></i> Recuperación de Cartera</h1>

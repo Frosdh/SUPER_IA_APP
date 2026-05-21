@@ -649,7 +649,7 @@ if ($user_role === 'asesor') {
 }
 
 if ($user_role === 'supervisor') {
-    $navTitle = 'Operaciones'; $navIcon = 'fas fa-handshake';
+    $navTitle = ''; $navIcon = ''; $navSubtitle = '';
     require_once '_sidebar_supervisor.php'; 
 } elseif ($user_role === 'asesor') {
     $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';

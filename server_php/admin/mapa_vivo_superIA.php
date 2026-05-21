@@ -422,7 +422,7 @@ $totalPendientes    = 0;
 </head>
 <body>
 
-<?php $navTitle = 'Mapa en Vivo'; $navIcon = 'fas fa-map-location-dot'; $navSubtitle = count($ubicaciones) . ' asesores en línea'; require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
 
         <div class="d-flex align-items-center justify-content-between" style="margin-bottom:14px;">
             <div>

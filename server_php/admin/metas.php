@@ -517,7 +517,7 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
 </head>
 <body>
 
-<?php $navTitle = 'Metas del Equipo'; $navIcon = 'fas fa-bullseye'; ?>
+<?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; ?>
 <?php require_once '_sidebar_supervisor.php'; ?>
 
 <?php if ($flash): ?>

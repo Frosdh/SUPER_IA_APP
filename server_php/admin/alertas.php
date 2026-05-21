@@ -561,8 +561,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
     </style>
 <?php 
 if ($user_role === 'supervisor') {
-    $navTitle = 'Alertas'; 
-    $navIcon = 'fas fa-bell';
+    $navTitle = ''; 
+    $navIcon = '';
+    $navSubtitle = '';
     require_once '_sidebar_supervisor.php'; 
 } else { ?>
 <!-- SIDEBAR Y NAVBAR LEGACY PARA OTROS ROLES -->

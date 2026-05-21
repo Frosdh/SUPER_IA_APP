@@ -520,9 +520,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 
 <?php $navTitle=''; $navIcon=''; require_once '_sidebar_supervisor.php'; ?>
 
-<div class="main-content">
 
-<div class="content-area">
 
 <!-- HERO -->
 <div class="hero">
@@ -733,8 +731,7 @@ foreach($gkpis as $g):
   </div>
 
 </div><!-- /bottom-grid -->
-</div><!-- /content-area -->
-</div><!-- /main-content -->
+
 
 <script>
 document.addEventListener('DOMContentLoaded',function(){

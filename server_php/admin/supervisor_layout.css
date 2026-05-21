@@ -16,6 +16,7 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
+html { zoom: 90%; }
 body {
     font-family:'Inter','Segoe UI',sans-serif;
     background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%);
@@ -25,7 +26,6 @@ body {
     overflow-x:hidden;
     overflow-y:auto;
     color:var(--brand-navy-deep);
-    zoom: 90%;
 }
 
 /* ── SIDEBAR ── */
@@ -162,11 +162,11 @@ body {
 /* Alinea el contenido supervisor hacia la izquierda en vez de centrarlo en exceso */
 .content-area {
     flex:1;
-    overflow-y:auto;
-    padding:28px 30px;
+    padding:20px 24px 40px;
     position: relative;
-    max-width: 1320px;
-    margin: 0 0 0 0;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 /* Estilos básicos para páginas de metas/tareas y cards de supervisor */

@@ -113,9 +113,7 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 <body>
 
 
-<?php $navTitle = 'Mis Asesores'; $navIcon = 'fas fa-users'; require_once '_sidebar_supervisor.php'; ?>
-<div class="main-content">
-    <div class="content-area">
+<?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
         <div class="card-block" style="max-width:900px;margin:0 auto 28px;">
             <h2 style="font-size:1.5rem;font-weight:800;margin-bottom:18px;color:#123a6d;display:flex;align-items:center;gap:10px;">
                 <i class="fas fa-users" style="color:#f4c400;"></i> Mi Equipo de Asesores y sus Clientes
@@ -179,8 +177,6 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
                 <?php endforeach; ?>
             <?php endif; ?>
         </div>
-    </div>
-</div>
 <script>
 function toggleClientes(asesorId) {
     const clientsDiv = document.getElementById('clients-' + asesorId);

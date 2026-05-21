@@ -1149,7 +1149,7 @@ $titulos_kpi = [
     'operaciones' => 'Análisis de Operaciones y Desembolsos',
     'actividad' => '📊 Actividad y Cumplimiento de Asesores'
 ];
-$navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
+$navTitle = ''; $navIcon = ''; $navSubtitle = '';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -1423,6 +1423,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
 
     <?php require_once $es_gerente ? '_sidebar.php' : '_sidebar_supervisor.php'; ?>
 
+    <?php if ($es_gerente): ?>
     <div class="main-content">
         <div class="navbar-custom">
             <div class="nav-title-group">
@@ -1439,6 +1440,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
         </div>
 
         <div class="content-area">
+    <?php endif; ?>
             <!-- FILTROS -->
             <div class="segment-card mb-4">
                 <form method="get" class="row g-2 align-items-end">
@@ -1538,7 +1540,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             </div>
 
             <div class="row g-4">
-                <div class="<?= in_array($view, ['operaciones']) ? 'col-lg-12' : 'col-lg-8' ?>">
+                <div class="<?= in_array($view, ['operaciones']) || !$es_gerente ? 'col-lg-12' : 'col-lg-9' ?>">
                     <?php if ($view === 'mercado'): ?>
                         <?php
                         $mercado_total = (int)($data['mercado']['cobertura']['total'] ?? 0);
@@ -2908,7 +2910,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
 
                     <?php elseif ($view === 'operaciones'): ?>
                         <div class="row g-4 mb-4">
-                            <div class="col-lg-8">
+                            <div class="col-lg-9">
                                 <div class="segment-card shadow-sm h-100" id="segment-operaciones" style="border-left: 5px solid #10b981;">
                                     <div class="sec-header">
                                         <div class="sec-title"><i class="fas fa-hand-holding-dollar me-2"
@@ -2950,7 +2952,7 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                                 </div>
                             </div>
                             
-                            <div class="col-lg-4">
+                            <div class="col-lg-3">
                                 <div class="ia-sidebar ia-follow shadow-lg m-0">
                                     <div class="d-flex align-items-center gap-3 mb-4">
                                         <div class="bg-warning rounded-circle p-2"><i class="fas fa-brain text-dark"></i></div>
@@ -3410,8 +3412,8 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             </div>
         <?php endif; ?>
             </div>
-                <?php if (!in_array($view, ['operaciones'])): ?>
-                <div class="col-lg-4">
+                <?php if ($es_gerente && !in_array($view, ['operaciones'])): ?>
+                <div class="col-lg-3">
                     <div class="ia-sidebar ia-follow shadow-lg">
                         <div class="d-flex align-items-center gap-3 mb-4">
                             <div class="bg-warning rounded-circle p-2"><i class="fas fa-brain text-dark"></i></div>
@@ -3562,11 +3564,9 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
                             </div>
                         </div>
                     </div>
-                </div>
+                </div><!-- /.col-lg-3 ia-sidebar -->
                 <?php endif; ?>
-            </div>
-        </div>
-    </div>
+            </div><!-- /.row principal -->
 
     <script>
         function scrollKpiTabs(offset) {
@@ -3891,6 +3891,8 @@ $navTitle = $titulos_kpi[$view] ?? 'Dashboard KPI';
             } catch (e) { console.error(e); }
         <?php endif; ?>
     </script>
+    </div><!-- /.content-area -->
+</div><!-- /.main-content -->
 </body>
 
 </html>

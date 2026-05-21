@@ -188,7 +188,7 @@ if ($modo_supervisor) {
 <!-- ════════════════ MODO SUPERVISOR ════════════════ -->
 <?php
 $alertas_pendientes = 0;
-$navTitle = 'Registrar Asesor'; $navIcon = 'fas fa-user-tie'; require_once '_sidebar_supervisor.php';
+$navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php';
 ?>
         <div class="page-header">
             <a href="mis_asesores.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Mis Asesores</a>
