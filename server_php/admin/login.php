@@ -21,12 +21,81 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
 $role = $_GET['role'] ?? 'admin'; // 'super_admin', 'admin', 'supervisor', 'asesor'
 $role_labels = [
     'super_admin' => ['title' => 'Super Administrador', 'subtitle' => 'Ingresa credenciales de super administrador'],
-    'admin' => ['title' => 'Admin Panel', 'subtitle' => 'Ingresa credenciales de administrador'],
-    'supervisor' => ['title' => 'Panel Supervisor', 'subtitle' => 'Ingresa credenciales de supervisor'],
-    'asesor' => ['title' => 'Panel Asesor', 'subtitle' => 'Ingresa credenciales de asesor']
+    'admin'       => ['title' => 'Panel Gerente',        'subtitle' => 'Ingresa credenciales de gerente'],
+    'supervisor'  => ['title' => 'Panel Supervisor',     'subtitle' => 'Ingresa credenciales de supervisor'],
+    'asesor'      => ['title' => 'Panel Asesor',         'subtitle' => 'Ingresa credenciales de asesor'],
 ];
 if (!array_key_exists($role, $role_labels)) $role = 'admin';
 $current_label = $role_labels[$role];
+
+// Paleta de colores por rol
+$role_theme = [
+    'super_admin' => [
+        'accent'      => '#FFC800',
+        'accent_dk'   => '#E6A800',
+        'accent_rgb'  => '255,200,0',
+        'left_grad'   => 'linear-gradient(155deg,#1A1400 0%,#2A2000 50%,#3A2E00 100%)',
+        'icon'        => 'fa-crown',
+        'label'       => 'Super Admin',
+        'badge_bg'    => 'rgba(255,200,0,.12)',
+        'badge_border'=> 'rgba(255,200,0,.35)',
+        'badge_color' => '#B8860B',
+        'feat' => [
+            ['icon'=>'fa-globe','style'=>'fi-y','text'=>'Acceso total al sistema global'],
+            ['icon'=>'fa-users-cog','style'=>'fi-y','text'=>'Gestión de todos los usuarios'],
+            ['icon'=>'fa-shield-halved','style'=>'fi-y','text'=>'Supervisión y seguridad completa'],
+        ],
+    ],
+    'admin' => [
+        'accent'      => '#60A5FA',
+        'accent_dk'   => '#3B82F6',
+        'accent_rgb'  => '96,165,250',
+        'left_grad'   => 'linear-gradient(155deg,#0B1929 0%,#0F2440 60%,#163057 100%)',
+        'icon'        => 'fa-user-shield',
+        'label'       => 'Gerente',
+        'badge_bg'    => 'rgba(96,165,250,.12)',
+        'badge_border'=> 'rgba(96,165,250,.35)',
+        'badge_color' => '#3B82F6',
+        'feat' => [
+            ['icon'=>'fa-chart-line','style'=>'fi-b','text'=>'Dashboard con métricas de agencia'],
+            ['icon'=>'fa-users-gear','style'=>'fi-b','text'=>'Gestión de supervisores y asesores'],
+            ['icon'=>'fa-file-contract','style'=>'fi-b','text'=>'Reportes y configuración del sistema'],
+        ],
+    ],
+    'supervisor' => [
+        'accent'      => '#94A3B8',
+        'accent_dk'   => '#64748B',
+        'accent_rgb'  => '148,163,184',
+        'left_grad'   => 'linear-gradient(155deg,#0F1520 0%,#1A2535 60%,#212F42 100%)',
+        'icon'        => 'fa-users-gear',
+        'label'       => 'Supervisor',
+        'badge_bg'    => 'rgba(148,163,184,.12)',
+        'badge_border'=> 'rgba(148,163,184,.35)',
+        'badge_color' => '#64748B',
+        'feat' => [
+            ['icon'=>'fa-location-dot','style'=>'fi-s','text'=>'Mapa en vivo de asesores en campo'],
+            ['icon'=>'fa-clipboard-list','style'=>'fi-s','text'=>'Seguimiento de encuestas y visitas'],
+            ['icon'=>'fa-building-columns','style'=>'fi-s','text'=>'Monitoreo de operaciones de crédito'],
+        ],
+    ],
+    'asesor' => [
+        'accent'      => '#4ADE80',
+        'accent_dk'   => '#16A34A',
+        'accent_rgb'  => '74,222,128',
+        'left_grad'   => 'linear-gradient(155deg,#071510 0%,#0D2218 60%,#102B1E 100%)',
+        'icon'        => 'fa-user-tie',
+        'label'       => 'Asesor',
+        'badge_bg'    => 'rgba(74,222,128,.10)',
+        'badge_border'=> 'rgba(74,222,128,.35)',
+        'badge_color' => '#16A34A',
+        'feat' => [
+            ['icon'=>'fa-map-location-dot','style'=>'fi-g','text'=>'Registro de visitas y prospectos'],
+            ['icon'=>'fa-clipboard-check','style'=>'fi-g','text'=>'Encuestas comerciales desde la app'],
+            ['icon'=>'fa-bullseye','style'=>'fi-g','text'=>'Metas diarias y seguimiento personal'],
+        ],
+    ],
+];
+$theme = $role_theme[$role];
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -123,106 +192,247 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA — Iniciar Sesión</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>SUPER_IA — <?= htmlspecialchars($current_label['title']) ?></title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
     <style>
-        *{box-sizing:border-box;}
-        body{font-family:'Inter','Segoe UI',sans-serif;background:linear-gradient(135deg,#1e1b4b 0%,#312e81 40%,#1e3a5f 100%);min-height:100vh;display:flex;align-items:center;justify-content:center;margin:0;overflow:hidden;position:relative;}
-        body::before{content:'';position:absolute;width:500px;height:500px;border-radius:50%;background:radial-gradient(circle,rgba(107,17,255,.18) 0%,transparent 70%);top:-150px;left:-100px;}
-        body::after{content:'';position:absolute;width:400px;height:400px;border-radius:50%;background:radial-gradient(circle,rgba(49,130,254,.15) 0%,transparent 70%);bottom:-100px;right:-80px;}
-        .login-wrapper{display:flex;width:860px;max-width:95vw;min-height:520px;border-radius:24px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);position:relative;z-index:1;}
-        .login-left{flex:1;background:linear-gradient(160deg,rgba(107,17,255,.55),rgba(49,130,254,.45));backdrop-filter:blur(20px);padding:50px 40px;display:flex;flex-direction:column;justify-content:center;color:#fff;border-right:1px solid rgba(255,255,255,.1);}
-        .login-left .brand-icon{width:60px;height:60px;background:rgba(255,255,255,.15);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:26px;margin-bottom:28px;border:1px solid rgba(255,255,255,.2);}
-        .login-left h1{font-size:28px;font-weight:800;margin-bottom:10px;}
-        .login-left p{font-size:14px;opacity:.75;line-height:1.7;margin-bottom:32px;}
-        .feature{display:flex;align-items:center;gap:12px;font-size:13.5px;margin-bottom:14px;opacity:.85;}
-        .feature .fi{width:32px;height:32px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
-        .login-right{flex:1;background:#fff;padding:50px 44px;display:flex;flex-direction:column;justify-content:center;}
-        .form-title{font-size:22px;font-weight:800;color:#1e293b;margin-bottom:6px;}
-        .form-subtitle{font-size:13.5px;color:#64748b;margin-bottom:32px;}
-        .inp-group{margin-bottom:20px;}
-        .inp-group label{display:block;font-size:12.5px;font-weight:600;color:#374151;margin-bottom:7px;}
-        .inp-wrap{position:relative;}
-        .inp-wrap i{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#9ca3af;font-size:14px;}
-        .inp-wrap input{width:100%;padding:12px 14px 12px 40px;border:1.5px solid #e5e7eb;border-radius:10px;font-size:14px;font-family:'Inter',sans-serif;color:#1e293b;transition:.2s;outline:none;}
-        .inp-wrap input:focus{border-color:#6b11ff;box-shadow:0 0 0 3px rgba(107,17,255,.1);}
-        .inp-wrap .toggle-pass{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#9ca3af;cursor:pointer;padding:4px;font-size:14px;line-height:1;display:flex;align-items:center;transition:.2s;}
-        .inp-wrap .toggle-pass:hover{color:#6b11ff;}
-        .inp-wrap input{padding-right:42px;}
-        .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#6b11ff,#3182fe);border:none;border-radius:11px;color:#fff;font-size:15px;font-weight:700;cursor:pointer;transition:.22s;box-shadow:0 6px 20px rgba(107,17,255,.35);font-family:'Inter',sans-serif;margin-top:8px;}
-        .btn-login:hover{opacity:.92;transform:translateY(-2px);box-shadow:0 10px 28px rgba(107,17,255,.45);}
-        .btn-back{width:100%;padding:10px;background:transparent;border:1.5px solid #e5e7eb;border-radius:11px;color:#64748b;font-size:13px;font-weight:600;cursor:pointer;transition:.2s;font-family:'Inter',sans-serif;margin-top:12px;text-decoration:none;display:inline-block;text-align:center;}
-        .btn-back:hover{background:#f8fafc;border-color:#d1d5db;color:#1e293b;}
-        .error-msg{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:11px 16px;font-size:13px;display:flex;align-items:center;gap:8px;margin-bottom:20px;}
-        .login-footer{margin-top:28px;text-align:center;font-size:12px;color:#9ca3af;}
-        @media(max-width:640px){.login-left{display:none;}.login-right{padding:36px 28px;}}
+        /* Base reset and responsive root */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { font-size: clamp(14px, 1.4vw, 18px); }
+
+        :root {
+            --accent:     <?= $theme['accent'] ?>;
+            --accent-dk:  <?= $theme['accent_dk'] ?>;
+            --accent-rgb: <?= $theme['accent_rgb'] ?>;
+            --left-grad:  <?= $theme['left_grad'] ?>;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #080E1A;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; position: relative;
+        }
+
+        /* Orbes de fondo: sizes in vw/clamp so they scale with zoom/viewport */
+        .orb { position: fixed; border-radius: 50%; pointer-events: none; z-index: 0; }
+        .orb1 {
+            width: clamp(260px, 30vw, 580px); height: clamp(260px, 30vw, 580px);
+            top: calc(-6vw); right: calc(-6vw);
+            background: radial-gradient(circle, rgba(var(--accent-rgb),.10) 0%, transparent 65%);
+        }
+        .orb2 {
+            width: clamp(220px, 24vw, 480px); height: clamp(220px, 24vw, 480px);
+            bottom: calc(-6vw); left: calc(-6vw);
+            background: radial-gradient(circle, rgba(var(--accent-rgb),.06) 0%, transparent 65%);
+        }
+        .grid-bg {
+            position: fixed; inset: 0; z-index: 0; pointer-events: none;
+            background-image:
+                linear-gradient(rgba(var(--accent-rgb),.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(var(--accent-rgb),.025) 1px, transparent 1px);
+            background-size: clamp(28px, 3.2vw, 60px) clamp(28px, 3.2vw, 60px);
+        }
+
+        /* Card principal: use clamp so it remains proportionate when zooming */
+        .login-card {
+            display: flex; width: clamp(320px, 94%, 940px); max-width: 96vw;
+            min-height: clamp(480px, 60vh, 720px);
+            border-radius: 1.75rem; overflow: hidden;
+            box-shadow: 0 36px 90px rgba(0,0,0,.6);
+            position: relative; z-index: 1;
+            border: 1px solid rgba(var(--accent-rgb),.18);
+        }
+
+        /* Left panel (hidden on small screens) */
+        .left-panel {
+            flex: 1; background: var(--left-grad);
+            padding: clamp(18px, 3.2vw, 54px) clamp(14px, 2.6vw, 46px);
+            display: flex; flex-direction: column; justify-content: center;
+            color: #fff; position: relative; overflow: hidden;
+        }
+        .left-panel::before, .left-panel::after { content: ''; position: absolute; border-radius: 50%; }
+        .left-panel::before {
+            top: -6vw; right: -6vw; width: clamp(120px, 14vw, 300px); height: clamp(120px, 14vw, 300px);
+            background: radial-gradient(circle, rgba(var(--accent-rgb),.14) 0%, transparent 70%);
+        }
+        .left-panel::after {
+            bottom: -5vw; left: -4vw; width: clamp(100px, 11vw, 220px); height: clamp(100px, 11vw, 220px);
+            background: radial-gradient(circle, rgba(var(--accent-rgb),.08) 0%, transparent 70%);
+        }
+
+        .brand-logo { display: flex; align-items: center; gap: .8rem; margin-bottom: 1.6rem; position: relative; z-index: 1; }
+        .brand-icon-box {
+            width: 3.5rem; height: 3.5rem; border-radius: .9rem;
+            background: rgba(var(--accent-rgb),.2); border: 1px solid rgba(var(--accent-rgb),.35);
+            display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
+            box-shadow: 0 4px 20px rgba(var(--accent-rgb),.2);
+        }
+        .brand-name { font-size: 1.25rem; font-weight: 900; letter-spacing: -.5px; }
+        .brand-name span { color: var(--accent); }
+
+        .role-title-left { font-size: clamp(1.05rem, 2.2vw, 1.6rem); font-weight: 900; margin-bottom: .5rem; z-index:1 }
+        .role-title-left span { color: var(--accent); }
+        .role-desc-left { font-size: clamp(.85rem, 1.6vw, 1rem); color: rgba(255,255,255,.55); line-height: 1.75; margin-bottom: 1.6rem; }
+
+        .feat-list { position: relative; z-index: 1; }
+        .feat-item { display:flex; align-items:center; gap:.65rem; font-size: .9rem; color: rgba(255,255,255,.75); margin-bottom:.8rem }
+        .feat-ico { width: 2.1rem; height:2.1rem; border-radius:.55rem; display:flex; align-items:center; justify-content:center; font-size:.8rem; background: rgba(var(--accent-rgb),.18); color:var(--accent); border:1px solid rgba(var(--accent-rgb),.25); }
+
+        /* Right panel */
+        .right-panel { flex:1; background:#F8FAFC; padding: clamp(18px,3.2vw,54px) clamp(14px,2.6vw,48px); display:flex; flex-direction:column; justify-content:center }
+
+        .role-badge { display:inline-flex; align-items:center; gap:.5rem; font-size:.8rem; font-weight:800; letter-spacing:1.5px; text-transform:uppercase; padding:.35rem .8rem; border-radius:1.25rem; background: <?= $theme['badge_bg'] ?>; border:1px solid <?= $theme['badge_border'] ?>; color: <?= $theme['badge_color'] ?>; margin-bottom:1.25rem }
+
+        .form-title { font-size: clamp(1.25rem, 2.4vw, 1.6rem); font-weight:900; color:#0D1929; margin-bottom:.25rem }
+        .form-subtitle { font-size: .95rem; color:#64748B; margin-bottom:1.6rem; line-height:1.5 }
+
+        .inp-group { margin-bottom:1rem }
+        .inp-group label { display:block; font-size:.75rem; font-weight:700; color:#1E3A5F; margin-bottom:.4rem; text-transform:uppercase }
+        .inp-wrap { position:relative }
+        .inp-wrap .ico { position:absolute; left:.85rem; top:50%; transform:translateY(-50%); color:#94A3B8; font-size:.85rem; pointer-events:none }
+        .inp-wrap input { width:100%; padding: .65rem 2.6rem; border:1.5px solid #E2E8F0; border-radius:.7rem; font-size:.95rem; color:#0D1929; background:#fff; transition:border-color .2s, box-shadow .2s; outline:none }
+        .inp-wrap input:focus { border-color:var(--accent); box-shadow: 0 0 0 .3rem rgba(var(--accent-rgb),.15) }
+        .toggle-pass { position:absolute; right:.8rem; top:50%; transform:translateY(-50%); background:none; border:none; color:#94A3B8; cursor:pointer; padding:.25rem; font-size:.9rem }
+        .toggle-pass:hover { color: var(--accent) }
+
+        .btn-login { width:100%; padding:.85rem; background: linear-gradient(135deg,var(--accent),var(--accent-dk)); border:none; border-radius:.75rem; color:#fff; font-size:1rem; font-weight:800; cursor:pointer; transition:transform .2s, box-shadow .2s; box-shadow:0 6px 22px rgba(var(--accent-rgb),.38); display:flex; align-items:center; justify-content:center; gap:.5rem }
+        <?php if ($role === 'super_admin' || $role === 'asesor'): ?>
+        .btn-login { color: #0D1929; }
+        <?php else: ?>
+        .btn-login { color: #fff; }
+        <?php endif; ?>
+        .btn-login:hover { transform: translateY(-.125rem); box-shadow: 0 10px 30px rgba(var(--accent-rgb),.5) }
+
+        .forgot-link { display:block; text-align:right; margin-top:.6rem; margin-bottom:.4rem; font-size:.85rem; color:#475569; font-weight:600; text-decoration:none }
+        .forgot-link:hover { color: var(--accent-dk) }
+
+        .btn-sec { width:100%; padding:.6rem; background:transparent; border:1.5px solid #E2E8F0; border-radius:.7rem; color:#64748B; font-size:.95rem; font-weight:600; cursor:pointer; transition:.2s; display:flex; align-items:center; justify-content:center; gap:.5rem; margin-top:.6rem }
+        .btn-sec:hover { background:#F1F5F9; border-color:#CBD5E1; color:#1E293B }
+
+        .error-msg { background:#FEF2F2; border:1px solid #FECACA; color:#DC2626; border-radius:.6rem; padding:.6rem .9rem; font-size:.95rem; display:flex; align-items:center; gap:.5rem; margin-bottom:1.1rem }
+
+        .login-footer { margin-top:1.2rem; text-align:center; font-size:.85rem; color:#CBD5E1 }
+
+        /* Switch to single column on small screens */
+        @media (max-width: 640px) {
+            .left-panel { display: none }
+            .right-panel { padding: clamp(14px,4.2vw,36px) clamp(10px,3.2vw,28px) }
+            .login-card { flex-direction: column; width: 94vw; min-height: auto }
+        }
     </style>
 </head>
 <body>
-    <div class="login-wrapper">
-        <div class="login-left">
-            <div class="brand-icon"><i class="fas fa-map-marked-alt"></i></div>
-            <h1>Super_IA</h1>
-            <p>Sistema de gestión integral para supervisión de operaciones, clientes y créditos de Super_IA.</p>
-            <div class="feature"><div class="fi"><i class="fas fa-chart-line"></i></div><span>Dashboard con estadísticas en tiempo real</span></div>
-            <div class="feature"><div class="fi"><i class="fas fa-users-gear"></i></div><span>Gestión de supervisores y asesores</span></div>
-            <div class="feature"><div class="fi"><i class="fas fa-shield-alt"></i></div><span>Seguimiento de operaciones de crédito</span></div>
+    <div class="orb orb1"></div>
+    <div class="orb orb2"></div>
+    <div class="grid-bg"></div>
+
+    <div class="login-card">
+
+        <!-- ── PANEL IZQUIERDO (color por rol) ── -->
+        <div class="left-panel">
+            <div class="brand-logo">
+                <div class="brand-icon-box">🛰️</div>
+                <span class="brand-name">SUPER<span>_IA</span></span>
+            </div>
+
+            <div class="role-title-left">
+                <span><?= htmlspecialchars($theme['label']) ?></span>
+            </div>
+            <p class="role-desc-left">
+                Plataforma de monitoreo y gestión comercial inteligente para
+                <?= strtolower(htmlspecialchars($theme['label'])) ?>es y su equipo.
+            </p>
+
+            <div class="feat-list">
+                <?php foreach ($theme['feat'] as $f): ?>
+                <div class="feat-item">
+                    <div class="feat-ico"><i class="fas <?= $f['icon'] ?>"></i></div>
+                    <span><?= htmlspecialchars($f['text']) ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
         </div>
-        <div class="login-right">
-            <div class="form-title"><?= htmlspecialchars($current_label['title']) ?></div>
+
+        <!-- ── PANEL DERECHO ── -->
+        <div class="right-panel">
+
+            <div class="role-badge">
+                <i class="fas <?= $theme['icon'] ?>"></i>
+                <?= htmlspecialchars($theme['label']) ?>
+            </div>
+
+            <div class="form-title">Iniciar Sesión</div>
             <div class="form-subtitle"><?= htmlspecialchars($current_label['subtitle']) ?></div>
+
             <?php if ($error): ?>
-                <div class="error-msg"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
+                <div class="error-msg">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?= htmlspecialchars($error) ?>
+                </div>
             <?php endif; ?>
+
             <form method="POST">
                 <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
+
                 <div class="inp-group">
                     <label>Correo Electrónico</label>
-                    <div class="inp-wrap"><i class="fas fa-envelope"></i><input type="email" name="email" placeholder="Ingresa tu correo" required autocomplete="off"></div>
+                    <div class="inp-wrap">
+                        <i class="fas fa-envelope ico"></i>
+                        <input type="email" name="email" placeholder="tu@correo.com" required autocomplete="off">
+                    </div>
                 </div>
+
                 <div class="inp-group">
                     <label>Contraseña</label>
                     <div class="inp-wrap">
-                        <i class="fas fa-lock"></i>
+                        <i class="fas fa-lock ico"></i>
                         <input type="password" id="password-input" name="password" placeholder="••••••••" required>
-                        <button type="button" class="toggle-pass" onclick="togglePass()" title="Mostrar/ocultar contraseña">
+                        <button type="button" class="toggle-pass" onclick="togglePass()">
                             <i class="fas fa-eye" id="toggle-icon"></i>
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="btn-login"><i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión</button>
-                <div style="text-align:right;margin-top:10px;margin-bottom:2px;">
-                    <a href="recuperar_password.php?role=<?= htmlspecialchars($role) ?>" style="font-size:12.5px;color:#6b11ff;text-decoration:none;font-weight:600;">
-                        <i class="fas fa-key me-1"></i>¿Olvidaste tu contraseña?
-                    </a>
-                </div>
-                
+
+                <button type="submit" class="btn-login">
+                    <i class="fas fa-right-to-bracket"></i> Iniciar Sesión
+                </button>
+
+                <a href="recuperar_password.php?role=<?= htmlspecialchars($role) ?>" class="forgot-link">
+                    <i class="fas fa-key"></i> ¿Olvidaste tu contraseña?
+                </a>
+
                 <?php if ($role === 'admin'): ?>
-                <a href="registro_admin.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Admin</a>
+                <a href="registro_admin.php" class="btn-sec">
+                    <i class="fas fa-user-plus"></i> Crear Cuenta de Gerente
+                </a>
                 <?php elseif ($role === 'supervisor'): ?>
-                <a href="registro_supervisor.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Supervisor</a>
+                <a href="registro_supervisor.php" class="btn-sec">
+                    <i class="fas fa-user-plus"></i> Crear Cuenta de Supervisor
+                </a>
                 <?php elseif ($role === 'asesor'): ?>
-                <a href="registro_asesor.php" class="btn-back"><i class="fas fa-user-plus me-2"></i>Crear Cuenta de Asesor</a>
+                <a href="registro_asesor.php" class="btn-sec">
+                    <i class="fas fa-user-plus"></i> Crear Cuenta de Asesor
+                </a>
                 <?php endif; ?>
 
-                <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Cambiar de Rol</a>
+                <a href="login_selector.php" class="btn-sec">
+                    <i class="fas fa-arrow-left"></i> Cambiar de Rol
+                </a>
             </form>
-            <div class="login-footer">Super_IA &copy; 2026</div>
+
+            <div class="login-footer">SUPER_IA &copy; 2026 · Plataforma de Gestión Comercial</div>
         </div>
     </div>
+
     <script>
         function togglePass() {
-            const input = document.getElementById('password-input');
+            const inp  = document.getElementById('password-input');
             const icon = document.getElementById('toggle-icon');
-            if (input.type === 'password') {
-                input.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
-            } else {
-                input.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
-            }
+            inp.type = inp.type === 'password' ? 'text' : 'password';
+            icon.classList.toggle('fa-eye');
+            icon.classList.toggle('fa-eye-slash');
         }
     </script>
 </body>
