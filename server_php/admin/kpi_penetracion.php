@@ -1162,6 +1162,7 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
     <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <style>
+        /* Layout heredado de supervisor_layout.css — no se necesitan overrides */
         .nav-arrow { width: 40px; height: 40px; min-width: 40px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 50%; color: #123a6d; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; z-index: 10; }
         .nav-arrow:hover { background: #123a6d; color: white; border-color: #123a6d; }
         .kpi-tabs-wrapper { overflow: hidden; position: relative; flex-grow: 1; }

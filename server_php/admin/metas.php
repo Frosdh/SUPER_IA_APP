@@ -514,6 +514,9 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
+    <style>
+        /* Layout heredado de supervisor_layout.css — no se necesitan overrides */
+    </style>
 </head>
 <body>
 

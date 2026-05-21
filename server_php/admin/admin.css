@@ -7,6 +7,7 @@
 
 /* ── Variables ─────────────────────────────────────────────── */
 :root {
+    --sidebar-width: 230px;
     --primary:        #FBBF24;
     --primary-end:    #F59E0B;
     --accent:         #FCD34D;
@@ -56,6 +57,7 @@ body {
 /* ── Sidebar ───────────────────────────────────────────────── */
 .sidebar {
     background: linear-gradient(180deg, var(--sidebar-from) 0%, var(--sidebar-to) 100%);
+    width: var(--sidebar-width);
     min-height: 100vh;
     color: #fff;
     padding-top: 0;
@@ -150,7 +152,13 @@ body {
 .page-header .page-sub   { font-size: 13px; color: var(--text-muted); margin: 3px 0 0; }
 
 /* ── Contenido principal ───────────────────────────────────── */
-.content { padding: 28px 30px; }
+.content { padding: 28px 30px; max-width: calc(100% - var(--sidebar-width)); box-sizing: border-box; }
+
+/* Unify content area width when pages use different layout wrappers */
+.content-area, .main-content, .container-fluid .content, [class*="main-content"] > .content-area {
+    max-width: calc(100% - var(--sidebar-width));
+    box-sizing: border-box;
+}
 
 /* ── Tarjetas stat ─────────────────────────────────────────── */
 .stat-card {

@@ -2,6 +2,7 @@
     --brand-yellow:      #ffdd00;
     --brand-yellow-deep: #f4c400;
     --brand-navy:        #123a6d;
+    --sidebar-width:     230px;
     --brand-navy-deep:   #0a2748;
     --brand-gray:        #6b7280;
     --brand-border:      #d7e0ea;
@@ -16,33 +17,29 @@
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
-html { zoom: 90%; }
 body {
     font-family:'Inter','Segoe UI',sans-serif;
     background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%);
     display:flex;
-    min-height:100vh;
-    height:auto;
-    overflow-x:hidden;
-    overflow-y:auto;
+    height:100vh;
+    overflow:hidden;
     color:var(--brand-navy-deep);
 }
 
 /* ── SIDEBAR ── */
 .sidebar {
-    width:230px;
+    width:var(--sidebar-width);
     background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%);
     color:#fff;
     padding:20px 0;
     overflow-y:auto;
-    position:sticky;
+    position:fixed;
     top:0;
+    left:0;
     height:100vh;
-    align-self:flex-start;
-    flex-shrink:0; 
-    top:0; 
-    z-index:1000; 
-    transition: all 0.3s ease; 
+    flex-shrink:0;
+    z-index:1000;
+    transition: all 0.3s ease;
 }
 .sidebar-brand { 
     padding:0 20px 24px; 
@@ -104,11 +101,10 @@ body {
 /* ── LAYOUT WRAPPERS ── */
 .main-content {
     flex:1;
-    margin-left: 0;   /* sidebar es sticky, no fixed → no necesita margin */
+    margin-left: var(--sidebar-width);
     display:flex;
     flex-direction:column;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow:hidden;
     min-width: 0;
 }
 .navbar-custom { 
@@ -167,6 +163,7 @@ body {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
+    overflow-y: auto;
 }
 
 /* Estilos básicos para páginas de metas/tareas y cards de supervisor */
