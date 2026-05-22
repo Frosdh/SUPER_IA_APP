@@ -983,38 +983,81 @@ if ($user_role === 'supervisor') {
                           <h6 class="mb-2" style="color:#1e40af; border-bottom:1px solid #e2e8f0; padding-bottom:5px;">
                               <i class="fas fa-box-open"></i> <?= htmlspecialchars($p['nombre']) ?>
                           </h6>
-                          <div class="row g-2">
-                              <div class="col-md-7">
-                                  <table class="table table-sm table-borderless m-0" style="font-size:10.5px;">
-                                      <tr class="table-light">
-                                          <th colspan="2">Estructura de Costos</th>
-                                      </tr>
-                                      <?php 
-                                      $materias = is_array($p['materias'] ?? null) ? $p['materias'] : [];
-                                      foreach ($materias as $m): if (empty($m['nombre'])) continue;
-                                      ?>
-                                      <tr>
-                                          <td><?= htmlspecialchars($m['nombre']) ?></td>
-                                          <td class="text-end">$<?= number_format((float)($m['valor'] ?? 0), 2) ?></td>
-                                      </tr>
-                                      <?php endforeach; ?>
-                                      <tr class="border-top">
-                                          <td><strong>Total Materia Prima</strong></td>
-                                          <td class="text-end"><strong>$<?= number_format((float)($p['total_materia_prima'] ?? 0), 2) ?></strong></td>
-                                      </tr>
-                                      <tr><td>Mano de obra / Empaques / Otros</td><td class="text-end">$<?= number_format((float)($p['mano_obra']??0) + (float)($p['empaques']??0) + (float)($p['otros_costos']??0), 2) ?></td></tr>
-                                      <tr class="table-primary">
-                                          <td><strong>COSTO TOTAL UNITARIO</strong></td>
-                                          <td class="text-end"><strong>$<?= number_format((float)($p['costo_unitario'] ?? 0), 2) ?></strong></td>
-                                      </tr>
-                                  </table>
+                          <div class="row g-3">
+                              <div class="col-lg-7 col-12">
+                                  <div class="table-responsive" style="border: 1px solid var(--brand-border); border-radius: 12px; background: #fff;">
+                                      <table class="table table-sm table-borderless m-0" style="font-size:11.5px; min-width: 320px;">
+                                          <thead>
+                                              <tr style="background: rgba(18,58,109,.04); border-bottom: 1.5px solid var(--brand-border);">
+                                                  <th colspan="2" class="px-3 py-2 text-uppercase text-secondary fw-bold" style="font-size: 10px; letter-spacing: 0.5px;">
+                                                      <i class="fas fa-receipt me-1"></i> Estructura de Costos
+                                                  </th>
+                                              </tr>
+                                          </thead>
+                                          <tbody>
+                                              <?php 
+                                              $materias = is_array($p['materias'] ?? null) ? $p['materias'] : [];
+                                              foreach ($materias as $m): if (empty($m['nombre'])) continue;
+                                              ?>
+                                              <tr style="border-bottom: 1px solid rgba(215,224,234,.4);">
+                                                  <td class="ps-3 py-2 text-secondary"><?= htmlspecialchars($m['nombre']) ?></td>
+                                                  <td class="pe-3 py-2 text-end fw-semibold text-dark">$<?= number_format((float)($m['valor'] ?? 0), 2) ?></td>
+                                              </tr>
+                                              <?php endforeach; ?>
+                                              <tr style="border-bottom: 1px solid rgba(215,224,234,.4); background: rgba(0,0,0,.01);">
+                                                  <td class="ps-3 py-2 text-dark"><strong>Total Materia Prima</strong></td>
+                                                  <td class="pe-3 py-2 text-end fw-bold text-dark">$<?= number_format((float)($p['total_materia_prima'] ?? 0), 2) ?></td>
+                                              </tr>
+                                              <tr style="border-bottom: 1px solid var(--brand-border);">
+                                                  <td class="ps-3 py-2 text-secondary">Mano de obra / Empaques / Otros</td>
+                                                  <td class="pe-3 py-2 text-end fw-semibold text-dark">$<?= number_format((float)($p['mano_obra']??0) + (float)($p['empaques']??0) + (float)($p['otros_costos']??0), 2) ?></td>
+                                              </tr>
+                                              <tr class="table-primary" style="background: rgba(18, 58, 109, 0.08) !important;">
+                                                  <td class="ps-3 py-2.5 text-primary fw-bold">COSTO TOTAL UNITARIO</td>
+                                                  <td class="pe-3 py-2.5 text-end fw-bold text-primary" style="font-size: 12.5px;">$<?= number_format((float)($p['costo_unitario'] ?? 0), 2) ?></td>
+                                              </tr>
+                                          </tbody>
+                                      </table>
+                                  </div>
                               </div>
-                              <div class="col-md-5">
-                                  <div class="dato-grid" style="grid-template-columns: 1fr; gap:5px; border:none; padding:0;">
-                                      <div class="dato-row"><span class="dato-label">Precio Unitario</span><span class="dato-val">$<?= number_format((float)($p['precio_unitario']??0), 2) ?></span></div>
-                                      <div class="dato-row"><span class="dato-label">Ventas Mes</span><span class="dato-val"><strong>$<?= number_format((float)($p['ventas_mensuales']??0), 2) ?></strong></span></div>
-                                      <div class="dato-row"><span class="dato-label">Costo Ventas</span><span class="dato-val">$<?= number_format((float)($p['costo_ventas']??0), 2) ?></span></div>
-                                      <div class="dato-row"><span class="dato-label">Inventario</span><span class="dato-val">$<?= number_format((float)($p['inventarios']??0), 2) ?></span></div>
+                              <div class="col-lg-5 col-12">
+                                  <div class="row g-2">
+                                      <div class="col-6 col-sm-6 col-md-3 col-lg-12">
+                                          <div class="d-flex align-items-center justify-content-between rounded border-start border-3 px-3 py-2.5 h-100" style="background: #ffffff; border: 1px solid var(--brand-border); border-left-color: var(--brand-gray) !important; box-shadow: 0 2px 6px rgba(0,0,0,.02);">
+                                              <div class="d-flex flex-column">
+                                                  <span style="font-size: 9px; text-transform: uppercase; color: var(--brand-gray); font-weight: 700; letter-spacing: 0.5px;">Precio Unitario</span>
+                                                  <strong style="font-size: 14px; color: var(--brand-navy-deep); margin-top: 2px;">$<?= number_format((float)($p['precio_unitario']??0), 2) ?></strong>
+                                              </div>
+                                              <i class="fas fa-tag text-muted opacity-50" style="font-size: 16px;"></i>
+                                          </div>
+                                      </div>
+                                      <div class="col-6 col-sm-6 col-md-3 col-lg-12">
+                                          <div class="d-flex align-items-center justify-content-between rounded border-start border-3 px-3 py-2.5 h-100" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-left-color: #166534 !important; box-shadow: 0 2px 6px rgba(0,0,0,.02);">
+                                              <div class="d-flex flex-column">
+                                                  <span style="font-size: 9px; text-transform: uppercase; color: #166534; font-weight: 700; letter-spacing: 0.5px;">Ventas Mes</span>
+                                                  <strong style="font-size: 14px; color: #14532d; margin-top: 2px;">$<?= number_format((float)($p['ventas_mensuales']??0), 2) ?></strong>
+                                              </div>
+                                              <i class="fas fa-chart-line text-success opacity-50" style="font-size: 16px;"></i>
+                                          </div>
+                                      </div>
+                                      <div class="col-6 col-sm-6 col-md-3 col-lg-12">
+                                          <div class="d-flex align-items-center justify-content-between rounded border-start border-3 px-3 py-2.5 h-100" style="background: #fef2f2; border: 1px solid #fecaca; border-left-color: #991b1b !important; box-shadow: 0 2px 6px rgba(0,0,0,.02);">
+                                              <div class="d-flex flex-column">
+                                                  <span style="font-size: 9px; text-transform: uppercase; color: #991b1b; font-weight: 700; letter-spacing: 0.5px;">Costo Ventas</span>
+                                                  <strong style="font-size: 14px; color: #7f1d1d; margin-top: 2px;">$<?= number_format((float)($p['costo_ventas']??0), 2) ?></strong>
+                                              </div>
+                                              <i class="fas fa-coins text-danger opacity-50" style="font-size: 16px;"></i>
+                                          </div>
+                                      </div>
+                                      <div class="col-6 col-sm-6 col-md-3 col-lg-12">
+                                          <div class="d-flex align-items-center justify-content-between rounded border-start border-3 px-3 py-2.5 h-100" style="background: #fffbeb; border: 1px solid #fef3c7; border-left-color: #d97706 !important; box-shadow: 0 2px 6px rgba(0,0,0,.02);">
+                                              <div class="d-flex flex-column">
+                                                  <span style="font-size: 9px; text-transform: uppercase; color: #b45309; font-weight: 700; letter-spacing: 0.5px;">Inventario</span>
+                                                  <strong style="font-size: 14px; color: #78350f; margin-top: 2px;">$<?= number_format((float)($p['inventarios']??0), 2) ?></strong>
+                                              </div>
+                                              <i class="fas fa-warehouse text-warning opacity-50" style="font-size: 16px;"></i>
+                                          </div>
+                                      </div>
                                   </div>
                               </div>
                           </div>
@@ -1240,49 +1283,7 @@ if ($user_role === 'supervisor') {
             </div>
         </div>
  
-        <!-- ── ALERTAS DEL CLIENTE (Solo visible para Supervisor/Admin) ── -->
-        <?php if ($alertas_cliente && $user_role !== 'asesor'): ?>
-         <div class="section-card">
-             <div class="section-header">
-                 <div class="sec-icon sec-red" style="background: #fee2e2; color: #dc2626;"><i class="fas fa-bell"></i></div>
-                 <h5>Alertas y Modificaciones Recientes</h5>
-             </div>
-             <div class="section-body" style="padding:0;">
-                 <table class="task-table">
-                     <thead>
-                         <tr>
-                             <th>Tipo / Campo</th>
-                             <th>Estado</th>
-                             <th>Asesor</th>
-                             <th>Fecha Alerta</th>
-                             <th>Acción</th>
-                         </tr>
-                     </thead>
-                     <tbody>
-                         <?php foreach ($alertas_cliente as $al): ?>
-                         <tr>
-                             <td><strong><?= htmlspecialchars($al['campo_modificado'] ?? 'Modificación') ?></strong></td>
-                             <td>
-                                 <?php if (!($al['vista_supervisor'] ?? 0)): ?>
-                                     <span class="badge bg-danger">Pendiente</span>
-                                 <?php else: ?>
-                                     <span class="badge bg-success">Revisada</span>
-                                 <?php endif; ?>
-                             </td>
-                             <td><?= htmlspecialchars($al['asesor_nombre'] ?? '—') ?></td>
-                             <td><?= date('d/m/Y H:i', strtotime($al['created_at'])) ?></td>
-                             <td>
-                                 <a href="alertas_detalle.php?id=<?= urlencode($al['id']) ?>" class="btn btn-sm btn-outline-danger" title="Ver detalle de la modificación">
-                                     <i class="fas fa-search-plus"></i>
-                                 </a>
-                             </td>
-                         </tr>
-                         <?php endforeach; ?>
-                     </tbody>
-                 </table>
-             </div>
-         </div>
-         <?php endif; ?>
+
 
         <!-- ══════════ FICHAS DE PRODUCTO ══════════ -->
         <?php if ($ficha_credito || $ficha_corriente || $ficha_ahorros || $ficha_inversiones): ?>

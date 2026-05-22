@@ -495,64 +495,82 @@ $currentPage = 'recuperacion';
     }
 
     .table th {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
-      color: var(--brand-gray);
-      letter-spacing: .3px;
-      border-bottom: 2px solid var(--brand-border);
+      color: #64748b;
+      letter-spacing: .6px;
+      border-bottom: 1px solid #edf2f7;
+      background-color: #fafbfc;
+      padding: 16px 12px;
     }
 
     .table td {
       vertical-align: middle;
       font-size: 13.5px;
-      border-color: #f0f3f7;
+      border-bottom: 1px solid #edf2f7;
+      padding: 16px 12px;
+    }
+
+    .rec-row {
+      transition: background-color 0.2s ease, transform 0.2s ease;
+    }
+
+    .rec-row:hover {
+      background-color: #f8fafc !important;
     }
 
     .mora-badge {
       display: inline-block;
-      padding: 3px 9px;
+      padding: 5px 12px;
       border-radius: 6px;
-      font-size: 11px;
+      font-size: 11.5px;
       font-weight: 800;
     }
 
     .mora-ok {
-      background: #dcfce7;
-      color: #065f46;
+      background: #e2fbe8;
+      color: #107c41;
+      border: 1px solid #c3f2cc;
     }
 
     .mora-mid {
-      background: #fef9c3;
-      color: #854d0e;
+      background: #fff8e1;
+      color: #b25e00;
+      border: 1px solid #ffe0b2;
     }
 
     .mora-high {
-      background: #fee2e2;
-      color: #991b1b;
+      background: #fdebee;
+      color: #c51162;
+      border: 1px solid #ffcdd2;
     }
 
     .btn-crear {
-      background: var(--brand-yellow);
-      color: var(--brand-navy-deep);
+      background: #ffdd00;
+      color: #0a2748;
       border: none;
-      padding: 6px 14px;
+      padding: 8px 16px;
       border-radius: 8px;
       font-size: 12.5px;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 5px;
+      gap: 6px;
+      box-shadow: 0 2px 4px rgba(255, 221, 0, 0.15);
+      transition: all 0.2s ease;
     }
 
     .btn-crear:hover {
-      background: var(--brand-yellow-deep);
+      background: #f4c400;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px rgba(255, 196, 0, 0.25);
     }
 
     .btn-bulk {
-      background: linear-gradient(135deg, #dc2626, #ef4444);
-      color: #fff;
+      background: linear-gradient(135deg, #0a2748, #1e4d8c);
+      color: #ffdd00;
       border: none;
       padding: 9px 20px;
       border-radius: 10px;
@@ -562,16 +580,18 @@ $currentPage = 'recuperacion';
       display: inline-flex;
       align-items: center;
       gap: 8px;
+      transition: all 0.2s ease;
     }
 
     .btn-bulk:hover {
-      opacity: .9;
+      opacity: .95;
+      transform: translateY(-1px);
     }
 
     .empty-msg {
       padding: 40px 20px;
       text-align: center;
-      color: #9ca3af;
+      color: #94a3b8;
     }
 
     .empty-msg i {
@@ -581,18 +601,37 @@ $currentPage = 'recuperacion';
       opacity: .5;
     }
 
-    .mora-input {
-      width: 72px;
-      border: 1.5px solid var(--brand-border);
-      border-radius: 7px;
-      padding: 4px 8px;
-      font-size: 13px;
+    /* Input meses en mora exacto al diseño */
+    .mora-input-row {
+      width: 110px;
+      height: 38px;
+      border-radius: 10px;
+      border: 1.5px solid #e2e8f0;
+      background-color: #f8fafc;
+      font-weight: 700;
+      color: #1e293b;
+      font-size: 14px;
       text-align: center;
+      transition: all 0.2s;
+      outline: none;
+      display: block;
+      margin: 0 auto;
     }
 
-    .mora-input:focus {
-      border-color: var(--brand-navy);
-      outline: none;
+    .mora-input-row:focus {
+      border-color: #3b82f6 !important;
+      background-color: #fff !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+    }
+
+    /* Ocultar flechas del input number */
+    .mora-input-row::-webkit-outer-spin-button,
+    .mora-input-row::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .mora-input-row {
+      -moz-appearance: textfield;
     }
   </style>
 </head>
@@ -608,47 +647,264 @@ $currentPage = 'recuperacion';
       </div>
 
 
-      <!-- FILTROS — solo búsqueda por cliente/cédula -->
+      <!-- FILTROS — búsqueda + A-Z -->
+      <style>
+      .filter-bar {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+        background: linear-gradient(135deg, #f8fafd 0%, #f0f5fb 100%);
+        border-radius: 12px;
+        border: 1px solid #e2eaf4;
+        box-shadow: 0 2px 8px rgba(0,0,0,.04);
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+      .filter-row-1 {
+        display: grid;
+        grid-template-columns: 1fr 1fr auto;
+        align-items: center;
+        gap: 14px;
+        padding: 16px 20px;
+        border-bottom: 1px solid #edf2f9;
+      }
+      .filter-row-2 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 12px 20px 14px;
+        background: rgba(248, 250, 253, 0.6);
+      }
+      .filter-row-3 {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 20px;
+        background: rgba(248, 250, 253, 0.7);
+        font-size: 12px;
+      }
+      .fi-group {
+        display: flex;
+        align-items: center;
+        border: 1.5px solid #dde5f0;
+        border-radius: 10px;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0,0,0,.04);
+        overflow: hidden;
+        transition: border-color .18s, box-shadow .18s;
+      }
+      .fi-group:focus-within {
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), 0 1px 3px rgba(0,0,0,.04);
+      }
+      .fi-ico {
+        flex-shrink: 0;
+        width: 40px;
+        text-align: center;
+        color: #b0bec5;
+        font-size: 13px;
+        pointer-events: none;
+      }
+      .fi-input {
+        flex: 1;
+        border: none;
+        outline: none;
+        padding: 11px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #1a2744;
+        background: transparent;
+        min-width: 0;
+      }
+      .fi-input::placeholder {
+        color: #b0bec5;
+        font-weight: 500;
+      }
+      .fi-clear-btn {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 11px 18px;
+        border-radius: 10px;
+        border: 1.5px solid #dde5f0;
+        background: #fff;
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: .18s;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px rgba(0,0,0,.04);
+      }
+      .fi-clear-btn:hover {
+        border-color: #ef4444;
+        color: #ef4444;
+        background: #fff5f5;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.1);
+      }
+      .az-all-btn {
+        height: 30px;
+        padding: 0 12px;
+        border-radius: 8px;
+        border: 1.5px solid #dde5f0;
+        background: #fff;
+        color: #475569;
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: .15s;
+        box-shadow: 0 1px 2px rgba(0,0,0,.04);
+      }
+      .az-all-btn.active {
+        background: linear-gradient(135deg, #0a2748 0%, #1e4d8c 100%);
+        border-color: #0a2748;
+        color: #ffdd00;
+        box-shadow: 0 3px 10px rgba(10, 39, 72, 0.25);
+      }
+      .az-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        border: 1.5px solid #e8eef6;
+        background: #fff;
+        color: #64748b;
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: .15s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 2px rgba(0,0,0,.03);
+      }
+      .az-btn:hover {
+        background: #eff6ff;
+        border-color: #93c5fd;
+        color: #1d4ed8;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(59, 130, 246, 0.15);
+      }
+      .az-btn.active {
+        background: linear-gradient(135deg, #ffdd00 0%, #f4c400 100%);
+        border-color: #e6b800;
+        color: #0a2748;
+        box-shadow: 0 3px 10px rgba(255, 221, 0, 0.35);
+        transform: translateY(-1px);
+      }
+      .fi-label {
+        font-size: 10.5px;
+        font-weight: 800;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        white-space: nowrap;
+        margin-right: 8px;
+      }
+      .fi-count {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        color: #94a3b8;
+        margin-left: auto;
+      }
+      .fi-count-num {
+        font-size: 14px;
+        font-weight: 900;
+        color: #0a2748;
+      }
+      </style>
       <div class="filter-bar">
-        <i class="fas fa-search" style="color:var(--brand-gray);"></i>
-        <input type="text" id="inputBusqueda" value="<?= htmlspecialchars($q) ?>"
-          placeholder="Buscar por nombre o cédula del cliente…"
-          style="min-width:260px;flex:1;padding:9px 14px;border:1.5px solid var(--brand-border);border-radius:9px;font-size:14px;outline:none;"
-          oninput="filtrarTabla()">
-        <span id="cntResultados" style="font-size:13px;color:var(--brand-gray);margin-left:auto;"></span>
+        <!-- FILA 1: búsqueda -->
+        <div class="filter-row-1">
+          <div class="fi-group">
+            <i class="fas fa-search fi-ico"></i>
+            <input type="text" id="fiNombre" class="fi-input" placeholder="Buscar por nombre…">
+          </div>
+          <div class="fi-group">
+            <i class="fas fa-id-card fi-ico"></i>
+            <input type="text" id="fiCedula" class="fi-input" placeholder="Buscar por cédula…">
+          </div>
+          <button class="fi-clear-btn" id="fiClear">
+            <i class="fas fa-rotate-left" style="font-size: 11px;"></i> Limpiar
+          </button>
+        </div>
+        <!-- FILA 2: A-Z -->
+        <div class="filter-row-2">
+          <span class="fi-label"><i class="fas fa-sort-alpha-down"></i> Alfabético</span>
+          <button class="az-all-btn active" id="azAllBtn">TODOS</button>
+          <button class="az-btn" data-letter="A">A</button>
+          <button class="az-btn" data-letter="B">B</button>
+          <button class="az-btn" data-letter="C">C</button>
+          <button class="az-btn" data-letter="D">D</button>
+          <button class="az-btn" data-letter="E">E</button>
+          <button class="az-btn" data-letter="F">F</button>
+          <button class="az-btn" data-letter="G">G</button>
+          <button class="az-btn" data-letter="H">H</button>
+          <button class="az-btn" data-letter="I">I</button>
+          <button class="az-btn" data-letter="J">J</button>
+          <button class="az-btn" data-letter="K">K</button>
+          <button class="az-btn" data-letter="L">L</button>
+          <button class="az-btn" data-letter="M">M</button>
+          <button class="az-btn" data-letter="N">N</button>
+          <button class="az-btn" data-letter="O">O</button>
+          <button class="az-btn" data-letter="P">P</button>
+          <button class="az-btn" data-letter="Q">Q</button>
+          <button class="az-btn" data-letter="R">R</button>
+          <button class="az-btn" data-letter="S">S</button>
+          <button class="az-btn" data-letter="T">T</button>
+          <button class="az-btn" data-letter="U">U</button>
+          <button class="az-btn" data-letter="V">V</button>
+          <button class="az-btn" data-letter="W">W</button>
+          <button class="az-btn" data-letter="X">X</button>
+          <button class="az-btn" data-letter="Y">Y</button>
+          <button class="az-btn" data-letter="Z">Z</button>
+        </div>
+        <!-- FILA 3: contador -->
+        <div class="filter-row-3">
+          <div class="fi-count">
+            Mostrando <span class="fi-count-num" id="cntMostrados">0</span> de <?= count($creditos) ?>
+          </div>
+        </div>
       </div>
 
       <!-- TABLA -->
       <div class="section-card">
-        <div class="section-header">
-          <h5><i class="fas fa-list" style="color:#dc2626;"></i> Créditos Aprobados / Desembolsados</h5>
-          <span class="sec-badge"><?= count($creditos) ?> créditos</span>
+        <div class="section-header" style="background: #fff; border-bottom: 1px solid #edf2f7; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;">
+          <h5 style="font-size: 16px; font-weight: 800; margin: 0; color: #0a2748; display: flex; align-items: center; gap: 10px;">
+            <i class="fa-solid fa-list-ul" style="color: #dc2626;"></i> Créditos Aprobados / Desembolsados
+          </h5>
+          <span class="sec-badge" style="background-color: #0a2748; color: #fff; border-radius: 20px; font-weight: 800; padding: 6px 14px; font-size: 12px;"><?= count($creditos) ?> créditos</span>
         </div>
         <?php if (empty($creditos)): ?>
           <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>
             <p>No se encontraron créditos aprobados<?= $q ? ' con esos filtros' : '' ?>.</p>
           </div>
         <?php else: ?>
-          <div style="overflow-x:auto;">
-            <table class="table table-hover mb-0" id="tablaCreditos">
+          <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
               <thead>
                 <tr>
                   <th style="width:36px;"><input type="checkbox" id="chkAll" title="Seleccionar todos"></th>
-                  <th>Cliente</th>
-                  <th>Asesor</th>
-                  <th>Monto</th>
-                  <th>Desembolso</th>
-                  <th>Meses desde desemb.</th>
-                  <th>Meses en mora</th>
-                  <th></th>
+                  <th class="ps-3 py-3">CLIENTE</th>
+                  <th class="py-3">ASESOR</th>
+                  <th class="py-3">MONTO</th>
+                  <th class="py-3">DESEMBOLSO</th>
+                  <th class="py-3 text-center">MESES DESDE DESEMB.</th>
+                  <th class="py-3 text-center">MESES EN MORA</th>
+                  <th class="text-end pe-3 py-3"></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody class="border-top-0">
                 <!-- Mensaje vacío al filtrar (JS lo muestra/oculta) -->
                 <tr id="emptyFiltered" style="display:none;">
-                  <td colspan="8" style="text-align:center;padding:32px 0;color:#9ca3af;">
-                    <i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>
-                    No hay créditos que coincidan con la búsqueda.
+                  <td colspan="8" class="text-center py-5">
+                    <div class="text-muted mb-3"><i class="fas fa-search fa-3x opacity-25"></i></div>
+                    <h6 class="fw-bold text-muted">No hay créditos que coincidan con la búsqueda</h6>
+                    <p class="small text-muted">Intenta ajustando los filtros.</p>
                   </td>
                 </tr>
                 <?php foreach ($creditos as $cr):
@@ -656,36 +912,49 @@ $currentPage = 'recuperacion';
                   try { $dt0 = new DateTime($fechaRaw); } catch(Throwable $_) { $dt0 = new DateTime(); }
                   $dt1 = new DateTime();
                   $meses = max(0, (int) (($dt1->format('Y') - $dt0->format('Y')) * 12 + ($dt1->format('n') - $dt0->format('n'))));
-                  $moraClass = $meses <= 3 ? 'mora-ok' : ($meses <= 6 ? 'mora-mid' : 'mora-high');
                   $nombreDisplay = htmlspecialchars(trim($cr['cliente_nombre']??'') ?: ($cr['cedula']??'—'));
                   ?>
-                  <tr data-nombre="<?= strtolower(htmlspecialchars($cr['cliente_nombre']??'')) ?>" data-cedula="<?= strtolower(htmlspecialchars($cr['cedula']??'')) ?>" data-asesor="<?= strtolower(htmlspecialchars($cr['asesor_nombre']??'')) ?>" data-meses="<?= $meses ?>">
-                    <td><input type="checkbox" class="chk-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
+                  <tr class="rec-row" data-nombre="<?= strtolower(htmlspecialchars($cr['cliente_nombre']??'')) ?>" data-cedula="<?= strtolower(htmlspecialchars($cr['cedula']??'')) ?>" data-asesor="<?= strtolower(htmlspecialchars($cr['asesor_nombre']??'')) ?>" data-meses="<?= $meses ?>" style="transition:all 0.2s ease;">
+                    <td style="width:36px;"><input type="checkbox" class="chk-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
                         data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
                         data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"></td>
-                    <td>
-                      <div style="font-weight:700;"><?= $nombreDisplay ?>
-                        <?php if (($cr['fuente']??'') === 'ficha' && ($cr['estado_revision']??'') === 'pendiente'): ?>
-                          <span style="font-size:10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;padding:1px 5px;font-weight:600;vertical-align:middle;margin-left:4px;">Pendiente revisión</span>
-                        <?php endif; ?>
+                    <td class="ps-3 py-3">
+                      <div class="fw-bold text-navy" style="font-size:14.5px; color: #1e293b;"><?= htmlspecialchars(strtolower($cr['cliente_nombre'] ?? '—')) ?></div>
+                      <div class="text-muted small mt-1" style="font-size:11.5px; font-family: sans-serif; letter-spacing: 0.3px;">
+                        <?= htmlspecialchars($cr['cedula'] ?? '—') ?> &middot; <?= htmlspecialchars($cr['telefono'] ?? '—') ?>
                       </div>
-                      <small class="text-muted"><?= htmlspecialchars($cr['cedula'] ?? '') ?><?= !empty($cr['telefono']) ? ' · ' . htmlspecialchars($cr['telefono']) : '' ?></small>
                     </td>
-                    <td><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></td>
-                    <td><strong><?= is_numeric($cr['monto_aprobado']??'') ? '$'.number_format((float)$cr['monto_aprobado'],2) : (htmlspecialchars($cr['monto_aprobado']??'') ?: '—') ?></strong></td>
-                    <td><?= !empty($fechaRaw) ? date('d/m/Y', strtotime($fechaRaw)) : '—' ?></td>
-                    <td><span class="mora-badge <?= $moraClass ?>"><?= $meses ?> mes<?= $meses != 1 ? 'es' : '' ?></span></td>
-                    <td>
-                      <input type="number" class="mora-input mora-val" min="0" max="999" value="<?= $meses ?>"
-                        data-credito-id="<?= htmlspecialchars($cr['id']) ?>" title="Meses en mora">
+                    <td class="py-3">
+                      <span class="text-secondary" style="font-size:13.5px; font-weight: 500;"><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></span>
                     </td>
-                    <td style="white-space:nowrap;">
-                      <button class="btn-crear btn-abrir-modal" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
-                        data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
-                        data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"
-                        data-cliente="<?= $nombreDisplay ?>"
-                        data-meses="<?= $meses ?>">
-                        <i class="fas fa-plus"></i> Crear tarea
+                    <td class="py-3 fw-bold text-navy" style="font-size:13.5px; color: #1e293b;">
+                      <?= is_numeric($cr['monto_aprobado']??'') ? '$'.number_format((float)$cr['monto_aprobado'],2) : (htmlspecialchars($cr['monto_aprobado']??'') ?: '—') ?>
+                    </td>
+                    <td class="py-3 text-secondary" style="font-size:13.5px;">
+                      <?= !empty($fechaRaw) ? date('d/m/Y', strtotime($fechaRaw)) : '—' ?>
+                    </td>
+                    <td class="py-3 text-center">
+                      <?php
+                      $badgeClass = $meses <= 3 ? 'mora-ok' : ($meses <= 6 ? 'mora-mid' : 'mora-high');
+                      ?>
+                      <span class="mora-badge <?= $badgeClass ?>">
+                        <?= $meses ?> mes<?= $meses != 1 ? 'es' : '' ?>
+                      </span>
+                    </td>
+                    <td class="py-3 text-center">
+                      <input type="number" class="mora-val mora-input-row text-center" 
+                             data-credito-id="<?= htmlspecialchars($cr['id']) ?>" 
+                             value="<?= $meses ?>" 
+                             min="0">
+                    </td>
+                    <td class="text-end pe-3 py-3">
+                      <button class="btn btn-crear btn-abrir-modal" 
+                              data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
+                              data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
+                              data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"
+                              data-cliente="<?= $nombreDisplay ?>"
+                              data-meses="<?= $meses ?>">
+                        <i class="fa-solid fa-plus" style="font-size: 11px;"></i> Crear tarea
                       </button>
                     </td>
                   </tr>
@@ -706,7 +975,7 @@ $currentPage = 'recuperacion';
             </select>
             <input type="date" id="bulkFecha" class="form-control form-control-sm" style="width:160px;"
               value="<?= date('Y-m-d') ?>">
-            <button class="btn-bulk" id="bulkConfirmar"><i class="fas fa-bolt"></i> Confirmar y crear</button>
+            <button class="btn-bulk" id="bulkConfirmar"><i class="fas fa-bolt"></i> Crear tareas</button>
           </div>
         <?php endif; ?>
       </div><!-- /section-card -->
@@ -878,25 +1147,92 @@ $currentPage = 'recuperacion';
         document.body.appendChild(t);
         setTimeout(() => t.remove(), 4000);
       }
-      // ── FILTRADO LIVE por nombre / cédula ──────────────────
-      function filtrarTabla(){
-        var q = (document.getElementById('inputBusqueda').value||'').toLowerCase().trim();
-        var filas = document.querySelectorAll('#tablaCreditos tbody tr');
-        var vis = 0;
-        filas.forEach(function(tr){
-          if (tr.id === 'emptyFiltered') return;
-          var nombre = (tr.dataset.nombre || '').toLowerCase();
-          var cedula = (tr.dataset.cedula || '').toLowerCase();
-          var show = !q || nombre.includes(q) || cedula.includes(q);
-          tr.style.display = show ? '' : 'none';
-          if (show) vis++;
+      // ── FILTRADO LIVE con A-Z, nombre y cédula ──────────────────────────
+      function aplicarFiltros() {
+        const fiNombre = document.getElementById('fiNombre').value.trim().toLowerCase();
+        const fiCedula = document.getElementById('fiCedula').value.trim().toLowerCase();
+        const fLetra = window.activeLetter || '';
+        const filas = document.querySelectorAll('tr.rec-row');
+        let visibles = 0;
+
+        filas.forEach(function(tr) {
+          const nombre = (tr.dataset.nombre || '').toLowerCase();
+          const cedula = (tr.dataset.cedula || '').toLowerCase();
+
+          const okNombre = !fiNombre || nombre.includes(fiNombre);
+          const okCedula = !fiCedula || cedula.includes(fiCedula);
+          const okLetra = !fLetra || nombre.startsWith(fLetra.toLowerCase());
+
+          if (okNombre && okCedula && okLetra) {
+            tr.style.display = '';
+            visibles++;
+          } else {
+            tr.style.display = 'none';
+          }
         });
-        var cnt = document.getElementById('cntResultados');
-        if(cnt) cnt.textContent = vis + ' resultado' + (vis!==1?'s':'');
-        var badge = document.querySelector('.sec-badge');
-        if(badge) badge.textContent = vis + ' crédito' + (vis!==1?'s':'');
-        var vacioDiv = document.getElementById('emptyFiltered');
-        if(vacioDiv) vacioDiv.style.display = (vis === 0) ? '' : 'none';
+
+        // Actualizar contador
+        const cnt = document.getElementById('cntMostrados');
+        if (cnt) cnt.textContent = visibles;
+
+        // Mostrar/ocultar empty
+        const emptyDiv = document.getElementById('emptyFiltered');
+        if (emptyDiv) {
+          emptyDiv.style.display = (visibles === 0 && filas.length > 0) ? '' : 'none';
+        }
+
+        // Actualizar badge
+        const badge = document.querySelector('.sec-badge');
+        if (badge) badge.textContent = visibles + ' crédito' + (visibles !== 1 ? 's' : '');
+      }
+
+      // Inicializar
+      window.activeLetter = '';
+      const fiNombre = document.getElementById('fiNombre');
+      const fiCedula = document.getElementById('fiCedula');
+      const fiClear = document.getElementById('fiClear');
+
+      if (fiNombre) fiNombre.addEventListener('input', aplicarFiltros);
+      if (fiCedula) fiCedula.addEventListener('input', aplicarFiltros);
+
+      // Botones A-Z
+      document.querySelectorAll('.az-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const letra = this.dataset.letter;
+          window.activeLetter = (window.activeLetter === letra) ? '' : letra;
+          document.querySelectorAll('.az-btn').forEach(b => b.classList.toggle('active', b.dataset.letter === window.activeLetter));
+          document.getElementById('azAllBtn').classList.toggle('active', window.activeLetter === '');
+          aplicarFiltros();
+        });
+      });
+
+      // Botón TODOS
+      if (document.getElementById('azAllBtn')) {
+        document.getElementById('azAllBtn').addEventListener('click', function() {
+          window.activeLetter = '';
+          document.querySelectorAll('.az-btn').forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          aplicarFiltros();
+        });
+      }
+
+      // Botón Limpiar
+      if (fiClear) {
+        fiClear.addEventListener('click', function() {
+          fiNombre.value = '';
+          fiCedula.value = '';
+          window.activeLetter = '';
+          document.querySelectorAll('.az-btn').forEach(b => b.classList.remove('active'));
+          document.getElementById('azAllBtn').classList.add('active');
+          aplicarFiltros();
+        });
+      }
+
+      // Inicializar contador
+      aplicarFiltros();
+      function filtrarTabla(){
+        // Mantener compatibilidad con código anterior si existe
+        aplicarFiltros();
       }
       // Ejecutar al cargar
       document.addEventListener('DOMContentLoaded', function(){ filtrarTabla(); });

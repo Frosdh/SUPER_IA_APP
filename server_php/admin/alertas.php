@@ -433,6 +433,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
             border: 1px solid var(--brand-border);
             box-shadow: var(--brand-shadow);
         }
+        .btn-premium-filter {
+            background: #f1f5f9;
+            color: var(--brand-navy, #123a6d);
+            border: 1px solid var(--brand-border, #d7e0ea);
+            transition: all 0.25s ease;
+        }
+        .btn-premium-filter:hover {
+            background: #e2e8f0;
+            color: var(--brand-navy-deep, #0a2748);
+        }
+        .btn-premium-filter.active {
+            background: var(--brand-navy, #123a6d);
+            color: #fff;
+            border-color: var(--brand-navy, #123a6d);
+            box-shadow: 0 4px 12px rgba(18, 58, 109, 0.15);
+        }
+        .btn-alphabet {
+            background: #f1f5f9;
+            color: var(--brand-navy, #123a6d);
+            border: 1px solid var(--brand-border, #d7e0ea);
+            transition: all 0.2s ease;
+        }
+        .btn-alphabet:hover {
+            background: #e2e8f0;
+            color: var(--brand-navy-deep, #0a2748);
+            transform: translateY(-1px);
+        }
+        .btn-alphabet.active {
+            background: var(--brand-navy, #123a6d);
+            color: #fff;
+            border-color: var(--brand-navy, #123a6d);
+            box-shadow: 0 4px 10px rgba(18, 58, 109, 0.15);
+        }
     </style>
 
     <!-- ================================================================
@@ -528,13 +561,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
 
         .alm-body {
             flex: 1 1 auto;
-            overflow: auto;
+            overflow-y: auto;
+            overflow-x: hidden;
             background: #f4f6f9;
-            padding: 0;                        /* el partial trae su propio padding */
-            /* aislar el contenido cargado por AJAX para que NADA herede de la página */
+            padding: 0;
             contain: content;
+            min-width: 0;
         }
-        .alm-body > * { max-width: 100%; }
+        .alm-body > * { max-width: 100%; box-sizing: border-box; }
+        /* Forzar que TODO el contenido interno se quede dentro del modal */
+        .alm-body .alm-detalle { overflow-x: hidden; max-width: 100%; min-width: 0; }
+        .alm-body .alm-detalle * { box-sizing: border-box; min-width: 0; }
+        .alm-body .alm-detalle .d-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0;
+        }
+        .alm-body .alm-detalle .d-row { min-width: 0; overflow: hidden; }
+        .alm-body .alm-detalle .d-val { word-break: break-word; overflow-wrap: anywhere; }
+        .alm-body .alm-detalle .sec-body { overflow-x: auto; max-width: 100%; }
+        .alm-body .alm-detalle .diff-table { table-layout: fixed; width: 100%; }
+        .alm-body .alm-detalle table { max-width: 100%; word-break: break-word; }
+        @media(max-width:860px){
+            .alm-body .alm-detalle .d-grid { grid-template-columns: repeat(2,1fr); }
+        }
+        @media(max-width:560px){
+            .alm-body .alm-detalle .d-grid { grid-template-columns: 1fr; }
+        }
 
         .alm-loader {
             display:flex; align-items:center; justify-content:center;
@@ -593,16 +646,93 @@ if ($user_role === 'supervisor') {
             </div>
         </div>
 
-        <!-- Buscador -->
+        <!-- Buscador y Filtros Premium -->
         <div class="search-container-premium">
-            <div class="d-flex align-items-center justify-content-between">
-                <div>
+            <div class="row g-3 align-items-center">
+                <!-- Título -->
+                <div class="col-12 col-md-4">
                     <h5 class="mb-0 fw-800 text-navy"><i class="fas fa-list-ul me-2 text-primary"></i> Registro de Modificaciones</h5>
                     <small class="text-muted">Gestiona y revisa los cambios realizados por tu equipo</small>
                 </div>
-                <div class="input-group" style="width: 350px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
-                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" id="alertSearch" class="form-control border-start-0" style="padding: 10px;" placeholder="Buscar por cliente o cédula...">
+                
+                <!-- Buscador por nombre o cédula -->
+                <div class="col-12 col-sm-6 <?php echo $col_asesor ? 'col-md-4' : 'col-md-8'; ?>">
+                    <div class="input-group" style="box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="alertSearch" class="form-control border-start-0" style="padding: 10px;" placeholder="Buscar por cliente o cédula...">
+                    </div>
+                </div>
+                
+                <!-- Filtro por Asesor (si aplica) -->
+                <?php if ($col_asesor): ?>
+                <div class="col-12 col-sm-6 col-md-4">
+                    <div class="input-group" style="box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-user-tie text-muted"></i></span>
+                        <select id="filterAsesor" class="form-select border-start-0" style="padding: 10px;">
+                            <option value="">Todos los Asesores</option>
+                            <?php
+                            $asesores = [];
+                            foreach ($alertas as $al) {
+                                if (!empty($al['asesor_nombre'])) {
+                                    $asesores[] = $al['asesor_nombre'];
+                                }
+                            }
+                            $asesores = array_values(array_unique($asesores));
+                            sort($asesores);
+                            foreach ($asesores as $as) {
+                                echo '<option value="' . htmlspecialchars(strtolower($as)) . '">' . htmlspecialchars($as) . '</option>';
+                            }
+                            ?>
+                        </select>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Segunda Fila: Filtros de Estado y Ordenamiento -->
+            <div class="row g-3 align-items-center mt-2 pt-2 border-top">
+                <!-- Botones de Estado -->
+                <div class="col-12 col-md-8 d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-premium-filter active" data-filter-status="todos" style="border-radius:20px; font-weight:600; padding:6px 16px;">
+                        <i class="fas fa-border-all me-1"></i> Todos
+                    </button>
+                    <button type="button" class="btn btn-premium-filter" data-filter-status="abierta" style="border-radius:20px; font-weight:600; padding:6px 16px;">
+                        <i class="fas fa-clock me-1 text-danger"></i> Pendientes
+                    </button>
+                    <button type="button" class="btn btn-premium-filter" data-filter-status="cerrada" style="border-radius:20px; font-weight:600; padding:6px 16px;">
+                        <i class="fas fa-check-circle me-1 text-success"></i> Revisadas
+                    </button>
+                </div>
+                
+                <!-- Selector de Ordenamiento -->
+                <div class="col-12 col-md-4 d-flex justify-content-md-end">
+                    <div class="input-group" style="width: 260px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-sort-alpha-down text-muted"></i></span>
+                        <select id="sortAlerts" class="form-select border-start-0" style="padding: 10px;">
+                            <option value="fecha-desc">Más recientes primero</option>
+                            <option value="fecha-asc">Más antiguas primero</option>
+                            <option value="name-asc">Nombre: A a la Z</option>
+                            <option value="name-desc">Nombre: Z a la A</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tercera Fila: Selector del Abecedario (A-Z) por Letra -->
+            <div class="row mt-2 pt-2 border-top align-items-center">
+                <div class="col-12">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <small class="text-muted fw-bold text-uppercase" style="font-size: 10px; letter-spacing: 0.5px; white-space: nowrap;">Filtrar por letra:</small>
+                        <div class="d-flex flex-wrap gap-1 alphabet-container" style="flex: 1;">
+                            <button type="button" class="btn btn-sm btn-alphabet active" data-letter="todos" style="border-radius:8px; font-weight:700; padding: 4px 10px; font-size:11px;">Todas</button>
+                            <?php
+                            $alphabet = range('A', 'Z');
+                            foreach ($alphabet as $char) {
+                                echo '<button type="button" class="btn btn-sm btn-alphabet" data-letter="' . strtolower($char) . '" style="border-radius:8px; font-weight:700; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; font-size:11px;">' . $char . '</button>';
+                            }
+                            ?>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -635,7 +765,10 @@ if ($user_role === 'supervisor') {
                         <tr class="alert-row" 
                             data-alerta-id="<?php echo htmlspecialchars($alerta['id_alerta']); ?>"
                             data-search-name="<?php echo strtolower(htmlspecialchars($alerta['cliente_nombre_display'])); ?>"
-                            data-search-id="<?php echo strtolower(htmlspecialchars($alerta['cliente_cedula_display'])); ?>">
+                            data-search-id="<?php echo strtolower(htmlspecialchars($alerta['cliente_cedula_display'])); ?>"
+                            data-estado="<?php echo htmlspecialchars($alerta['estado']); ?>"
+                            data-asesor="<?php echo strtolower(htmlspecialchars($alerta['asesor_nombre'] ?? '')); ?>"
+                            data-fecha="<?php echo strtotime($alerta['fecha']); ?>">
                             
                             <td>
                                 <div class="fw-bold text-navy"><?php echo htmlspecialchars($alerta['cliente_nombre_display']); ?></div>
@@ -838,25 +971,129 @@ if ($user_role === 'supervisor') {
         if (e.key === 'Escape' && backdrop.classList.contains('alm-open')) closeModal();
     });
 
-    // ── BUSCADOR EN TIEMPO REAL ──────────────────────────────────
+    // ── BUSCADOR Y FILTROS EN TIEMPO REAL ──────────────────────────
     var alertSearch = document.getElementById('alertSearch');
-    if (alertSearch) {
-        alertSearch.addEventListener('input', function() {
-            var val = this.value.toLowerCase().trim();
-            var rows = document.querySelectorAll('.alert-row');
-            
-            rows.forEach(function(row) {
-                var name = row.getAttribute('data-search-name') || '';
-                var id   = row.getAttribute('data-search-id') || '';
-                
-                if (name.includes(val) || id.includes(val)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+    var filterAsesor = document.getElementById('filterAsesor');
+    var sortAlerts = document.getElementById('sortAlerts');
+    var statusButtons = document.querySelectorAll('.btn-premium-filter');
+    var alphabetButtons = document.querySelectorAll('.btn-alphabet');
+
+    function applyFiltersAndSort() {
+        var val = alertSearch ? alertSearch.value.toLowerCase().trim() : '';
+        var activeBtn = document.querySelector('.btn-premium-filter.active');
+        var activeStatus = activeBtn ? activeBtn.getAttribute('data-filter-status') : 'todos';
+        var activeAsesor = filterAsesor ? filterAsesor.value : '';
+        var sortValue = sortAlerts ? sortAlerts.value : 'fecha-desc';
+        
+        var activeLetterBtn = document.querySelector('.btn-alphabet.active');
+        var activeLetter = activeLetterBtn ? activeLetterBtn.getAttribute('data-letter') : 'todos';
+
+        var tbody = document.querySelector('#alertas-table tbody');
+        if (!tbody) return;
+
+        var rows = Array.from(tbody.querySelectorAll('.alert-row'));
+        if (rows.length === 0) return;
+
+        // 1. Ordenar las filas en memoria
+        rows.sort(function(a, b) {
+            if (sortValue === 'name-asc' || sortValue === 'name-desc') {
+                var nameA = a.getAttribute('data-search-name') || '';
+                var nameB = b.getAttribute('data-search-name') || '';
+                var cmp = nameA.localeCompare(nameB, 'es', { sensitivity: 'base' });
+                return sortValue === 'name-asc' ? cmp : -cmp;
+            } else {
+                // Ordenar por fecha
+                var tA = parseInt(a.getAttribute('data-fecha') || 0, 10);
+                var tB = parseInt(b.getAttribute('data-fecha') || 0, 10);
+                return sortValue === 'fecha-asc' ? (tA - tB) : (tB - tA);
+            }
         });
+
+        // 2. Filtrar y re-añadir filas ordenadas
+        var visibleCount = 0;
+        rows.forEach(function(row) {
+            var name = row.getAttribute('data-search-name') || '';
+            var id   = row.getAttribute('data-search-id') || '';
+            var status = row.getAttribute('data-estado') || '';
+            var advisor = row.getAttribute('data-asesor') || '';
+
+            // Filtro de texto (nombre o cédula)
+            var matchesText = !val || name.includes(val) || id.includes(val);
+
+            // Filtro de estado
+            var matchesStatus = (activeStatus === 'todos') || (status === activeStatus);
+
+            // Filtro de asesor
+            var matchesAsesor = !activeAsesor || (advisor === activeAsesor);
+
+            // Filtro de letra (A-Z)
+            var matchesLetter = (activeLetter === 'todos') || name.startsWith(activeLetter);
+
+            if (matchesText && matchesStatus && matchesAsesor && matchesLetter) {
+                row.style.display = '';
+                visibleCount++;
+            } else {
+                row.style.display = 'none';
+            }
+
+            // Mueve la fila en el DOM
+            tbody.appendChild(row);
+        });
+
+        // Manejo de la fila de "sin resultados"
+        var placeholderRow = document.getElementById('no-alerts-placeholder');
+        if (visibleCount === 0) {
+            if (!placeholderRow) {
+                placeholderRow = document.createElement('tr');
+                placeholderRow.id = 'no-alerts-placeholder';
+                var colSpan = tbody.querySelector('.alert-row') ? tbody.querySelector('.alert-row').cells.length : 6;
+                placeholderRow.innerHTML = `
+                    <td colspan="${colSpan}" class="text-center py-5">
+                        <div class="text-muted">
+                            <i class="fas fa-search fa-3x mb-3 d-block opacity-25"></i>
+                            Ninguna alerta coincide con los filtros aplicados
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(placeholderRow);
+            } else {
+                placeholderRow.style.display = '';
+                tbody.appendChild(placeholderRow);
+            }
+        } else {
+            if (placeholderRow) {
+                placeholderRow.style.display = 'none';
+            }
+        }
     }
+
+    // Escuchadores de eventos para los filtros
+    if (alertSearch) {
+        alertSearch.addEventListener('input', applyFiltersAndSort);
+    }
+    if (filterAsesor) {
+        filterAsesor.addEventListener('change', applyFiltersAndSort);
+    }
+    if (sortAlerts) {
+        sortAlerts.addEventListener('change', applyFiltersAndSort);
+    }
+    statusButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            statusButtons.forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            applyFiltersAndSort();
+        });
+    });
+    alphabetButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            alphabetButtons.forEach(function(b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            applyFiltersAndSort();
+        });
+    });
+
+    // Ejecutar ordenamiento y filtrado inicial
+    applyFiltersAndSort();
 
     // ── MARCAR COMO REVISADA ──────────────────────────────────────
     btnMark.addEventListener('click', function(){
@@ -884,10 +1121,14 @@ if ($user_role === 'supervisor') {
                 if (tr) {
                     // Estado badge en columna
                     var estadoCell = tr.querySelector('td:nth-last-child(2)');
-                    if (estadoCell) estadoCell.innerHTML = '<span class="badge" style="background:#10b981;">✓ Cerrada</span>';
-                    // Actualizar data-estado del botón "Ver"
+                    if (estadoCell) estadoCell.innerHTML = '<span class="badge-premium badge-success-soft">Revisada</span>';
+                    // Actualizar data-estado de la fila y el botón "Ver"
+                    tr.setAttribute('data-estado', 'cerrada');
                     var btnRow = tr.querySelector('.open-alert-detail');
                     if (btnRow) btnRow.setAttribute('data-estado', 'cerrada');
+                    
+                    // Volver a aplicar filtros para refrescar la lista de inmediato
+                    applyFiltersAndSort();
                 }
                 // 2. Actualizar contadores en el encabezado
                 var elPend = document.getElementById('alertas-pendientes');
