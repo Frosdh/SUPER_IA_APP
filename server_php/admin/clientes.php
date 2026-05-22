@@ -230,6 +230,16 @@ $currentPage        = 'clientes';
 $alertas_pendientes = $alertas_pendientes ?? 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 $is_supervisor_ui   = ($user_role === 'supervisor');
+
+// Extraer lista única de asesores para el filtro dropdown
+$asesores_lista = [];
+foreach ($clientes as $c) {
+    $an = trim($c['asesor_nombre'] ?? '');
+    if ($an && !in_array($an, $asesores_lista)) {
+        $asesores_lista[] = $an;
+    }
+}
+sort($asesores_lista);
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -451,20 +461,298 @@ if ($user_role === 'supervisor') {
             </div>
         </div>
 
+        <style>
+        /* ══ FILTER BAR — diseño premium ══════════════════════════ */
+        .filter-bar{
+            display:flex;flex-direction:column;gap:0;
+            background:linear-gradient(135deg,#f8fafd 0%,#f0f5fb 100%);
+            border-bottom:1px solid #e2eaf4;
+            padding:0;
+        }
+
+        /* sección 1: inputs de búsqueda */
+        .filter-top{
+            display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+            padding:16px 22px 12px;
+        }
+
+        /* sección 2: estado pills + A-Z */
+        .filter-middle{
+            display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+            padding:10px 22px 12px;
+            border-top:1px solid #edf2f9;
+        }
+
+        /* sección 3: contador + tags */
+        .filter-bottom{
+            display:flex;align-items:center;justify-content:space-between;
+            flex-wrap:wrap;gap:8px;
+            padding:8px 22px 12px;
+            border-top:1px dashed #edf2f9;
+            background:rgba(248,250,253,.7);
+        }
+
+        /* label de sección */
+        .fi-label{
+            font-size:10.5px;font-weight:800;color:#94a3b8;
+            text-transform:uppercase;letter-spacing:.6px;
+            white-space:nowrap;display:flex;align-items:center;gap:5px;
+            margin-right:2px;
+        }
+
+        /* ── Estado pills ─────────────────────────────────────── */
+        .estado-pills{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+        .ep-btn{
+            display:inline-flex;align-items:center;gap:6px;
+            padding:6px 14px;border-radius:99px;
+            font-size:12px;font-weight:700;
+            border:1.5px solid transparent;
+            cursor:pointer;transition:all .18s;
+            white-space:nowrap;
+        }
+        .ep-btn i{font-size:11px;}
+
+        /* Todos */
+        .ep-all{background:#f1f5f9;border-color:#dde5f0;color:#475569;}
+        .ep-all:hover{background:#e2e8f0;border-color:#c7d4e4;}
+        .ep-all.active{background:linear-gradient(135deg,#0a2748,#1e4d8c);border-color:#0a2748;color:#fff;box-shadow:0 3px 10px rgba(10,39,72,.25);}
+
+        /* Cliente activo */
+        .ep-cliente{background:#f0fdf4;border-color:#bbf7d0;color:#15803d;}
+        .ep-cliente:hover{background:#dcfce7;border-color:#86efac;}
+        .ep-cliente.active{background:linear-gradient(135deg,#15803d,#16a34a);border-color:#15803d;color:#fff;box-shadow:0 3px 10px rgba(21,128,61,.3);}
+
+        /* Prospecto */
+        .ep-prospecto{background:#fffbeb;border-color:#fde68a;color:#b45309;}
+        .ep-prospecto:hover{background:#fef3c7;border-color:#fcd34d;}
+        .ep-prospecto.active{background:linear-gradient(135deg,#d97706,#f59e0b);border-color:#d97706;color:#fff;box-shadow:0 3px 10px rgba(217,119,6,.3);}
+
+        /* Descartado */
+        .ep-descartado{background:#fef2f2;border-color:#fecaca;color:#b91c1c;}
+        .ep-descartado:hover{background:#fee2e2;border-color:#fca5a5;}
+        .ep-descartado.active{background:linear-gradient(135deg,#b91c1c,#dc2626);border-color:#b91c1c;color:#fff;box-shadow:0 3px 10px rgba(185,28,28,.3);}
+
+        /* grupos de input — wrapper flex para evitar solapamiento */
+        .fi-group{
+            flex:1;min-width:170px;max-width:240px;
+            display:flex;align-items:center;
+            border:1.5px solid #dde5f0;
+            border-radius:12px;
+            background:#fff;
+            box-shadow:0 1px 3px rgba(0,0,0,.04);
+            transition:border-color .18s,box-shadow .18s;
+            overflow:hidden;
+        }
+        .fi-group:focus-within{
+            border-color:#3b82f6;
+            box-shadow:0 0 0 3px rgba(59,130,246,.1),0 1px 3px rgba(0,0,0,.04);
+        }
+        .fi-group-wide{min-width:190px;max-width:260px;}
+        .fi-ico{
+            flex-shrink:0;
+            width:38px;
+            text-align:center;
+            color:#b0bec5;
+            font-size:13px;
+            pointer-events:none;
+        }
+        .fi-input{
+            flex:1;
+            border:none;
+            outline:none;
+            padding:10px 13px 10px 0;
+            font-size:13px;font-weight:600;
+            color:#1a2744;
+            background:transparent;
+            min-width:0;
+        }
+        .fi-input::placeholder{color:#b0bec5;font-weight:500;}
+        .fi-select{
+            flex:1;
+            border:none;
+            outline:none;
+            padding:10px 30px 10px 0;
+            font-size:13px;font-weight:600;
+            color:#1a2744;
+            background:transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' stroke='%2394a3b8' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+            appearance:none;cursor:pointer;
+            min-width:0;
+        }
+
+        /* divider vertical */
+        .fi-divider{width:1px;height:32px;background:#dde5f0;flex-shrink:0;margin:0 2px;}
+
+        /* botón limpiar */
+        .fi-clear-btn{
+            display:flex;align-items:center;gap:7px;
+            padding:9px 16px;
+            border-radius:12px;
+            border:1.5px solid #dde5f0;
+            background:#fff;
+            color:#94a3b8;
+            font-size:12.5px;font-weight:700;
+            cursor:pointer;
+            transition:.18s;
+            white-space:nowrap;
+            box-shadow:0 1px 3px rgba(0,0,0,.04);
+            margin-left:auto;
+        }
+        .fi-clear-btn:hover{border-color:#ef4444;color:#ef4444;background:#fff5f5;box-shadow:0 2px 8px rgba(239,68,68,.1);}
+
+        /* ── A-Z strip ─────────────────────────────────────────── */
+        .az-wrap{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+        .az-label{
+            font-size:10.5px;font-weight:800;color:#94a3b8;
+            text-transform:uppercase;letter-spacing:.6px;
+            white-space:nowrap;margin-right:4px;
+            display:flex;align-items:center;gap:5px;
+        }
+        .az-label i{font-size:11px;}
+
+        .az-all-btn{
+            height:30px;padding:0 12px;
+            border-radius:8px;
+            border:1.5px solid #dde5f0;
+            background:#fff;
+            color:#475569;
+            font-size:11px;font-weight:800;
+            cursor:pointer;transition:.15s;
+            box-shadow:0 1px 2px rgba(0,0,0,.04);
+        }
+        .az-all-btn.active{
+            background:linear-gradient(135deg,#0a2748 0%,#1e4d8c 100%);
+            border-color:#0a2748;color:#ffdd00;
+            box-shadow:0 3px 10px rgba(10,39,72,.25);
+        }
+        .az-all-btn:hover:not(.active){background:#f1f5f9;border-color:#c7d4e4;}
+
+        .az-btn{
+            width:30px;height:30px;
+            border-radius:8px;
+            border:1.5px solid #e8eef6;
+            background:#fff;
+            color:#64748b;
+            font-size:11.5px;font-weight:800;
+            cursor:pointer;transition:.15s;
+            display:flex;align-items:center;justify-content:center;
+            box-shadow:0 1px 2px rgba(0,0,0,.03);
+        }
+        .az-btn:hover{
+            background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;
+            transform:translateY(-1px);box-shadow:0 3px 8px rgba(59,130,246,.15);
+        }
+        .az-btn.active{
+            background:linear-gradient(135deg,#ffdd00 0%,#f4c400 100%);
+            border-color:#e6b800;color:#0a2748;
+            box-shadow:0 3px 10px rgba(255,221,0,.35);
+            transform:translateY(-1px);
+        }
+
+        /* ── info row ───────────────────────────────────────────── */
+        .fi-info-wrap{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+        .fi-count{
+            display:flex;align-items:center;gap:6px;
+            font-size:12px;font-weight:600;color:#94a3b8;
+            white-space:nowrap;
+        }
+        .fi-count-num{
+            font-size:14px;font-weight:900;color:#0a2748;
+        }
+        .fi-count-sep{color:#dde5f0;}
+
+        /* tags activos */
+        .fi-tags{display:flex;gap:5px;flex-wrap:wrap;}
+        .fi-tag{
+            display:inline-flex;align-items:center;gap:5px;
+            background:linear-gradient(135deg,#eff6ff,#e0ecff);
+            border:1px solid #bfdbfe;
+            border-radius:8px;
+            padding:3px 10px 3px 9px;
+            font-size:11px;font-weight:700;color:#1d4ed8;
+        }
+        .fi-tag i{font-size:9px;opacity:.7;}
+        .fi-tag-x{
+            cursor:pointer;opacity:.5;font-size:10px;
+            transition:.15s;margin-left:1px;line-height:1;
+        }
+        .fi-tag-x:hover{opacity:1;color:#ef4444;}
+        </style>
+
         <div class="table-card bg-white" style="border-radius:20px; border:1px solid #e2e8f0; box-shadow:0 10px 30px rgba(0,0,0,0.05);">
-            <div class="card-header-custom p-4 border-bottom d-flex justify-content-between align-items-center flex-wrap gap-3" style="background:#fff;">
-                <div>
-                    <h5 class="m-0 fw-800 d-flex align-items-center gap-2" style="color:var(--brand-navy-deep, #0a2748);">
-                        <i class="fas fa-list-ul text-primary"></i> Listado Completo
-                    </h5>
-                    <small id="cntResultados" class="text-muted fw-semibold" style="font-size: 11px; margin-left: 28px;"><?= count($clientes) ?> clientes en total</small>
+            <!-- header title -->
+            <div class="px-4 pt-4 pb-2 d-flex align-items-center justify-content-between">
+                <h5 class="m-0 fw-800 d-flex align-items-center gap-2" style="color:#0a2748;">
+                    <i class="fas fa-list-ul text-primary"></i> Listado Completo
+                </h5>
+            </div>
+
+            <!-- FILTER BAR -->
+            <div class="filter-bar">
+
+                <!-- FILA 1: búsqueda de texto + asesor + limpiar -->
+                <div class="filter-top">
+                    <div class="fi-group">
+                        <i class="fas fa-search fi-ico"></i>
+                        <input type="text" id="fiNombre" class="fi-input" placeholder="Buscar por nombre…">
+                    </div>
+                    <div class="fi-group">
+                        <i class="fas fa-id-card fi-ico"></i>
+                        <input type="text" id="fiCedula" class="fi-input" placeholder="Buscar por cédula…">
+                    </div>
+                    <div class="fi-divider"></div>
+                    <div class="fi-group fi-group-wide">
+                        <i class="fas fa-user-tie fi-ico"></i>
+                        <select id="fiAsesor" class="fi-select">
+                            <option value="">Todos los asesores</option>
+                            <?php foreach($asesores_lista as $an): ?>
+                            <option value="<?=htmlspecialchars($an)?>"><?=htmlspecialchars($an)?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <button class="fi-clear-btn" id="fiClear">
+                        <i class="fas fa-rotate-left" style="font-size:11px;"></i> Limpiar
+                    </button>
                 </div>
-                <div class="search-box" style="flex:1; max-width:500px;">
-                    <div class="input-group shadow-sm" style="border-radius:12px; border:2px solid #f1f5f9; overflow:hidden;">
-                        <span class="input-group-text bg-white border-0 text-primary"><i class="fas fa-search"></i></span>
-                        <input type="text" id="searchClients" class="form-control border-0 bg-white shadow-none fw-semibold" placeholder="Buscar cliente por nombre o cédula..." style="font-size:14px; padding: 10px;">
+
+                <!-- FILA 2: estado pills + A-Z -->
+                <div class="filter-middle">
+                    <!-- Estado pills -->
+                    <div class="estado-pills">
+                        <span class="fi-label"><i class="fas fa-tag"></i> Estado</span>
+                        <button class="ep-btn ep-all active" data-estado="">
+                            <i class="fas fa-border-all"></i> Todos
+                        </button>
+                        <button class="ep-btn ep-cliente" data-estado="cliente">
+                            <i class="fas fa-check-circle"></i> Cliente activo
+                        </button>
+                        <button class="ep-btn ep-prospecto" data-estado="prospecto">
+                            <i class="fas fa-clock"></i> Prospecto
+                        </button>
+                        <button class="ep-btn ep-descartado" data-estado="descartado">
+                            <i class="fas fa-times-circle"></i> Descartado
+                        </button>
+                    </div>
+                    <!-- A-Z -->
+                    <div class="fi-divider"></div>
+                    <div class="az-wrap">
+                        <span class="fi-label"><i class="fas fa-sort-alpha-down"></i> A–Z</span>
+                        <button class="az-all-btn active" data-letter="">TODOS</button>
+                        <?php foreach(range('A','Z') as $l): ?>
+                        <button class="az-btn" data-letter="<?=$l?>"><?=$l?></button>
+                        <?php endforeach; ?>
                     </div>
                 </div>
+
+                <!-- FILA 3: contador + tags activos -->
+                <div class="filter-bottom">
+                    <div class="fi-count">
+                        <i class="fas fa-users" style="font-size:11px;color:#cbd5e1;"></i>
+                        Mostrando <span class="fi-count-num" id="cntResultados"><?=count($clientes)?></span>
+                        <span class="fi-count-sep">de <?=count($clientes)?></span> clientes
+                    </div>
+                    <div class="fi-tags" id="fiTagsBox"></div>
+                </div>
+
             </div>
             
             <div class="table-responsive">
@@ -494,7 +782,15 @@ if ($user_role === 'supervisor') {
                             $esDescartado = ($estadoDb === 'descartado');
                             $esCliente = !$esDescartado && cliente_es_cliente_por_aprobacion($pdo, (string)($cliente['id'] ?? ''), (string)($cliente['cedula'] ?? ''));
                         ?>
-                        <tr class="client-row" style="transition:all 0.2s ease;">
+                        <?php
+                            $estadoKey = $esDescartado ? 'descartado' : ($esCliente ? 'cliente' : 'prospecto');
+                        ?>
+                        <tr class="client-row"
+                            data-nombre="<?=htmlspecialchars(mb_strtolower(trim($cliente['nombre']??'')))?>"
+                            data-cedula="<?=htmlspecialchars($cliente['cedula']??'')?>"
+                            data-asesor="<?=htmlspecialchars(mb_strtolower(trim($cliente['asesor_nombre']??'')))?>"
+                            data-estado="<?=htmlspecialchars($estadoKey)?>"
+                            style="transition:all 0.2s ease;">
                             <td class="ps-4 py-3">
                                 <div class="d-flex align-items-center gap-3">
                                     <div class="avatar-circle <?= $esDescartado ? 'bg-danger' : ($esCliente ? 'bg-success' : 'bg-warning') ?> bg-opacity-10 text-<?= $esDescartado ? 'danger' : ($esCliente ? 'success' : 'warning') ?> d-flex align-items-center justify-content-center rounded-circle fw-bold" style="width:48px; height:48px; font-size:16px; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
@@ -550,56 +846,134 @@ if ($user_role === 'supervisor') {
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const inputBusqueda = document.getElementById('searchClients');
-    const cntResultados = document.getElementById('cntResultados');
 
-    if (inputBusqueda) {
-        inputBusqueda.addEventListener('input', function() {
-            const filter = this.value.toLowerCase();
-            const rows = document.querySelectorAll('table tbody tr:not(#emptyFiltered)');
-            let visibles = 0;
-            
-            rows.forEach(row => {
-                // Si la fila es la de "No hay clientes para mostrar" (vacía de origen), la ignoramos
-                if (row.querySelector('td[colspan]')) return;
-                
-                const name = row.querySelector('.client-name') ? row.querySelector('.client-name').textContent.toLowerCase() : '';
-                const cedula = row.querySelector('.client-cedula') ? row.querySelector('.client-cedula').textContent.toLowerCase() : '';
-                
-                if (name.includes(filter) || cedula.includes(filter)) {
-                    row.style.display = '';
-                    visibles++;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+  const fiNombre  = document.getElementById('fiNombre');
+  const fiCedula  = document.getElementById('fiCedula');
+  const fiAsesor  = document.getElementById('fiAsesor');
+  const fiClear   = document.getElementById('fiClear');
+  const cntEl     = document.getElementById('cntResultados');
+  const tagsBox   = document.getElementById('fiTagsBox');
+  const allRows   = Array.from(document.querySelectorAll('table tbody tr.client-row'));
+  const total     = allRows.length;
 
-            if (cntResultados) {
-                cntResultados.textContent = visibles + (visibles === 1 ? ' cliente encontrado' : ' clientes encontrados');
-            }
+  let activeLetter = '';
+  let activeEstado = '';   // '' | 'cliente' | 'prospecto' | 'descartado'
 
-            let emptyRow = document.getElementById('emptyFiltered');
-            if (visibles === 0 && rows.length > 0) {
-                if (!emptyRow) {
-                    const tbody = document.querySelector('table tbody');
-                    const tr = document.createElement('tr');
-                    tr.id = 'emptyFiltered';
-                    tr.innerHTML = `
-                        <td colspan="6" class="text-center py-5">
-                            <div class="text-muted mb-3"><i class="fas fa-search fa-3x opacity-25"></i></div>
-                            <h6 class="fw-bold text-muted">No hay resultados para "${this.value}"</h6>
-                            <p class="text-muted small">Intenta con otro nombre o número de cédula.</p>
-                        </td>
-                    `;
-                    tbody.appendChild(tr);
-                } else {
-                    emptyRow.querySelector('h6').textContent = `No hay resultados para "${this.value}"`;
-                }
-            } else {
-                if (emptyRow) emptyRow.remove();
-            }
-        });
+  /* ── aplicar todos los filtros ───────────────────────── */
+  function applyFilters() {
+    const fNom = (fiNombre.value || '').trim().toLowerCase();
+    const fCed = (fiCedula.value || '').trim().toLowerCase();
+    const fAse = (fiAsesor.value || '').trim().toLowerCase();
+    const fEst = activeEstado;
+    const fLet = activeLetter.toLowerCase();
+
+    let vis = 0;
+    allRows.forEach(row => {
+      const nombre = row.dataset.nombre || '';
+      const cedula = row.dataset.cedula || '';
+      const asesor = row.dataset.asesor || '';
+      const estado = row.dataset.estado || '';
+
+      const okNom = !fNom || nombre.includes(fNom);
+      const okCed = !fCed || cedula.includes(fCed);
+      const okAse = !fAse || asesor === fAse;
+      const okEst = !fEst || estado === fEst;
+      const okLet = !fLet || nombre.startsWith(fLet);
+
+      if (okNom && okCed && okAse && okEst && okLet) {
+        row.style.display = '';
+        vis++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    /* contador */
+    if (cntEl) cntEl.textContent = vis;
+
+    /* fila vacía */
+    let emptyRow = document.getElementById('emptyFiltered');
+    if (vis === 0 && total > 0) {
+      if (!emptyRow) {
+        const tbody = document.querySelector('table tbody');
+        const tr = document.createElement('tr');
+        tr.id = 'emptyFiltered';
+        tr.innerHTML = `<td colspan="6" class="text-center py-5">
+          <div class="text-muted mb-3"><i class="fas fa-filter fa-3x opacity-20"></i></div>
+          <h6 class="fw-bold text-muted">Sin resultados con los filtros aplicados</h6>
+          <p class="text-muted small">Prueba quitando algún filtro o cambiando la letra.</p>
+        </td>`;
+        tbody.appendChild(tr);
+      }
+    } else {
+      if (emptyRow) emptyRow.remove();
     }
+
+    renderTags(fNom, fCed, fAse, fEst, fLet);
+  }
+
+  /* ── tags de filtros activos ─────────────────────────── */
+  const estadoLabel = {cliente:'Cliente activo', prospecto:'Prospecto', descartado:'Descartado'};
+  function renderTags(fNom, fCed, fAse, fEst, fLet) {
+    if (!tagsBox) return;
+    tagsBox.innerHTML = '';
+    function tag(label, clearFn) {
+      const d = document.createElement('div');
+      d.className = 'fi-tag';
+      d.innerHTML = `<i class="fas fa-tag"></i>${label}<span class="fi-tag-x">✕</span>`;
+      d.querySelector('.fi-tag-x').addEventListener('click', clearFn);
+      tagsBox.appendChild(d);
+    }
+    if (fNom) tag(`Nombre: "${fiNombre.value}"`,  () => { fiNombre.value = ''; applyFilters(); });
+    if (fCed) tag(`Cédula: "${fiCedula.value}"`,  () => { fiCedula.value = ''; applyFilters(); });
+    if (fAse) tag(`Asesor: ${fiAsesor.options[fiAsesor.selectedIndex]?.text || fAse}`, () => { fiAsesor.value = ''; applyFilters(); });
+    if (fEst) tag(`Estado: ${estadoLabel[fEst] || fEst}`, () => setEstado(''));
+    if (fLet) tag(`Letra: ${fLet.toUpperCase()}`, () => setLetter(''));
+  }
+
+  /* ── pills de estado ─────────────────────────────────── */
+  function setEstado(val) {
+    activeEstado = val;
+    document.querySelectorAll('.ep-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.estado === val);
+    });
+    applyFilters();
+  }
+  document.querySelectorAll('.ep-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setEstado(btn.dataset.estado === activeEstado ? '' : btn.dataset.estado);
+    });
+  });
+
+  /* ── letra A-Z ───────────────────────────────────────── */
+  function setLetter(l) {
+    activeLetter = l;
+    document.querySelectorAll('.az-btn').forEach(b => b.classList.toggle('active', b.dataset.letter === l));
+    const allBtn = document.querySelector('.az-all-btn');
+    if (allBtn) allBtn.classList.toggle('active', l === '');
+    applyFilters();
+  }
+  document.querySelectorAll('.az-btn').forEach(btn => {
+    btn.addEventListener('click', () => setLetter(btn.dataset.letter === activeLetter ? '' : btn.dataset.letter));
+  });
+  const allBtn = document.querySelector('.az-all-btn');
+  if (allBtn) allBtn.addEventListener('click', () => setLetter(''));
+
+  /* ── limpiar todo ────────────────────────────────────── */
+  fiClear.addEventListener('click', () => {
+    fiNombre.value = '';
+    fiCedula.value = '';
+    fiAsesor.value = '';
+    setEstado('');
+    setLetter('');
+  });
+
+  /* ── listeners de inputs ─────────────────────────────── */
+  [fiNombre, fiCedula, fiAsesor].forEach(el => {
+    el.addEventListener('input', applyFilters);
+    el.addEventListener('change', applyFilters);
+  });
+
 });
 </script>
     </div>

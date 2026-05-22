@@ -330,277 +330,393 @@ $currentPage = 'dashboard';
   --n1:#0a2748; --n2:#123a6d; --n3:#1e4d8c;
   --bg:#f0f4f9;
   --card:#ffffff;
-  --glass:rgba(255,221,0,.08);
-  --gborder:rgba(18,58,109,.15);
   --nborder:#e2e8f0;
   --tm:#1a2744; --td:#64748b;
-  --shadow:0 2px 12px rgba(18,58,109,.08);
+  --shadow:0 2px 14px rgba(18,58,109,.07);
 }
 *{margin:0;padding:0;box-sizing:border-box;font-family:'Inter','Segoe UI',sans-serif;}
-body{background:var(--bg);color:var(--tm);min-height:100vh;display:flex;overflow-x:hidden;}
-body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 20%,rgba(255,221,0,.04) 0%,transparent 45%),radial-gradient(ellipse at 85% 75%,rgba(18,58,109,.06) 0%,transparent 50%);pointer-events:none;z-index:0;}
+body{background:var(--bg);color:var(--tm);height:100vh;display:flex;overflow:hidden;}
 
-/* SIDEBAR */
-.sidebar{width:220px;background:linear-gradient(180deg,#06101e 0%,var(--n1) 100%);border-right:1px solid var(--nborder);position:fixed;height:100vh;left:0;top:0;z-index:100;padding:20px 0;overflow-y:auto;flex-shrink:0;}
-.sidebar-brand{padding:0 18px 22px;font-size:16px;font-weight:900;border-bottom:1px solid rgba(255,221,0,.12);margin-bottom:18px;display:flex;align-items:center;gap:8px;letter-spacing:.5px;}
-.sidebar-brand i{color:var(--y);font-size:18px;}
-.sidebar-brand span{background:linear-gradient(90deg,var(--y),#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.sidebar-section{padding:0 12px;margin-bottom:20px;}
-.sidebar-section-title{font-size:10px;text-transform:uppercase;color:rgba(255,255,255,.3);letter-spacing:.8px;padding:0 8px;margin-bottom:8px;font-weight:700;}
-.sidebar-link{display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:3px;border-radius:10px;color:rgba(255,255,255,.65);text-decoration:none;font-size:13px;border:1px solid transparent;transition:all .2s;}
-.sidebar-link:hover{background:rgba(255,221,0,.08);color:#fff;border-color:rgba(255,221,0,.12);}
-.sidebar-link.active{background:linear-gradient(90deg,var(--y),var(--yd));color:var(--n1);font-weight:800;}
-.badge-nav{background:#ef4444;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;margin-left:auto;font-weight:800;}
+/* ── MAIN ─────────────────────────────────────────────────── */
+.main-content{flex:1;margin-left:230px;display:flex;flex-direction:column;overflow:hidden;}
+.content-area{flex:1;padding:24px 28px 32px;overflow-y:auto;}
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-thumb{background:rgba(18,58,109,.25);border-radius:3px;}
 
-/* MAIN */
-.main-content{flex:1;margin-left:220px;display:flex;flex-direction:column;min-height:100vh;position:relative;z-index:1;}
+/* ── HERO ────────────────────────────────────────────────── */
+.hero{
+  background:linear-gradient(125deg,#06101e 0%,#0a2748 55%,#123a6d 100%);
+  border-radius:22px;
+  padding:26px 32px;
+  margin-bottom:22px;
+  display:flex;align-items:center;justify-content:space-between;gap:24px;
+  position:relative;overflow:hidden;
+  border:1px solid rgba(255,221,0,.12);
+}
+.hero::before{
+  content:'';position:absolute;right:-80px;top:-80px;
+  width:280px;height:280px;
+  background:radial-gradient(circle,rgba(255,221,0,.14) 0%,transparent 65%);
+  pointer-events:none;
+}
+.hero::after{
+  content:'';position:absolute;left:-50px;bottom:-50px;
+  width:200px;height:200px;
+  background:radial-gradient(circle,rgba(18,58,109,.9) 0%,transparent 65%);
+  pointer-events:none;
+}
+.hero-left{position:relative;z-index:1;}
+.hero-title{font-size:23px;font-weight:900;color:#fff;margin-bottom:3px;letter-spacing:-.3px;}
+.hero-title span{color:var(--y);}
+.hero-sub{font-size:12.5px;color:rgba(255,255,255,.55);font-weight:500;margin-bottom:14px;}
+.hero-prog-label{font-size:11px;color:rgba(255,255,255,.6);display:flex;justify-content:space-between;margin-bottom:5px;}
+.hero-prog-track{width:260px;height:7px;background:rgba(255,255,255,.12);border-radius:99px;overflow:hidden;}
+.hero-prog-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--y),#fbbf24);transition:width 1.6s cubic-bezier(.4,0,.2,1);}
+.hero-right{display:flex;gap:10px;flex-shrink:0;position:relative;z-index:1;}
+.hs-pill{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:13px 18px;text-align:center;min-width:78px;transition:.2s;}
+.hs-pill:hover{background:rgba(255,255,255,.12);}
+.hs-num{font-size:24px;font-weight:900;color:var(--y);line-height:1;}
+.hs-lbl{font-size:9.5px;color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-top:3px;}
+.hs-pill.danger{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.1);}
+.hs-pill.danger .hs-num{color:#f87171;}
 
+/* ── STAT CARDS ──────────────────────────────────────────── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.sc{
+  background:#fff;border:1px solid var(--nborder);border-radius:16px;
+  padding:16px 18px;position:relative;overflow:hidden;
+  box-shadow:var(--shadow);transition:.2s;
+}
+.sc:hover{transform:translateY(-3px);box-shadow:0 8px 28px rgba(18,58,109,.12);border-color:rgba(18,58,109,.2);}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac,var(--y));border-radius:3px 3px 0 0;}
+.sc-icon{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:10px;background:var(--aic,rgba(255,221,0,.12));color:var(--ac,var(--y));}
+.sc-value{font-size:28px;font-weight:900;color:var(--n1);line-height:1;margin-bottom:3px;}
+.sc-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--td);margin-bottom:4px;}
+.sc-sub{font-size:11px;color:var(--td);}
+.sc-badge{position:absolute;top:14px;right:14px;font-size:10px;font-weight:800;padding:3px 9px;border-radius:6px;}
+.sb-green{background:rgba(74,222,128,.13);color:#22c55e;}
+.sb-yellow{background:rgba(251,191,36,.13);color:#f59e0b;}
+.sb-red{background:rgba(239,68,68,.13);color:#ef4444;}
+.sb-blue{background:rgba(96,165,250,.13);color:#3b82f6;}
 
+/* ── SECTION HEADER ──────────────────────────────────────── */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px;}
+.sec-title{font-size:15px;font-weight:900;color:var(--n1);display:flex;align-items:center;gap:8px;}
+.sec-title i{color:var(--y);}
+.sec-actions{display:flex;align-items:center;gap:8px;}
+.live-chip{display:flex;align-items:center;gap:6px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.22);padding:4px 12px;border-radius:99px;font-size:11px;font-weight:800;color:#22c55e;}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;animation:livePulse 1.8s infinite;}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.4;transform:scale(.7);}}
+.btn-link{font-size:11.5px;font-weight:700;color:var(--y);text-decoration:none;background:rgba(255,221,0,.09);border:1px solid rgba(255,221,0,.18);padding:5px 13px;border-radius:8px;transition:.18s;}
+.btn-link:hover{background:rgba(255,221,0,.18);color:var(--y);}
 
-/* CONTENT */
-.content-area{flex:1;padding:22px 26px 40px;overflow-y:auto;}
+/* ── KPI SECTION WRAPPER ────────────────────────────────── */
+.kpi-section{
+  background:linear-gradient(155deg,#060f1d 0%,#0b1f3a 45%,#0f2d55 100%);
+  border-radius:22px;border:1px solid rgba(255,221,0,.14);
+  padding:22px 20px 24px;margin-bottom:22px;position:relative;overflow:hidden;
+}
+/* scan-line sweep */
+.kpi-section::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(255,255,255,.016) 3px,rgba(255,255,255,.016) 4px);
+  pointer-events:none;animation:scanMove 10s linear infinite;
+}
+@keyframes scanMove{from{background-position:0 0;}to{background-position:0 100px;}}
+/* ambient orb top-right */
+.kpi-section::after{
+  content:'';position:absolute;right:-60px;top:-60px;
+  width:280px;height:280px;
+  background:radial-gradient(circle,rgba(255,221,0,.09) 0%,transparent 65%);
+  pointer-events:none;animation:orbPulse 4s ease-in-out infinite;
+}
+@keyframes orbPulse{0%,100%{opacity:.55;transform:scale(1);}50%{opacity:1;transform:scale(1.18);}}
 
-/* WELCOME HERO */
-.hero{background:linear-gradient(135deg,rgba(10,39,72,.9) 0%,rgba(18,58,109,.7) 60%,rgba(30,77,140,.5) 100%);border:1px solid var(--gborder);border-radius:20px;padding:24px 28px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:relative;overflow:hidden;}
-.hero::before{content:'';position:absolute;right:-60px;top:-60px;width:200px;height:200px;background:radial-gradient(circle,rgba(255,221,0,.2) 0%,transparent 68%);pointer-events:none;}
-.hero::after{content:'';position:absolute;left:-40px;bottom:-40px;width:150px;height:150px;background:radial-gradient(circle,rgba(18,58,109,.6) 0%,transparent 68%);pointer-events:none;}
-.hero-text h2{font-size:22px;font-weight:900;color:#fff;margin-bottom:4px;}
-.hero-text p{font-size:13px;color:rgba(255,255,255,.7);margin:0;}
-.hero-progress{margin-top:12px;max-width:260px;}
-.hp-label{font-size:11px;color:rgba(255,255,255,.65);display:flex;justify-content:space-between;margin-bottom:4px;}
-.hp-track{background:rgba(255,255,255,.15);border-radius:6px;height:6px;overflow:hidden;}
-.hp-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--y),var(--yd));transition:width 1.4s ease;}
-.hero-stats{display:flex;gap:10px;flex-shrink:0;position:relative;z-index:1;}
-.hs-item{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:13px;padding:11px 16px;text-align:center;min-width:72px;}
-.hs-num{font-size:22px;font-weight:900;color:var(--y);line-height:1;}
-.hs-lbl{font-size:9.5px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-top:2px;}
-.hs-item.red{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08);}
-.hs-item.red .hs-num{color:#f87171;}
+/* ── KPI HEADER inside section ──────────────────────────── */
+.kpi-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;position:relative;z-index:1;flex-wrap:wrap;gap:10px;}
+.kpi-title{font-size:17px;font-weight:900;color:#fff;display:flex;align-items:center;gap:10px;letter-spacing:-.2px;}
+.kpi-title i{color:var(--y);font-size:19px;filter:drop-shadow(0 0 9px rgba(255,221,0,.65));animation:iconBounce 2.8s ease-in-out infinite;}
+@keyframes iconBounce{0%,100%{transform:translateY(0) rotate(0deg);}40%{transform:translateY(-4px) rotate(-4deg);}70%{transform:translateY(-2px) rotate(3deg);}}
+.kpi-title-sub{font-size:11.5px;color:rgba(255,255,255,.42);font-weight:600;margin-top:3px;letter-spacing:.1px;}
+.kpi-actions{display:flex;align-items:center;gap:9px;}
+.kpi-live{display:flex;align-items:center;gap:7px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.32);padding:5px 14px;border-radius:99px;font-size:11.5px;font-weight:800;color:#4ade80;letter-spacing:.5px;}
+.kpi-live-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;box-shadow:0 0 8px #4ade8088;animation:livePulse 1.8s infinite;}
+.kpi-btn{font-size:11.5px;font-weight:700;color:var(--y);text-decoration:none;background:rgba(255,221,0,.1);border:1px solid rgba(255,221,0,.28);padding:5px 14px;border-radius:9px;transition:.18s;white-space:nowrap;}
+.kpi-btn:hover{background:rgba(255,221,0,.22);color:var(--y);border-color:rgba(255,221,0,.5);}
 
-/* METRICS BAR */
-.metrics-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
-.metric-card{background:#fff;border:1px solid var(--nborder);border-radius:14px;padding:14px 16px;position:relative;overflow:hidden;transition:.2s;box-shadow:var(--shadow);}
-.metric-card:hover{border-color:rgba(18,58,109,.25);box-shadow:0 4px 20px rgba(18,58,109,.12);transform:translateY(-2px);}
-.metric-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--mc,var(--y));}
-.metric-label{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--td);font-weight:700;margin-bottom:4px;}
-.metric-value{font-size:26px;font-weight:900;color:var(--n1);line-height:1;}
-.metric-sub{font-size:11px;color:var(--td);margin-top:3px;}
-.metric-trend{font-size:10px;font-weight:800;padding:2px 8px;border-radius:5px;position:absolute;top:14px;right:14px;}
-.trend-up{background:rgba(74,222,128,.12);color:#4ade80;}
-.trend-dn{background:rgba(239,68,68,.12);color:#f87171;}
-.trend-nt{background:rgba(148,163,184,.1);color:#94a3b8;}
+/* ── KPI GAUGE GRID ──────────────────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;position:relative;z-index:1;}
 
-/* KPI SECTION HEADER */
-.section-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-.section-hd h3{font-size:15px;font-weight:900;color:var(--n1);display:flex;align-items:center;gap:8px;}
-.section-hd h3 i{color:var(--y);}
-.live-badge{display:flex;align-items:center;gap:7px;background:rgba(74,222,128,.07);border:1px solid rgba(74,222,128,.2);padding:4px 12px;border-radius:999px;font-size:11px;font-weight:800;color:#4ade80;}
-.live-dot{width:7px;height:7px;border-radius:50%;background:#4ade80;animation:pulse 1.8s infinite;}
-.all-link{font-size:12px;font-weight:700;color:var(--y);text-decoration:none;background:rgba(255,221,0,.08);border:1px solid rgba(255,221,0,.15);padding:5px 12px;border-radius:8px;}
-.all-link:hover{background:rgba(255,221,0,.16);color:var(--y);}
+@keyframes kpiEnter{
+  from{opacity:0;transform:translateY(32px) scale(.91);}
+  to{opacity:1;transform:translateY(0) scale(1);}
+}
+@keyframes critRing{
+  0%,100%{box-shadow:0 4px 22px rgba(0,0,0,.28),0 0 0 0 rgba(239,68,68,.0);}
+  50%{box-shadow:0 4px 22px rgba(0,0,0,.28),0 0 0 7px rgba(239,68,68,.2);}
+}
+@keyframes fillShimmer{
+  0%{transform:translateX(-100%);}100%{transform:translateX(220%);}
+}
 
-/* GAUGE GRID */
-.gauges-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:13px;margin-bottom:22px;}
+.g-card{
+  background:rgba(255,255,255,.97);border:1.5px solid rgba(255,255,255,.15);border-radius:20px;
+  padding:17px 13px 14px;display:flex;flex-direction:column;align-items:center;
+  position:relative;overflow:hidden;text-decoration:none;color:inherit;
+  transition:transform .28s cubic-bezier(.34,1.56,.64,1),box-shadow .28s,border-color .28s;
+  cursor:pointer;box-shadow:0 5px 22px rgba(0,0,0,.28);
+  animation:kpiEnter .52s cubic-bezier(.34,1.56,.64,1) both;
+}
+.g-card:hover{
+  transform:translateY(-9px) scale(1.025);
+  border-color:var(--gc,#ffdd00);
+  box-shadow:0 22px 55px rgba(var(--gc-rgb,255,221,0),.32),0 0 0 1px rgba(var(--gc-rgb,255,221,0),.25);
+}
+/* shimmer sweep */
+.g-card::before{
+  content:'';position:absolute;top:0;left:-120%;width:55%;height:100%;
+  background:linear-gradient(105deg,transparent 35%,rgba(255,255,255,.5) 55%,transparent 75%);
+  transition:left .6s ease;pointer-events:none;z-index:3;
+}
+.g-card:hover::before{left:160%;}
+/* colored top accent */
+.g-card::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:var(--gc,var(--y));border-radius:3px 3px 0 0;
+  transition:height .28s,box-shadow .28s;
+}
+.g-card:hover::after{height:4px;box-shadow:0 0 8px rgba(var(--gc-rgb,255,221,0),.6);}
+/* radial glow bg */
+.g-glow{position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(var(--gc-rgb,255,221,0),.07) 0%,transparent 55%);pointer-events:none;z-index:0;}
 
-/* GAUGE CARD */
-.g-card{background:#fff;border:1px solid var(--nborder);border-radius:18px;padding:14px 10px 12px;display:flex;flex-direction:column;align-items:center;position:relative;overflow:hidden;text-decoration:none;color:inherit;transition:transform .22s,box-shadow .22s,border-color .22s;cursor:pointer;box-shadow:var(--shadow);}
-.g-card:hover{transform:translateY(-5px);border-color:var(--gc,rgba(255,221,0,.4));box-shadow:0 0 30px rgba(var(--gc-rgb,255,221,0),.15);}
-.g-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gc,var(--y));border-radius:3px 3px 0 0;}
-.g-card::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(var(--gc-rgb,255,221,0),.06) 0%,transparent 60%);pointer-events:none;}
-.g-title{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;color:#64748b;display:flex;align-items:center;gap:5px;margin-bottom:2px;}
-.g-title i{font-size:12px;color:var(--gc,var(--y));}
-.g-chart{width:100%;max-width:160px;height:130px;min-height:130px;}
-.g-pct-row{display:flex;align-items:center;gap:7px;margin-top:-8px;}
-.g-pct{font-size:24px;font-weight:900;color:var(--n1);line-height:1;}
-.g-badge{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;}
-.gb-good{background:rgba(74,222,128,.15);color:#4ade80;}
-.gb-warn{background:rgba(251,191,36,.15);color:#fbbf24;}
-.gb-bad{background:rgba(239,68,68,.15);color:#f87171;}
-.g-meta{font-size:11px;color:var(--td);margin-top:4px;text-align:center;font-weight:600;}
-.g-track{width:76%;height:4px;background:#e2e8f0;border-radius:999px;overflow:hidden;margin-top:7px;}
-.g-fill{height:100%;border-radius:999px;background:var(--gc,var(--y));transition:width 1.4s ease;}
+.g-card.g-crit{animation:kpiEnter .52s cubic-bezier(.34,1.56,.64,1) both,critRing 2.3s ease-in-out 1s infinite;}
 
-/* OPS SPECIAL */
-.g-card-ops{background:linear-gradient(135deg,var(--n1),var(--n2));border-color:rgba(255,221,0,.35);}
-.g-card-ops:hover{border-color:var(--y);}
-.ops-num{font-size:38px;font-weight:900;color:var(--y);line-height:1;margin:8px 0 3px;}
-.ops-money{font-size:16px;font-weight:700;color:rgba(255,255,255,.85);}
-.ops-lbl{font-size:9px;text-transform:uppercase;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.6px;margin-top:2px;}
+.g-title{font-size:10.5px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;color:#64748b;display:flex;align-items:center;gap:5px;margin-bottom:3px;position:relative;z-index:1;}
+.g-title i{font-size:12px;color:var(--gc,var(--y));filter:drop-shadow(0 0 5px rgba(var(--gc-rgb,255,221,0),.55));}
+.g-chart{width:100%;max-width:175px;height:155px;min-height:155px;}
+.g-pct-row{display:flex;align-items:center;gap:8px;margin-top:-9px;position:relative;z-index:1;}
+.g-pct{font-size:25px;font-weight:900;color:var(--n1);line-height:1;}
+.g-badge{font-size:9px;font-weight:800;padding:2px 7px;border-radius:5px;}
+.gb-ok{background:rgba(74,222,128,.13);color:#22c55e;}
+.gb-wa{background:rgba(251,191,36,.13);color:#f59e0b;}
+.gb-er{background:rgba(239,68,68,.13);color:#ef4444;}
+.g-meta{font-size:11px;color:#64748b;margin-top:5px;text-align:center;font-weight:600;position:relative;z-index:1;}
+.g-track{width:78%;height:5px;background:rgba(0,0,0,.09);border-radius:99px;overflow:hidden;margin-top:9px;position:relative;z-index:1;}
+.g-fill{height:100%;border-radius:99px;background:var(--gc,var(--y));transition:width 1.6s cubic-bezier(.4,0,.2,1);position:relative;overflow:hidden;}
+.g-fill::after{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.6),transparent);
+  animation:fillShimmer 2.8s ease-in-out infinite;
+}
 
-/* FUNNEL FLOW */
-.funnel-section{background:#fff;border:1px solid var(--nborder);border-radius:18px;padding:20px 22px;margin-bottom:22px;position:relative;overflow:hidden;box-shadow:var(--shadow);}
-.funnel-section::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% -10%,rgba(255,221,0,.05) 0%,transparent 55%);pointer-events:none;}
-.funnel-steps{display:flex;align-items:center;justify-content:space-between;gap:0;position:relative;z-index:1;margin-top:16px;}
-.f-step{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;max-width:100px;}
-.f-ico{width:52px;height:52px;border-radius:14px;background:rgba(18,58,109,.06);border:1px solid var(--nborder);display:flex;align-items:center;justify-content:center;font-size:18px;transition:.2s;position:relative;}
-.f-ico::after{content:attr(data-pct);position:absolute;top:-6px;right:-6px;background:var(--fc,var(--y));color:var(--n1);font-size:9px;font-weight:900;padding:1px 5px;border-radius:6px;}
+/* ops special */
+.g-ops{
+  background:linear-gradient(135deg,#050f1c 0%,#0a2748 55%,#123a6d 100%);
+  border-color:rgba(255,221,0,.28);border-width:1.5px;
+}
+.g-ops:hover{
+  border-color:rgba(255,221,0,.75);
+  box-shadow:0 22px 55px rgba(255,221,0,.25),0 0 0 1px rgba(255,221,0,.3)!important;
+}
+.ops-big{
+  font-size:42px;font-weight:900;color:var(--y);line-height:1;margin:14px 0 5px;
+  filter:drop-shadow(0 0 14px rgba(255,221,0,.45));
+  animation:opsGlow 2.5s ease-in-out infinite;
+}
+@keyframes opsGlow{0%,100%{filter:drop-shadow(0 0 10px rgba(255,221,0,.4));}50%{filter:drop-shadow(0 0 20px rgba(255,221,0,.75));}}
+.ops-sub{font-size:15px;font-weight:700;color:rgba(255,255,255,.82);}
+.ops-tag{font-size:9px;text-transform:uppercase;color:rgba(255,255,255,.45);font-weight:700;letter-spacing:.6px;margin-top:4px;}
+
+/* ── FUNNEL ──────────────────────────────────────────────── */
+.funnel-wrap{
+  background:#fff;border:1px solid var(--nborder);border-radius:18px;
+  padding:20px 24px;margin-bottom:22px;box-shadow:var(--shadow);
+  position:relative;overflow:hidden;
+}
+.funnel-wrap::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 50% -20%,rgba(255,221,0,.04) 0%,transparent 60%);
+  pointer-events:none;
+}
+.funnel-steps{display:flex;align-items:center;justify-content:space-between;margin-top:18px;position:relative;z-index:1;}
+.f-step{display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;max-width:90px;}
+.f-ico{
+  width:52px;height:52px;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;font-size:19px;
+  position:relative;transition:.2s;
+}
 .f-ico:hover{transform:scale(1.1);}
-.f-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;color:#64748b;text-align:center;line-height:1.3;}
+.f-pct-badge{
+  position:absolute;top:-7px;right:-7px;
+  font-size:8.5px;font-weight:900;padding:1px 5px;border-radius:5px;
+  background:var(--fc,var(--y));color:var(--n1);white-space:nowrap;
+}
+.f-lbl{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#64748b;text-align:center;line-height:1.3;}
 .f-val{font-size:13px;font-weight:900;color:var(--n1);}
-.f-connector{flex:1;height:2px;background:linear-gradient(90deg,var(--y),rgba(255,221,0,.2));margin:0 4px;margin-bottom:26px;position:relative;overflow:hidden;}
-.f-connector::after{content:'';position:absolute;top:0;left:-100%;width:60%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.7),transparent);animation:flow 2.5s linear infinite;}
-@keyframes flow{0%{left:-60%;}100%{left:110%;}}
+.f-arrow{flex:1;display:flex;align-items:center;justify-content:center;margin-bottom:20px;color:rgba(255,221,0,.35);font-size:14px;}
 
-/* BOTTOM GRID */
-.bottom-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;}
-.b-card{background:#fff;border:1px solid var(--nborder);border-radius:16px;overflow:hidden;transition:border-color .2s,box-shadow .2s;box-shadow:var(--shadow);}
-.b-card:hover{border-color:rgba(18,58,109,.3);box-shadow:0 4px 20px rgba(18,58,109,.1);}
-.b-head{padding:12px 16px;border-bottom:1px solid var(--nborder);display:flex;align-items:center;gap:9px;background:rgba(18,58,109,.04);}
-.b-head h5{font-size:13px;font-weight:900;color:var(--n1);margin:0;flex:1;display:flex;align-items:center;gap:7px;}
-.bh-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;}
-.b-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:7px;background:rgba(18,58,109,.1);color:var(--n2);border:1px solid rgba(18,58,109,.2);}
-.b-badge-red{background:rgba(239,68,68,.2);color:#f87171;border-color:rgba(239,68,68,.25);}
-.b-link{font-size:11px;font-weight:700;color:var(--y);text-decoration:none;opacity:.8;}
-.b-link:hover{opacity:1;}
+/* ── BOTTOM GRID ─────────────────────────────────────────── */
+.btm-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+.b-card{background:#fff;border:1px solid var(--nborder);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);transition:.2s;}
+.b-card:hover{border-color:rgba(18,58,109,.25);box-shadow:0 6px 22px rgba(18,58,109,.1);}
+.bh{padding:13px 16px;border-bottom:1px solid var(--nborder);display:flex;align-items:center;gap:9px;background:rgba(248,250,252,.8);}
+.bh-ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.bh h5{font-size:13px;font-weight:900;color:var(--n1);margin:0;flex:1;}
+.bh-num{font-size:10px;font-weight:800;padding:2px 8px;border-radius:6px;border:1px solid;white-space:nowrap;}
+.num-navy{color:var(--n2);background:rgba(18,58,109,.07);border-color:rgba(18,58,109,.15);}
+.num-red{color:#ef4444;background:rgba(239,68,68,.08);border-color:rgba(239,68,68,.2);}
+.bh-link{font-size:11px;font-weight:700;color:var(--y);text-decoration:none;opacity:.8;}
+.bh-link:hover{opacity:1;}
 
-/* Clients */
-.cli-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;text-decoration:none;color:inherit;transition:background .14s;}
-.cli-row:hover{background:rgba(18,58,109,.04);}
+/* clients */
+.cli-row{display:flex;align-items:center;gap:10px;padding:10px 15px;border-bottom:1px solid #f1f5f9;text-decoration:none;color:inherit;transition:background .14s;}
+.cli-row:hover{background:rgba(18,58,109,.03);}
 .cli-row:last-child{border-bottom:none;}
-.cli-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--n1),var(--n2));border:1px solid rgba(255,221,0,.2);color:var(--y);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0;}
+.cli-av{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--n1),var(--n2));color:var(--y);display:flex;align-items:center;justify-content:center;font-weight:900;font-size:12px;flex-shrink:0;}
 .cli-name{font-size:12.5px;font-weight:700;color:var(--n1);}
 .cli-sub{font-size:10.5px;color:var(--td);}
-.cli-est{font-size:10px;font-weight:800;padding:2px 7px;border-radius:5px;margin-left:auto;flex-shrink:0;}
-.est-c{background:rgba(74,222,128,.12);color:#4ade80;}
-.est-p{background:rgba(59,130,246,.12);color:#60a5fa;}
-.est-pe{background:rgba(251,191,36,.12);color:#fbbf24;}
+.cli-tag{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:5px;margin-left:auto;flex-shrink:0;white-space:nowrap;}
+.tag-c{background:rgba(34,197,94,.12);color:#16a34a;}
+.tag-p{background:rgba(59,130,246,.1);color:#2563eb;}
+.tag-d{background:rgba(239,68,68,.1);color:#dc2626;}
 
-/* Quick */
-.quick-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:10px 12px;}
-.qb{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px 6px;border-radius:13px;font-weight:800;font-size:11px;text-align:center;min-height:65px;text-decoration:none;transition:.2s;border:1px solid transparent;}
-.qb i{font-size:16px;}
-.qb:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.3);}
-.qb-y{background:linear-gradient(135deg,var(--y),var(--yd));color:var(--n1);}
-.qb-n{background:linear-gradient(135deg,var(--n1),var(--n2));color:#fff;border-color:var(--nborder);}
-.qb-g{background:linear-gradient(135deg,#065f46,#059669);color:#fff;}
-.qb-b{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;}
-.qb-r{background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;}
-.qb-p{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;}
-.qb-t{background:linear-gradient(135deg,#134e4a,#0d9488);color:#fff;}
-.qb-o{background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;}
+/* quick links */
+.qk-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px;}
+.qk{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:11px 6px;border-radius:13px;font-weight:800;font-size:11px;text-align:center;min-height:66px;text-decoration:none;transition:.18s;border:1px solid transparent;}
+.qk i{font-size:17px;}
+.qk:hover{transform:translateY(-3px);box-shadow:0 8px 20px rgba(0,0,0,.25);}
+.qk-y{background:linear-gradient(135deg,var(--y),var(--yd));color:var(--n1);}
+.qk-n{background:linear-gradient(135deg,#0a2748,#123a6d);color:#fff;border-color:#1e4d8c;}
+.qk-g{background:linear-gradient(135deg,#064e3b,#059669);color:#fff;}
+.qk-b{background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;}
+.qk-r{background:linear-gradient(135deg,#7f1d1d,#dc2626);color:#fff;}
+.qk-p{background:linear-gradient(135deg,#4c1d95,#7c3aed);color:#fff;}
+.qk-t{background:linear-gradient(135deg,#134e4a,#0d9488);color:#fff;}
+.qk-o{background:linear-gradient(135deg,#7c2d12,#ea580c);color:#fff;}
 
-/* Alertas */
-.al-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;transition:background .14s;}
+/* alert rows */
+.al-row{display:flex;align-items:flex-start;gap:10px;padding:10px 15px;border-bottom:1px solid #f1f5f9;text-decoration:none;color:inherit;transition:background .14s;}
 .al-row:hover{background:rgba(239,68,68,.03);}
 .al-row:last-child{border-bottom:none;}
-.al-ico{width:34px;height:34px;border-radius:10px;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.2);color:#f87171;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
-.al-campo{font-size:12.5px;font-weight:800;color:var(--n1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.al-asesor{font-size:10.5px;color:var(--td);}
-.al-valor{font-size:10.5px;color:#4ade80;font-weight:700;margin-top:2px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2);padding:1px 7px;border-radius:5px;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.al-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;}
-.al-time{font-size:10px;color:var(--td);white-space:nowrap;}
-.btn-visto{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.2);color:#f87171;cursor:pointer;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700;}
-.btn-visto:hover{background:rgba(239,68,68,.2);}
-
-/* Actividad */
-.act-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;}
-.act-row:last-child{border-bottom:none;}
-.act-ico{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
-.ai-ok{background:rgba(74,222,128,.12);color:#4ade80;}
-.ai-pe{background:rgba(251,191,36,.12);color:#fbbf24;}
-.act-name{font-size:12.5px;font-weight:700;color:var(--n1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.act-sub{font-size:10.5px;color:var(--td);}
-.act-date{font-size:10px;color:var(--td);flex-shrink:0;margin-left:auto;}
+.al-ic{width:34px;height:34px;border-radius:10px;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.18);color:#ef4444;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;margin-top:1px;}
+.al-campo{font-size:12.5px;font-weight:800;color:var(--n1);}
+.al-asesor{font-size:10.5px;color:var(--td);margin-top:1px;}
+.al-t{font-size:9.5px;color:var(--td);margin-left:auto;flex-shrink:0;white-space:nowrap;padding-top:2px;}
 
 /* empty */
-.empty-b{padding:24px;text-align:center;color:var(--td);font-size:12.5px;}
-.empty-b i{display:block;font-size:22px;margin-bottom:6px;opacity:.5;}
+.empty{padding:28px;text-align:center;color:var(--td);font-size:12.5px;}
+.empty i{display:block;font-size:22px;margin-bottom:7px;opacity:.4;}
 
-/* scrollbar */
-::-webkit-scrollbar{width:5px;}
-::-webkit-scrollbar-thumb{background:rgba(18,58,109,.3);border-radius:3px;}
-::-webkit-scrollbar-track{background:#f1f5f9;}
-
-@media(max-width:1400px){.gauges-grid{grid-template-columns:repeat(auto-fill,minmax(165px,1fr));}}
-@media(max-width:1200px){.bottom-grid,.metrics-bar{grid-template-columns:1fr 1fr;} .funnel-steps{flex-wrap:wrap;gap:10px;justify-content:center;} .f-connector{display:none;}}
-@media(max-width:900px){.main-content{margin-left:0;} .gauges-grid{grid-template-columns:repeat(2,1fr);} .bottom-grid{grid-template-columns:1fr;}}
+@media(max-width:1350px){.kpi-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}}
+@media(max-width:1100px){.stats-row,.btm-grid{grid-template-columns:1fr 1fr;}.funnel-steps .f-arrow{display:none;}.funnel-steps{flex-wrap:wrap;gap:12px;justify-content:center;}}
+@media(max-width:800px){.main-content{margin-left:0;}.kpi-grid{grid-template-columns:repeat(2,1fr);}.btm-grid{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
 
 <?php $navTitle=''; $navIcon=''; require_once '_sidebar_supervisor.php'; ?>
 
-
-
-<!-- HERO -->
+<!-- ── HERO ─────────────────────────────────────────────────── -->
 <div class="hero">
-  <div class="hero-text" style="position:relative;z-index:1;">
-    <h2>Panel de Supervisión — <?= htmlspecialchars(explode(' ',$supervisor_nombre)[0]) ?></h2>
-    <p>Monitoreo en tiempo real · <?= strtoupper(strftime('%B %Y') ?: date('M Y')) ?></p>
+  <div class="hero-left">
+    <div class="hero-title">Panel de Supervisión — <span><?= htmlspecialchars(explode(' ',$supervisor_nombre)[0]) ?></span></div>
+    <div class="hero-sub">Monitoreo en tiempo real · <?= strtoupper(date('M Y')) ?></div>
     <?php if($tareas_hoy>0): ?>
-    <div class="hero-progress">
-      <div class="hp-label"><span>Progreso de tareas hoy</span><span><?= $tareas_completadas ?>/<?= $tareas_hoy ?></span></div>
-      <div class="hp-track"><div class="hp-fill" id="hp-fill" style="width:0%;"></div></div>
+    <div class="hero-prog-label">
+      <span>Progreso de tareas hoy</span>
+      <span><?= $tareas_completadas ?>/<?= $tareas_hoy ?></span>
+    </div>
+    <div class="hero-prog-track">
+      <div class="hero-prog-fill" id="hp-fill" style="width:0%;"></div>
     </div>
     <?php endif; ?>
   </div>
-  <div class="hero-stats" style="position:relative;z-index:1;">
-    <div class="hs-item"><div class="hs-num"><?= $total_asesores ?></div><div class="hs-lbl">Asesores</div></div>
-    <div class="hs-item"><div class="hs-num" id="cnt-clientes">0</div><div class="hs-lbl">Clientes</div></div>
-    <div class="hs-item"><div class="hs-num" id="cnt-activos">0</div><div class="hs-lbl">Activos</div></div>
+  <div class="hero-right">
+    <div class="hs-pill">
+      <div class="hs-num"><?= $total_asesores ?></div>
+      <div class="hs-lbl">Asesores</div>
+    </div>
+    <div class="hs-pill">
+      <div class="hs-num" id="cnt-clientes">0</div>
+      <div class="hs-lbl">Clientes</div>
+    </div>
+    <div class="hs-pill">
+      <div class="hs-num" id="cnt-activos">0</div>
+      <div class="hs-lbl">Activos</div>
+    </div>
     <?php if($alertas_pendientes>0): ?>
-    <div class="hs-item red"><div class="hs-num"><?= $alertas_pendientes ?></div><div class="hs-lbl">Alertas</div></div>
+    <div class="hs-pill danger">
+      <div class="hs-num"><?= $alertas_pendientes ?></div>
+      <div class="hs-lbl">Alertas</div>
+    </div>
     <?php endif; ?>
   </div>
 </div>
 
-<!-- METRICS BAR -->
-<div class="metrics-bar">
-  <div class="metric-card" style="--mc:#ffdd00;">
-    <div class="metric-trend <?= $pct_tareas>=70?'trend-up':($pct_tareas>=35?'trend-nt':'trend-dn') ?>"><?= $pct_tareas ?>%</div>
-    <div class="metric-label">Actividad Hoy</div>
-    <div class="metric-value" id="cnt-act">0</div>
-    <div class="metric-sub"><?= $tareas_completadas ?>/<?= $tareas_hoy ?> tareas completadas</div>
+<!-- ── STAT CARDS ────────────────────────────────────────────── -->
+<div class="stats-row">
+  <div class="sc" style="--ac:#f59e0b;--aic:rgba(245,158,11,.1);">
+    <div class="sc-badge <?= $pct_tareas>=70?'sb-green':($pct_tareas>=35?'sb-yellow':'sb-red') ?>"><?= $pct_tareas ?>%</div>
+    <div class="sc-icon"><i class="fas fa-bolt"></i></div>
+    <div class="sc-label">Actividad Hoy</div>
+    <div class="sc-value" id="cnt-act">0</div>
+    <div class="sc-sub"><?= $tareas_completadas ?>/<?= $tareas_hoy ?> tareas completadas</div>
   </div>
-  <div class="metric-card" style="--mc:#4ade80;">
-    <div class="metric-trend trend-nt"><?= $kpi_dash['penetracion_pct'] ?>%</div>
-    <div class="metric-label">Penetración Mensual</div>
-    <div class="metric-value" id="cnt-pen">0</div>
-    <div class="metric-sub"><?= $kpi_dash['penetracion_clientes'] ?>/<?= $kpi_dash['penetracion_visitas'] ?> visitas</div>
+  <div class="sc" style="--ac:#22c55e;--aic:rgba(34,197,94,.1);">
+    <div class="sc-badge sb-blue"><?= $kpi_dash['penetracion_pct'] ?>%</div>
+    <div class="sc-icon"><i class="fas fa-chart-pie"></i></div>
+    <div class="sc-label">Penetración Mensual</div>
+    <div class="sc-value" id="cnt-pen">0</div>
+    <div class="sc-sub"><?= $kpi_dash['penetracion_clientes'] ?>/<?= $kpi_dash['penetracion_visitas'] ?> visitas</div>
   </div>
-  <div class="metric-card" style="--mc:#60a5fa;">
-    <div class="metric-trend trend-nt"><?= $kpi_dash['operaciones_total'] ?></div>
-    <div class="metric-label">Créditos <?=date('M Y')?></div>
-    <div class="metric-value" id="cnt-ops" style="color:var(--n2);">$<?= number_format($kpi_dash['operaciones_monto'],0,'.',',') ?></div>
-    <div class="metric-sub"><?= $kpi_dash['operaciones_total'] ?> crédito<?= $kpi_dash['operaciones_total']!=1?'s':'' ?> desembolsado<?= $kpi_dash['operaciones_total']!=1?'s':'' ?></div>
+  <div class="sc" style="--ac:#3b82f6;--aic:rgba(59,130,246,.1);">
+    <div class="sc-badge sb-blue"><?= $kpi_dash['operaciones_total'] ?></div>
+    <div class="sc-icon"><i class="fas fa-hand-holding-dollar"></i></div>
+    <div class="sc-label">Créditos <?= date('M Y') ?></div>
+    <div class="sc-value" style="font-size:20px;">$<?= number_format($kpi_dash['operaciones_monto'],0,'.',',') ?></div>
+    <div class="sc-sub"><?= $kpi_dash['operaciones_total'] ?> crédito<?= $kpi_dash['operaciones_total']!=1?'s':'' ?> desembolsado<?= $kpi_dash['operaciones_total']!=1?'s':'' ?></div>
   </div>
-  <div class="metric-card" style="--mc:#f87171;">
-    <div class="metric-trend b-badge-red"><?= $alertas_pendientes ?></div>
-    <div class="metric-label">Alertas Sin Ver</div>
-    <div class="metric-value" style="color:#f87171;" id="cnt-alerta">0</div>
-    <div class="metric-sub">Pendientes de revisión</div>
-  </div>
-</div>
-
-<!-- KPI GAUGES -->
-<div class="section-hd">
-  <h3><i class="fas fa-gauge-high"></i> KPIs del Equipo — Tacómetros en Vivo</h3>
-  <div style="display:flex;gap:10px;align-items:center;">
-    <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
-    <a href="kpi_penetracion.php" class="all-link"><i class="fas fa-external-link-alt me-1"></i>Ver reportes</a>
+  <div class="sc" style="--ac:#ef4444;--aic:rgba(239,68,68,.1);">
+    <div class="sc-badge sb-red"><?= $alertas_pendientes ?></div>
+    <div class="sc-icon"><i class="fas fa-bell"></i></div>
+    <div class="sc-label">Alertas Sin Ver</div>
+    <div class="sc-value" style="color:#ef4444;" id="cnt-alerta">0</div>
+    <div class="sc-sub">Pendientes de revisión</div>
   </div>
 </div>
 
-<div class="gauges-grid">
+<!-- ── KPI GAUGES ─────────────────────────────────────────────── -->
+<div class="kpi-section">
+<div class="kpi-hd">
+  <div>
+    <div class="kpi-title"><i class="fas fa-gauge-high"></i> KPIs del Equipo — Tacómetros en Vivo</div>
+    <div class="kpi-title-sub">Rendimiento en tiempo real &middot; <?= strtoupper(date('M Y')) ?></div>
+  </div>
+  <div class="kpi-actions">
+    <div class="kpi-live"><div class="kpi-live-dot"></div>EN VIVO</div>
+    <a href="kpi_penetracion.php" class="kpi-btn"><i class="fas fa-arrow-up-right-from-square"></i> Ver reportes</a>
+  </div>
+</div>
+<div class="kpi-grid">
 <?php
 $gkpis=[
-  ['k'=>'actividad',    'lbl'=>'Actividad',      'ico'=>'fa-bolt',            'c'=>'#60a5fa', 'cr'=>'96,165,250',  'v'=>$kpi_dash['actividad_pct'],     'meta'=>$kpi_dash['actividad_realizadas'].'/'.$kpi_dash['actividad_total'].' hoy',          'url'=>'kpi_penetracion.php?view=actividad'],
-  ['k'=>'penetracion',  'lbl'=>'Penetración',    'ico'=>'fa-chart-pie',       'c'=>'#4ade80', 'cr'=>'74,222,128',  'v'=>$kpi_dash['penetracion_pct'],   'meta'=>$kpi_dash['penetracion_clientes'].'/'.$kpi_dash['penetracion_visitas'].' visitas', 'url'=>'kpi_penetracion.php?view=mercado'],
-  ['k'=>'interes',      'lbl'=>'Interés',        'ico'=>'fa-heart-pulse',     'c'=>'#fbbf24', 'cr'=>'251,191,36',  'v'=>$kpi_dash['interes_pct'],       'meta'=>$kpi_dash['interes_si'].'/'.$kpi_dash['interes_total'].' encuestas',              'url'=>'kpi_penetracion.php?view=interes'],
-  ['k'=>'prospeccion',  'lbl'=>'Prospección',    'ico'=>'fa-route',           'c'=>'#c084fc', 'cr'=>'192,132,252', 'v'=>$kpi_dash['prospeccion_pct'],   'meta'=>$kpi_dash['prospeccion_avance'].'/'.$kpi_dash['prospeccion_meta'].' meta',        'url'=>'kpi_penetracion.php?view=prospeccion'],
-  ['k'=>'levantamiento','lbl'=>'Levantamientos', 'ico'=>'fa-clipboard-check', 'c'=>'#38bdf8', 'cr'=>'56,189,248',  'v'=>$kpi_dash['levantamiento_pct'], 'meta'=>$kpi_dash['levantamientos'].'/'.$kpi_dash['interesados'].' interesados',         'url'=>'kpi_penetracion.php?view=evaluacion'],
-  ['k'=>'frio',         'lbl'=>'Visitas Frío',   'ico'=>'fa-snowflake',       'c'=>'#fb923c', 'cr'=>'251,146,60',  'v'=>$kpi_dash['frio_pct'],          'meta'=>$kpi_dash['frio_visitas'].' visitas frías',                                      'url'=>'kpi_penetracion.php?view=frio'],
-  ['k'=>'eficiencia',   'lbl'=>'Eficiencia',     'ico'=>'fa-bolt-lightning',  'c'=>'#f472b6', 'cr'=>'244,114,182', 'v'=>$kpi_dash['eficiencia_pct'],    'meta'=>$kpi_dash['interes_si'].' con interés',                                          'url'=>'kpi_penetracion.php?view=eficiencia'],
-  ['k'=>'postventa',    'lbl'=>'Post-Venta',     'ico'=>'fa-rotate',          'c'=>'#2dd4bf', 'cr'=>'45,212,191',  'v'=>$kpi_dash['postventa_pct'],     'meta'=>$ops_aprobadas.' aprobados',                                                     'url'=>'kpi_penetracion.php?view=postventa'],
-  ['k'=>'recuperacion', 'lbl'=>'Recuperación',   'ico'=>'fa-shield-halved',   'c'=>'#f87171', 'cr'=>'248,113,113', 'v'=>$kpi_dash['recuperacion_pct'],  'meta'=>$kpi_dash['recuperaciones'].' gestiones',                                        'url'=>'kpi_penetracion.php?view=recuperacion'],
+  ['k'=>'actividad',    'lbl'=>'Actividad',      'ico'=>'fa-bolt',            'c'=>'#60a5fa','cr'=>'96,165,250',   'v'=>$kpi_dash['actividad_pct'],     'meta'=>$kpi_dash['actividad_realizadas'].'/'.$kpi_dash['actividad_total'].' hoy',         'url'=>'kpi_penetracion.php?view=actividad'],
+  ['k'=>'penetracion',  'lbl'=>'Penetración',    'ico'=>'fa-chart-pie',       'c'=>'#4ade80','cr'=>'74,222,128',   'v'=>$kpi_dash['penetracion_pct'],    'meta'=>$kpi_dash['penetracion_clientes'].'/'.$kpi_dash['penetracion_visitas'].' visitas','url'=>'kpi_penetracion.php?view=mercado'],
+  ['k'=>'interes',      'lbl'=>'Interés',        'ico'=>'fa-heart-pulse',     'c'=>'#fbbf24','cr'=>'251,191,36',   'v'=>$kpi_dash['interes_pct'],        'meta'=>$kpi_dash['interes_si'].'/'.$kpi_dash['interes_total'].' encuestas',           'url'=>'kpi_penetracion.php?view=interes'],
+  ['k'=>'prospeccion',  'lbl'=>'Prospección',    'ico'=>'fa-route',           'c'=>'#a78bfa','cr'=>'167,139,250',  'v'=>$kpi_dash['prospeccion_pct'],    'meta'=>$kpi_dash['prospeccion_avance'].'/'.$kpi_dash['prospeccion_meta'].' meta',       'url'=>'kpi_penetracion.php?view=prospeccion'],
+  ['k'=>'levantam',     'lbl'=>'Levantamientos', 'ico'=>'fa-clipboard-check', 'c'=>'#38bdf8','cr'=>'56,189,248',   'v'=>$kpi_dash['levantamiento_pct'],  'meta'=>$kpi_dash['levantamientos'].'/'.$kpi_dash['interesados'].' interesados',        'url'=>'kpi_penetracion.php?view=evaluacion'],
+  ['k'=>'frio',         'lbl'=>'Visitas Frío',   'ico'=>'fa-snowflake',       'c'=>'#fb923c','cr'=>'251,146,60',   'v'=>$kpi_dash['frio_pct'],           'meta'=>$kpi_dash['frio_visitas'].' visitas frías',                                    'url'=>'kpi_penetracion.php?view=frio'],
+  ['k'=>'eficiencia',   'lbl'=>'Eficiencia',     'ico'=>'fa-bolt-lightning',  'c'=>'#f472b6','cr'=>'244,114,182',  'v'=>$kpi_dash['eficiencia_pct'],     'meta'=>$kpi_dash['interes_si'].' con interés',                                        'url'=>'kpi_penetracion.php?view=eficiencia'],
+  ['k'=>'postventa',    'lbl'=>'Post-Venta',     'ico'=>'fa-rotate',          'c'=>'#2dd4bf','cr'=>'45,212,191',   'v'=>$kpi_dash['postventa_pct'],      'meta'=>$ops_aprobadas.' aprobados',                                                   'url'=>'kpi_penetracion.php?view=postventa'],
+  ['k'=>'recuperacion', 'lbl'=>'Recuperación',   'ico'=>'fa-shield-halved',   'c'=>'#ef4444','cr'=>'239,68,68',    'v'=>$kpi_dash['recuperacion_pct'],   'meta'=>$kpi_dash['recuperaciones'].' gestiones',                                      'url'=>'kpi_penetracion.php?view=recuperacion'],
 ];
 foreach($gkpis as $g):
-  $v=(float)$g['v'];
-  $bc=$v>=70?'gb-good':($v>=35?'gb-warn':'gb-bad');
-  $bt=$v>=70?'▲ OK':($v>=35?'~ Med':'▼ Bajo');
+  $v=round((float)$g['v'],1);
+  $bc=$v>=70?'gb-ok':($v>=35?'gb-wa':'gb-er');
+  $bt=$v>=70?'OK':($v>=35?'Bajo':'Crítico');
 ?>
-<a href="<?=htmlspecialchars($g['url'])?>" class="g-card" style="--gc:<?=$g['c']?>;--gc-rgb:<?=$g['cr']?>;"
-   data-val="<?=$v?>" data-color="<?=htmlspecialchars($g['c'])?>" data-key="<?=htmlspecialchars($g['k'])?>">
+<a href="<?=htmlspecialchars($g['url'])?>" class="g-card<?=$bc==='gb-er'?' g-crit':''?>" style="--gc:<?=$g['c']?>;--gc-rgb:<?=$g['cr']?>;">
+  <div class="g-glow"></div>
   <div class="g-title"><i class="fas <?=$g['ico']?>"></i><?=htmlspecialchars($g['lbl'])?></div>
   <div class="g-chart" id="gc-<?=htmlspecialchars($g['k'])?>"></div>
   <div class="g-pct-row">
@@ -612,199 +728,192 @@ foreach($gkpis as $g):
 </a>
 <?php endforeach; ?>
 
-<!-- OPERACIONES — dark card especial -->
-<a href="kpi_penetracion.php?view=operaciones" class="g-card g-card-ops" style="--gc:#ffdd00;justify-content:center;">
-  <div class="g-title"><i class="fas fa-hand-holding-dollar" style="color:var(--y);"></i>Créditos <?=date('M Y')?></div>
-  <div class="ops-num" id="cnt-ops-big">0</div>
-  <div style="font-size:11px;color:rgba(255,255,255,.55);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-top:2px;">
-    <?=$kpi_dash['operaciones_total']==1?'crédito desembolsado':'créditos desembolsados'?>
-  </div>
-  <div class="ops-money" style="margin-top:10px;">
-    $<?=number_format($kpi_dash['operaciones_monto'],0,'.',',')?>
-  </div>
-  <div class="ops-lbl">Monto prestado este mes</div>
-  <div class="g-track" style="background:rgba(255,255,255,.1);width:80%;margin-top:10px;">
+<!-- CRÉDITOS ESPECIAL -->
+<a href="kpi_penetracion.php?view=operaciones" class="g-card g-ops" style="--gc:#ffdd00;--gc-rgb:255,221,0;justify-content:center;">
+  <div class="g-glow"></div>
+  <div class="g-title" style="color:rgba(255,255,255,.6);"><i class="fas fa-hand-holding-dollar" style="color:var(--y);"></i>Créditos <?=date('M Y')?></div>
+  <div class="ops-big" id="cnt-ops-big">0</div>
+  <div class="ops-sub">$<?=number_format($kpi_dash['operaciones_monto'],0,'.',',')?></div>
+  <div class="ops-tag">Monto prestado este mes</div>
+  <div class="g-track" style="background:rgba(255,255,255,.1);width:80%;margin-top:12px;">
     <div class="g-fill" style="width:<?=min(100,$kpi_dash['operaciones_total']*10)?>%;background:var(--y);"></div>
   </div>
 </a>
-</div><!-- /gauges-grid -->
+</div><!-- /kpi-grid -->
+</div><!-- /kpi-section -->
 
-<!-- FUNNEL FLOW -->
-<div class="funnel-section">
-  <div class="section-hd" style="margin-bottom:0;">
-    <h3 style="color:var(--n1);"><i class="fas fa-diagram-project"></i> Flujo de Conversión del Equipo</h3>
-    <span style="font-size:12px;color:var(--td);"><?= strtoupper(date('M Y')) ?></span>
+<!-- ── FUNNEL ─────────────────────────────────────────────────── -->
+<div class="funnel-wrap">
+  <div class="sec-hd" style="margin-bottom:0;">
+    <div class="sec-title"><i class="fas fa-diagram-project"></i> Flujo de Conversión del Equipo</div>
+    <span style="font-size:12px;color:var(--td);font-weight:700;"><?= strtoupper(date('M Y')) ?></span>
   </div>
   <div class="funnel-steps">
     <?php
     $fsteps=[
-      ['lbl'=>'Prospección', 'ico'=>'fas fa-route',           'c'=>'#c084fc', 'v'=>$kpi_dash['prospeccion_pct'],    'n'=>$kpi_dash['prospeccion_avance']],
-      ['lbl'=>'Visitas',     'ico'=>'fas fa-map-marker-alt',  'c'=>'#60a5fa', 'v'=>$kpi_dash['penetracion_pct'],    'n'=>$kpi_dash['penetracion_visitas']],
-      ['lbl'=>'Interés',     'ico'=>'fas fa-heart-pulse',     'c'=>'#fbbf24', 'v'=>$kpi_dash['interes_pct'],        'n'=>$kpi_dash['interes_si']],
-      ['lbl'=>'Levantam.',   'ico'=>'fas fa-clipboard-check', 'c'=>'#38bdf8', 'v'=>$kpi_dash['levantamiento_pct'],  'n'=>$kpi_dash['levantamientos']],
-      ['lbl'=>'Eficiencia',  'ico'=>'fas fa-bolt',            'c'=>'#f472b6', 'v'=>$kpi_dash['eficiencia_pct'],     'n'=>$kpi_dash['interes_si']],
-      ['lbl'=>'Operaciones', 'ico'=>'fas fa-handshake',       'c'=>'#ffdd00', 'v'=>min(100,$kpi_dash['operaciones_total']*10), 'n'=>$kpi_dash['operaciones_total']],
+      ['lbl'=>'Prospección','ico'=>'fas fa-route',           'c'=>'#a78bfa','v'=>$kpi_dash['prospeccion_pct'],   'n'=>$kpi_dash['prospeccion_avance']],
+      ['lbl'=>'Visitas',    'ico'=>'fas fa-map-marker-alt',  'c'=>'#60a5fa','v'=>$kpi_dash['penetracion_pct'],   'n'=>$kpi_dash['penetracion_visitas']],
+      ['lbl'=>'Interés',    'ico'=>'fas fa-heart-pulse',     'c'=>'#fbbf24','v'=>$kpi_dash['interes_pct'],       'n'=>$kpi_dash['interes_si']],
+      ['lbl'=>'Levantam.',  'ico'=>'fas fa-clipboard-check', 'c'=>'#38bdf8','v'=>$kpi_dash['levantamiento_pct'], 'n'=>$kpi_dash['levantamientos']],
+      ['lbl'=>'Eficiencia', 'ico'=>'fas fa-bolt',            'c'=>'#f472b6','v'=>$kpi_dash['eficiencia_pct'],    'n'=>$kpi_dash['interes_si']],
+      ['lbl'=>'Créditos',   'ico'=>'fas fa-handshake',       'c'=>'#ffdd00','v'=>min(100,$kpi_dash['operaciones_total']*10),'n'=>$kpi_dash['operaciones_total']],
     ];
-    foreach($fsteps as $i=>$fs):
-    ?>
+    foreach($fsteps as $i=>$fs): ?>
     <div class="f-step">
-      <div class="f-ico" style="color:<?=$fs['c']?>;border-color:<?=$fs['c']?>33;background:<?=$fs['c']?>12;" data-pct="<?=(int)$fs['v']?>%">
+      <div class="f-ico" style="color:<?=$fs['c']?>;background:<?=$fs['c']?>18;border:1px solid <?=$fs['c']?>44;">
         <i class="<?=$fs['ico']?>"></i>
+        <span class="f-pct-badge" style="background:<?=$fs['c']?>;color:<?=$i===5?'var(--n1)':'#fff'?>;"><?=(int)$fs['v']?>%</span>
       </div>
-      <div class="f-label"><?=htmlspecialchars($fs['lbl'])?></div>
+      <div class="f-lbl"><?=htmlspecialchars($fs['lbl'])?></div>
       <div class="f-val" style="color:<?=$fs['c']?>"><?=$fs['n']?></div>
     </div>
-    <?php if($i<count($fsteps)-1): ?><div class="f-connector"></div><?php endif; ?>
-    <?php endforeach; ?>
+    <?php if($i<count($fsteps)-1): ?>
+    <div class="f-arrow"><i class="fas fa-chevron-right"></i></div>
+    <?php endif; endforeach; ?>
   </div>
 </div>
 
-<!-- BOTTOM 4 -->
-<div class="bottom-grid">
+<!-- ── BOTTOM GRID ───────────────────────────────────────────── -->
+<div class="btm-grid">
 
-  <!-- ÚLTIMOS CLIENTES -->
+  <!-- Últimos Clientes -->
   <div class="b-card">
-    <div class="b-head">
-      <div class="bh-ico" style="background:rgba(18,58,109,.5);color:var(--y);"><i class="fas fa-users"></i></div>
+    <div class="bh">
+      <div class="bh-ic" style="background:rgba(18,58,109,.1);color:var(--n2);"><i class="fas fa-users"></i></div>
       <h5>Últimos Clientes</h5>
-      <a href="clientes.php" class="b-link">Ver todos →</a>
+      <a href="clientes.php" class="bh-link">Ver todos →</a>
     </div>
     <?php if(empty($ultimos_clientes)): ?>
-      <div class="empty-b"><i class="fas fa-user-slash"></i>Sin registros</div>
+      <div class="empty"><i class="fas fa-user-slash"></i>Sin registros</div>
     <?php else: foreach($ultimos_clientes as $cl):
       $in=mb_strtoupper(mb_substr(trim($cl['nombre']??'C'),0,1));
-      $ec='est-'.($cl['estado']??'prospecto'); ?>
+      $est=$cl['estado']??'prospecto';
+      $tc=$est==='cliente'?'tag-c':($est==='descartado'?'tag-d':'tag-p');
+    ?>
     <a href="ver_cliente.php?id=<?=urlencode($cl['cedula']??'')?>" class="cli-row">
       <div class="cli-av"><?=htmlspecialchars($in)?></div>
       <div style="flex:1;min-width:0;">
         <div class="cli-name"><?=htmlspecialchars($cl['nombre']??'—')?></div>
         <div class="cli-sub"><?=htmlspecialchars($cl['ciudad']??'')?> · <?=htmlspecialchars($cl['asesor_nombre']??'')?></div>
       </div>
-      <span class="cli-est <?=$ec?>"><?=ucfirst($cl['estado']??'prospecto')?></span>
+      <span class="cli-tag <?=$tc?>"><?=ucfirst($est)?></span>
     </a>
     <?php endforeach; endif; ?>
   </div>
 
-  <!-- ACCESO RÁPIDO -->
+  <!-- Acceso Rápido -->
   <div class="b-card">
-    <div class="b-head">
-      <div class="bh-ico" style="background:rgba(255,221,0,.12);color:var(--y);"><i class="fas fa-bolt"></i></div>
+    <div class="bh">
+      <div class="bh-ic" style="background:rgba(255,221,0,.12);color:var(--y);"><i class="fas fa-bolt"></i></div>
       <h5>Acceso Rápido</h5>
     </div>
-    <div class="quick-grid">
-      <a href="registro_asesor.php"    class="qb qb-y"><i class="fas fa-user-plus"></i>Crear Asesor</a>
-      <a href="clientes.php"           class="qb qb-n"><i class="fas fa-address-book"></i>Clientes</a>
-      <a href="operaciones.php"        class="qb qb-g"><i class="fas fa-handshake"></i>Operaciones</a>
-      <a href="mapa_vivo_asesor.php"   class="qb qb-b"><i class="fas fa-map-marked-alt"></i>Mapa Vivo</a>
-      <a href="alertas.php"            class="qb qb-r"><i class="fas fa-bell"></i>Alertas<?=$alertas_pendientes>0?" ($alertas_pendientes)":''?></a>
-      <a href="kpi_penetracion.php"    class="qb qb-p"><i class="fas fa-chart-line"></i>KPI Report</a>
-      <a href="mis_asesores.php"       class="qb qb-t"><i class="fas fa-users-cog"></i>Asesores</a>
-      <a href="metas.php"              class="qb qb-o"><i class="fas fa-bullseye"></i>Metas</a>
+    <div class="qk-grid">
+      <a href="registro_asesor.php"  class="qk qk-y"><i class="fas fa-user-plus"></i>Crear Asesor</a>
+      <a href="clientes.php"         class="qk qk-n"><i class="fas fa-address-book"></i>Clientes</a>
+      <a href="operaciones.php"      class="qk qk-g"><i class="fas fa-handshake"></i>Operaciones</a>
+      <a href="mapa_vivo_superIA.php" class="qk qk-b"><i class="fas fa-map-marked-alt"></i>Mapa Vivo</a>
+      <a href="alertas.php"          class="qk qk-r"><i class="fas fa-bell"></i>Alertas<?=$alertas_pendientes>0?" ($alertas_pendientes)":''?></a>
+      <a href="kpi_penetracion.php"  class="qk qk-p"><i class="fas fa-chart-line"></i>KPI Report</a>
+      <a href="mis_asesores.php"     class="qk qk-t"><i class="fas fa-users-cog"></i>Mi Equipo</a>
+      <a href="metas.php"            class="qk qk-o"><i class="fas fa-bullseye"></i>Metas</a>
     </div>
   </div>
 
-
-
-  <!-- ACTIVIDAD RECIENTE -->
+  <!-- Últimas Alertas -->
   <div class="b-card">
-    <div class="b-head">
-      <div class="bh-ico" style="background:rgba(74,222,128,.12);color:#4ade80;"><i class="fas fa-clock-rotate-left"></i></div>
-      <h5>Actividad Reciente</h5>
-      <span class="b-badge"><?=count($recientes)?></span>
+    <div class="bh">
+      <div class="bh-ic" style="background:rgba(239,68,68,.1);color:#ef4444;"><i class="fas fa-bell"></i></div>
+      <h5>Últimas Alertas</h5>
+      <?php if($alertas_pendientes>0): ?>
+        <span class="bh-num num-red"><?= $alertas_pendientes ?> pendiente<?= $alertas_pendientes!=1?'s':'' ?></span>
+      <?php endif; ?>
+      <a href="alertas.php" class="bh-link ms-auto">Ver todas →</a>
     </div>
-    <?php if(empty($recientes)): ?>
-      <div class="empty-b"><i class="fas fa-inbox"></i>Sin actividad</div>
-    <?php else: foreach($recientes as $r):
-      $done=($r['estado']??'')==='completada';
-      $tipo=ucfirst(str_replace('_',' ',$r['tipo_tarea']??'visita'));
+    <?php if(empty($ultimas_alertas)): ?>
+      <div class="empty"><i class="fas fa-check-circle" style="color:#22c55e;opacity:.6;"></i>Sin alertas pendientes</div>
+    <?php else: foreach($ultimas_alertas as $al):
+      $campo=ucfirst(str_replace('_',' ',$al['campo_modificado']??'modificación'));
+      $diff=time()-strtotime($al['created_at']);
+      $t=$diff<60?'hace '.$diff.'s':($diff<3600?'hace '.floor($diff/60).'min':($diff<86400?'hace '.floor($diff/3600).'h':date('d/m',strtotime($al['created_at']))));
     ?>
-    <div class="act-row">
-      <div class="act-ico <?=$done?'ai-ok':'ai-pe'?>"><i class="fas <?=$done?'fa-check':'fa-clock'?>"></i></div>
+    <a href="alertas_detalle.php?id=<?= $al['id_alerta'] ?>" class="al-row">
+      <div class="al-ic"><i class="fas fa-triangle-exclamation"></i></div>
       <div style="flex:1;min-width:0;">
-        <div class="act-name"><?=htmlspecialchars($r['cliente_nombre']??'—')?></div>
-        <div class="act-sub"><?=htmlspecialchars($tipo)?> · <?=htmlspecialchars($r['asesor_nombre']??'')?></div>
+        <div class="al-campo"><?=htmlspecialchars($campo)?></div>
+        <div class="al-asesor"><i class="fas fa-user-circle" style="font-size:10px;margin-right:3px;"></i><?=htmlspecialchars($al['asesor_nombre']??'Asesor')?></div>
       </div>
-      <span class="act-date"><?=$r['fecha_programada']?date('d/m',strtotime($r['fecha_programada'])):''?></span>
-    </div>
+      <div class="al-t"><?= $t ?></div>
+    </a>
     <?php endforeach; endif; ?>
-
   </div>
 
-</div><!-- /bottom-grid -->
-
+</div><!-- /btm-grid -->
 
 <script>
 document.addEventListener('DOMContentLoaded',function(){
 
-  // ── ANIMATED COUNTERS ─────────────────────────────────────
-  function counter(el, target, duration, prefix, suffix){
-    if(!el) return;
-    var start=0, step=target/(duration/16);
-    var t=setInterval(function(){
-      start+=step;
-      if(start>=target){start=target;clearInterval(t);}
-      el.textContent=prefix+Math.round(start).toLocaleString()+suffix;
-    },16);
+  /* COUNTERS */
+  function counter(el,target,dur,pre,suf){
+    if(!el)return;var s=0,step=target/(dur/16);
+    var t=setInterval(function(){s+=step;if(s>=target){s=target;clearInterval(t);}el.textContent=pre+Math.round(s).toLocaleString()+suf;},16);
   }
   setTimeout(function(){
-    counter(document.getElementById('cnt-clientes'), <?=$total_clientes?>, 1200,'','');
-    counter(document.getElementById('cnt-activos'),  <?=$clientes_activos?>, 1200,'','');
-    counter(document.getElementById('cnt-act'),      <?=$pct_tareas?>, 900,'','%');
-    counter(document.getElementById('cnt-pen'),      <?=$kpi_dash['penetracion_pct']?>, 900,'','%');
-    counter(document.getElementById('cnt-ops-big'),  <?=$kpi_dash['operaciones_total']?>, 1000,'','');
-    counter(document.getElementById('cnt-alerta'),   <?=$alertas_pendientes?>, 700,'','');
-    // progress bar hero
+    counter(document.getElementById('cnt-clientes'),<?=$total_clientes?>,1200,'','');
+    counter(document.getElementById('cnt-activos'), <?=$clientes_activos?>,1200,'','');
+    counter(document.getElementById('cnt-act'),     <?=$pct_tareas?>,900,'','%');
+    counter(document.getElementById('cnt-pen'),     <?=$kpi_dash['penetracion_pct']?>,900,'','%');
+    counter(document.getElementById('cnt-ops-big'), <?=$kpi_dash['operaciones_total']?>,1000,'','');
+    counter(document.getElementById('cnt-alerta'),  <?=$alertas_pendientes?>,700,'','');
     var hf=document.getElementById('hp-fill');
-    if(hf) setTimeout(function(){ hf.style.width='<?=$pct_tareas?>%'; },200);
-    // g-fill bars
+    if(hf)setTimeout(function(){hf.style.width='<?=$pct_tareas?>%';},200);
     document.querySelectorAll('.g-fill').forEach(function(el){
-      var w=el.style.width; el.style.width='0';
-      setTimeout(function(){ el.style.width=w; },300);
+      var w=el.style.width;el.style.width='0';
+      setTimeout(function(){el.style.width=w;},350);
     });
   },400);
 
-  // ── APEX GAUGE FACTORY ────────────────────────────────────
-  function makeGauge(elId, value, color){
-    var el=document.getElementById(elId);
-    if(!el) return;
-    var fill = value>=70? color : (value>=35? '#fbbf24' : '#f87171');
+  /* APEX GAUGES */
+  function makeGauge(id,val,color){
+    var el=document.getElementById(id);if(!el)return;
+    var fill=val>=70?color:(val>=35?'#fbbf24':'#f87171');
+    var trackColor=val>=70?'rgba(74,222,128,.12)':(val>=35?'rgba(251,191,36,.12)':'rgba(239,68,68,.12)');
     new ApexCharts(el,{
-      series:[Math.min(100,Math.max(0,value))],
-      chart:{type:'radialBar',height:130,width:'100%',
-        toolbar:{show:false},
-        animations:{enabled:true,easing:'easeinout',speed:1200,animateGradually:{enabled:true,delay:100}}},
+      series:[Math.min(100,Math.max(0,val))],
+      chart:{type:'radialBar',height:155,width:'100%',toolbar:{show:false},
+        background:'transparent',
+        animations:{enabled:true,easing:'easeout',speed:1400,
+          animateGradually:{enabled:true,delay:120},
+          dynamicAnimation:{enabled:true,speed:700}}},
       plotOptions:{radialBar:{
-        startAngle:-130, endAngle:130,
-        track:{background:'#e2e8f0',strokeWidth:'70%',margin:3},
+        startAngle:-135,endAngle:135,
+        track:{background:trackColor,strokeWidth:'72%',margin:4,
+          dropShadow:{enabled:false}},
         dataLabels:{show:true,name:{show:false},value:{
-          offsetY:6, fontSize:'17px', fontWeight:'900',
-          fontFamily:'Inter,sans-serif', color:'#1a2744',
-          formatter:function(v){return Math.round(v)+'%';}
-        }},
-        hollow:{margin:4, size:'48%', background:'transparent'}
-      }},
-      fill:{type:'gradient',gradient:{shade:'light',type:'horizontal',
-        shadeIntensity:.15, gradientToColors:[fill], inverseColors:false,
-        opacityFrom:1, opacityTo:.9, stops:[0,100]}},
+          offsetY:8,fontSize:'18px',fontWeight:'900',fontFamily:'Inter,sans-serif',color:'#1a2744',
+          formatter:function(v){return Math.round(v)+'%';}}},
+        hollow:{margin:5,size:'50%',background:'transparent',
+          dropShadow:{enabled:true,top:2,left:0,blur:6,opacity:.08}}}},
+      fill:{type:'gradient',gradient:{
+        shade:'dark',type:'diagonal1',shadeIntensity:.22,
+        gradientToColors:[fill],inverseColors:false,opacityFrom:1,opacityTo:.85,stops:[0,100]}},
       colors:[color],
-      stroke:{lineCap:'round'},
+      stroke:{lineCap:'round',width:3},
       tooltip:{enabled:false},
-      grid:{padding:{top:-10,bottom:-10,left:-10,right:-10}}
+      grid:{padding:{top:-12,bottom:-12,left:-10,right:-10}},
+      states:{hover:{filter:{type:'none'}},active:{filter:{type:'none'}}}
     }).render();
   }
 
-  // ── RENDER GAUGES ─────────────────────────────────────────
-  var gd=<?php $ga=[];foreach($gkpis as $g) $ga[]=['k'=>$g['k'],'v'=>(float)$g['v'],'c'=>$g['c']];echo json_encode($ga);?>;
-  gd.forEach(function(g){ makeGauge('gc-'+g.k, g.v, g.c); });
+  var gd=<?php $ga=[];foreach($gkpis as $g)$ga[]=['k'=>$g['k'],'v'=>(float)$g['v'],'c'=>$g['c']];echo json_encode($ga);?>;
 
+  /* stagger entrance animation delay */
+  document.querySelectorAll('.kpi-grid .g-card').forEach(function(c,i){
+    c.style.animationDelay=(i*0.065)+'s';
+  });
 
-  // ── CARD HOVER GLOW ───────────────────────────────────────
-  document.querySelectorAll('.g-card').forEach(function(c){
-    c.addEventListener('mouseenter',function(){
-      var col=getComputedStyle(c).getPropertyValue('--gc').trim();
-      if(col) c.style.boxShadow='0 0 32px '+col+'28';
-    });
-    c.addEventListener('mouseleave',function(){ c.style.boxShadow=''; });
+  /* render gauges with stagger */
+  gd.forEach(function(g,i){
+    setTimeout(function(){makeGauge('gc-'+g.k,g.v,g.c);},i*70);
   });
 
 });
