@@ -3892,6 +3892,212 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
             } catch (e) { console.error(e); }
         <?php endif; ?>
     </script>
+
+    <!-- PREMIUM FLOATING AI ANALYZER STYLES & SCRIPT -->
+    <style>
+    /* Premium CSS for Floating AI Analyzer */
+    .floating-ia-btn {
+        position: fixed;
+        bottom: 25px;
+        right: 25px;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+        color: #fff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        box-shadow: 0 10px 25px rgba(99, 102, 241, 0.4);
+        cursor: pointer;
+        z-index: 1060;
+        transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    .floating-ia-btn:hover {
+        transform: scale(1.1) rotate(15deg);
+        box-shadow: 0 15px 30px rgba(99, 102, 241, 0.6);
+    }
+
+    .floating-ia-btn .pulse-ring {
+        position: absolute;
+        inset: -4px;
+        border-radius: 50%;
+        border: 2px solid rgba(139, 92, 246, 0.5);
+        animation: iaPulse 2s infinite;
+        pointer-events: none;
+    }
+
+    @keyframes iaPulse {
+        0% { transform: scale(0.95); opacity: 1; }
+        100% { transform: scale(1.35); opacity: 0; }
+    }
+
+    .ia-sidebar {
+        position: fixed !important;
+        bottom: 95px !important;
+        right: 25px !important;
+        width: 380px !important;
+        max-height: calc(100vh - 140px) !important;
+        z-index: 1050 !important;
+        overflow-y: auto !important;
+        background: linear-gradient(145deg, #0b0f19 0%, #111827 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6) !important;
+        transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1) !important;
+        opacity: 0;
+        pointer-events: none;
+        transform: translateY(20px) scale(0.95);
+        scrollbar-width: thin;
+        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+    }
+
+    .ia-sidebar.active {
+        opacity: 1 !important;
+        pointer-events: all !important;
+        transform: translateY(0) scale(1) !important;
+    }
+
+    .close-ia-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 255, 255, 0.05);
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+        z-index: 10;
+    }
+
+    .close-ia-btn:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #fff;
+        transform: rotate(90deg);
+    }
+
+    @media (min-width: 992px) {
+        .content-area .col-lg-12, .row.g-4 .col-lg-12 {
+            width: 100% !important;
+            flex: 0 0 100% !important;
+            max-width: 100% !important;
+        }
+    }
+
+    .ia-sidebar::-webkit-scrollbar {
+        width: 6px;
+    }
+    .ia-sidebar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .ia-sidebar::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 3px;
+    }
+    .ia-sidebar::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.35);
+    }
+
+    @media (max-width: 576px) {
+        .ia-sidebar {
+            width: calc(100% - 30px) !important;
+            right: 15px !important;
+            bottom: 85px !important;
+            max-height: calc(100vh - 120px) !important;
+        }
+        .floating-ia-btn {
+            bottom: 15px;
+            right: 15px;
+        }
+    }
+    </style>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const sidebar = document.querySelector('.ia-sidebar');
+        if (!sidebar) return;
+
+        // Strip ia-follow to stop legacy sticky logic from interfering
+        sidebar.classList.remove('ia-follow');
+
+        // Hide parent bootstrap col-lg-3 wrapper so it doesn't occupy page layout space
+        const parentCol = sidebar.closest('.col-lg-3');
+        if (parentCol) {
+            parentCol.style.display = 'none';
+            
+            // Find if the main content has col-lg-9 and convert to col-lg-12
+            const siblingCol = parentCol.previousElementSibling;
+            if (siblingCol && siblingCol.classList.contains('col-lg-9')) {
+                siblingCol.classList.remove('col-lg-9');
+                siblingCol.classList.add('col-lg-12');
+                siblingCol.style.width = '100%';
+                siblingCol.style.flex = '0 0 100%';
+                siblingCol.style.maxWidth = '100%';
+            }
+        }
+        
+        // Expand the operations view sub-row
+        const rowCol9 = document.querySelector('.row.g-4 .col-lg-9');
+        if (rowCol9) {
+            rowCol9.classList.remove('col-lg-9');
+            rowCol9.classList.add('col-lg-12');
+            rowCol9.style.width = '100%';
+            rowCol9.style.flex = '0 0 100%';
+            rowCol9.style.maxWidth = '100%';
+        }
+
+        // Add close button absolutely in the sidebar
+        sidebar.style.position = 'relative';
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'close-ia-btn';
+        closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+        closeBtn.title = 'Cerrar Analizador';
+        closeBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sidebar.classList.remove('active');
+        });
+        sidebar.appendChild(closeBtn);
+
+        // Create floating trigger button
+        const floatBtn = document.createElement('div');
+        floatBtn.id = 'floatingIaBtn';
+        floatBtn.className = 'floating-ia-btn';
+        floatBtn.title = 'Analizador IA & Recomendaciones';
+        floatBtn.innerHTML = '<i class="fas fa-brain"></i><span class="pulse-ring"></span>';
+        document.body.appendChild(floatBtn);
+
+        // Toggle logic
+        floatBtn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sidebar.classList.toggle('active');
+            if (sidebar.classList.contains('active')) {
+                sidebar.scrollTop = 0;
+            }
+        });
+
+        // Close on escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                sidebar.classList.remove('active');
+            }
+        });
+
+        // Close when clicking outside of the floating sidebar
+        document.addEventListener('click', function(e) {
+            if (sidebar.classList.contains('active') && !sidebar.contains(e.target) && !floatBtn.contains(e.target)) {
+                sidebar.classList.remove('active');
+            }
+        });
+    });
+    </script>
     </div><!-- /.content-area -->
 </div><!-- /.main-content -->
 </body>

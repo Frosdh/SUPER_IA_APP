@@ -123,8 +123,14 @@ if ($modo_supervisor) {
         .btn-logout { background:rgba(255,221,0,.15); color:#fff; border:1px solid rgba(255,221,0,.28); padding:8px 15px; border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600; }
         .btn-logout:hover { background:rgba(255,221,0,.26); color:#fff; }
         .content-area { flex:1; overflow-y:auto; padding:32px; }
-        .btn-back { padding:8px 18px; background:rgba(18,58,109,.08); color:var(--brand-navy-deep); border:1.5px solid var(--brand-border); border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600; margin-bottom:22px; display:inline-flex; align-items:center; gap:8px; font-size:13.5px; transition:background .2s; }
+        .btn-back { padding:8px 18px; background:rgba(18,58,109,.08); color:var(--brand-navy-deep); border:1.5px solid var(--brand-border); border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600; margin-bottom:14px; display:inline-flex; align-items:center; gap:8px; font-size:13.5px; transition:background .2s; }
         .btn-back:hover { background:rgba(18,58,109,.15); color:var(--brand-navy-deep); }
+
+        .form-container-centered {
+            max-width: 100%;
+            margin: 0 auto;
+            padding-bottom: 40px;
+        }
 
         /* ── PÚBLICO (modo sin sesión) ── */
         body.public-mode {
@@ -145,20 +151,22 @@ if ($modo_supervisor) {
         .pub-back:hover { color:#fff; }
 
         /* ── FORM COMÚN ── */
-        .page-header { margin-bottom:28px; }
+        .page-header { margin-bottom:20px; }
         .page-header h1 { font-size:26px; font-weight:800; color:var(--brand-navy-deep); }
-        .form-card { background:var(--brand-card); border-radius:18px; box-shadow:var(--brand-shadow); padding:36px; max-width:720px; border:1px solid var(--brand-border); }
-        .section-title { font-size:12.5px; font-weight:800; color:var(--brand-navy); text-transform:uppercase; letter-spacing:.4px; margin:26px 0 14px; padding-bottom:8px; border-bottom:2px solid var(--brand-yellow); display:flex; align-items:center; gap:8px; }
+        .form-card { background:var(--brand-card); border-radius:18px; box-shadow:var(--brand-shadow); padding:30px; max-width:100%; border:1px solid var(--brand-border); }
+        .section-title { font-size:12.5px; font-weight:800; color:var(--brand-navy); text-transform:uppercase; letter-spacing:.4px; margin:18px 0 12px; padding-bottom:8px; border-bottom:2px solid var(--brand-yellow); display:flex; align-items:center; gap:8px; }
         .section-title:first-child { margin-top:0; }
         .form-group { margin-bottom:16px; }
         .form-group label { display:block; font-weight:600; margin-bottom:7px; color:#374151; font-size:13px; }
         .form-group input,
-        .form-group select { width:100%; padding:11px 14px; border:1.5px solid #e5e7eb; border-radius:10px; font-family:inherit; font-size:14px; color:#1e293b; background:#fff; transition:border .2s,box-shadow .2s; }
+        .form-group select { width:100%; padding:9.5px 13px; border:1.5px solid #e5e7eb; border-radius:10px; font-family:inherit; font-size:14px; color:#1e293b; background:#fff; transition:border .2s,box-shadow .2s; }
         .form-group input:focus,
         .form-group select:focus { outline:none; border-color:var(--brand-navy); box-shadow:0 0 0 3px rgba(18,58,109,.10); }
         .form-group input::placeholder { color:#b0bac5; }
         .row-cols { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
         .row-cols .form-group { margin-bottom:0; }
+        .form-row-cols-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; }
+        .form-row-cols-3 .form-group { margin-bottom:0; }
         .file-upload { border:2px dashed rgba(18,58,109,.25); border-radius:12px; padding:24px; text-align:center; cursor:pointer; transition:all .25s; background:rgba(18,58,109,.03); }
         .file-upload:hover { border-color:var(--brand-navy); background:rgba(18,58,109,.07); }
         .file-input-label { cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:8px; }
@@ -170,6 +178,8 @@ if ($modo_supervisor) {
         input[type="file"] { display:none; }
         .btn-submit { width:100%; padding:13px; background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); color:#fff; border:none; border-radius:12px; font-weight:700; cursor:pointer; font-size:15px; transition:all .25s; margin-top:20px; display:flex; align-items:center; justify-content:center; gap:10px; }
         .btn-submit:hover { transform:translateY(-2px); box-shadow:0 8px 22px rgba(18,58,109,.30); }
+        .form-actions { display:flex; justify-content:flex-end; margin-top:20px; }
+        .form-actions .btn-submit { width:auto; min-width:240px; margin-top:0; }
         .alert { padding:13px 17px; border-radius:10px; margin-bottom:18px; font-size:14px; display:flex; align-items:flex-start; gap:10px; }
         .alert-success { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
         .alert-danger  { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
@@ -179,7 +189,12 @@ if ($modo_supervisor) {
         select option { background:#fff; color:#1e293b; }
         ::-webkit-scrollbar { width:6px; }
         ::-webkit-scrollbar-thumb { background:#d1d5db; border-radius:3px; }
-        @media(max-width:640px) { .row-cols { grid-template-columns:1fr; } .form-card,.public-card { padding:20px; } }
+        @media(max-width:768px) {
+            .row-cols, .form-row-cols-3 { grid-template-columns:1fr; gap:16px; }
+            .row-cols .form-group, .form-row-cols-3 .form-group { margin-bottom:0; }
+            .form-card, .public-card { padding:20px; }
+            .form-actions .btn-submit { width:100%; }
+        }
     </style>
 </head>
 <body class="<?= $modo_supervisor ? 'panel-mode' : 'public-mode' ?>">
@@ -190,6 +205,7 @@ if ($modo_supervisor) {
 $alertas_pendientes = 0;
 $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php';
 ?>
+    <div class="form-container-centered">
         <div class="page-header">
             <a href="mis_asesores.php" class="btn-back"><i class="fas fa-arrow-left"></i> Volver a Mis Asesores</a>
             <h1><i class="fas fa-user-tie me-2"></i>Registrar Nuevo Asesor</h1>
@@ -267,11 +283,11 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 
             <!-- Cuenta de acceso -->
             <div class="section-title"><i class="fas fa-lock" style="color:var(--brand-yellow-deep);"></i> Cuenta de Acceso</div>
-            <div class="form-group">
-                <label><i class="fas fa-user-circle me-1"></i> Usuario</label>
-                <input type="text" name="usuario" placeholder="Ej: jgarcia" minlength="4" required>
-            </div>
-            <div class="row-cols">
+            <div class="form-row-cols-3">
+                <div class="form-group">
+                    <label><i class="fas fa-user-circle me-1"></i> Usuario</label>
+                    <input type="text" name="usuario" placeholder="Ej: jgarcia" minlength="4" required>
+                </div>
                 <div class="form-group">
                     <label><i class="fas fa-key me-1"></i> Contraseña</label>
                     <div style="position:relative;">
@@ -304,14 +320,17 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
                 </div>
             </div>
 
-            <button type="submit" class="btn-submit">
-                <i class="fas fa-paper-plane"></i> Enviar Solicitud
-            </button>
+            <div class="form-actions">
+                <button type="submit" class="btn-submit">
+                    <i class="fas fa-paper-plane"></i> <?= $modo_supervisor ? 'Registrar Asesor' : 'Enviar Solicitud' ?>
+                </button>
+            </div>
 
         </form>
 
 <?php if ($modo_supervisor): ?>
         </div><!-- /.form-card -->
+    </div><!-- /.form-container-centered -->
     </div><!-- /.content-area -->
 </div><!-- /.main-content -->
 <?php else: ?>

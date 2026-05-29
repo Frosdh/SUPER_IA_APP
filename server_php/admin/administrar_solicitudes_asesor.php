@@ -285,24 +285,187 @@ $currentPage = 'solicitudes_asesor';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        .page-header { margin-bottom: 30px; }
-        .page-header h1 { margin: 0; font-size: 28px; font-weight: 800; color: var(--brand-navy-deep); }
+        /* ── PAGE HEADER ─────────────────────────── */
+        .ma-page-header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 28px;
+            padding-bottom: 18px;
+            border-bottom: 2px solid #e8eef6;
+        }
+        .ma-page-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #0a2748, #1e4d8c);
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 14px rgba(10,39,72,.22);
+            flex-shrink: 0;
+        }
+        .ma-page-icon i { color: #ffdd00; font-size: 22px; }
+        .ma-page-title { font-size: 22px; font-weight: 900; color: #0a2748; margin: 0; }
+        .ma-page-sub { font-size: 13px; color: #94a3b8; margin: 2px 0 0; font-weight: 500; }
+
+        /* Botón regresar */
+        .btn-outline-navy {
+            background: transparent;
+            color: #0a2748;
+            border: 2px solid #0a2748;
+            border-radius: 10px;
+            padding: 8px 16px;
+            font-size: 13.5px;
+            font-weight: 700;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-outline-navy:hover {
+            background: rgba(10,39,72,.05);
+            color: #0a2748;
+            transform: translateY(-1px);
+        }
+
+        /* ── SOLICITUDES GRID ─────────────────────── */
+        .solicitudes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        /* Tarjeta Solicitud */
+        .sc {
+            background: #fff;
+            border-radius: 18px;
+            border: 2px solid #e2eaf4;
+            box-shadow: 0 3px 12px rgba(10,39,72,.07);
+            transition: all .2s;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .sc:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 28px rgba(10,39,72,.15);
+            border-color: #93c5fd;
+        }
+        
+        .sc-stripe {
+            height: 5px;
+            background: #fbbf24; /* Yellow by default for pending */
+        }
+        .sc-stripe.aprobada { background: #10b981; }
+        .sc-stripe.rechazada { background: #ef4444; }
+
+        .sc-body {
+            padding: 20px;
+            flex-grow: 1;
+        }
+        .sc-top {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .sc-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #0a2748, #1e4d8c);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 18px; font-weight: 800; color: #ffdd00;
+            box-shadow: 0 3px 8px rgba(10,39,72,.15);
+        }
+        .sc-avatar.aprobada { background: linear-gradient(135deg, #065f46, #10b981); color: #fff; }
+        .sc-avatar.rechazada { background: linear-gradient(135deg, #991b1b, #ef4444); color: #fff; }
+
+        .sc-name {
+            font-size: 15px;
+            font-weight: 800;
+            color: #0a2748;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .sc-username {
+            font-size: 11.5px;
+            color: #94a3b8;
+            font-weight: 600;
+            margin-top: 2px;
+        }
+
+        .sc-info {
+            font-size: 12px;
+            color: #4b5563;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+        }
+        .sc-info span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .sc-info i {
+            color: #64748b;
+            width: 14px;
+            text-align: center;
+        }
+
+        .sc-bank {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 10px 12px;
+            border: 1px solid #edf2f7;
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 10px;
+        }
+        .sc-bank-title {
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 9.5px;
+        }
+
+        .sc-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: #f8fafc;
+            border-top: 1px solid #edf2f9;
+            gap: 8px;
+        }
+
+        .badge-solicitud {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .badge-solicitud.pendiente { background: #fef3c7; color: #d97706; }
+        .badge-solicitud.aprobada { background: #d1fae5; color: #059669; }
+        .badge-solicitud.rechazada { background: #fee2e2; color: #dc2626; }
+
+        /* Fallbacks */
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .stat-card { background: var(--brand-card); padding: 20px; border-radius: 16px; box-shadow: var(--brand-shadow); text-align: center; border: 1px solid var(--brand-border); }
-        .stat-card .number { font-size: 32px; font-weight: 800; color: var(--brand-navy-deep); }
-        .stat-card .label { color: var(--brand-gray); font-size: 13px; margin-top: 5px; }
+        .stat-card { background: #fff; padding: 20px; border-radius: 16px; box-shadow: 0 4px 14px rgba(10,39,72,.06); text-align: center; border: 1px solid #e2eaf4; }
+        .stat-card .number { font-size: 32px; font-weight: 800; color: #0a2748; }
+        .stat-card .label { color: #64748b; font-size: 13px; margin-top: 5px; }
         .alert-success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
         .alert-danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
-        .table-card { background: var(--brand-card); border-radius: 18px; box-shadow: var(--brand-shadow); overflow: hidden; border: 1px solid var(--brand-border); }
-        .table-card .card-header-custom { padding: 20px; border-bottom: 1px solid rgba(215,224,234,0.7); }
-        .table-card h6 { font-weight: 800; margin: 0; font-size: 16px; color: var(--brand-navy-deep); }
-        .table { margin-bottom: 0; }
-        .table thead th { background: #f8fafc; font-size: 11px; text-transform: uppercase; color: var(--brand-gray); border: none; padding: 14px; }
-        .table tbody td { padding: 14px; vertical-align: middle; border-color: rgba(215,224,234,0.55); }
-        .table tbody tr:hover { background: #fafbff; }
-        .badge-pendiente { background: #fef08a; color: #713f12; padding: 5px 10px; border-radius: 6px; font-weight: 600; display:inline-block; }
-        .badge-aprobada { background: #dcfce7; color: #166534; padding: 5px 10px; border-radius: 6px; font-weight: 600; display:inline-block; }
-        .badge-rechazada { background: #fee2e2; color: #991b1b; padding: 5px 10px; border-radius: 6px; font-weight: 600; display:inline-block; }
+
+        /* Modals y Botones */
         .btn-aprobar { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
         .btn-aprobar:hover { background: #059669; }
         .btn-rechazar { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
@@ -316,13 +479,49 @@ $currentPage = 'solicitudes_asesor';
         .modal-body textarea { width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: 'Inter', sans-serif; resize: vertical; }
         .modal-footer { display: flex; gap: 10px; justify-content: flex-end; }
         .modal-footer button { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
-        .btn-primary-modal { background: var(--brand-navy); color: white; }
-        .btn-primary-modal:hover { background: var(--brand-navy-deep); }
+        .btn-primary-modal { background: #0a2748; color: white; }
+        .btn-primary-modal:hover { background: #1e4d8c; }
         .btn-secondary-modal { background: #e5e7eb; color: #1f2937; }
         .btn-secondary-modal:hover { background: #d1d5db; }
-        .info-group { margin-bottom: 15px; padding: 12px; background: #f9fafb; border-left: 3px solid var(--brand-yellow-deep); border-radius: 4px; }
-        .info-label { font-size: 12px; color: #6c757d; font-weight: 600; text-transform: uppercase; }
-        .info-value { font-weight: 600; color: #1f2937; margin-top: 4px; }
+
+        /* Botones de filtro de estado */
+        .btn-filter {
+            background: #f8fafc;
+            color: #64748b;
+            border: 1.5px solid #e2eaf4;
+            border-radius: 9px;
+            padding: 8px 14px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-filter:hover {
+            background: #f1f5f9;
+            color: #0a2748;
+            border-color: #cbd5e1;
+        }
+        .btn-filter.active {
+            background: #0a2748;
+            color: #fff;
+            border-color: #0a2748;
+            box-shadow: 0 4px 10px rgba(10,39,72,.15);
+        }
+        .btn-filter.active span {
+            background: #fff !important;
+        }
+        .btn-filter span {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot-pendiente { background: #fbbf24; }
+        .dot-aprobada { background: #10b981; }
+        .dot-rechazada { background: #ef4444; }
     </style>
 </head>
 <body>
@@ -334,134 +533,178 @@ $navSubtitle = '';
 require_once '_sidebar_supervisor.php';
 ?>
 
-        <div class="page-header">
-            <h1><i class="fas fa-users me-2"></i>Solicitudes de Asesores</h1>
+    <!-- HEADER -->
+    <div class="ma-page-header">
+        <div class="ma-page-icon"><i class="fas fa-file-circle-check"></i></div>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3" style="flex: 1;">
+            <div>
+                <h1 class="ma-page-title">Solicitudes de Asesores</h1>
+                <p class="ma-page-sub">Aprueba o rechaza los registros de nuevos asesores</p>
+            </div>
+            <a href="mis_asesores.php" class="btn-outline-navy text-decoration-none">
+                <i class="fas fa-arrow-left"></i> Regresar a Mi Equipo
+            </a>
         </div>
+    </div>
 
-        <?php if ($mensaje_exito): ?>
-        <div class="alert-success">
-            <i class="fas fa-check-circle me-2"></i><?php echo $mensaje_exito; ?>
+    <?php if ($mensaje_exito): ?>
+    <div class="alert-success">
+        <i class="fas fa-check-circle me-2"></i><?php echo $mensaje_exito; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php if ($mensaje_error): ?>
+    <div class="alert-danger">
+        <i class="fas fa-exclamation-circle me-2"></i><?php echo $mensaje_error; ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- ESTADÍSTICAS -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="number" style="color: #fbbf24;">
+                <?php echo count(array_filter($solicitudes, fn($s) => $s['estado'] === 'pendiente')); ?>
+            </div>
+            <div class="label">Pendientes</div>
         </div>
-        <?php endif; ?>
-
-        <?php if ($mensaje_error): ?>
-        <div class="alert-danger">
-            <i class="fas fa-exclamation-circle me-2"></i><?php echo $mensaje_error; ?>
+        <div class="stat-card">
+            <div class="number" style="color: #10b981;">
+                <?php echo count(array_filter($solicitudes, fn($s) => $s['estado'] === 'aprobada')); ?>
+            </div>
+            <div class="label">Aprobadas</div>
         </div>
-        <?php endif; ?>
+        <div class="stat-card">
+            <div class="number" style="color: #ef4444;">
+                <?php echo count(array_filter($solicitudes, fn($s) => $s['estado'] === 'rechazada')); ?>
+            </div>
+            <div class="label">Rechazadas</div>
+        </div>
+    </div>
 
-        <!-- ESTADÍSTICAS -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="number" style="color: #fbbf24;">
-                    <?php echo count(array_filter($solicitudes, fn($s) => $s['estado'] === 'pendiente')); ?>
+    <!-- FILTROS DE BÚSQUEDA -->
+    <div class="filter-bar" style="background: #fff; border: 1px solid #e2eaf4; border-radius: 14px; padding: 14px 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 24px; box-shadow: 0 4px 14px rgba(10,39,72,.05);">
+        <div class="d-flex align-items-center gap-2" style="flex: 1; min-width: 280px;">
+            <i class="fas fa-search" style="color:#64748b;"></i>
+            <input type="text" id="busquedaSolicitud" placeholder="Buscar por nombre o usuario..." style="width:100%; padding:9px 14px; border:1.5px solid #d7e0ea; border-radius:9px; font-size:14px; outline:none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#0a2748'" onblur="this.style.borderColor='#d7e0ea'">
+        </div>
+        
+        <div class="d-flex align-items-center gap-2 flex-wrap" id="statusFilters">
+            <button class="btn-filter active" data-status="todos">Todos</button>
+            <button class="btn-filter" data-status="pendiente" style="border-color: #fbbf2433;"><span class="dot-pendiente"></span>Pendientes</button>
+            <button class="btn-filter" data-status="aprobada" style="border-color: #10b98133;"><span class="dot-aprobada"></span>Aprobadas</button>
+            <button class="btn-filter" data-status="rechazada" style="border-color: #ef444433;"><span class="dot-rechazada"></span>Rechazadas</button>
+        </div>
+        
+        <span id="cntResultados" style="font-size:13px; color:#64748b; margin-left:auto; font-weight: 600;"><?php echo count($solicitudes); ?> resultados</span>
+    </div>
+
+    <!-- GRID DE SOLICITUDES EN TARJETAS -->
+    <div class="solicitudes-grid">
+        <?php if (empty($solicitudes)): ?>
+            <div class="col-12" style="grid-column: 1 / -1;">
+                <div style="text-align: center; padding: 60px 20px; color: #94a3b8; background: #fff; border-radius: 18px; border: 1.5px dashed #d7e0ea;">
+                    <i class="fas fa-inbox" style="font-size: 48px; display: block; margin-bottom: 14px; opacity: 0.3;"></i>
+                    <p style="font-size: 15px; font-weight: 600; margin: 0;">No hay solicitudes pendientes o procesadas</p>
                 </div>
-                <div class="label">Pendientes</div>
             </div>
-            <div class="stat-card">
-                <div class="number" style="color: #10b981;">
-                    <?php echo count(array_filter($solicitudes, fn($s) => $s['estado'] === 'aprobada')); ?>
-                </div>
-                <div class="label">Aprobadas</div>
-            </div>
-            <div class="stat-card">
-                <div class="number" style="color: #ef4444;">
-                    <?php echo count(array_filter($solicitudes, fn($s) => $s['estado'] === 'rechazada')); ?>
-                </div>
-                <div class="label">Rechazadas</div>
-            </div>
-        </div>
-
-        <!-- FILTROS DE BÚSQUEDA -->
-        <div class="filter-bar" style="background: #fff; border: 1px solid var(--brand-border); border-radius: 14px; padding: 14px 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; box-shadow: var(--brand-shadow);">
-            <i class="fas fa-search" style="color:var(--brand-gray);"></i>
-            <input type="text" id="busquedaSolicitud" placeholder="Buscar por nombre o cédula del cliente..." style="min-width:260px; flex:1; padding:9px 14px; border:1.5px solid var(--brand-border); border-radius:9px; font-size:14px; outline:none; transition: border-color 0.2s;" onfocus="this.style.borderColor='var(--brand-navy)'" onblur="this.style.borderColor='var(--brand-border)'">
-            <span id="cntResultados" style="font-size:13px; color:var(--brand-gray); margin-left:auto;"><?php echo count($solicitudes); ?> resultados</span>
-        </div>
-
-        <!-- TABLA DE SOLICITUDES -->
-        <div class="table-card section-card">
-            <div class="card-header-custom section-header" style="display: flex; justify-content: space-between; align-items: center;">
-                <h6 style="margin: 0; font-size: 15px; font-weight: 800; color: var(--brand-navy-deep);"><i class="fas fa-list me-2" style="color: #dc2626;"></i>Listado de Solicitudes</h6>
-                <span class="sec-badge" id="badgeResultados" style="font-size: 11px; background: var(--brand-navy); color: #fff; padding: 3px 9px; border-radius: 10px; font-weight: 700;"><?php echo count($solicitudes); ?> solicitudes</span>
-            </div>
-            <div style="overflow-x: auto;">
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th>Usuario</th>
-                            <th>Nombre</th>
-                            <th>Email</th>
-                            <th>Banco</th>
-                            <th>Credencial</th>
-                            <th>Estado</th>
-                            <th>Fecha Solicitud</th>
-                            <th>Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($solicitudes)): ?>
-                        <tr>
-                            <td colspan="8" style="text-align: center; color: #9ca3af; padding: 30px;">
-                                <i class="fas fa-inbox me-2"></i>No hay solicitudes
-                            </td>
-                        </tr>
-                        <?php else: ?>
-                            <?php foreach ($solicitudes as $solicitud): ?>
-                            <tr>
-                                <td><strong><?php echo htmlspecialchars($solicitud['usuario']); ?></strong></td>
-                                <td><?php echo htmlspecialchars($solicitud['nombres'] . ' ' . $solicitud['apellidos']); ?></td>
-                                <td><?php echo htmlspecialchars($solicitud['email']); ?></td>
-                                <td><small><?php echo htmlspecialchars($solicitud['banco']); ?></small></td>
-                                <td>
-                                    <?php if (!empty($solicitud['credencial_archivo'])):
-                                        $cred = $solicitud['credencial_archivo'];
-                                        if (str_contains($cred, 'documentos_asesor') || str_contains($cred, 'uploads/')) {
-                                            $credPath = '../../' . ltrim($cred, '/');
-                                        } else {
-                                            $credPath = '../../uploads/asesor_credentials/' . $cred;
-                                        }
-                                        $ext = strtolower(pathinfo($cred, PATHINFO_EXTENSION));
-                                        $icon = $ext === 'pdf' ? 'fa-file-pdf' : 'fa-file-image';
-                                        $color = $ext === 'pdf' ? '#ef4444' : '#3182fe';
-                                    ?>
-                                    <a href="<?php echo htmlspecialchars($credPath); ?>"
-                                       target="_blank"
-                                       title="Ver documento (<?php echo strtoupper($ext); ?>)"
-                                       style="color:<?php echo $color; ?>; text-decoration:none; font-weight:600; display:inline-flex; align-items:center; gap:5px; padding:4px 8px; border:1px solid <?php echo $color; ?>33; border-radius:6px; font-size:12px;">
-                                        <i class="fas <?php echo $icon; ?>"></i> Ver
-                                    </a>
-                                    <?php else: ?>
-                                    <span style="color:#9ca3af;font-size:11px;display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border:1px solid #e5e7eb;border-radius:5px;">
-                                        <i class="fas fa-minus"></i> Sin doc
-                                    </span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <span class="badge-<?php echo $solicitud['estado']; ?>">
-                                        <?php echo ucfirst($solicitud['estado']); ?>
-                                    </span>
-                                </td>
-                                <td><?php echo date('d/m/Y H:i', strtotime($solicitud['fecha_solicitud'])); ?></td>
-                                <td>
-                                    <?php if ($solicitud['estado'] === 'pendiente'): ?>
-                                    <button class="btn-aprobar" onclick="mostrarModal('aprobar', '<?php echo htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])); ?>', '<?php echo htmlspecialchars(addslashes($solicitud['nombres'])); ?>', '<?php echo htmlspecialchars(addslashes($solicitud['credencial_archivo'])); ?>')">
-                                        <i class="fas fa-check me-1"></i>Aprobar
-                                    </button>
-                                    <button class="btn-rechazar" onclick="mostrarModal('rechazar', '<?php echo htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])); ?>', '<?php echo htmlspecialchars(addslashes($solicitud['nombres'])); ?>', '<?php echo htmlspecialchars(addslashes($solicitud['credencial_archivo'])); ?>')" style="margin-left: 5px;">
-                                        <i class="fas fa-times me-1"></i>Rechazar
-                                    </button>
-                                    <?php else: ?>
-                                    <span style="color: #9ca3af; font-size: 12px;">Procesada</span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                            <?php endforeach; ?>
+        <?php else: ?>
+            <?php foreach ($solicitudes as $solicitud):
+                $idSol = htmlspecialchars($solicitud['id_solicitud']);
+                $nom = htmlspecialchars($solicitud['nombres'] . ' ' . $solicitud['apellidos']);
+                $inicial = strtoupper(mb_substr(trim($solicitud['nombres']), 0, 1));
+                $usr = htmlspecialchars($solicitud['usuario']);
+                $em = htmlspecialchars($solicitud['email']);
+                $tel = htmlspecialchars($solicitud['telefono']);
+                $bco = htmlspecialchars($solicitud['banco']);
+                $cta = htmlspecialchars($solicitud['numero_cuenta']);
+                $t_cta = htmlspecialchars($solicitud['tipo_cuenta']);
+                $est = $solicitud['estado']; // pendiente, aprobada, rechazada
+                
+                // Credencial
+                $cred = $solicitud['credencial_archivo'];
+                $credPath = '';
+                $ext = '';
+                if (!empty($cred)) {
+                    if (str_contains($cred, 'documentos_asesor') || str_contains($cred, 'uploads/')) {
+                        $credPath = '../../' . ltrim($cred, '/');
+                    } else {
+                        $credPath = '../../uploads/asesor_credentials/' . $cred;
+                    }
+                    $ext = strtolower(pathinfo($cred, PATHINFO_EXTENSION));
+                }
+            ?>
+            <div class="sc" data-search-user="<?= strtolower($usr) ?>" data-search-name="<?= strtolower($nom) ?>" data-search-status="<?= $est ?>">
+                <div class="sc-stripe <?= $est ?>"></div>
+                <div class="sc-body">
+                    <div class="sc-top">
+                        <div class="sc-avatar <?= $est ?>"><?= $inicial ?></div>
+                        <div style="min-width: 0; flex: 1;">
+                            <h3 class="sc-name text-truncate" title="<?= $nom ?>"><?= $nom ?></h3>
+                            <p class="sc-username"><i class="fas fa-at text-muted me-1"></i><?= $usr ?></p>
+                        </div>
+                    </div>
+                    <div class="sc-info">
+                        <span><i class="fas fa-envelope"></i> <?= $em ?></span>
+                        <?php if ($tel): ?>
+                        <span><i class="fas fa-phone"></i> <?= $tel ?></span>
                         <?php endif; ?>
-                    </tbody>
-                </table>
+                        <span><i class="fas fa-calendar-alt"></i> <?= date('d/m/Y H:i', strtotime($solicitud['fecha_solicitud'])) ?></span>
+                    </div>
+
+                    <?php if ($bco || $cta): ?>
+                    <div class="sc-bank">
+                        <div class="sc-bank-title"><i class="fas fa-university me-1"></i>Datos de Cuenta</div>
+                        <div><strong>Banco:</strong> <?= $bco ?: 'No especificado' ?></div>
+                        <div><strong>Cuenta:</strong> <?= $cta ?: 'No especificada' ?> (<?= $t_cta ?: 'Ahorros' ?>)</div>
+                    </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($solicitud['observaciones'])): ?>
+                    <div style="margin-top: 10px; font-size: 11px; color: #ef4444; background: #fee2e2; padding: 8px 10px; border-radius: 8px; border: 1px solid #fca5a5;">
+                        <strong>Observaciones:</strong> <?= htmlspecialchars($solicitud['observaciones']) ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                
+                <div class="sc-footer">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span class="badge-solicitud <?= $est ?>">
+                            <?php if ($est === 'pendiente'): ?><i class="fas fa-clock"></i>
+                            <?php elseif ($est === 'aprobada'): ?><i class="fas fa-check-circle"></i>
+                            <?php else: ?><i class="fas fa-times-circle"></i><?php endif; ?>
+                            <?= ucfirst($est) ?>
+                        </span>
+                        
+                        <?php if (!empty($cred)):
+                            $icon = $ext === 'pdf' ? 'fa-file-pdf' : 'fa-file-image';
+                            $color = $ext === 'pdf' ? '#ef4444' : '#3182fe';
+                        ?>
+                        <a href="<?= htmlspecialchars($credPath) ?>"
+                           target="_blank"
+                           title="Ver credencial (<?= strtoupper($ext) ?>)"
+                           style="color:<?= $color ?>; text-decoration:none; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border:1px solid <?= $color ?>33; border-radius:8px; font-size:11.5px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                            <i class="fas <?= $icon ?>"></i> Credencial
+                        </a>
+                        <?php endif; ?>
+                    </div>
+
+                    <div style="display: flex; gap: 5px;">
+                        <?php if ($est === 'pendiente'): ?>
+                        <button class="btn-aprobar btn-sm" style="padding: 6px 10px; border-radius: 8px;" onclick="mostrarModal('aprobar', '<?= htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['nombres'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['credencial_archivo'])) ?>')">
+                            <i class="fas fa-check"></i>
+                        </button>
+                        <button class="btn-rechazar btn-sm" style="padding: 6px 10px; border-radius: 8px;" onclick="mostrarModal('rechazar', '<?= htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['nombres'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['credencial_archivo'])) ?>')">
+                            <i class="fas fa-times"></i>
+                        </button>
+                        <?php else: ?>
+                        <span style="color: #94a3b8; font-size: 11.5px; font-weight: 600;"><i class="fas fa-check-double me-1"></i>Procesada</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
-        </div>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </div>
 
     </div>
 </div>
@@ -601,52 +844,71 @@ function cerrarModal() {
     modal.classList.remove('show');
 }
 
-// Lógica de búsqueda en la tabla
+// Lógica de búsqueda y filtrado de solicitudes en tarjetas
 document.addEventListener('DOMContentLoaded', function() {
     const inputBusqueda = document.getElementById('busquedaSolicitud');
     const cntResultados = document.getElementById('cntResultados');
-    const badgeResultados = document.getElementById('badgeResultados');
+    const filterButtons = document.querySelectorAll('.btn-filter');
+    let currentStatus = 'todos';
 
-    if (inputBusqueda) {
-        inputBusqueda.addEventListener('input', function() {
-            const term = this.value.toLowerCase();
-            const filas = document.querySelectorAll('.table tbody tr:not(#emptyFiltered)');
-            let visibles = 0;
+    function aplicarFiltros() {
+        const term = inputBusqueda ? inputBusqueda.value.toLowerCase().trim() : '';
+        const cards = document.querySelectorAll('.solicitudes-grid .sc');
+        let visibles = 0;
+
+        cards.forEach(card => {
+            const usuario = card.getAttribute('data-search-user') || '';
+            const nombre = card.getAttribute('data-search-name') || '';
+            const status = card.getAttribute('data-search-status') || '';
+
+            // Comprobar coincidencia de texto
+            const matchesSearch = usuario.includes(term) || nombre.includes(term);
             
-            filas.forEach(fila => {
-                // Si la fila es la de "No hay solicitudes", la ignoramos
-                if (fila.querySelector('td[colspan]')) return;
-                
-                const usuario = fila.querySelector('td:nth-child(1)').textContent.toLowerCase();
-                const nombre = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
-                
-                if (usuario.includes(term) || nombre.includes(term)) {
-                    fila.style.display = '';
-                    visibles++;
-                } else {
-                    fila.style.display = 'none';
-                }
-            });
+            // Comprobar coincidencia de estado
+            const matchesStatus = (currentStatus === 'todos' || status === currentStatus);
 
-            if (cntResultados) cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
-            if (badgeResultados) badgeResultados.textContent = visibles + (visibles === 1 ? ' solicitud' : ' solicitudes');
-
-            let emptyRow = document.getElementById('emptyFiltered');
-            if (visibles === 0 && filas.length > 0) {
-                if (!emptyRow) {
-                    const tbody = document.querySelector('.table tbody');
-                    const tr = document.createElement('tr');
-                    tr.id = 'emptyFiltered';
-                    tr.innerHTML = '<td colspan="8" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</td>';
-                    tbody.appendChild(tr);
-                } else {
-                    emptyRow.style.display = '';
-                }
-            } else if (emptyRow) {
-                emptyRow.style.display = 'none';
+            if (matchesSearch && matchesStatus) {
+                card.style.display = '';
+                visibles++;
+            } else {
+                card.style.display = 'none';
             }
         });
+
+        if (cntResultados) {
+            cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
+        }
+
+        let emptyPlaceholder = document.getElementById('emptyFiltered');
+        if (visibles === 0 && cards.length > 0) {
+            if (!emptyPlaceholder) {
+                const grid = document.querySelector('.solicitudes-grid');
+                const div = document.createElement('div');
+                div.id = 'emptyFiltered';
+                div.className = 'col-12';
+                div.style.gridColumn = '1 / -1';
+                div.innerHTML = '<div style="text-align:center;padding:48px 20px;color:#94a3b8;background:#fff;border-radius:18px;border:1.5px dashed #d7e0ea;"><i class="fas fa-search" style="font-size:32px;display:block;margin-bottom:12px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</div>';
+                grid.appendChild(div);
+            } else {
+                emptyPlaceholder.style.display = '';
+            }
+        } else if (emptyPlaceholder) {
+            emptyPlaceholder.style.display = 'none';
+        }
     }
+
+    if (inputBusqueda) {
+        inputBusqueda.addEventListener('input', aplicarFiltros);
+    }
+
+    filterButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            filterButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentStatus = this.getAttribute('data-status');
+            aplicarFiltros();
+        });
+    });
 });
 </script>
 

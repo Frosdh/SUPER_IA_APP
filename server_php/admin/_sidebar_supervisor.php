@@ -112,14 +112,6 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
            class="sidebar-link <?= ($currentPage === 'asesores') ? 'active' : '' ?>">
             <i class="fas fa-users"></i> <span>Mis Asesores</span>
         </a>
-        <a href="registro_asesor.php"
-           class="sidebar-link <?= ($currentPage === 'agregar') ? 'active' : '' ?>">
-            <i class="fas fa-user-plus"></i> <span>Crear Asesor</span>
-        </a>
-        <a href="administrar_solicitudes_asesor.php"
-           class="sidebar-link <?= ($currentPage === 'solicitudes') ? 'active' : '' ?>">
-            <i class="fas fa-file-circle-check"></i> <span>Solicitudes de Asesor</span>
-        </a>
     </div>
 
 </div>
