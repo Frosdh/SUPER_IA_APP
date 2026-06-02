@@ -228,6 +228,11 @@ try {
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label><i class="fas fa-id-card me-2"></i>Cédula de Identidad</label>
+                    <input type="text" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required>
+                </div>
+
                 <div class="row-cols">
                     <div class="form-group">
                         <label><i class="fas fa-envelope me-2"></i>Email</label>

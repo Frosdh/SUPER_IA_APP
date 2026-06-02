@@ -22,6 +22,7 @@ $email = trim($_POST['email'] ?? '');
 $telefono = trim($_POST['telefono'] ?? '');
 $password = $_POST['password'] ?? '';
 $unidad_bancaria_id = $_POST['unidad_bancaria_id'] ?? '';
+$cedula = trim($_POST['cedula'] ?? '');
 
 $errores = [];
 $archivo_guardado = null;
@@ -30,6 +31,7 @@ $archivo_guardado = null;
 if (empty($unidad_bancaria_id)) $errores[] = 'La cooperativa/banco es requerida';
 if (empty($id_supervisor)) $errores[] = 'El supervisor es requerido';
 if (empty($nombre) || strlen(trim($nombre)) < 3) $errores[] = 'El nombre completo es requerido';
+if (empty($cedula)) $errores[] = 'La cédula es requerida';
 if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
 if (empty($telefono)) $errores[] = 'El teléfono es requerido';
 if (empty($password) || strlen($password) < 6) $errores[] = 'Contraseña debe tener al menos 6 caracteres';
@@ -84,15 +86,22 @@ try {
     // Hashear contraseña con password_hash
     $password_hash = password_hash($password, PASSWORD_DEFAULT);
 
+    // Asegurar que la columna cedula exista en la tabla usuario
+    $chk = $pdo->query("SHOW COLUMNS FROM usuario LIKE 'cedula'");
+    if (!$chk->fetch()) {
+        $pdo->exec("ALTER TABLE usuario ADD COLUMN cedula VARCHAR(13) NULL AFTER nombre");
+    }
+
     // Insertar nuevo usuario en la tabla usuario (SUPER_IA LOGAN)
     $stmt = $pdo->prepare("
-        INSERT INTO usuario 
-        (nombre, email, password_hash, rol, agencia_id, estado_aprobacion, activo, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        INSERT INTO usuario
+        (nombre, cedula, email, password_hash, rol, agencia_id, estado_aprobacion, activo, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
     ");
 
     $stmt->execute([
         $nombre,                    // nombre
+        $cedula,                    // cedula
         $email,                     // email
         $password_hash,            // password_hash
         'asesor',                  // rol = 'asesor'

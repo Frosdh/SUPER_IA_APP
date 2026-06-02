@@ -33,6 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // ── Recoger campos comunes ─────────────────────────────────
 $nombres          = trim($_POST['nombres']           ?? '');
 $apellidos        = trim($_POST['apellidos']         ?? '');
+$cedula           = trim($_POST['cedula']            ?? '');
 $email            = trim($_POST['email']             ?? '');
 $telefono         = trim($_POST['telefono']          ?? '');
 $usuario          = trim($_POST['usuario']           ?? '');
@@ -62,6 +63,7 @@ $archivo_guardado = null;
 // ── Validaciones comunes ───────────────────────────────────
 if (empty($nombres))                                           $errores[] = 'Los nombres son requeridos';
 if (empty($apellidos))                                         $errores[] = 'Los apellidos son requeridos';
+if (empty($cedula))                                            $errores[] = 'La cédula es requerida';
 if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
 if (empty($telefono))                                          $errores[] = 'El teléfono es requerido';
 if (empty($usuario) || strlen($usuario) < 4)                  $errores[] = 'Usuario debe tener al menos 4 caracteres';
@@ -167,6 +169,7 @@ try {
     // Columnas que pueden faltar en tablas ya existentes
     $columnas_extra = [
         'id_cooperativa'     => "ALTER TABLE solicitudes_asesor ADD COLUMN id_cooperativa INT NULL AFTER id_solicitud",
+        'cedula'             => "ALTER TABLE solicitudes_asesor ADD COLUMN cedula VARCHAR(13) NULL AFTER apellidos",
         'credencial_archivo' => "ALTER TABLE solicitudes_asesor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER tipo_cuenta",
     ];
     foreach ($columnas_extra as $col => $sql) {
@@ -181,9 +184,9 @@ try {
 
     $stmt = $pdo->prepare("
         INSERT INTO solicitudes_asesor
-            (id_cooperativa, id_supervisor, usuario, nombres, apellidos,
+            (id_cooperativa, id_supervisor, usuario, nombres, apellidos, cedula,
              email, password_hash, telefono, banco, numero_cuenta, tipo_cuenta, credencial_archivo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     $stmt->execute([
@@ -192,6 +195,7 @@ try {
         $usuario,
         $nombres,
         $apellidos,
+        $cedula,
         $email,
         $password_hash,
         $telefono,

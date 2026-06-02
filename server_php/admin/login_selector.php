@@ -31,10 +31,11 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
 
         body {
             font-family: 'Inter', sans-serif;
-            background: #0B1929;
+            background: #0b1929ff;
             min-height: 100vh;
-            display: grid !important;
-            place-items: center;
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
             padding: 40px 0;
             color: #F1F5F9;
             overflow-x: hidden;
@@ -66,12 +67,12 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
         }
 
         .page-wrap {
-            position: relative; z-index: 1;
-            width: min(92vw, 1400px) !important;
-            max-width: min(92vw, 1400px) !important;
-            padding: 0 !important;
+            position: relative;
+            z-index: 1;
+            width: min(92vw, 1400px);
+            max-width: 100%;
+            padding: 0;
             box-sizing: border-box;
-            margin: 0 auto;
         }
 
         /* Header */
