@@ -33,7 +33,6 @@ input, button, select, textarea {
 }
 
 /* ── 3. CONTENEDORES FLUIDOS ─────────────────────────────────*/
-.page-wrap,
 .page,
 .login-card,
 .login-wrapper,
@@ -44,6 +43,7 @@ input, button, select, textarea {
     padding-left:  clamp(12px, 4vw, 40px) !important;
     padding-right: clamp(12px, 4vw, 40px) !important;
 }
+/* page-wrap: NO sobreescribir — cada página define su propio ancho */
 
 /* Inner max-width: removed — supervisor panel pages need full width */
 
@@ -69,12 +69,16 @@ input, button, select, textarea {
 }
 
 /* ── 5. GRIDS ADAPTABLES ─────────────────────────────────────*/
-.role-grid,
 .features-grid,
 .feat-cards,
 .acronym-wrap {
     grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)) !important;
     gap: clamp(10px, 2vw, 20px) !important;
+}
+/* role-grid: siempre 4 columnas en desktop */
+.role-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: clamp(12px, 2vw, 24px) !important;
 }
 
 /* ── 6. TIPOGRAFÍA FLUIDA ────────────────────────────────────*/

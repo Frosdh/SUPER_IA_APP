@@ -228,7 +228,7 @@ $totalPendientes    = 0;
         }
         .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
         /* ── Layout ── */
-        .main-content { flex:1; margin-left:0 !important; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+        .main-content { flex:1; margin-left:0 !important; display:flex; flex-direction:column; overflow:hidden; min-width:0; height:100vh; }
         .navbar-custom {
             background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));
             color:#fff; padding:15px 30px;
@@ -243,9 +243,9 @@ $totalPendientes    = 0;
             border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600;
         }
         .btn-logout:hover { background:rgba(255,221,0,.24); color:#fff; }
-        .content-area { flex:1; display:flex; flex-direction:column; padding:20px; overflow:hidden; }
-        .map-row      { flex:1; display:flex; gap:16px; overflow:hidden; min-height:0; }
-        .map-container { flex:1; position:relative; min-width:0; height:100%; }
+        .content-area { flex:1; display:flex; flex-direction:column; padding:20px; overflow:hidden; height:100vh; }
+        .map-row      { flex:1; display:flex; gap:16px; overflow:hidden; min-height:0; height:calc(100vh - 120px); }
+        .map-container { flex:1; position:relative; min-width:0; height:100%; min-height:500px; }
 
         /* ── Mapa ── */
         #map {
