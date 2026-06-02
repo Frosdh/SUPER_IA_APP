@@ -609,67 +609,14 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
     <title>Super_IA - <?= htmlspecialchars($page_title) ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
 <?php if ($user_role === 'supervisor' || $user_role === 'asesor'): ?>
-        :root {
-            --brand-yellow: #ffdd00;
-            --brand-yellow-deep: #f4c400;
-            --brand-navy: #123a6d;
-            --brand-navy-deep: #0a2748;
-            --brand-gray: #6b7280;
-            --brand-border: #d7e0ea;
-            --brand-card: #ffffff;
-            --brand-bg: #f4f6f9;
-            --brand-shadow: 0 16px 34px rgba(18, 58, 109, 0.08);
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: var(--brand-bg); display: flex; height: 100vh; color: var(--brand-navy-deep); }
-        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; z-index: 100; }
-        .sidebar-brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
-        .sidebar-brand i { color:var(--brand-yellow); }
-        .sidebar-section { padding: 0 15px; margin-bottom: 22px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.5); letter-spacing: 0.6px; padding: 0 10px; margin-bottom: 10px; font-weight: 700; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 11px 15px; margin-bottom: 4px; border-radius: 10px; color: rgba(255,255,255,0.82); text-decoration: none; font-size: 14px; border: 1px solid transparent; transition: all .22s; position: relative; }
-        .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
-        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; }
-        .badge-nav { background:#dc2626; color:#fff; font-size:10px; font-weight:800; padding:2px 7px; border-radius:10px; margin-left:auto; }
-
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); position: sticky; top: 0; z-index: 50; }
-        .navbar-custom h2 { margin: 0; font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
-        .navbar-custom h2 i { color: var(--brand-yellow); }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .btn-logout { background: rgba(255,221,0,0.15); color: white; border: 1px solid rgba(255,221,0,0.28); padding: 8px 15px; border-radius: 10px; cursor: pointer; text-decoration: none; font-weight: 600; font-size: 13px; }
-        .btn-logout:hover { background: rgba(255,221,0,0.24); color: white; }
-
-        .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .stat-card { background: var(--brand-card); padding: 20px 14px; border-radius: 16px; box-shadow: var(--brand-shadow); text-align: center; border: 1px solid var(--brand-border); overflow: hidden; }
-        .stat-card .number { font-size: clamp(18px, 3.5vw, 32px); font-weight: 800; color: var(--brand-navy-deep); word-break: break-all; line-height: 1.15; }
-        .stat-card .label { color: var(--brand-gray); font-size: 12px; margin-top: 6px; word-break: break-word; }
-        .table-card { background: var(--brand-card); border-radius: 18px; box-shadow: var(--brand-shadow); overflow: hidden; border: 1px solid var(--brand-border); }
-        .table-card .card-header-custom { padding: 20px; border-bottom: 1px solid rgba(215,224,234,0.7); }
-        .table-card h6 { font-weight: 800; margin: 0; font-size: 16px; color: var(--brand-navy-deep); }
-        .table { margin-bottom: 0; }
-        .table thead th { background: #f8fafc; font-size: 11px; text-transform: uppercase; color: var(--brand-gray); border: none; padding: 14px; }
-        .table tbody td { padding: 14px; vertical-align: middle; border-color: rgba(215,224,234,0.55); }
-        .table tbody tr:hover { background: rgba(255,221,0,0.06); }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    <link rel="stylesheet" href="supervisor_layout.css">
 <?php else: ?>
+    <style>
+        /* Estilos para admin/superadmin (sin sidebar supervisor) */
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; display: flex; height: 100vh; }
-        .sidebar {
-            width: 230px;
-            background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%);
-            color: white;
-            padding: 20px 0;
-            overflow-y: auto;
-            position: fixed;
-            height: 100vh;
-            left: 0;
-            top: 0;
-        }
+        .sidebar { width: 230px; background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
         .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
         .sidebar-brand i { margin-right: 10px; color: #7c3aed; }
         .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
@@ -702,8 +649,8 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
         .badge-prospect { background: #3b82f6; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
-<?php endif; ?>
     </style>
+<?php endif; ?>
 </head>
 <body>
 

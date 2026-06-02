@@ -322,7 +322,6 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 
 <?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
 
-<div style="padding:0 28px 40px;">
 
     <!-- HEADER -->
     <div class="ma-page-header">
@@ -464,8 +463,6 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
         <?php endforeach; ?>
 
     <?php endif; ?>
-
-</div>
 
 <script>
 var asesorActivo = null;
