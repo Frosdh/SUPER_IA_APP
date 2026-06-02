@@ -358,7 +358,7 @@ $currentPage = 'recuperacion';
 
     .main-content {
       flex: 1;
-      margin-left: 230px;
+      margin-left: 0;
       display: flex;
       flex-direction: column;
       min-width: 0;

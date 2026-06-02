@@ -101,7 +101,7 @@ body {
 /* ── LAYOUT WRAPPERS ── */
 .main-content {
     flex:1;
-    margin-left: var(--sidebar-width);
+    margin-left: 0 !important;
     display:flex;
     flex-direction:column;
     overflow:hidden;

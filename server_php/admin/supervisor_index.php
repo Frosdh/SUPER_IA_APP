@@ -338,7 +338,7 @@ $currentPage = 'dashboard';
 body{background:var(--bg);color:var(--tm);height:100vh;display:flex;overflow:hidden;}
 
 /* ── MAIN ─────────────────────────────────────────────────── */
-.main-content{flex:1;margin-left:0;display:flex;flex-direction:column;overflow:hidden;}
+.main-content{flex:1;margin-left:0 !important;display:flex;flex-direction:column;overflow:hidden;}
 .content-area{flex:1;padding:24px 28px 32px;overflow-y:auto;}
 ::-webkit-scrollbar{width:5px;}
 ::-webkit-scrollbar-thumb{background:rgba(18,58,109,.25);border-radius:3px;}

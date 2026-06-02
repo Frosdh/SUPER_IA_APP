@@ -228,7 +228,7 @@ $totalPendientes    = 0;
         }
         .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
         /* ── Layout ── */
-        .main-content { flex:1; margin-left:230px; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+        .main-content { flex:1; margin-left:0; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
         .navbar-custom {
             background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));
             color:#fff; padding:15px 30px;

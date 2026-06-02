@@ -91,7 +91,7 @@ $totalPendientes = 0;
     
     <?php include '_sidebar.php'; ?>
     
-    <div class="col main-content" style="margin-left:230px;overflow-y:auto;">
+    <div class="col main-content" style="margin-left:0;overflow-y:auto;">
         
         <div class="navbar-custom" style="background: linear-gradient(135deg, #FBBF24 0%, #F59E0B 100%);">
             <div>

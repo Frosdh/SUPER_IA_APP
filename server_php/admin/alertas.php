@@ -318,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
         .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; border-color: rgba(255,221,0,0.15); }
         .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; box-shadow: 0 10px 24px rgba(255,221,0,0.18); }
         .badge-nav { background:#ef4444; color:#fff; font-size:10px; padding:2px 7px; border-radius:10px; margin-left:auto; font-weight:700; }
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+        .main-content { flex: 1; margin-left: 0; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 12px 28px rgba(18, 58, 109, 0.18); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }
@@ -352,9 +352,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
         .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
         .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
         .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        @media (max-width: 1200px) { .sidebar { width: 200px; } .main-content { margin-left: 200px; } }
-        @media (max-width: 768px) { .sidebar { width: 180px; } .main-content { margin-left: 180px; } }
+        .main-content { flex: 1; margin-left: 0; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+        @media (max-width: 1200px) { .sidebar { width: 200px; } .main-content { margin-left: 0; } }
+        @media (max-width: 768px) { .sidebar { width: 180px; } .main-content { margin-left: 0; } }
         .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }
