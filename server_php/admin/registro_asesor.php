@@ -342,6 +342,7 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 </div><!-- /.public-wrapper -->
 <?php endif; ?>
 
+<script src="js/validaciones.js"></script>
 <script>
 // ── Mostrar/ocultar contraseña ─────────────────────────────
 function toggleVis(inputId, iconId) {
@@ -352,33 +353,9 @@ function toggleVis(inputId, iconId) {
     icon.classList.toggle('fa-eye-slash');
 }
 
-// ── Validar que coincidan en tiempo real ──────────────────
-const p1   = document.getElementById('pass1');
-const p2   = document.getElementById('pass2');
-const hint = document.getElementById('passHint');
-
-function checkPass() {
-    if (!p2.value) { hint.style.display = 'none'; return; }
-    hint.style.display = 'block';
-    if (p1.value === p2.value) {
-        hint.style.color = '#059669';
-        hint.textContent = '✔ Las contraseñas coinciden';
-    } else {
-        hint.style.color = '#dc2626';
-        hint.textContent = '✖ Las contraseñas no coinciden';
-    }
-}
-p1.addEventListener('input', checkPass);
-p2.addEventListener('input', checkPass);
-
-document.querySelector('form').addEventListener('submit', function(e) {
-    if (p1.value !== p2.value) {
-        e.preventDefault();
-        hint.style.display = 'block';
-        hint.style.color   = '#dc2626';
-        hint.textContent   = '✖ Las contraseñas no coinciden';
-        p2.focus();
-    }
+// ── Activar validaciones del formulario ───────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    bindValidaciones('form');
 });
 
 // ── Carga dinámica de supervisores (modo público) ─────────

@@ -18,6 +18,7 @@
 // en solicitudes_asesor con estado = 'pendiente' para que el supervisor apruebe.
 // ============================================================
 require_once 'db_admin.php';
+require_once __DIR__ . '/funciones_validacion.php';
 
 // ── Detectar modo ──────────────────────────────────────────
 $modo_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
@@ -41,58 +42,68 @@ $password         = $_POST['password']               ?? '';
 $password_confirm = $_POST['password_confirm']       ?? '';
 
 // ── Campos según modo ─────────────────────────────────────
+$banco         = '';
+$numero_cuenta = '';
+$tipo_cuenta   = 'Asesor';
+$id_supervisor_int = null;  // ID entero real para el INSERT
+
 if ($modo_supervisor) {
-    // El id_supervisor viene de la sesión
-    $supervisor_id  = $_SESSION['supervisor_id'] ?? null;
-    $id_cooperativa = null; // se resolverá desde la BD si se necesita
-    $banco          = trim($_POST['banco']         ?? '');
-    $numero_cuenta  = trim($_POST['numero_cuenta'] ?? '');
-    $tipo_cuenta    = trim($_POST['tipo_cuenta']   ?? '');
+    $usuario_id_sesion = $_SESSION['supervisor_id'] ?? null;
+    $id_cooperativa    = null;
 } else {
-    // El asesor selecciona cooperativa y supervisor en el formulario
-    $supervisor_id  = trim($_POST['id_supervisor']  ?? '');
-    $id_cooperativa = (int)($_POST['id_cooperativa'] ?? 0);
-    $banco          = '';
-    $numero_cuenta  = '';
-    $tipo_cuenta    = 'Asesor';
+    $usuario_id_sesion = null;
+    $id_cooperativa    = (int)($_POST['id_cooperativa'] ?? 0);
+    $supervisor_id     = trim($_POST['id_supervisor'] ?? '');
 }
 
 $errores = [];
 $archivo_guardado = null;
 
-// ── Validaciones comunes ───────────────────────────────────
-if (empty($nombres))                                           $errores[] = 'Los nombres son requeridos';
-if (empty($apellidos))                                         $errores[] = 'Los apellidos son requeridos';
-if (empty($cedula))                                            $errores[] = 'La cédula es requerida';
-if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
-if (empty($telefono))                                          $errores[] = 'El teléfono es requerido';
-if (empty($usuario) || strlen($usuario) < 4)                  $errores[] = 'Usuario debe tener al menos 4 caracteres';
-if (empty($password) || strlen($password) < 6)                $errores[] = 'Contraseña debe tener al menos 6 caracteres';
-if ($password !== $password_confirm)                           $errores[] = 'Las contraseñas no coinciden';
+// ── Validaciones comunes (usando funciones_validacion.php) ─
+$errores = array_merge($errores, validarFormularioAsesor($_POST, true));
 
 // ── Validaciones específicas por modo ─────────────────────
 if ($modo_supervisor) {
-    if (empty($banco))         $errores[] = 'El banco es requerido';
-    if (empty($numero_cuenta)) $errores[] = 'El número de cuenta es requerido';
-    if (empty($tipo_cuenta))   $errores[] = 'El tipo de cuenta es requerido';
-    if (empty($supervisor_id)) $errores[] = 'No se encontró la sesión de supervisor';
+    if (empty($usuario_id_sesion)) {
+        $errores[] = 'No se encontró la sesión de supervisor';
+    } else {
+        // Resolver el ID entero del supervisor desde la tabla supervisor
+        try {
+            $stSup = $pdo->prepare('SELECT id, cooperativa_id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+            $stSup->execute([$usuario_id_sesion]);
+            $rowSup = $stSup->fetch(PDO::FETCH_ASSOC);
+            if ($rowSup) {
+                $id_supervisor_int = (int)$rowSup['id'];
+                $id_cooperativa    = $id_cooperativa ?? ($rowSup['cooperativa_id'] ?? null);
+            } else {
+                // Fallback: intentar buscar directo en usuario
+                $stSup2 = $pdo->prepare('SELECT id FROM usuario WHERE id = ? LIMIT 1');
+                $stSup2->execute([$usuario_id_sesion]);
+                $rowSup2 = $stSup2->fetch(PDO::FETCH_ASSOC);
+                $id_supervisor_int = $rowSup2 ? (int)$rowSup2['id'] : null;
+            }
+        } catch (\Throwable $e) {
+            // Si el usuario_id ya es numérico, usarlo directo
+            if (is_numeric($usuario_id_sesion)) {
+                $id_supervisor_int = (int)$usuario_id_sesion;
+            }
+        }
+        if (!$id_supervisor_int) {
+            $errores[] = 'No se pudo identificar al supervisor en el sistema';
+        }
+    }
 } else {
     if ($id_cooperativa <= 0)  $errores[] = 'Debes seleccionar una cooperativa';
     if (empty($supervisor_id)) $errores[] = 'Debes seleccionar un supervisor';
+    else $id_supervisor_int = is_numeric($supervisor_id) ? (int)$supervisor_id : null;
 
-    // Verificar que el supervisor exista en la tabla usuario
-    if (empty($errores) || !in_array('Debes seleccionar un supervisor', $errores)) {
+    // Verificar que el supervisor exista
+    if ($id_supervisor_int) {
         try {
-            $stmt = $pdo->prepare(
-                "SELECT id FROM usuario WHERE id = ? AND rol = 'supervisor' AND activo = 1 LIMIT 1"
-            );
-            $stmt->execute([$supervisor_id]);
-            if (!$stmt->fetch()) {
-                $errores[] = 'El supervisor seleccionado no es válido';
-            }
-        } catch (\Throwable $e) {
-            // Si la consulta falla (tabla diferente), no bloqueamos el registro
-        }
+            $stmt = $pdo->prepare("SELECT id FROM usuario WHERE id = ? AND rol = 'supervisor' AND activo = 1 LIMIT 1");
+            $stmt->execute([$id_supervisor_int]);
+            if (!$stmt->fetch()) $errores[] = 'El supervisor seleccionado no es válido';
+        } catch (\Throwable $e) { /* no bloquear */ }
     }
 }
 
@@ -127,11 +138,12 @@ if ($credencial_presente) {
             }
         }
     }
-} elseif ($modo_supervisor) {
-    // En modo supervisor la credencial es obligatoria
-    $errores[] = 'El archivo de credencial es requerido';
 }
-// En modo público la credencial es opcional: $archivo_guardado queda null.
+
+// ── Credencial obligatoria ────────────────────────────────
+if (!$credencial_presente) {
+    $errores[] = 'Debes adjuntar la credencial o nombramiento (PDF, JPG o PNG)';
+}
 
 // ── Retornar errores ──────────────────────────────────────
 if (!empty($errores)) {
@@ -172,6 +184,14 @@ try {
         'cedula'             => "ALTER TABLE solicitudes_asesor ADD COLUMN cedula VARCHAR(13) NULL AFTER apellidos",
         'credencial_archivo' => "ALTER TABLE solicitudes_asesor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER tipo_cuenta",
     ];
+
+    // Asegurar que id_supervisor sea INT (puede ser VARCHAR en instalaciones antiguas)
+    try {
+        $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE 'id_supervisor'")->fetch(PDO::FETCH_ASSOC);
+        if ($colInfo && stripos($colInfo['Type'], 'varchar') !== false) {
+            $pdo->exec("ALTER TABLE solicitudes_asesor MODIFY COLUMN id_supervisor INT NOT NULL");
+        }
+    } catch (\Throwable $e) { /* ignorar */ }
     foreach ($columnas_extra as $col => $sql) {
         $chk = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE '$col'");
         if (!$chk->fetch()) {
@@ -191,7 +211,7 @@ try {
 
     $stmt->execute([
         $id_cooperativa,
-        $supervisor_id,
+        $id_supervisor_int,
         $usuario,
         $nombres,
         $apellidos,

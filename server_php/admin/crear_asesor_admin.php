@@ -325,7 +325,13 @@ try {
     </div>
 </div>
 
+<script src="js/validaciones.js"></script>
 <script>
+// ── Activar validaciones (sin campo 'usuario' en este form) ──
+document.addEventListener('DOMContentLoaded', () => {
+    bindValidaciones('form');
+});
+
 // Manejo del file upload
 const fileInput = document.getElementById('credencial');
 const fileLabel = document.querySelector('.file-input-label');

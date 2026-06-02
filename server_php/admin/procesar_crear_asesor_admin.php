@@ -1,5 +1,6 @@
 <?php
 require_once 'db_admin.php';
+require_once __DIR__ . '/funciones_validacion.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: crear_asesor_admin.php');
@@ -27,14 +28,31 @@ $cedula = trim($_POST['cedula'] ?? '');
 $errores = [];
 $archivo_guardado = null;
 
-// Validaciones
+// Validaciones de cooperativa y supervisor (específicos de este form)
 if (empty($unidad_bancaria_id)) $errores[] = 'La cooperativa/banco es requerida';
-if (empty($id_supervisor)) $errores[] = 'El supervisor es requerido';
-if (empty($nombre) || strlen(trim($nombre)) < 3) $errores[] = 'El nombre completo es requerido';
-if (empty($cedula)) $errores[] = 'La cédula es requerida';
-if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
-if (empty($telefono)) $errores[] = 'El teléfono es requerido';
-if (empty($password) || strlen($password) < 6) $errores[] = 'Contraseña debe tener al menos 6 caracteres';
+if (empty($id_supervisor))      $errores[] = 'El supervisor es requerido';
+
+// Validaciones de campos personales (usando funciones_validacion.php)
+// Este form no tiene campo 'usuario' ni 'password_confirm', validamos manualmente lo que aplica
+$camposForm = [
+    'nombres'   => trim($_POST['nombres']   ?? ''),
+    'apellidos' => trim($_POST['apellidos'] ?? ''),
+    'cedula'    => $cedula,
+    'email'     => $email,
+    'telefono'  => $telefono,
+    'password'  => $password,
+];
+foreach ([
+    ['nombres',   fn($v) => validarNombre($v, 'Nombres')],
+    ['apellidos', fn($v) => validarNombre($v, 'Apellidos')],
+    ['cedula',    fn($v) => validarCedulaEc($v)],
+    ['email',     fn($v) => validarEmail($v)],
+    ['telefono',  fn($v) => validarTelefono($v)],
+    ['password',  fn($v) => validarPassword($v)],
+] as [$campo, $fn]) {
+    $r = $fn($camposForm[$campo]);
+    if (!$r['ok']) $errores[] = $r['msg'];
+}
 
 // Validar archivo
 $archivo_upload = $_FILES['credencial'] ?? null;
