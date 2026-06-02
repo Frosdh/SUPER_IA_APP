@@ -33,9 +33,8 @@ body {
     color:#fff;
     padding:20px 0;
     overflow-y:auto;
-    position:fixed;
+    position:sticky;
     top:0;
-    left:0;
     height:100vh;
     flex-shrink:0;
     z-index:1000;
@@ -296,7 +295,7 @@ table tbody tr:hover { background: #f8fafc; }
 @media (max-width: 992px) {
     .sidebar { width: 70px; }
     .sidebar span, .sidebar-section-title { display: none; }
-    .main-content { margin-left: 70px; }
+    .main-content { margin-left: 0 !important; }
     .sidebar-brand { justify-content: center; padding: 15px 0; }
     .sidebar-link { justify-content: center; padding: 12px; }
     .sidebar-link i { font-size: 18px; margin: 0; }

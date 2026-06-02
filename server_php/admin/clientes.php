@@ -250,7 +250,7 @@ sort($asesores_lista);
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <?php if ($user_role === 'supervisor' || $user_role === 'asesor'): ?>
-    <link rel="stylesheet" href="supervisor_layout.css">
+    <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
 <?php else: ?>
     <style>
         /* Estilos para admin/superadmin (sin sidebar supervisor) */
@@ -262,10 +262,10 @@ sort($asesores_lista);
             color: white;
             padding: 20px 0;
             overflow-y: auto;
-            position: fixed;
+            position: sticky;
             height: 100vh;
-            left: 0;
             top: 0;
+            flex-shrink: 0;
         }
         .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
         .sidebar-brand i { margin-right: 10px; color: #7c3aed; }
@@ -274,7 +274,7 @@ sort($asesores_lista);
         .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
         .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
         .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
-        .main-content { flex: 1; margin-left: 0; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+        .main-content { flex: 1; margin-left: 0 !important; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         @media (max-width: 1200px) { .sidebar { width: 200px; } .main-content { margin-left: 0; } }
         @media (max-width: 768px) { .sidebar { width: 180px; } .main-content { margin-left: 0; } }
         .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }

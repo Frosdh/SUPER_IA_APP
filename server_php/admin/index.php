@@ -99,17 +99,16 @@ $usuariosPorRol = $pdo->query("
             overflow: hidden;
         }
         
-        /* SIDEBAR */
         .sidebar {
             width: 230px;
             background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%);
             color: white;
             padding: 20px 0;
             overflow-y: auto;
-            position: fixed;
+            position: sticky;
             height: 100vh;
-            left: 0;
             top: 0;
+            flex-shrink: 0;
         }
         
         .sidebar-brand {
@@ -176,10 +175,9 @@ $usuariosPorRol = $pdo->query("
             margin-left: auto;
         }
         
-        /* MAIN CONTENT */
         .main-content {
             flex: 1;
-            margin-left: 230px;
+            margin-left: 0 !important;
             display: flex;
             flex-direction: column;
             overflow: hidden;

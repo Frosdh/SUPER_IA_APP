@@ -54,10 +54,10 @@ $currentPage = 'super_admin_dashboard';
             color: white;
             padding: 20px 0;
             overflow-y: auto;
-            position: fixed;
+            position: sticky;
             height: 100vh;
-            left: 0;
             top: 0;
+            flex-shrink: 0;
         }
         .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
         .sidebar-brand i { margin-right: 10px; color: #fbbf24; }
@@ -66,7 +66,7 @@ $currentPage = 'super_admin_dashboard';
         .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
         .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
         .sidebar-link.active { background: linear-gradient(90deg, #fbbf24, #f59e0b); color: #1a0f3d; }
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; }
+        .main-content { flex: 1; margin-left: 0 !important; display: flex; flex-direction: column; overflow: hidden; }
         .navbar-custom { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #1a0f3d; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }

@@ -298,7 +298,7 @@ $is_supervisor = ($user_role === 'supervisor');
         body { font-family:'Inter','Segoe UI',sans-serif; background:var(--brand-bg); display:flex; min-height:100vh; color:var(--brand-navy-deep); }
 
         /* ── SIDEBAR ── */
-        .sidebar { width:230px; background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%); color:#fff; padding:20px 0; overflow-y:auto; position:fixed; height:100vh; left:0; top:0; z-index:100; }
+        .sidebar { width:230px; background:linear-gradient(180deg,var(--brand-navy-deep) 0%,var(--brand-navy) 100%); color:#fff; padding:20px 0; overflow-y:auto; position:sticky; height:100vh; top:0; flex-shrink:0; z-index:100; }
         .brand { padding:0 20px 24px; font-size:18px; font-weight:800; border-bottom:1px solid rgba(255,221,0,.18); margin-bottom:20px; display:flex; align-items:center; gap:10px; }
         .brand i { color:var(--brand-yellow); }
         .section-label { font-size:11px; text-transform:uppercase; color:rgba(255,255,255,.5); letter-spacing:.6px; padding:0 25px; margin-bottom:10px; font-weight:700; }
@@ -308,7 +308,7 @@ $is_supervisor = ($user_role === 'supervisor');
         .logout-link { margin-top:auto; border-top:1px solid rgba(255,255,255,.1); padding-top:16px; }
 
         /* ── MAIN ── */
-        .main-content { flex:1; margin-left:230px; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
+        .main-content { flex:1; margin-left:0 !important; display:flex; flex-direction:column; overflow:hidden; min-width:0; }
         .navbar-custom { background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); color:#fff; padding:15px 30px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 12px 28px rgba(18,58,109,.18); flex-shrink:0; }
         .navbar-custom h2 { margin:0; font-size:20px; font-weight:700; }
         .user-info { display:flex; align-items:center; gap:15px; }

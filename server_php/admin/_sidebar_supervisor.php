@@ -50,7 +50,7 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
     }
 }
 ?>
-<link rel="stylesheet" href="supervisor_layout.css">
+<link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
 
 <!-- ======== SIDEBAR SUPERVISOR ======== -->
 <div class="sidebar">

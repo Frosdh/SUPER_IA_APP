@@ -283,10 +283,10 @@ $currentPage = 'recuperacion';
       color: #fff;
       padding: 20px 0;
       overflow-y: auto;
-      position: fixed;
+      position: sticky;
       height: 100vh;
-      left: 0;
       top: 0;
+      flex-shrink: 0;
       z-index: 100;
     }
 
@@ -358,7 +358,7 @@ $currentPage = 'recuperacion';
 
     .main-content {
       flex: 1;
-      margin-left: 0;
+      margin-left: 0 !important;
       display: flex;
       flex-direction: column;
       min-width: 0;

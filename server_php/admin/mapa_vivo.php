@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 require_once 'db_admin.php';
 
 if (session_status() === PHP_SESSION_NONE) {
@@ -48,10 +48,10 @@ $currentPage = 'mapa_vivo';
             color: white;
             padding: 20px 0;
             overflow-y: auto;
-            position: fixed;
+            position: sticky;
             height: 100vh;
-            left: 0;
             top: 0;
+            flex-shrink: 0;
         }
         .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
         .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
@@ -60,7 +60,7 @@ $currentPage = 'mapa_vivo';
         .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); transition: all 0.25s ease; text-decoration: none; font-size: 14px; }
         .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; }
         .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; }
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; }
+        .main-content { flex: 1; margin-left: 0 !important; display: flex; flex-direction: column; overflow: hidden; }
         .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 24px rgba(18, 58, 109, 0.16); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }

@@ -480,8 +480,10 @@ body {
 /* ── Content area: scroll propio ────────────────────────────*/
 .content-area,
 main,
+.main-content,
 [class*="main-content"] {
     flex: 1 1 0;
+    margin-left: 0 !important;
     min-width: 0;
     overflow-x: hidden;
     overflow-y: auto;
