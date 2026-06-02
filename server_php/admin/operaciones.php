@@ -633,10 +633,8 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
         .content-area { flex: 1; overflow-y: auto; padding: 30px; }
         .page-header { margin-bottom: 30px; }
         .page-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #1f2937; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .stat-card { background: white; padding: 20px 14px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06); text-align: center; overflow: hidden; }
-        .stat-card .number { font-size: clamp(18px, 3.5vw, 32px); font-weight: 700; color: #1f2937; word-break: break-all; line-height: 1.15; }
-        .stat-card .label { color: #9ca3af; font-size: 12px; margin-top: 6px; word-break: break-word; }
+        .stats-kpi-row { display: flex; gap: 14px; margin-bottom: 28px; flex-wrap: wrap; }
+        .stats-kpi-row > div { flex: 1 1 160px; }
         .table-card { background: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); overflow: hidden; }
         .table-card .card-header-custom { padding: 20px; border-bottom: 1px solid #f0f0f0; }
         .table-card h6 { font-weight: 700; margin: 0; font-size: 16px; }
@@ -805,31 +803,46 @@ if ($user_role === 'supervisor') {
         <?php endif; ?>
 
         <!-- ESTADÍSTICAS -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div style="font-size: 14px; color: #94a3b8; margin-bottom: 8px;"><i class="fas fa-list"></i></div>
-                <div class="number" style="color: #1a2744;"><?= $stats['total_operaciones'] ?></div>
-                <div class="label">Total Solicitudes</div>
+        <div class="row g-3 mb-4" style="margin-top: 24px;">
+            <div class="col-md">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #3b82f6 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Total Solicitudes</div>
+                        <h3 class="m-0 fw-800" style="color:#0a2748;"><?= $stats['total_operaciones'] ?></h3>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div style="font-size: 14px; color: #15803d; margin-bottom: 8px;"><i class="fas fa-check-circle"></i></div>
-                <div class="number" style="color: #15803d;"><?= $stats['aprobadas'] ?></div>
-                <div class="label">Aprobadas</div>
+            <div class="col-md">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #10b981 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Aprobadas</div>
+                        <h3 class="m-0 fw-800 text-success"><?= $stats['aprobadas'] ?></h3>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div style="font-size: 14px; color: #b91c1c; margin-bottom: 8px;"><i class="fas fa-times-circle"></i></div>
-                <div class="number" style="color: #b91c1c;"><?= $stats['rechazadas'] ?></div>
-                <div class="label">Rechazadas</div>
+            <div class="col-md">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #ef4444 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Rechazadas</div>
+                        <h3 class="m-0 fw-800 text-danger"><?= $stats['rechazadas'] ?></h3>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div style="font-size: 14px; color: #b45309; margin-bottom: 8px;"><i class="fas fa-hourglass-half"></i></div>
-                <div class="number" style="color: #b45309;"><?= $stats['pendientes'] ?></div>
-                <div class="label">Pendientes</div>
+            <div class="col-md">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #f59e0b !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Pendientes</div>
+                        <h3 class="m-0 fw-800" style="color:#b45309;"><?= $stats['pendientes'] ?></h3>
+                    </div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div style="font-size: 14px; color: #94a3b8; margin-bottom: 8px;"><i class="fas fa-dollar-sign"></i></div>
-                <div class="number">$<?= number_format($stats['monto_total'], 2) ?></div>
-                <div class="label">Monto Total</div>
+            <div class="col-md">
+                <div class="card border-0 shadow-sm h-100" style="border-radius:16px; border-left:4px solid #0ea5e9 !important;">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold text-uppercase mb-1">Monto Total</div>
+                        <h3 class="m-0 fw-800" style="color:#0369a1;">$<?= number_format($stats['monto_total'], 2) ?></h3>
+                    </div>
+                </div>
             </div>
         </div>
 

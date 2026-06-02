@@ -466,6 +466,9 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
                 <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
                 <small><?= htmlspecialchars($supervisor_rol) ?></small>
             </div>
+            <a href="logout.php" style="background:rgba(255,221,0,.14);color:#fff;border:1px solid rgba(255,221,0,.3);padding:7px 14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </a>
         </div>
     </div>
 
