@@ -38,7 +38,7 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 40px 24px;
+            padding: 40px 0;
             color: #F1F5F9;
             overflow-x: hidden;
             overflow-y: auto;
@@ -70,8 +70,9 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
 
         .page-wrap {
             position: relative; z-index: 1;
-            width: min(1100px, 100%);
+            width: 100%;
             max-width: 100%;
+            padding: 0 48px;
         }
 
         /* Header */
@@ -116,22 +117,17 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
         /* Grid de roles */
         .role-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-            gap: 18px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
             margin-bottom: 20px;
         }
-        .role-grid-bottom {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            max-width: min(360px, 100%);
-            margin: 0 auto;
-        }
+        .role-grid-bottom { display: none; }
 
         .role-card {
             background: #112035;
             border: 1px solid rgba(22,48,87,.9);
             border-radius: 22px;
-            padding: 32px 24px 28px;
+            padding: 26px 20px 22px;
             text-align: center;
             text-decoration: none;
             color: inherit;
@@ -212,9 +208,8 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
         .back-link:hover { color: #FFC800; }
 
         /* Responsive */
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
             .role-grid { grid-template-columns: 1fr 1fr; }
-            .role-grid-bottom { max-width: 100%; }
         }
         @media (max-width: 480px) {
             .role-grid { grid-template-columns: 1fr; }
@@ -285,10 +280,6 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
                 </div>
             </a>
 
-        </div>
-
-        <!-- Fila inferior centrada -->
-        <div class="role-grid-bottom" style="margin-top:18px;">
             <!-- ASESOR -->
             <a href="login.php?role=asesor" class="role-card card-asesor fade-in d5">
                 <div class="icon-box ib-green">
@@ -300,6 +291,7 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
                     <i class="fas fa-arrow-right"></i> Ingresar
                 </div>
             </a>
+
         </div>
 
         <!-- Volver -->
