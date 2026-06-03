@@ -364,9 +364,10 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
                 $total     = intval($asesor['total_clientes']);
                 $asesorKeyEsc = htmlspecialchars($asesorKey, ENT_QUOTES, 'UTF-8');
             ?>
-            <div class="ac" 
-                 id="ac-<?= $asesorKeyEsc ?>" 
-                 onclick="toggleClientes('<?= $asesorKeyEsc ?>')"
+            <div class="ac"
+                 id="ac-<?= $asesorKeyEsc ?>"
+                 style="cursor:pointer;"
+                 onclick="window.location='detalle_asesor.php?id=<?= urlencode($asesorKey) ?>'"
                  data-search-name="<?= strtolower(htmlspecialchars($nombre)) ?>"
                  data-search-user="<?= strtolower(htmlspecialchars($asesor['usuario'] ?? '')) ?>"
                  data-search-email="<?= strtolower(htmlspecialchars($email)) ?>">
@@ -379,7 +380,7 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
                 </div>
                 <div class="ac-footer">
                     <span class="ac-badge"><i class="fas fa-user-group"></i> <?= $total ?> cliente<?= $total !== 1 ? 's' : '' ?></span>
-                    <span class="ac-arrow" id="arrow-<?= $asesorKeyEsc ?>"><i class="fas fa-chevron-right"></i></span>
+                    <span class="ac-arrow"><i class="fas fa-chevron-right"></i></span>
                 </div>
             </div>
             <?php endforeach; ?>
