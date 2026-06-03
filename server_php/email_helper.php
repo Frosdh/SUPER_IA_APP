@@ -42,7 +42,19 @@ function createMailer(array $emailConfig)
     $mail->SMTPSecure = $emailConfig['secure'];
     $mail->Port = (int)$emailConfig['port'];
     $mail->CharSet = 'UTF-8';
+    $mail->Timeout = 30;
     $mail->setFrom($emailConfig['from_email'], $emailConfig['from_name']);
+
+    // Desactivar verificación estricta de certificado SSL.
+    // Necesario en entornos locales (XAMPP) donde el proveedor de internet
+    // puede interceptar la conexión SMTP y presentar su propio certificado.
+    $mail->SMTPOptions = [
+        'ssl' => [
+            'verify_peer'       => false,
+            'verify_peer_name'  => false,
+            'allow_self_signed' => true,
+        ],
+    ];
 
     return $mail;
 }
