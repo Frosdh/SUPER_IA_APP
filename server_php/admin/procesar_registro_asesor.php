@@ -74,20 +74,18 @@ if ($modo_supervisor) {
     $id_supervisor_val = trim($_POST['id_supervisor'] ?? '');
 }
 
-$errores = [];
+$errores = [];          // errores por campo ['campo' => 'msg']
 $archivo_guardado = null;
 
-// ── Validaciones comunes (usando funciones_validacion.php) ─
-$errores = array_merge($errores, validarFormularioAsesor($_POST, true));
+// ── Validaciones por campo ─────────────────────────────────
+$errores = validarFormularioCampos($_POST, true);
 
-// ── Validaciones específicas por modo ─────────────────────
+// ── Validaciones de cooperativa/supervisor ────────────────
 if ($modo_supervisor) {
-    if (empty($id_supervisor_val)) {
-        $errores[] = 'No se encontró la sesión de supervisor';
-    }
+    if (empty($id_supervisor_val)) $errores['supervisor'] = 'No se encontró la sesión de supervisor';
 } else {
-    if (empty($id_cooperativa))    $errores[] = 'Debes seleccionar una cooperativa';
-    if (empty($id_supervisor_val)) $errores[] = 'Debes seleccionar un supervisor';
+    if (empty($id_cooperativa))    $errores['id_cooperativa'] = 'Debes seleccionar una cooperativa';
+    if (empty($id_supervisor_val)) $errores['id_supervisor']  = 'Debes seleccionar un supervisor';
 }
 
 // ── Procesar archivo ──────────────────────────────────────
@@ -128,44 +126,35 @@ if ($credencial_presente) {
 
 // ── Credencial obligatoria ────────────────────────────────
 if (!$credencial_presente) {
-    $errores[] = 'Debes adjuntar la credencial o nombramiento (PDF, JPG o PNG)';
+    $errores['credencial'] = 'Debes adjuntar la credencial o nombramiento (PDF, JPG o PNG)';
 }
 
-// ── Validar unicidad: email, usuario y cédula ─────────────
-if (empty($errores)) {
-    // Email: revisar en usuario activo y en solicitudes pendientes/aprobadas
+// ── Validar unicidad ──────────────────────────────────────
+if (!isset($errores['email'])) {
     $st = $pdo->prepare("SELECT 1 FROM usuario WHERE email = ? LIMIT 1");
     $st->execute([$email]);
     if ($st->fetchColumn()) {
-        $errores[] = 'El correo electrónico ya está registrado en el sistema.';
+        $errores['email'] = 'Este correo ya está registrado en el sistema.';
     } else {
         $st2 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE email = ? AND estado != 'rechazada' LIMIT 1");
         $st2->execute([$email]);
-        if ($st2->fetchColumn()) {
-            $errores[] = 'Ya existe una solicitud activa con ese correo electrónico.';
-        }
-    }
-
-    // Usuario: revisar en solicitudes activas
-    $st3 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE usuario = ? AND estado != 'rechazada' LIMIT 1");
-    $st3->execute([$usuario]);
-    if ($st3->fetchColumn()) {
-        $errores[] = 'El nombre de usuario ya está en uso.';
-    }
-
-    // Cédula: revisar en solicitudes activas (si se proporcionó)
-    if (!empty($cedula)) {
-        $st4 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE cedula = ? AND estado != 'rechazada' LIMIT 1");
-        $st4->execute([$cedula]);
-        if ($st4->fetchColumn()) {
-            $errores[] = 'La cédula ya está registrada en una solicitud activa.';
-        }
+        if ($st2->fetchColumn()) $errores['email'] = 'Ya existe una solicitud activa con ese correo.';
     }
 }
+if (!isset($errores['usuario'])) {
+    $st3 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE usuario = ? AND estado != 'rechazada' LIMIT 1");
+    $st3->execute([$usuario]);
+    if ($st3->fetchColumn()) $errores['usuario'] = 'El nombre de usuario ya está en uso.';
+}
+if (!isset($errores['cedula']) && !empty($cedula)) {
+    $st4 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE cedula = ? AND estado != 'rechazada' LIMIT 1");
+    $st4->execute([$cedula]);
+    if ($st4->fetchColumn()) $errores['cedula'] = 'Esta cédula ya está registrada.';
+}
 
-// ── Retornar errores (guardar datos en sesión para repoblar el formulario) ──
+// ── Retornar errores inline ───────────────────────────────
 if (!empty($errores)) {
-    $_SESSION['form_prev'] = [
+    $_SESSION['form_prev']    = [
         'id_cooperativa' => $_POST['id_cooperativa'] ?? '',
         'id_supervisor'  => $_POST['id_supervisor']  ?? '',
         'nombres'        => $nombres,
@@ -175,7 +164,8 @@ if (!empty($errores)) {
         'telefono'       => $telefono,
         'usuario'        => $usuario,
     ];
-    header("Location: $form_origen?error=" . urlencode(implode(', ', $errores)));
+    $_SESSION['form_errors'] = $errores; // ['campo' => 'msg']
+    header("Location: $form_origen");
     exit;
 }
 

@@ -157,3 +157,37 @@ function validarFormularioAsesor(array $post, bool $conUsuario = true): array {
 
     return $errores;
 }
+
+// ─────────────────────────────────────────────────────────────
+// VALIDAR FORMULARIO — devuelve errores indexados por campo
+// ['campo' => 'mensaje de error']
+// ─────────────────────────────────────────────────────────────
+function validarFormularioCampos(array $post, bool $conUsuario = true): array {
+    $errores = [];
+
+    $checks = [
+        'nombres'   => fn($v) => validarNombre($v, 'Nombres'),
+        'apellidos' => fn($v) => validarNombre($v, 'Apellidos'),
+        'cedula'    => fn($v) => validarCedulaEc($v),
+        'email'     => fn($v) => validarEmail($v),
+        'telefono'  => fn($v) => validarTelefono($v),
+        'password'  => fn($v) => validarPassword($v),
+    ];
+    if ($conUsuario) {
+        $checks['usuario'] = fn($v) => validarUsuario($v);
+    }
+
+    foreach ($checks as $campo => $fn) {
+        $val = trim($post[$campo] ?? '');
+        $r   = $fn($val);
+        if (!$r['ok']) $errores[$campo] = $r['msg'];
+    }
+
+    if (isset($post['password_confirm'])) {
+        if (($post['password'] ?? '') !== ($post['password_confirm'] ?? '')) {
+            $errores['password_confirm'] = 'Las contraseñas no coinciden';
+        }
+    }
+
+    return $errores;
+}

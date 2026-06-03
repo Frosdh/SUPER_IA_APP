@@ -99,6 +99,20 @@ if (!$session_missing && $session_user_id) {
 $currentPage        = 'asesores';
 $alertas_pendientes = 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
+
+// ── Contar solicitudes pendientes de asesor ───────────────
+$solicitudes_pendientes = 0;
+try {
+    $session_user_id = $_SESSION['supervisor_id'] ?? null;
+    if ($session_user_id) {
+        $stPend = $pdo->prepare("
+            SELECT COUNT(*) FROM solicitudes_asesor
+            WHERE id_supervisor = ? AND estado = 'pendiente'
+        ");
+        $stPend->execute([$session_user_id]);
+        $solicitudes_pendientes = (int)$stPend->fetchColumn();
+    }
+} catch (\Throwable $e) { $solicitudes_pendientes = 0; }
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -127,6 +141,27 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
     .ma-page-icon i{color:#ffdd00;font-size:22px;}
     .ma-page-title{font-size:22px;font-weight:900;color:#0a2748;margin:0;}
     .ma-page-sub{font-size:13px;color:#94a3b8;margin:2px 0 0;font-weight:500;}
+
+    /* Badge de notificación en botón Solicitudes */
+    .sol-badge {
+        position: absolute;
+        top: -8px; right: -8px;
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px; font-weight: 800;
+        min-width: 20px; height: 20px;
+        border-radius: 10px;
+        padding: 0 5px;
+        display: flex; align-items: center; justify-content: center;
+        border: 2px solid #fff;
+        animation: pulse-badge 2s infinite;
+        box-shadow: 0 0 0 0 rgba(239,68,68,.6);
+    }
+    @keyframes pulse-badge {
+        0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
+        70%  { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+        100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+    }
 
     .btn-navy {
         background: #0a2748;
@@ -339,8 +374,11 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
                 <a href="registro_asesor.php" class="btn-navy text-decoration-none d-inline-flex align-items-center gap-2">
                     <i class="fas fa-user-plus"></i> Crear Asesor
                 </a>
-                <a href="administrar_solicitudes_asesor.php" class="btn-outline-navy text-decoration-none d-inline-flex align-items-center gap-2">
+                <a href="administrar_solicitudes_asesor.php" class="btn-outline-navy text-decoration-none d-inline-flex align-items-center gap-2" style="position:relative;">
                     <i class="fas fa-file-circle-check"></i> Solicitudes de Asesor
+                    <?php if ($solicitudes_pendientes > 0): ?>
+                    <span class="sol-badge"><?= $solicitudes_pendientes ?></span>
+                    <?php endif; ?>
                 </a>
             </div>
         </div>

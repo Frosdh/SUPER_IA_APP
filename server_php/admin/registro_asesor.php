@@ -32,13 +32,28 @@ $supervisor_rol    = $_SESSION['supervisor_rol']    ?? 'Supervisor';
 $error   = $_GET['error']   ?? '';
 $success = $_GET['success'] ?? '';
 
-// ── Recuperar datos previos del formulario (si hubo error) ─
-$formPrev = $_SESSION['form_prev'] ?? [];
-unset($_SESSION['form_prev']);
+// ── Recuperar datos y errores previos (si hubo error) ─────
+$formPrev   = $_SESSION['form_prev']   ?? [];
+$formErrors = $_SESSION['form_errors'] ?? [];
+unset($_SESSION['form_prev'], $_SESSION['form_errors']);
 
 function fv(string $key, string $default = ''): string {
     global $formPrev;
     return htmlspecialchars($formPrev[$key] ?? $default, ENT_QUOTES, 'UTF-8');
+}
+// Devuelve el span de error inline para un campo
+function fe(string $key): string {
+    global $formErrors;
+    if (!empty($formErrors[$key])) {
+        return '<span class="field-feedback error"><i class="fas fa-exclamation-circle"></i> '
+            . htmlspecialchars($formErrors[$key], ENT_QUOTES, 'UTF-8') . '</span>';
+    }
+    return '<span class="field-feedback"></span>';
+}
+// Clase CSS de error en el input
+function fi(string $key): string {
+    global $formErrors;
+    return !empty($formErrors[$key]) ? ' input-error' : '';
 }
 
 // ── Cargar cooperativas desde unidad_bancaria (modo público) ──
@@ -307,11 +322,8 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 <?php endif; ?>
 
         <!-- ── Alertas ───────────────────────────────────── -->
-        <?php if ($error): ?>
-        <div class="alert alert-danger"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
         <?php if ($success): ?>
-        <div class="alert alert-success"><i class="fas fa-check-circle"></i>Solicitud enviada. El supervisor revisará tu registro pronto.</div>
+        <div class="alert alert-success"><i class="fas fa-check-circle"></i> Solicitud enviada. El supervisor revisará tu registro pronto.</div>
         <?php endif; ?>
         
 
@@ -371,27 +383,30 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             <div class="row-cols">
                 <div class="form-group">
                     <label><i class="fas fa-user me-1"></i> Nombres</label>
-                    <input type="text" name="nombres" placeholder="Ej: Juan Carlos" required value="<?= fv('nombres') ?>">
+                    <input type="text" name="nombres" placeholder="Ej: Juan Carlos" required value="<?= fv('nombres') ?>" class="<?= fi('nombres') ?>">
+                    <?= fe('nombres') ?>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-user me-1"></i> Apellidos</label>
-                    <input type="text" name="apellidos" placeholder="Ej: García López" required value="<?= fv('apellidos') ?>">
+                    <input type="text" name="apellidos" placeholder="Ej: García López" required value="<?= fv('apellidos') ?>" class="<?= fi('apellidos') ?>">
+                    <?= fe('apellidos') ?>
                 </div>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-id-card me-1"></i> Cédula de Identidad</label>
-                <input type="text" id="cedula" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required value="<?= fv('cedula') ?>">
-                <span id="cedula-feedback" class="field-feedback"></span>
+                <input type="text" id="cedula" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required value="<?= fv('cedula') ?>" class="<?= fi('cedula') ?>">
+                <span id="cedula-feedback" class="field-feedback"><?= !empty($formErrors['cedula']) ? '<i class="fas fa-exclamation-circle"></i> '.htmlspecialchars($formErrors['cedula']) : '' ?></span>
             </div>
             <div class="row-cols">
                 <div class="form-group">
                     <label><i class="fas fa-envelope me-1"></i> Email</label>
-                    <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" required value="<?= fv('email') ?>">
-                    <span id="email-feedback" class="field-feedback"></span>
+                    <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" required value="<?= fv('email') ?>" class="<?= fi('email') ?>">
+                    <span id="email-feedback" class="field-feedback <?= !empty($formErrors['email']) ? 'error' : '' ?>"><?= !empty($formErrors['email']) ? '<i class="fas fa-exclamation-circle"></i> '.htmlspecialchars($formErrors['email']) : '' ?></span>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-phone me-1"></i> Teléfono</label>
-                    <input type="tel" name="telefono" placeholder="0987654321" required value="<?= fv('telefono') ?>">
+                    <input type="tel" name="telefono" placeholder="0987654321" required value="<?= fv('telefono') ?>" class="<?= fi('telefono') ?>">
+                    <?= fe('telefono') ?>
                 </div>
             </div>
 
@@ -400,8 +415,8 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             <div class="form-row-cols-3">
                 <div class="form-group">
                     <label><i class="fas fa-user-circle me-1"></i> Usuario</label>
-                    <input type="text" id="usuario" name="usuario" placeholder="Ej: jgarcia" minlength="4" required value="<?= fv('usuario') ?>">
-                    <span id="usuario-feedback" class="field-feedback"></span>
+                    <input type="text" id="usuario" name="usuario" placeholder="Ej: jgarcia" minlength="4" required value="<?= fv('usuario') ?>" class="<?= fi('usuario') ?>">
+                    <span id="usuario-feedback" class="field-feedback <?= !empty($formErrors['usuario']) ? 'error' : '' ?>"><?= !empty($formErrors['usuario']) ? '<i class="fas fa-exclamation-circle"></i> '.htmlspecialchars($formErrors['usuario']) : '' ?></span>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-key me-1"></i> Contraseña</label>
@@ -422,8 +437,8 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             </div>
 
             <!-- Credencial -->
-            <div class="section-title"><i class="fas fa-file-alt" style="color:var(--brand-yellow-deep);"></i> Credencial / Nombramiento <small style="font-weight:400;text-transform:none;font-size:11px;">(opcional)</small></div>
-            <div class="file-upload" id="dropZone">
+            <div class="section-title"><i class="fas fa-file-alt" style="color:var(--brand-yellow-deep);"></i> Credencial / Nombramiento</div>
+            <div class="file-upload <?= !empty($formErrors['credencial']) ? 'file-upload-error' : '' ?>" id="dropZone">
                 <label class="file-input-label" for="credencial">
                     <i class="fas fa-cloud-upload-alt"></i>
                     <div>Arrastra aquí o haz clic para subir</div>
@@ -432,6 +447,11 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
                 <input type="file" id="credencial" name="credencial" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
                 <div class="file-name" id="fileName"></div>
             </div>
+            <?php if (!empty($formErrors['credencial'])): ?>
+            <span class="field-feedback error" style="margin-top:6px;display:block;">
+                <i class="fas fa-exclamation-circle"></i> <?= htmlspecialchars($formErrors['credencial']) ?>
+            </span>
+            <?php endif; ?>
 
             <!-- Submit -->
             <?php if ($modo_supervisor): ?>
@@ -461,8 +481,10 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 .field-feedback.error { color:#ef4444; }
 .field-feedback.ok    { color:#10b981; }
 .public-card .field-feedback.ok { color:#4ADE80; }
-input.input-error { border-color:#ef4444 !important; }
-input.input-ok    { border-color:#10b981 !important; }
+input.input-error  { border-color:#ef4444 !important; box-shadow:0 0 0 2px rgba(239,68,68,.15); }
+input.input-ok     { border-color:#10b981 !important; }
+.file-upload-error { border-color:#ef4444 !important; background:rgba(239,68,68,.05) !important; }
+.public-card .field-feedback.error { color:#f87171; }
 </style>
 
 <script>
