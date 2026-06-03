@@ -37,6 +37,16 @@ try {
         $db_password,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
+    // Crear tabla de OTPs si no existe
+    $pdo->exec("CREATE TABLE IF NOT EXISTS email_otp_codes (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        email      VARCHAR(255) NOT NULL,
+        codigo     VARCHAR(10)  NOT NULL,
+        expira_en  DATETIME     NOT NULL,
+        usado      TINYINT(1)   NOT NULL DEFAULT 0,
+        creado_en  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email_usado (email, usado)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
 } catch (\Throwable $e) {
     echo json_encode(['status' => 'error', 'message' => 'Sin conexión a BD']);
     exit;

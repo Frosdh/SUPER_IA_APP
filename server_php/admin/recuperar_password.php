@@ -25,56 +25,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Ingresa un correo electrónico válido.';
         file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error: Correo inválido ($email)\n", FILE_APPEND);
     } else {
-        // Buscar usuario por email SIN filtrar por rol
-        // Cualquier usuario activo (asesor, supervisor, gerente, superadmin) puede recuperar su contraseña
-        $stmt = $pdo->prepare("SELECT id, nombre, rol FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
-        $stmt->execute([$email]);
-        $user = $stmt->fetch();
+        try {
+            // Buscar usuario por email SIN filtrar por rol
+            // Cualquier usuario activo (asesor, supervisor, gerente, superadmin) puede recuperar su contraseña
+            $stmt = $pdo->prepare("SELECT id, nombre FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
+            $stmt->execute([$email]);
+            $user = $stmt->fetch();
 
-        if (!$user) {
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email\n", FILE_APPEND);
-            // Por seguridad, redirigimos a la pantalla de verificación OTP para que no se sepa si existe o no
-            $_SESSION['recovery_email'] = $email;
-            $_SESSION['recovery_role']  = $postRole;
-            header('Location: verificar_otp_recovery.php');
-            exit;
-        } else {
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . ", rol=" . $user['rol'] . "\n", FILE_APPEND);
-            
+            if (!$user) {
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email\n", FILE_APPEND);
+                // Por seguridad, redirigimos igual para no revelar si el correo existe
+                $_SESSION['recovery_email'] = $email;
+                $_SESSION['recovery_role']  = $postRole;
+                header('Location: verificar_otp_recovery.php');
+                exit;
+            }
+
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . "\n", FILE_APPEND);
+
             // Generar OTP de 6 dígitos
             $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
             $expira_en = date('Y-m-d H:i:s', time() + 600); // 10 minutos
-            
-            // Invalidar OTPs anteriores
+
+            // Invalidar OTPs anteriores e insertar el nuevo
             $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE email = ? AND usado = 0")
                 ->execute([$email]);
-            
-            // Insertar nuevo OTP
             $pdo->prepare(
                 "INSERT INTO email_otp_codes (email, codigo, expira_en, usado, creado_en)
                  VALUES (?, ?, ?, 0, NOW())"
             )->execute([$email, $codigo, $expira_en]);
 
-            // Siempre guardamos el código en sesión ANTES de intentar enviar
-            // así la redirección ocurre sin importar si el email tarda o falla
+            // Guardar en sesión y cerrar para no bloquear
             $_SESSION['recovery_email']   = $email;
             $_SESSION['recovery_role']    = $postRole;
             $_SESSION['recovery_dev_otp'] = $codigo;
-            session_write_close(); // cerrar sesión antes del envío para no bloquear
+            session_write_close();
 
-            // Intentar enviar email (con timeout propio de PHPMailer)
+            // Enviar email
             $emailHelperPath = __DIR__ . '/../email_helper.php';
             $sent      = false;
             $mailError = '';
             if (file_exists($emailHelperPath)) {
                 require_once $emailHelperPath;
-                $htmlBody  = buildOtpEmailHtml($codigo);
-                $plainBody = buildOtpEmailText($codigo);
                 list($sent, $mailError) = sendEmailMessage(
                     $email,
                     'Código de recuperación — Super_IA',
-                    $htmlBody,
-                    $plainBody
+                    buildOtpEmailHtml($codigo),
+                    buildOtpEmailText($codigo)
                 );
             } else {
                 $mailError = 'No se encontró email_helper.php';
@@ -88,6 +85,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             header('Location: verificar_otp_recovery.php');
             exit;
+
+        } catch (\Throwable $e) {
+            $error = 'Error interno. Intenta de nuevo.';
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - EXCEPCIÓN: " . $e->getMessage() . " | email=$email\n", FILE_APPEND);
         }
     }
 }

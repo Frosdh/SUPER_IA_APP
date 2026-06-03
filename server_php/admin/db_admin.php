@@ -29,6 +29,18 @@ try {
     );
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    // Crear tabla de OTPs si no existe (requerida para recuperación de contraseña)
+    $pdo->exec("CREATE TABLE IF NOT EXISTS email_otp_codes (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        email      VARCHAR(255) NOT NULL,
+        codigo     VARCHAR(10)  NOT NULL,
+        expira_en  DATETIME     NOT NULL,
+        usado      TINYINT(1)   NOT NULL DEFAULT 0,
+        creado_en  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_email_usado (email, usado)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
 } catch (PDOException $e) {
     die("Error de conexión a la base de datos: " . $e->getMessage());
 }
