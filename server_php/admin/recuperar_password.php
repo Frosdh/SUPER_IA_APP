@@ -16,8 +16,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email     = trim($_POST['email'] ?? '');
     $postRole  = $_POST['role'] ?? $role;
 
+    // Log de depuración inicial
+    $logFile = __DIR__ . '/recuperar_debug.log';
+    $logMsg = date('Y-m-d H:i:s') . " - Intento de recuperación para Email: $email, Rol POST: $postRole\n";
+    file_put_contents($logFile, $logMsg, FILE_APPEND);
+
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Ingresa un correo electrónico válido.';
+        file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error: Correo inválido ($email)\n", FILE_APPEND);
     } else {
         // Determinar el rol en la tabla usuario
         $rolMap = [
@@ -43,40 +49,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $user = $stmt->fetch();
 
         if (!$user) {
-            // Por seguridad no revelamos si existe o no
-            $success = 'Si el correo está registrado, recibirás una contraseña provisional en tu bandeja de entrada.';
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email, Rol: $dbRol\n", FILE_APPEND);
+            // Por seguridad, redirigimos a la pantalla de verificación OTP para que no se sepa si existe o no
+            $_SESSION['recovery_email'] = $email;
+            $_SESSION['recovery_role']  = $postRole;
+            header('Location: verificar_otp_recovery.php');
+            exit;
         } else {
-            // Generar contraseña provisional aleatoria que cumpla las políticas (min 8 car, 1 mayus, 1 minus, 1 num, 1 sym)
-            $caracteres_mayus = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-            $caracteres_minus = 'abcdefghijklmnopqrstuvwxyz';
-            $caracteres_num   = '0123456789';
-            $caracteres_sym   = '@#$%!._';
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . "\n", FILE_APPEND);
             
-            // Garantizar al menos uno de cada tipo
-            $pass_arr = [];
-            $pass_arr[] = $caracteres_mayus[random_int(0, strlen($caracteres_mayus) - 1)];
-            $pass_arr[] = $caracteres_minus[random_int(0, strlen($caracteres_minus) - 1)];
-            $pass_arr[] = $caracteres_num[random_int(0, strlen($caracteres_num) - 1)];
-            $pass_arr[] = $caracteres_sym[random_int(0, strlen($caracteres_sym) - 1)];
+            // Generar OTP de 6 dígitos
+            $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $expira_en = date('Y-m-d H:i:s', time() + 600); // 10 minutos
             
-            // Completar hasta 10 caracteres
-            $todos = $caracteres_mayus . $caracteres_minus . $caracteres_num . $caracteres_sym;
-            for ($i = 4; $i < 10; $i++) {
-                $pass_arr[] = $todos[random_int(0, strlen($todos) - 1)];
-            }
-            shuffle($pass_arr);
-            $provisional_password = implode('', $pass_arr);
-
-            // Guardar el hash en la base de datos de inmediato
-            $hash = password_hash($provisional_password, PASSWORD_BCRYPT);
-            $pdo->prepare("UPDATE usuario SET password_hash = ? WHERE id = ?")->execute([$hash, $user['id']]);
-
-            try {
-                $pdo->prepare("UPDATE solicitudes_supervisor SET password_hash = ? WHERE email = ?")->execute([$hash, $email]);
-            } catch (\Throwable $e) { }
-            try {
-                $pdo->prepare("UPDATE solicitudes_asesor SET password_hash = ? WHERE email = ?")->execute([$hash, $email]);
-            } catch (\Throwable $e) { }
+            // Invalidar OTPs anteriores
+            $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE email = ? AND usado = 0")
+                ->execute([$email]);
+            
+            // Insertar nuevo OTP
+            $pdo->prepare(
+                "INSERT INTO email_otp_codes (email, codigo, expira_en, usado, creado_en)
+                 VALUES (?, ?, ?, 0, NOW())"
+            )->execute([$email, $codigo, $expira_en]);
 
             // Enviar email usando el helper existente
             $emailHelperPath = __DIR__ . '/../email_helper.php';
@@ -84,22 +78,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $mailError = '';
             if (file_exists($emailHelperPath)) {
                 require_once $emailHelperPath;
-                $htmlBody  = buildProvisionalPasswordEmailHtml($provisional_password);
-                $plainBody = buildProvisionalPasswordEmailText($provisional_password);
-                list($sent, $mailError) = sendEmailMessage($email, 'Nueva contraseña provisional — Super_IA', $htmlBody, $plainBody);
+                $htmlBody  = buildOtpEmailHtml($codigo);
+                $plainBody = buildOtpEmailText($codigo);
+                list($sent, $mailError) = sendEmailMessage($email, 'Código de recuperación — Super_IA', $htmlBody, $plainBody);
+            } else {
+                $mailError = 'No se encontró email_helper.php';
             }
 
             if ($sent) {
-                $success = 'Se ha enviado una contraseña provisional a tu correo. Revisa tu bandeja de entrada.';
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Código OTP enviado a $email. Código: $codigo\n", FILE_APPEND);
+                $_SESSION['recovery_email'] = $email;
+                $_SESSION['recovery_role']  = $postRole;
+                header('Location: verificar_otp_recovery.php');
+                exit;
             } else {
-                $success = 'Si el correo está registrado, recibirás una contraseña provisional en tu bandeja de entrada.';
-                if (defined('SUPER_IA_DEV') && SUPER_IA_DEV) {
-                    $success .= " [DEV] Contraseña: $provisional_password";
-                }
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error al enviar código OTP a $email: $mailError. Código generado: $codigo\n", FILE_APPEND);
+                $error = 'Error al enviar el correo. Por favor intente más tarde. SMTP: ' . htmlspecialchars($mailError);
             }
         }
     }
 }
+
 ?>
 
 <!DOCTYPE html>
@@ -139,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card">
         <div class="icon-wrap"><i class="fas fa-key"></i></div>
         <h2>Recuperar Contraseña</h2>
-        <p class="subtitle">Ingresa tu correo registrado y te enviaremos una contraseña provisional de acceso.</p>
+        <p class="subtitle">Ingresa tu correo registrado y te enviaremos un código de recuperación de acceso.</p>
 
         <?php if ($error): ?>
             <div class="alert-error"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
@@ -158,11 +157,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="email" name="email" placeholder="tu@correo.com" required autocomplete="off">
                 </div>
             </div>
-            <button type="submit" class="btn-main"><i class="fas fa-paper-plane me-2"></i>Enviar Contraseña</button>
+            <button type="submit" class="btn-main"><i class="fas fa-paper-plane me-2"></i>Enviar Código</button>
         </form>
         <?php endif; ?>
 
-        <a href="login.php?role=<?= htmlspecialchars($role) ?>" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Volver al Login</a>
+        <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Volver al Login</a>
         <div class="footer">Super_IA &copy; 2026</div>
     </div>
 </body>

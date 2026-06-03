@@ -34,6 +34,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->prepare("UPDATE solicitudes_supervisor SET password_hash = ? WHERE email = ?")->execute([$hash, $email]);
         } catch (\Throwable $e) { /* tabla puede no existir */ }
+        try {
+            $pdo->prepare("UPDATE solicitudes_asesor SET password_hash = ? WHERE email = ?")->execute([$hash, $email]);
+        } catch (\Throwable $e) { /* tabla puede no existir */ }
 
         // Limpiar sesión de recuperación
         unset($_SESSION['recovery_email'], $_SESSION['recovery_role'], $_SESSION['recovery_otp_ok']);
