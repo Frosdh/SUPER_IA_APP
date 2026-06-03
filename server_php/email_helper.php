@@ -13,73 +13,126 @@ function loadEmailConfig()
     if (!file_exists($configPath)) {
         return [null, "Falta configurar email_config.php con las credenciales SMTP"];
     }
-
     $emailConfig = require $configPath;
-    if (
-        empty($emailConfig['host']) ||
-        empty($emailConfig['port']) ||
-        empty($emailConfig['secure']) ||
-        empty($emailConfig['username']) ||
-        empty($emailConfig['password']) ||
-        empty($emailConfig['from_email']) ||
-        empty($emailConfig['from_name']) ||
-        $emailConfig['password'] === 'CAMBIA_ESTA_PASSWORD'
-    ) {
-        return [null, "Configura correctamente las credenciales SMTP en email_config.php"];
-    }
-
     return [$emailConfig, null];
 }
 
-function createMailer(array $emailConfig)
+// ── Detecta si estamos en Windows (XAMPP local) ───────────────────────────────
+function _isWindows()
 {
-    $mail = new PHPMailer(true);
-    $mail->isSMTP();
-    $mail->Host = $emailConfig['host'];
-    $mail->SMTPAuth = true;
-    $mail->Username = $emailConfig['username'];
-    $mail->Password = $emailConfig['password'];
-    $mail->SMTPSecure = $emailConfig['secure'];
-    $mail->Port = (int)$emailConfig['port'];
-    $mail->CharSet = 'UTF-8';
-    $mail->Timeout = 30;
-    $mail->setFrom($emailConfig['from_email'], $emailConfig['from_name']);
-
-    // Desactivar verificación estricta de certificado SSL.
-    // Necesario en entornos locales (XAMPP) donde el proveedor de internet
-    // puede interceptar la conexión SMTP y presentar su propio certificado.
-    $mail->SMTPOptions = [
-        'ssl' => [
-            'verify_peer'       => false,
-            'verify_peer_name'  => false,
-            'allow_self_signed' => true,
-        ],
-    ];
-
-    return $mail;
+    return strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
 }
 
-function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
+// ── Estrategia 1: localhost SMTP sin autenticación (solo en Linux/hosting) ────
+function _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName)
 {
-    list($emailConfig, $configError) = loadEmailConfig();
-    if ($configError !== null) {
-        return [false, $configError];
+    // En Windows esta conexión no funciona — el sendmail local no existe
+    if (_isWindows()) {
+        return [false, 'localhost SMTP no disponible en Windows/XAMPP'];
     }
-
     try {
-        $mail = createMailer($emailConfig);
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host       = 'localhost';
+        $mail->Port       = 25;
+        $mail->SMTPAuth   = false;
+        $mail->SMTPSecure = '';
+        $mail->CharSet    = 'UTF-8';
+        $mail->Timeout    = 10;
+        $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = $subject;
-        $mail->Body = $htmlBody;
+        $mail->Body    = $htmlBody;
         $mail->AltBody = $plainBody;
         $mail->send();
-
         return [true, null];
-    } catch (Exception $e) {
-        return [false, $mail->ErrorInfo];
+    } catch (\Exception $e) {
+        return [false, $e->getMessage()];
     }
 }
+
+// ── Estrategia 2: SMTP externo con credenciales (Gmail / hosting) ─────────────
+function _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, array $cfg)
+{
+    try {
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host       = $cfg['host'];
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $cfg['username'];
+        $mail->Password   = $cfg['password'];
+        $mail->SMTPSecure = $cfg['secure'];
+        $mail->Port       = (int)$cfg['port'];
+        $mail->CharSet    = 'UTF-8';
+        $mail->Timeout    = 20;
+        $mail->setFrom($cfg['from_email'], $cfg['from_name']);
+        $mail->SMTPOptions = [
+            'ssl' => [
+                'verify_peer'       => false,
+                'verify_peer_name'  => false,
+                'allow_self_signed' => true,
+            ],
+        ];
+        $mail->addAddress($toEmail);
+        $mail->isHTML(true);
+        $mail->Subject = $subject;
+        $mail->Body    = $htmlBody;
+        $mail->AltBody = $plainBody;
+        $mail->send();
+        return [true, null];
+    } catch (\Exception $e) {
+        return [false, $e->getMessage()];
+    }
+}
+
+// ── Estrategia 3: PHP mail() nativo (solo en Linux/hosting, NO Windows) ───────
+function _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromName)
+{
+    // En Windows PHP mail() retorna true sin enviar → no usarlo
+    if (_isWindows()) {
+        return [false, 'PHP mail() no funcional en Windows/XAMPP'];
+    }
+    $headers  = "From: $fromName <$fromEmail>\r\n";
+    $headers .= "Reply-To: $fromEmail\r\n";
+    $headers .= "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $headers .= "X-Mailer: Super_IA\r\n";
+    $ok = @mail($toEmail, $subject, $plainBody, $headers);
+    return [$ok, $ok ? null : 'PHP mail() falló — verifica la configuración del servidor'];
+}
+
+// ── Función principal de envío ────────────────────────────────────────────────
+function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
+{
+    list($cfg, $cfgErr) = loadEmailConfig();
+
+    $fromEmail = $cfg['from_email'] ?? 'noreply@super-ia.com';
+    $fromName  = $cfg['from_name']  ?? 'Super_IA';
+
+    $errors = [];
+
+    // 1️⃣  localhost SMTP (solo Linux/hosting — skipped en Windows)
+    list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
+    if ($ok) return [true, null];
+    $errors[] = "localhost:25 → $err";
+
+    // 2️⃣  SMTP externo con credenciales
+    if ($cfg !== null && empty($cfgErr) && !empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
+        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
+        if ($ok) return [true, null];
+        $errors[] = "SMTP {$cfg['host']}:{$cfg['port']} → $err";
+    }
+
+    // 3️⃣  PHP mail() nativo (solo Linux/hosting)
+    list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromName);
+    if ($ok) return [true, null];
+    $errors[] = "mail() → $err";
+
+    return [false, implode(' | ', $errors)];
+}
+
+
 
 function buildOtpEmailHtml($codigo)
 {

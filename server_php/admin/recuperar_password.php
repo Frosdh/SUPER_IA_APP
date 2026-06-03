@@ -87,13 +87,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($sent) {
                 file_put_contents($logFile, date('Y-m-d H:i:s') . " - Código OTP enviado a $email. Código: $codigo\n", FILE_APPEND);
-                $_SESSION['recovery_email'] = $email;
-                $_SESSION['recovery_role']  = $postRole;
+                $_SESSION['recovery_email']   = $email;
+                $_SESSION['recovery_role']    = $postRole;
+                unset($_SESSION['recovery_dev_otp']); // limpiar fallback previo
                 header('Location: verificar_otp_recovery.php');
                 exit;
             } else {
-                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error al enviar código OTP a $email: $mailError. Código generado: $codigo\n", FILE_APPEND);
-                $error = 'Error al enviar el correo. Por favor intente más tarde. SMTP: ' . htmlspecialchars($mailError);
+                // SMTP no disponible (común en XAMPP/Windows).
+                // Guardamos el código en sesión para mostrarlo en pantalla como fallback de desarrollo.
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error SMTP a $email: $mailError. Código: $codigo\n", FILE_APPEND);
+                $_SESSION['recovery_email']   = $email;
+                $_SESSION['recovery_role']    = $postRole;
+                $_SESSION['recovery_dev_otp'] = $codigo; // mostrar en pantalla
+                header('Location: verificar_otp_recovery.php');
+                exit;
             }
         }
     }

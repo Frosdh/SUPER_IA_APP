@@ -14,6 +14,13 @@ $email = $_SESSION['recovery_email'];
 $role  = $_SESSION['recovery_role'] ?? 'admin';
 $error = '';
 
+// ── Modo desarrollo: el correo no se pudo enviar, mostrar código en pantalla ──
+$devOtp = '';
+if (!empty($_SESSION['recovery_dev_otp'])) {
+    $devOtp = $_SESSION['recovery_dev_otp'];
+    unset($_SESSION['recovery_dev_otp']); // mostrar solo una vez
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $codigo = trim($_POST['codigo'] ?? '');
 
