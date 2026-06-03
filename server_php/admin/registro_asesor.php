@@ -421,18 +421,35 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
                 <div class="form-group">
                     <label><i class="fas fa-key me-1"></i> Contraseña</label>
                     <div style="position:relative;">
-                        <input type="password" name="password" id="pass1" placeholder="Mín. 6 caracteres" minlength="6" required style="padding-right:40px;">
+                        <input type="password" name="password" id="pass1" placeholder="Mín. 8 caracteres" minlength="8" required style="padding-right:40px;" oninput="checkPass(this.value)">
                         <button type="button" class="eye-btn" onclick="toggleVis('pass1','eye1')"><i class="fas fa-eye" id="eye1"></i></button>
                     </div>
+                    <!-- Barra de fortaleza -->
+                    <div id="strength-bar-wrap" style="margin-top:6px;display:none;">
+                        <div style="display:flex;gap:4px;margin-bottom:4px;">
+                            <div class="sbar" id="sb1"></div>
+                            <div class="sbar" id="sb2"></div>
+                            <div class="sbar" id="sb3"></div>
+                            <div class="sbar" id="sb4"></div>
+                        </div>
+                        <div id="strength-label" style="font-size:11px;font-weight:700;"></div>
+                        <ul id="pass-rules" style="margin:6px 0 0 0;padding:0;list-style:none;font-size:11px;display:flex;flex-wrap:wrap;gap:4px;">
+                            <li id="r-len"  class="prule">✗ 8+ caracteres</li>
+                            <li id="r-up"   class="prule">✗ Mayúscula</li>
+                            <li id="r-low"  class="prule">✗ Minúscula</li>
+                            <li id="r-num"  class="prule">✗ Número</li>
+                            <li id="r-sym"  class="prule">✗ Símbolo</li>
+                        </ul>
+                    </div>
+                    <?= fe('password') ?>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-key me-1"></i> Confirmar Contraseña</label>
                     <div style="position:relative;">
-                        <input type="password" name="password_confirm" id="pass2" placeholder="Repite la contraseña" minlength="6" required style="padding-right:40px;">
+                        <input type="password" name="password_confirm" id="pass2" placeholder="Repite la contraseña" minlength="8" required style="padding-right:40px;" oninput="checkConfirm()">
                         <button type="button" class="eye-btn" onclick="toggleVis('pass2','eye2')"><i class="fas fa-eye" id="eye2"></i></button>
                     </div>
-                    <div class="pass-hint" id="passHint"></div>
-           
+                    <div id="passHint" class="field-feedback"></div>
                 </div>
             </div>
 
@@ -465,7 +482,7 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
                 <i class="fas fa-paper-plane"></i> Enviar Solicitud
             </button>
             <?php endif; ?>
-
+            
         </form>
 
 <?php if ($modo_supervisor): ?>
@@ -485,6 +502,13 @@ input.input-error  { border-color:#ef4444 !important; box-shadow:0 0 0 2px rgba(
 input.input-ok     { border-color:#10b981 !important; }
 .file-upload-error { border-color:#ef4444 !important; background:rgba(239,68,68,.05) !important; }
 .public-card .field-feedback.error { color:#f87171; }
+
+/* Barra de fortaleza */
+.sbar { flex:1; height:5px; border-radius:3px; background:#e5e7eb; transition:background .3s; }
+.prule { background:#f1f5f9; border-radius:20px; padding:2px 8px; color:#9ca3af; transition:.2s; }
+.prule.ok { background:#dcfce7; color:#16a34a; }
+.public-card .prule { background:rgba(255,255,255,.08); color:rgba(255,255,255,.4); }
+.public-card .prule.ok { background:rgba(74,222,128,.18); color:#4ADE80; }
 </style>
 
 <script>
@@ -495,6 +519,62 @@ function toggleVis(inputId, iconId) {
     inp.type = inp.type === 'password' ? 'text' : 'password';
     icon.classList.toggle('fa-eye');
     icon.classList.toggle('fa-eye-slash');
+}
+
+// ── Fortaleza de contraseña ────────────────────────────────
+const levels = [
+    { color:'#ef4444', label:'Muy débil',  text:'🔴' },
+    { color:'#f97316', label:'Débil',      text:'🟠' },
+    { color:'#eab308', label:'Regular',    text:'🟡' },
+    { color:'#22c55e', label:'Fuerte',     text:'🟢' },
+    { color:'#16a34a', label:'Muy fuerte', text:'✅' },
+];
+
+function checkPass(val) {
+    const wrap  = document.getElementById('strength-bar-wrap');
+    const label = document.getElementById('strength-label');
+    if (!val) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+
+    const rules = {
+        len : val.length >= 8,
+        up  : /[A-Z]/.test(val),
+        low : /[a-z]/.test(val),
+        num : /[0-9]/.test(val),
+        sym : /[\W_]/.test(val),
+    };
+
+    // Actualizar chips
+    document.getElementById('r-len').className = 'prule' + (rules.len ? ' ok' : '');
+    document.getElementById('r-up' ).className = 'prule' + (rules.up  ? ' ok' : '');
+    document.getElementById('r-low').className = 'prule' + (rules.low ? ' ok' : '');
+    document.getElementById('r-num').className = 'prule' + (rules.num ? ' ok' : '');
+    document.getElementById('r-sym').className = 'prule' + (rules.sym ? ' ok' : '');
+
+    const score = Object.values(rules).filter(Boolean).length; // 0-5
+    const lvl   = Math.max(0, score - 1); // índice 0-4
+    const bars  = [document.getElementById('sb1'),document.getElementById('sb2'),
+                   document.getElementById('sb3'),document.getElementById('sb4')];
+
+    bars.forEach((b, i) => {
+        b.style.background = i < score ? levels[lvl].color : '#e5e7eb';
+    });
+    label.textContent = levels[lvl].label;
+    label.style.color  = levels[lvl].color;
+
+    checkConfirm();
+}
+
+function checkConfirm() {
+    const p1 = document.getElementById('pass1')?.value;
+    const p2 = document.getElementById('pass2')?.value;
+    const hint = document.getElementById('passHint');
+    if (!hint || !p2) return;
+    if (p1 === p2) {
+        hint.innerHTML = '<span style="color:#22c55e;">✓ Las contraseñas coinciden</span>';
+    } else {
+        hint.innerHTML = '<span style="color:#ef4444;">✗ Las contraseñas no coinciden</span>';
+    }
 }
 
 // ── Carga dinámica de supervisores (modo público) ─────────

@@ -118,8 +118,17 @@ function validarUsuario(string $valor): array {
 // CONTRASEÑA
 // ─────────────────────────────────────────────────────────────
 function validarPassword(string $pass): array {
-    if (strlen($pass) < 6) return ['ok' => false, 'msg' => 'La contraseña debe tener mínimo 6 caracteres'];
-    return ['ok' => true, 'msg' => 'Contraseña aceptable'];
+    if (strlen($pass) < 8)
+        return ['ok' => false, 'msg' => 'Mínimo 8 caracteres'];
+    if (!preg_match('/[A-Z]/', $pass))
+        return ['ok' => false, 'msg' => 'Debe incluir al menos una mayúscula (A-Z)'];
+    if (!preg_match('/[a-z]/', $pass))
+        return ['ok' => false, 'msg' => 'Debe incluir al menos una minúscula (a-z)'];
+    if (!preg_match('/[0-9]/', $pass))
+        return ['ok' => false, 'msg' => 'Debe incluir al menos un número (0-9)'];
+    if (!preg_match('/[\W_]/', $pass))
+        return ['ok' => false, 'msg' => 'Debe incluir al menos un símbolo (@ # $ % ! . _)'];
+    return ['ok' => true, 'msg' => 'Contraseña segura'];
 }
 
 // ─────────────────────────────────────────────────────────────
