@@ -25,38 +25,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Ingresa un correo electrónico válido.';
         file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error: Correo inválido ($email)\n", FILE_APPEND);
     } else {
-        // Determinar el rol en la tabla usuario
-        $rolMap = [
-            'super_admin' => 'gerente_general',
-            'admin'       => 'jefe_agencia',
-            'supervisor'  => 'supervisor',
-            'asesor'      => 'asesor',
-        ];
-        $dbRol = $rolMap[$postRole] ?? 'jefe_agencia';
-
-        // Buscar usuario (para super_admin también puede ser gerente_general)
-        if ($postRole === 'admin') {
-            $stmt = $pdo->prepare("SELECT id, nombre FROM usuario WHERE email = ? AND (rol = 'jefe_agencia' OR rol = 'gerente_general') AND activo = 1 LIMIT 1");
-        } else {
-            $stmt = $pdo->prepare("SELECT id, nombre FROM usuario WHERE email = ? AND rol = ? AND activo = 1 LIMIT 1");
-        }
-
-        if ($postRole === 'admin') {
-            $stmt->execute([$email]);
-        } else {
-            $stmt->execute([$email, $dbRol]);
-        }
+        // Buscar usuario por email SIN filtrar por rol
+        // Cualquier usuario activo (asesor, supervisor, gerente, superadmin) puede recuperar su contraseña
+        $stmt = $pdo->prepare("SELECT id, nombre, rol FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
+        $stmt->execute([$email]);
         $user = $stmt->fetch();
 
         if (!$user) {
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email, Rol: $dbRol\n", FILE_APPEND);
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email\n", FILE_APPEND);
             // Por seguridad, redirigimos a la pantalla de verificación OTP para que no se sepa si existe o no
             $_SESSION['recovery_email'] = $email;
             $_SESSION['recovery_role']  = $postRole;
             header('Location: verificar_otp_recovery.php');
             exit;
         } else {
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . "\n", FILE_APPEND);
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . ", rol=" . $user['rol'] . "\n", FILE_APPEND);
             
             // Generar OTP de 6 dígitos
             $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
@@ -72,29 +55,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                  VALUES (?, ?, ?, 0, NOW())"
             )->execute([$email, $codigo, $expira_en]);
 
-            // Enviar email usando el helper existente
+            // Siempre guardamos el código en sesión ANTES de intentar enviar
+            // así la redirección ocurre sin importar si el email tarda o falla
+            $_SESSION['recovery_email']   = $email;
+            $_SESSION['recovery_role']    = $postRole;
+            $_SESSION['recovery_dev_otp'] = $codigo;
+            session_write_close(); // cerrar sesión antes del envío para no bloquear
+
+            // Intentar enviar email (con timeout propio de PHPMailer)
             $emailHelperPath = __DIR__ . '/../email_helper.php';
-            $sent = false;
+            $sent      = false;
             $mailError = '';
             if (file_exists($emailHelperPath)) {
                 require_once $emailHelperPath;
                 $htmlBody  = buildOtpEmailHtml($codigo);
                 $plainBody = buildOtpEmailText($codigo);
-                list($sent, $mailError) = sendEmailMessage($email, 'Código de recuperación — Super_IA', $htmlBody, $plainBody);
+                list($sent, $mailError) = sendEmailMessage(
+                    $email,
+                    'Código de recuperación — Super_IA',
+                    $htmlBody,
+                    $plainBody
+                );
             } else {
                 $mailError = 'No se encontró email_helper.php';
             }
 
-            // Siempre guardamos el código en sesión para mostrarlo en pantalla
-            $_SESSION['recovery_email']   = $email;
-            $_SESSION['recovery_role']    = $postRole;
-            $_SESSION['recovery_dev_otp'] = $codigo; // siempre visible en pantalla
+            file_put_contents(
+                $logFile,
+                date('Y-m-d H:i:s') . ' - ' . ($sent ? "OTP enviado" : "SMTP falló: $mailError") . " | email=$email | codigo=$codigo\n",
+                FILE_APPEND
+            );
 
-            if ($sent) {
-                file_put_contents($logFile, date('Y-m-d H:i:s') . " - OTP enviado a $email: $codigo\n", FILE_APPEND);
-            } else {
-                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error SMTP a $email: $mailError\n", FILE_APPEND);
-            }
             header('Location: verificar_otp_recovery.php');
             exit;
         }

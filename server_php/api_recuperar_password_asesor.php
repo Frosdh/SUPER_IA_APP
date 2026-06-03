@@ -1,193 +1,200 @@
 <?php
-// ============================================================
-// api_recuperar_password_asesor.php
-// Recuperación de contraseña para asesores (app móvil Flutter).
-//
-// Acciones (POST):
-//   action=enviar_otp      → genera y envía OTP al email del asesor
-//   action=verificar_otp   → verifica que el código sea válido
-//   action=nueva_password  → actualiza la contraseña en la DB
-// ============================================================
+// api_recuperar_password_asesor.php — Recuperación de contraseña (app móvil)
+// Responde JSON siempre, nunca lanza 500
 
+// ── Headers CORS y JSON ────────────────────────────────────
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-    http_response_code(204);
-    exit;
+    http_response_code(204); exit;
 }
 
+// ── Capturar cualquier error fatal y devolverlo como JSON ──
+set_exception_handler(function($e) {
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['status' => 'error', 'message' => 'Error interno: ' . $e->getMessage()]);
+    exit;
+});
+set_error_handler(function($errno, $errstr) {
+    // Solo errores fatales
+    if ($errno === E_ERROR || $errno === E_PARSE) {
+        echo json_encode(['status' => 'error', 'message' => "PHP Error: $errstr"]);
+        exit;
+    }
+    return false;
+});
+
+// ── Conexión DB ────────────────────────────────────────────
 require_once __DIR__ . '/db_config.php';
 
-// Conexión PDO
 try {
     $pdo = new PDO(
-        "mysql:host=$db_host;dbname=$db_name;charset=utf8mb4",
+        "mysql:host={$db_host};dbname={$db_name};charset=utf8mb4",
         $db_user,
-        $db_password
+        $db_password,
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    echo json_encode(['status' => 'error', 'message' => 'Error de conexión']);
+} catch (\Throwable $e) {
+    echo json_encode(['status' => 'error', 'message' => 'Sin conexión a BD']);
     exit;
 }
 
-$action = trim($_POST['action'] ?? '');
+$action = trim($_POST['action'] ?? $_GET['action'] ?? '');
 
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
 // 1. ENVIAR OTP
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
 if ($action === 'enviar_otp') {
     $email = trim($_POST['email'] ?? '');
 
-    if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        echo json_encode(['status' => 'error', 'message' => 'Ingresa un correo válido.']);
+    if (!$email || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        echo json_encode(['status' => 'error', 'message' => 'Correo inválido.']);
         exit;
     }
 
-    // Buscar asesor activo en la tabla usuario
-    $stmt = $pdo->prepare(
-        "SELECT id, nombre FROM usuario
-         WHERE email = ? AND rol = 'asesor' AND activo = 1
-         LIMIT 1"
-    );
-    $stmt->execute([$email]);
-    $user = $stmt->fetch();
+    try {
+        // Buscar usuario activo con ese correo — cualquier rol (asesor, supervisor, gerente, superadmin)
+        $st = $pdo->prepare("SELECT id, nombre, rol FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
+        $st->execute([$email]);
+        $user = $st->fetch();
 
-    // Por seguridad: respuesta igual aunque no exista
-    if (!$user) {
-        echo json_encode([
-            'status'  => 'success',
-            'message' => 'Si el correo está registrado, recibirás un código.',
-        ]);
-        exit;
+        if ($user) {
+            $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+            $expira_en = date('Y-m-d H:i:s', time() + 600);
+
+            // Invalidar OTPs anteriores y guardar el nuevo
+            $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE email = ? AND usado = 0")->execute([$email]);
+            $pdo->prepare("INSERT INTO email_otp_codes (email, codigo, expira_en, usado, creado_en) VALUES (?, ?, ?, 0, NOW())")
+                ->execute([$email, $codigo, $expira_en]);
+
+            // Enviar email ANTES de responder para garantizar que se procese
+            _enviarEmailOtp($email, $codigo);
+
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
+                'email'   => $email,
+            ]);
+        } else {
+            // Por seguridad respondemos igual aunque no exista el usuario
+            echo json_encode([
+                'status'  => 'success',
+                'message' => 'Si el correo está registrado, recibirás el código.',
+                'email'   => $email,
+            ]);
+        }
+
+    } catch (\Throwable $e) {
+        file_put_contents(__DIR__ . '/api_otp_error.log',
+            date('Y-m-d H:i:s') . " enviar_otp ERROR: " . $e->getMessage() . "\n", FILE_APPEND);
+        echo json_encode(['status' => 'error', 'message' => 'Error interno al enviar el código.']);
     }
-
-    // Generar OTP de 6 dígitos
-    $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-    $expira_en = date('Y-m-d H:i:s', time() + 600); // 10 minutos
-
-    // Invalidar OTPs anteriores
-    $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE email = ? AND usado = 0")
-        ->execute([$email]);
-
-    // Insertar nuevo OTP
-    $pdo->prepare(
-        "INSERT INTO email_otp_codes (email, codigo, expira_en, usado, creado_en)
-         VALUES (?, ?, ?, 0, NOW())"
-    )->execute([$email, $codigo, $expira_en]);
-
-    // Enviar email
-    $sent     = false;
-    $mailErr  = '';
-    $helperPath = __DIR__ . '/email_helper.php';
-
-    if (file_exists($helperPath)) {
-        require_once $helperPath;
-        $html  = buildOtpEmailHtml($codigo);
-        $plain = buildOtpEmailText($codigo);
-        list($sent, $mailErr) = sendEmailMessage(
-            $email,
-            'Código de recuperación — Super_IA',
-            $html,
-            $plain
-        );
-    }
-
-    // Siempre devolver el código para que la app pueda mostrarlo en pantalla
-    $response = [
-        'status'  => 'success',
-        'message' => 'Código generado. Revisa tu correo o usa el código que aparece aquí.',
-        'codigo'  => $codigo,  // la app lo muestra en pantalla como respaldo
-        'email'   => $email,
-    ];
-
-    if (!$sent) {
-        file_put_contents(
-            __DIR__ . '/email_send_mobile.log',
-            date('Y-m-d H:i:s') . " SMTP FALLO para $email: $mailErr\n",
-            FILE_APPEND | LOCK_EX
-        );
-        $response['email_enviado'] = false;
-        $response['message'] = 'No llegó al correo — usa el código que aparece en pantalla.';
-    } else {
-        $response['email_enviado'] = true;
-    }
-
-    echo json_encode($response);
     exit;
 }
 
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
 // 2. VERIFICAR OTP
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
 if ($action === 'verificar_otp') {
     $email  = trim($_POST['email']  ?? '');
     $codigo = trim($_POST['codigo'] ?? '');
 
-    if (empty($email) || empty($codigo)) {
+    if (!$email || !$codigo) {
         echo json_encode(['status' => 'error', 'message' => 'Datos incompletos.']);
         exit;
     }
 
-    $stmt = $pdo->prepare(
-        "SELECT id FROM email_otp_codes
-         WHERE email = ? AND codigo = ? AND usado = 0 AND expira_en > NOW()
-         ORDER BY id DESC LIMIT 1"
-    );
-    $stmt->execute([$email, $codigo]);
-    $row = $stmt->fetch();
+    try {
+        $st = $pdo->prepare(
+            "SELECT id FROM email_otp_codes
+             WHERE email = ? AND codigo = ? AND usado = 0 AND expira_en > NOW()
+             ORDER BY id DESC LIMIT 1"
+        );
+        $st->execute([$email, $codigo]);
+        $row = $st->fetch();
 
-    if (!$row) {
-        echo json_encode(['status' => 'error', 'message' => 'Código incorrecto o expirado.']);
-        exit;
+        if (!$row) {
+            echo json_encode(['status' => 'error', 'message' => 'Código incorrecto o expirado.']);
+            exit;
+        }
+
+        $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE id = ?")->execute([$row['id']]);
+        echo json_encode(['status' => 'success', 'message' => 'Código verificado.']);
+
+    } catch (\Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Error al verificar.']);
     }
-
-    // Marcar como usado
-    $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE id = ?")
-        ->execute([$row['id']]);
-
-    echo json_encode([
-        'status'  => 'success',
-        'message' => 'Código verificado correctamente.',
-    ]);
     exit;
 }
 
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
 // 3. NUEVA CONTRASEÑA
-// ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════
 if ($action === 'nueva_password') {
-    $email    = trim($_POST['email']    ?? '');
-    $password = $_POST['nueva_password'] ?? '';
+    $email    = trim($_POST['email']         ?? '');
+    $password = trim($_POST['nueva_password'] ?? '');
 
-    if (empty($email) || strlen($password) < 6) {
+    if (!$email || strlen($password) < 6) {
         echo json_encode(['status' => 'error', 'message' => 'Datos inválidos.']);
         exit;
     }
 
-    $hash = password_hash($password, PASSWORD_BCRYPT);
+    try {
+        $hash = password_hash($password, PASSWORD_BCRYPT);
+        $st = $pdo->prepare("UPDATE usuario SET password_hash = ? WHERE email = ? AND activo = 1");
+        $st->execute([$hash, $email]);
 
-    $stmt = $pdo->prepare(
-        "UPDATE usuario SET password_hash = ?
-         WHERE email = ? AND rol = 'asesor' AND activo = 1"
-    );
-    $stmt->execute([$hash, $email]);
+        if ($st->rowCount() === 0) {
+            echo json_encode(['status' => 'error', 'message' => 'Usuario no encontrado.']);
+            exit;
+        }
 
-    if ($stmt->rowCount() === 0) {
-        echo json_encode(['status' => 'error', 'message' => 'No se encontró el usuario.']);
-        exit;
+        echo json_encode(['status' => 'success', 'message' => 'Contraseña actualizada correctamente.']);
+
+    } catch (\Throwable $e) {
+        echo json_encode(['status' => 'error', 'message' => 'Error al actualizar.']);
     }
-
-    echo json_encode([
-        'status'  => 'success',
-        'message' => 'Contraseña actualizada. Ya puedes iniciar sesión.',
-    ]);
     exit;
 }
 
 // Acción no reconocida
-echo json_encode(['status' => 'error', 'message' => 'Acción no válida.']);
+echo json_encode(['status' => 'error', 'message' => "Acción '$action' no válida."]);
+exit;
+
+// ══════════════════════════════════════════════════════════
+// FUNCIÓN: Enviar email con OTP
+// ══════════════════════════════════════════════════════════
+function _enviarEmailOtp(string $toEmail, string $codigo): void
+{
+    $logFile = __DIR__ . '/email_send_mobile.log';
+
+    try {
+        $helperPath = __DIR__ . '/email_helper.php';
+        if (!file_exists($helperPath)) {
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " email_helper.php no encontrado\n", FILE_APPEND);
+            return;
+        }
+
+        require_once $helperPath;
+
+        $html  = buildOtpEmailHtml($codigo);
+        $plain = buildOtpEmailText($codigo);
+
+        [$sent, $err] = sendEmailMessage($toEmail, 'Código de recuperación — Super_IA', $html, $plain);
+
+        file_put_contents(
+            $logFile,
+            date('Y-m-d H:i:s') . ($sent ? " OK" : " FAIL: $err") . " | to=$toEmail | code=$codigo\n",
+            FILE_APPEND | LOCK_EX
+        );
+    } catch (\Throwable $e) {
+        file_put_contents(
+            $logFile,
+            date('Y-m-d H:i:s') . " EXCEPTION: " . $e->getMessage() . " | to=$toEmail\n",
+            FILE_APPEND | LOCK_EX
+        );
+    }
+}

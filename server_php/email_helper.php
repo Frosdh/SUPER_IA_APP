@@ -139,19 +139,24 @@ function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
 
     $log("[START] Enviando a: $toEmail | From: $fromEmail | Asunto: $subject");
 
-    // 1️⃣  PHP mail() nativo del servidor (cPanel hosting — más confiable y sin spam)
-    //     Usa noreply@corporativoqbank.com para que salga desde el propio dominio
-    if (!_isWindows()) {
-        $domainFrom      = 'noreply@corporativoqbank.com';
-        $domainFromName  = $fromName;
-        $log("[TRY] PHP mail() con FROM=$domainFrom");
-        list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, $domainFrom, $domainFromName);
-        if ($ok) { $log("[OK] PHP mail() exitoso"); return [true, null]; }
-        $log("[FAIL] PHP mail(): $err");
-        $errors[] = "mail() → $err";
+    // 1️⃣  Gmail SMTP puerto 587 (TLS)
+    if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
+        $log("[TRY] Gmail {$cfg['host']}:{$cfg['port']} ({$cfg['secure']})");
+        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
+        if ($ok) { $log("[OK] Gmail 587 exitoso"); return [true, null]; }
+        $log("[FAIL] Gmail 587: $err");
+        $errors[] = "{$cfg['host']}:587 → $err";
+
+        // 1b️⃣  Gmail puerto alternativo 465 (SSL)
+        $altCfg = array_merge($cfg, ['port' => 465, 'secure' => 'ssl']);
+        $log("[TRY] Gmail alt 465 (ssl)");
+        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $altCfg);
+        if ($ok) { $log("[OK] Gmail 465 exitoso"); return [true, null]; }
+        $log("[FAIL] Gmail 465: $err");
+        $errors[] = "{$cfg['host']}:465 → $err";
     }
 
-    // 2️⃣  SMTP del hosting (fallback con password)
+    // 2️⃣  SMTP del hosting (si tiene password configurada)
     if (!empty($cfg['fallback_password'])) {
         $fallbackCfg = [
             'host'       => $cfg['fallback_host']     ?? 'mail.corporativoqbank.com',
@@ -162,39 +167,20 @@ function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
             'from_email' => $cfg['fallback_from']     ?? 'angelespinozav@corporativoqbank.com',
             'from_name'  => $fromName,
         ];
-        $log("[TRY] SMTP hosting {$fallbackCfg['host']}:{$fallbackCfg['port']}");
+        $log("[TRY] Hosting SMTP {$fallbackCfg['host']}:{$fallbackCfg['port']}");
         list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $fallbackCfg);
-        if ($ok) { $log("[OK] SMTP hosting exitoso"); return [true, null]; }
-        $log("[FAIL] SMTP hosting: $err");
+        if ($ok) { $log("[OK] Hosting SMTP exitoso"); return [true, null]; }
+        $log("[FAIL] Hosting SMTP: $err");
         $errors[] = "{$fallbackCfg['host']} → $err";
     }
 
-    // 3️⃣  Gmail SMTP (puede ir a spam si TO y FROM son @gmail.com)
-    if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
-        $log("[TRY] Gmail SMTP {$cfg['host']}:{$cfg['port']} as {$cfg['username']}");
-        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
-        if ($ok) { $log("[OK] Gmail SMTP exitoso"); return [true, null]; }
-        $log("[FAIL] Gmail SMTP: $err");
-        $errors[] = "{$cfg['host']}:{$cfg['port']} → $err";
-
-        // Puerto alternativo Gmail (465 si 587 falló, o viceversa)
-        $altPort   = ($cfg['port'] == 587) ? 465 : 587;
-        $altSecure = ($altPort == 465) ? 'ssl' : 'tls';
-        $altCfg    = array_merge($cfg, ['port' => $altPort, 'secure' => $altSecure]);
-        $log("[TRY] Gmail alt port $altPort");
-        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $altCfg);
-        if ($ok) { $log("[OK] Gmail alt exitoso"); return [true, null]; }
-        $log("[FAIL] Gmail alt: $err");
-        $errors[] = "{$cfg['host']}:{$altPort} → $err";
-    }
-
-    // 4️⃣  localhost SMTP
+    // 3️⃣  PHP mail() nativo — último recurso (puede ser lento)
     if (!_isWindows()) {
-        $log("[TRY] localhost:25");
-        list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
-        if ($ok) { $log("[OK] localhost exitoso"); return [true, null]; }
-        $log("[FAIL] localhost: $err");
-        $errors[] = "localhost → $err";
+        $log("[TRY] PHP mail()");
+        list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, 'noreply@corporativoqbank.com', $fromName);
+        if ($ok) { $log("[OK] PHP mail() exitoso"); return [true, null]; }
+        $log("[FAIL] PHP mail(): $err");
+        $errors[] = "mail() → $err";
     }
 
     $allErrors = implode(' | ', $errors);

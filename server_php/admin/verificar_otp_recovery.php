@@ -95,17 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="alert-error"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
-        <?php if (!empty($devOtp)): ?>
-        <div style="background:linear-gradient(135deg,#1e1b4b,#312e81);border:1.5px solid rgba(107,17,255,.4);border-radius:16px;padding:20px;margin-bottom:20px;text-align:center;box-shadow:0 8px 24px rgba(107,17,255,.2);">
-            <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;">
-                <i class="fas fa-shield-alt" style="margin-right:4px;color:#a78bfa;"></i> Tu código de verificación
-            </div>
-            <div style="font-size:38px;font-weight:900;letter-spacing:10px;color:#fff;font-family:'Courier New',monospace;"><?= htmlspecialchars($devOtp) ?></div>
-            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:8px;">
-                <i class="fas fa-clock" style="margin-right:4px;"></i> Expira en 10 minutos · También enviado a <strong style="color:#a78bfa;"><?= htmlspecialchars($email) ?></strong>
-            </div>
-        </div>
-        <?php endif; ?>
 
         <form method="POST" id="otp-form">
             <!-- Inputs visuales separados por dígito -->
