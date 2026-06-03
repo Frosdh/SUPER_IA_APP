@@ -272,12 +272,14 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             </div>
             <div class="form-group">
                 <label><i class="fas fa-id-card me-1"></i> Cédula de Identidad</label>
-                <input type="text" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required>
+                <input type="text" id="cedula" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required>
+                <span id="cedula-feedback" class="field-feedback"></span>
             </div>
             <div class="row-cols">
                 <div class="form-group">
                     <label><i class="fas fa-envelope me-1"></i> Email</label>
-                    <input type="email" name="email" placeholder="correo@ejemplo.com" required>
+                    <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" required>
+                    <span id="email-feedback" class="field-feedback"></span>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-phone me-1"></i> Teléfono</label>
@@ -290,7 +292,8 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             <div class="form-row-cols-3">
                 <div class="form-group">
                     <label><i class="fas fa-user-circle me-1"></i> Usuario</label>
-                    <input type="text" name="usuario" placeholder="Ej: jgarcia" minlength="4" required>
+                    <input type="text" id="usuario" name="usuario" placeholder="Ej: jgarcia" minlength="4" required>
+                    <span id="usuario-feedback" class="field-feedback"></span>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-key me-1"></i> Contraseña</label>
@@ -342,6 +345,13 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 </div><!-- /.public-wrapper -->
 <?php endif; ?>
 
+<style>
+.field-feedback { display:block; font-size:12px; margin-top:4px; min-height:16px; }
+.field-feedback.error  { color:#ef4444; }
+.field-feedback.ok     { color:#10b981; }
+input.input-error { border-color:#ef4444 !important; }
+input.input-ok    { border-color:#10b981 !important; }
+</style>
 <script src="js/validaciones.js"></script>
 <script>
 // ── Mostrar/ocultar contraseña ─────────────────────────────
@@ -352,6 +362,59 @@ function toggleVis(inputId, iconId) {
     icon.classList.toggle('fa-eye');
     icon.classList.toggle('fa-eye-slash');
 }
+
+// ── Validación en tiempo real: email, usuario, cédula ─────
+const camposUnicos = [
+    { id: 'email',   campo: 'email',   msgExiste: 'Este correo ya está registrado.' },
+    { id: 'usuario', campo: 'usuario', msgExiste: 'Este nombre de usuario ya está en uso.' },
+    { id: 'cedula',  campo: 'cedula',  msgExiste: 'Esta cédula ya está registrada.' },
+];
+
+let debounceTimers = {};
+
+camposUnicos.forEach(({ id, campo, msgExiste }) => {
+    const input    = document.getElementById(id);
+    const feedback = document.getElementById(id + '-feedback');
+    if (!input || !feedback) return;
+
+    input.addEventListener('blur', () => verificar(input, campo, feedback, msgExiste));
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimers[id]);
+        feedback.textContent = '';
+        feedback.className = 'field-feedback';
+        input.classList.remove('input-error', 'input-ok');
+        debounceTimers[id] = setTimeout(() => verificar(input, campo, feedback, msgExiste), 600);
+    });
+});
+
+async function verificar(input, campo, feedback, msgExiste) {
+    const val = input.value.trim();
+    if (!val) return;
+    try {
+        const res  = await fetch('api_verificar_campo.php?campo=' + campo + '&valor=' + encodeURIComponent(val));
+        const data = await res.json();
+        if (data.disponible) {
+            feedback.textContent = '✓ Disponible';
+            feedback.className   = 'field-feedback ok';
+            input.classList.remove('input-error');
+            input.classList.add('input-ok');
+        } else {
+            feedback.textContent = '✗ ' + msgExiste;
+            feedback.className   = 'field-feedback error';
+            input.classList.remove('input-ok');
+            input.classList.add('input-error');
+        }
+    } catch(e) { /* silenciar error de red */ }
+}
+
+// Bloquear submit si algún campo tiene error
+document.querySelector('form')?.addEventListener('submit', function(e) {
+    const hayError = document.querySelectorAll('input.input-error').length > 0;
+    if (hayError) {
+        e.preventDefault();
+        alert('Corrige los campos marcados en rojo antes de continuar.');
+    }
+});
 
 // ── Activar validaciones del formulario ───────────────────
 document.addEventListener('DOMContentLoaded', () => {

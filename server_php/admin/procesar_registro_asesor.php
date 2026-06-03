@@ -42,18 +42,36 @@ $password         = $_POST['password']               ?? '';
 $password_confirm = $_POST['password_confirm']       ?? '';
 
 // ── Campos según modo ─────────────────────────────────────
-$banco         = '';
-$numero_cuenta = '';
-$tipo_cuenta   = 'Asesor';
-$id_supervisor_int = null;  // ID entero real para el INSERT
+$banco             = '';
+$numero_cuenta     = '';
+$tipo_cuenta       = 'Asesor';
+$id_supervisor_val = null;   // valor final para el INSERT (string o int según BD)
 
 if ($modo_supervisor) {
-    $usuario_id_sesion = $_SESSION['supervisor_id'] ?? null;
+    // supervisor_id en sesión = usuario.id
+    $id_supervisor_val = $_SESSION['supervisor_id'] ?? null;
     $id_cooperativa    = null;
+
+    // Recorrer la cadena jerárquica para obtener la unidad_bancaria (cooperativa) del supervisor:
+    // supervisor.usuario_id → supervisor.jefe_agencia_id → jefe_agencia.agencia_id → agencia.unidad_bancaria_id
+    if ($id_supervisor_val) {
+        try {
+            $stCoop = $pdo->prepare("
+                SELECT ag.unidad_bancaria_id
+                FROM supervisor sup
+                JOIN jefe_agencia ja ON ja.id = sup.jefe_agencia_id
+                JOIN agencia ag      ON ag.id = ja.agencia_id
+                WHERE sup.usuario_id = ?
+                LIMIT 1
+            ");
+            $stCoop->execute([$id_supervisor_val]);
+            $rowCoop = $stCoop->fetch(PDO::FETCH_ASSOC);
+            $id_cooperativa = $rowCoop['unidad_bancaria_id'] ?? null;
+        } catch (\Throwable $e) { /* opcional */ }
+    }
 } else {
-    $usuario_id_sesion = null;
-    $id_cooperativa    = (int)($_POST['id_cooperativa'] ?? 0);
-    $supervisor_id     = trim($_POST['id_supervisor'] ?? '');
+    $id_cooperativa    = trim($_POST['id_cooperativa'] ?? '');
+    $id_supervisor_val = trim($_POST['id_supervisor'] ?? '');
 }
 
 $errores = [];
@@ -64,47 +82,12 @@ $errores = array_merge($errores, validarFormularioAsesor($_POST, true));
 
 // ── Validaciones específicas por modo ─────────────────────
 if ($modo_supervisor) {
-    if (empty($usuario_id_sesion)) {
+    if (empty($id_supervisor_val)) {
         $errores[] = 'No se encontró la sesión de supervisor';
-    } else {
-        // Resolver el ID entero del supervisor desde la tabla supervisor
-        try {
-            $stSup = $pdo->prepare('SELECT id, cooperativa_id FROM supervisor WHERE usuario_id = ? LIMIT 1');
-            $stSup->execute([$usuario_id_sesion]);
-            $rowSup = $stSup->fetch(PDO::FETCH_ASSOC);
-            if ($rowSup) {
-                $id_supervisor_int = (int)$rowSup['id'];
-                $id_cooperativa    = $id_cooperativa ?? ($rowSup['cooperativa_id'] ?? null);
-            } else {
-                // Fallback: intentar buscar directo en usuario
-                $stSup2 = $pdo->prepare('SELECT id FROM usuario WHERE id = ? LIMIT 1');
-                $stSup2->execute([$usuario_id_sesion]);
-                $rowSup2 = $stSup2->fetch(PDO::FETCH_ASSOC);
-                $id_supervisor_int = $rowSup2 ? (int)$rowSup2['id'] : null;
-            }
-        } catch (\Throwable $e) {
-            // Si el usuario_id ya es numérico, usarlo directo
-            if (is_numeric($usuario_id_sesion)) {
-                $id_supervisor_int = (int)$usuario_id_sesion;
-            }
-        }
-        if (!$id_supervisor_int) {
-            $errores[] = 'No se pudo identificar al supervisor en el sistema';
-        }
     }
 } else {
-    if ($id_cooperativa <= 0)  $errores[] = 'Debes seleccionar una cooperativa';
-    if (empty($supervisor_id)) $errores[] = 'Debes seleccionar un supervisor';
-    else $id_supervisor_int = is_numeric($supervisor_id) ? (int)$supervisor_id : null;
-
-    // Verificar que el supervisor exista
-    if ($id_supervisor_int) {
-        try {
-            $stmt = $pdo->prepare("SELECT id FROM usuario WHERE id = ? AND rol = 'supervisor' AND activo = 1 LIMIT 1");
-            $stmt->execute([$id_supervisor_int]);
-            if (!$stmt->fetch()) $errores[] = 'El supervisor seleccionado no es válido';
-        } catch (\Throwable $e) { /* no bloquear */ }
-    }
+    if (empty($id_cooperativa))    $errores[] = 'Debes seleccionar una cooperativa';
+    if (empty($id_supervisor_val)) $errores[] = 'Debes seleccionar un supervisor';
 }
 
 // ── Procesar archivo ──────────────────────────────────────
@@ -145,6 +128,38 @@ if (!$credencial_presente) {
     $errores[] = 'Debes adjuntar la credencial o nombramiento (PDF, JPG o PNG)';
 }
 
+// ── Validar unicidad: email, usuario y cédula ─────────────
+if (empty($errores)) {
+    // Email: revisar en usuario activo y en solicitudes pendientes/aprobadas
+    $st = $pdo->prepare("SELECT 1 FROM usuario WHERE email = ? LIMIT 1");
+    $st->execute([$email]);
+    if ($st->fetchColumn()) {
+        $errores[] = 'El correo electrónico ya está registrado en el sistema.';
+    } else {
+        $st2 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE email = ? AND estado != 'rechazada' LIMIT 1");
+        $st2->execute([$email]);
+        if ($st2->fetchColumn()) {
+            $errores[] = 'Ya existe una solicitud activa con ese correo electrónico.';
+        }
+    }
+
+    // Usuario: revisar en solicitudes activas
+    $st3 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE usuario = ? AND estado != 'rechazada' LIMIT 1");
+    $st3->execute([$usuario]);
+    if ($st3->fetchColumn()) {
+        $errores[] = 'El nombre de usuario ya está en uso.';
+    }
+
+    // Cédula: revisar en solicitudes activas (si se proporcionó)
+    if (!empty($cedula)) {
+        $st4 = $pdo->prepare("SELECT 1 FROM solicitudes_asesor WHERE cedula = ? AND estado != 'rechazada' LIMIT 1");
+        $st4->execute([$cedula]);
+        if ($st4->fetchColumn()) {
+            $errores[] = 'La cédula ya está registrada en una solicitud activa.';
+        }
+    }
+}
+
 // ── Retornar errores ──────────────────────────────────────
 if (!empty($errores)) {
     header("Location: $form_origen?error=" . urlencode(implode(', ', $errores)));
@@ -157,7 +172,7 @@ try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS solicitudes_asesor (
             id_solicitud       INT AUTO_INCREMENT PRIMARY KEY,
-            id_cooperativa     INT NULL,
+            id_cooperativa     VARCHAR(36) NULL,
             id_supervisor      VARCHAR(64) NOT NULL,
             usuario            VARCHAR(50)  NOT NULL UNIQUE,
             nombres            VARCHAR(100) NOT NULL,
@@ -180,18 +195,27 @@ try {
 
     // Columnas que pueden faltar en tablas ya existentes
     $columnas_extra = [
-        'id_cooperativa'     => "ALTER TABLE solicitudes_asesor ADD COLUMN id_cooperativa INT NULL AFTER id_solicitud",
+        'id_cooperativa'     => "ALTER TABLE solicitudes_asesor ADD COLUMN id_cooperativa VARCHAR(36) NULL AFTER id_solicitud",
         'cedula'             => "ALTER TABLE solicitudes_asesor ADD COLUMN cedula VARCHAR(13) NULL AFTER apellidos",
         'credencial_archivo' => "ALTER TABLE solicitudes_asesor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER tipo_cuenta",
     ];
 
-    // Asegurar que id_supervisor sea INT (puede ser VARCHAR en instalaciones antiguas)
+    // Asegurar que id_supervisor sea VARCHAR(64) para soportar UUIDs
     try {
         $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE 'id_supervisor'")->fetch(PDO::FETCH_ASSOC);
-        if ($colInfo && stripos($colInfo['Type'], 'varchar') !== false) {
-            $pdo->exec("ALTER TABLE solicitudes_asesor MODIFY COLUMN id_supervisor INT NOT NULL");
+        if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+            $pdo->exec("ALTER TABLE solicitudes_asesor MODIFY COLUMN id_supervisor VARCHAR(64) NOT NULL DEFAULT ''");
         }
     } catch (\Throwable $e) { /* ignorar */ }
+
+    // Asegurar que id_cooperativa sea VARCHAR(36) para soportar UUIDs (corregir si era INT)
+    try {
+        $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE 'id_cooperativa'")->fetch(PDO::FETCH_ASSOC);
+        if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+            $pdo->exec("ALTER TABLE solicitudes_asesor MODIFY COLUMN id_cooperativa VARCHAR(36) NULL");
+        }
+    } catch (\Throwable $e) { /* ignorar */ }
+
     foreach ($columnas_extra as $col => $sql) {
         $chk = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE '$col'");
         if (!$chk->fetch()) {
@@ -211,7 +235,7 @@ try {
 
     $stmt->execute([
         $id_cooperativa,
-        $id_supervisor_int,
+        $id_supervisor_val,
         $usuario,
         $nombres,
         $apellidos,

@@ -69,44 +69,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $solicitud = $stmt->fetch();
 
                     if ($solicitud) {
-                        if ($solicitud['id_supervisor'] != $supervisor_id) {
+                        if ((string)$solicitud['id_supervisor'] !== (string)$supervisor_id) {
                             $mensaje_error = "❌ No tienes permiso para procesar esta solicitud.";
                         } else {
-                            // Insertar usuario
-                            $hasSupervisorFk = false;
-                            try {
-                                $col = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'supervisor_id_fk'")->fetch();
-                                $hasSupervisorFk = (bool)$col;
-                            } catch (Exception $e) {
-                                $hasSupervisorFk = false;
-                            }
-
-                            if ($hasSupervisorFk) {
-                                $stmtIns = $pdo->prepare("INSERT INTO usuarios (usuario, clave, nombres, apellidos, email, telefono, activo, id_rol_fk, supervisor_id_fk) VALUES (?, ?, ?, ?, ?, ?, 1, 4, ?)");
-                                $stmtIns->execute([
-                                    $solicitud['usuario'],
-                                    $solicitud['password_hash'],
-                                    $solicitud['nombres'],
-                                    $solicitud['apellidos'],
-                                    $solicitud['email'],
-                                    $solicitud['telefono'],
-                                    $solicitud['id_supervisor']
-                                ]);
+                            // Verificar que el email no exista ya en usuario
+                            $chkEmail = $pdo->prepare("SELECT id FROM usuario WHERE email = ? LIMIT 1");
+                            $chkEmail->execute([$solicitud['email']]);
+                            if ($chkEmail->fetch()) {
+                                $mensaje_error = "❌ Ya existe un usuario con ese email.";
                             } else {
-                                $stmtIns = $pdo->prepare("INSERT INTO usuarios (usuario, clave, nombres, apellidos, email, telefono, activo, id_rol_fk) VALUES (?, ?, ?, ?, ?, ?, 1, 4)");
-                                $stmtIns->execute([
-                                    $solicitud['usuario'],
-                                    $solicitud['password_hash'],
-                                    $solicitud['nombres'],
-                                    $solicitud['apellidos'],
-                                    $solicitud['email'],
-                                    $solicitud['telefono']
-                                ]);
-                            }
+                                $pdo->beginTransaction();
+                                try {
+                                    // 1. Crear registro en tabla usuario
+                                    $nombre_completo = trim($solicitud['nombres'] . ' ' . $solicitud['apellidos']);
+                                    $nuevo_usuario_id = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                                        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                                        mt_rand(0, 0xffff),
+                                        mt_rand(0, 0x0fff) | 0x4000,
+                                        mt_rand(0, 0x3fff) | 0x8000,
+                                        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                                    );
 
-                            $stmtUpd = $pdo->prepare("UPDATE solicitudes_asesor SET estado = 'aprobada', fecha_aprobacion = NOW() WHERE id_solicitud = ?");
-                            $stmtUpd->execute([$id_solicitud]);
-                            $mensaje_exito = "✅ Solicitud aprobada. El nuevo asesor puede iniciar sesión.";
+                                    $stmtUsr = $pdo->prepare("
+                                        INSERT INTO usuario
+                                            (id, nombre, email, telefono, password_hash, rol, activo, estado_aprobacion, aprobado_por, fecha_aprobacion)
+                                        VALUES (?, ?, ?, ?, ?, 'asesor', 1, 'aprobado', ?, NOW())
+                                    ");
+                                    $stmtUsr->execute([
+                                        $nuevo_usuario_id,
+                                        $nombre_completo,
+                                        $solicitud['email'],
+                                        $solicitud['telefono'],
+                                        $solicitud['password_hash'],
+                                        $supervisor_id,
+                                    ]);
+
+                                    // 2. Obtener supervisor.id (PK de la tabla supervisor) a partir del usuario_id del supervisor
+                                    $stmtSup = $pdo->prepare("SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1");
+                                    $stmtSup->execute([$supervisor_id]);
+                                    $rowSup = $stmtSup->fetch(PDO::FETCH_ASSOC);
+                                    $supervisor_pk = $rowSup['id'] ?? null;
+
+                                    if (!$supervisor_pk) {
+                                        throw new \Exception("No se encontró el registro de supervisor para este usuario.");
+                                    }
+
+                                    // 3. Crear registro en tabla asesor
+                                    $nuevo_asesor_id = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                                        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                                        mt_rand(0, 0xffff),
+                                        mt_rand(0, 0x0fff) | 0x4000,
+                                        mt_rand(0, 0x3fff) | 0x8000,
+                                        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                                    );
+                                    $stmtAsesor = $pdo->prepare("
+                                        INSERT INTO asesor (id, usuario_id, supervisor_id)
+                                        VALUES (?, ?, ?)
+                                    ");
+                                    $stmtAsesor->execute([$nuevo_asesor_id, $nuevo_usuario_id, $supervisor_pk]);
+
+                                    // 4. Marcar solicitud como aprobada
+                                    $stmtUpd = $pdo->prepare("UPDATE solicitudes_asesor SET estado = 'aprobada', fecha_aprobacion = NOW() WHERE id_solicitud = ?");
+                                    $stmtUpd->execute([$id_solicitud]);
+
+                                    $pdo->commit();
+                                    $mensaje_exito = "✅ Solicitud aprobada. El nuevo asesor ya puede iniciar sesión.";
+                                } catch (\Exception $ex) {
+                                    $pdo->rollBack();
+                                    throw $ex;
+                                }
+                            }
                         }
                     } else {
                         $mensaje_error = "❌ Solicitud no encontrada.";
@@ -136,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $solicitud = $stmt->fetch();
 
                     if ($solicitud) {
-                        if ($solicitud['id_supervisor'] != $supervisor_id) {
+                        if ((string)$solicitud['id_supervisor'] !== (string)$supervisor_id) {
                             $mensaje_error = "❌ No tienes permiso para procesar esta solicitud.";
                         } else {
                             $stmt = $pdo->prepare("UPDATE solicitudes_asesor SET estado = 'rechazada', observaciones = ?, fecha_aprobacion = NOW() WHERE id_solicitud = ?");
@@ -190,23 +222,22 @@ try {
     }
 } catch (Exception $e) {}
 
-// Obtener solicitudes de este supervisor
+// Obtener solicitudes de este supervisor (soporta UUID y legacy numérico)
 $solicitudes = [];
 try {
-    // Legacy: solo aplica si el supervisor_id es numérico
-    if (is_numeric($supervisor_id)) {
-        $query = "SELECT * FROM solicitudes_asesor 
-            WHERE id_supervisor = " . intval($supervisor_id) . " 
-            ORDER BY 
-                CASE estado 
-                    WHEN 'pendiente' THEN 1 
-                    WHEN 'rechazada' THEN 2 
-                    WHEN 'aprobada' THEN 3 
+    if ($supervisor_id) {
+        $stmt = $pdo->prepare("
+            SELECT * FROM solicitudes_asesor
+            WHERE id_supervisor = ?
+            ORDER BY
+                CASE estado
+                    WHEN 'pendiente' THEN 1
+                    WHEN 'rechazada' THEN 2
+                    WHEN 'aprobada'  THEN 3
                 END,
                 fecha_solicitud DESC
-        ";
-        
-        $stmt = $pdo->query($query);
+        ");
+        $stmt->execute([(string)$supervisor_id]);
         $solicitudes = $stmt->fetchAll();
     }
 } catch (Exception $e) {}
@@ -844,71 +875,43 @@ function cerrarModal() {
     modal.classList.remove('show');
 }
 
-// Lógica de búsqueda y filtrado de solicitudes en tarjetas
+// Búsqueda y filtrado
 document.addEventListener('DOMContentLoaded', function() {
     const inputBusqueda = document.getElementById('busquedaSolicitud');
-    const cntResultados = document.getElementById('cntResultados');
-    const filterButtons = document.querySelectorAll('.btn-filter');
+    const cntResultados  = document.getElementById('cntResultados');
+    const filterButtons  = document.querySelectorAll('.btn-filter');
     let currentStatus = 'todos';
 
     function aplicarFiltros() {
-        const term = inputBusqueda ? inputBusqueda.value.toLowerCase().trim() : '';
+        const term  = inputBusqueda ? inputBusqueda.value.toLowerCase().trim() : '';
         const cards = document.querySelectorAll('.solicitudes-grid .sc');
         let visibles = 0;
 
         cards.forEach(card => {
-            const usuario = card.getAttribute('data-search-user') || '';
-            const nombre = card.getAttribute('data-search-name') || '';
-            const status = card.getAttribute('data-search-status') || '';
-
-            // Comprobar coincidencia de texto
-            const matchesSearch = usuario.includes(term) || nombre.includes(term);
-            
-            // Comprobar coincidencia de estado
-            const matchesStatus = (currentStatus === 'todos' || status === currentStatus);
-
-            if (matchesSearch && matchesStatus) {
-                card.style.display = '';
-                visibles++;
-            } else {
-                card.style.display = 'none';
-            }
+            const texto  = card.textContent.toLowerCase();
+            const estado = (card.dataset.estado || '').toLowerCase();
+            const matchBusq = !term || texto.includes(term);
+            const matchFilt = currentStatus === 'todos' || estado === currentStatus;
+            card.style.display = (matchBusq && matchFilt) ? '' : 'none';
+            if (matchBusq && matchFilt) visibles++;
         });
 
-        if (cntResultados) {
-            cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
-        }
-
-        let emptyPlaceholder = document.getElementById('emptyFiltered');
-        if (visibles === 0 && cards.length > 0) {
-            if (!emptyPlaceholder) {
-                const grid = document.querySelector('.solicitudes-grid');
-                const div = document.createElement('div');
-                div.id = 'emptyFiltered';
-                div.className = 'col-12';
-                div.style.gridColumn = '1 / -1';
-                div.innerHTML = '<div style="text-align:center;padding:48px 20px;color:#94a3b8;background:#fff;border-radius:18px;border:1.5px dashed #d7e0ea;"><i class="fas fa-search" style="font-size:32px;display:block;margin-bottom:12px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</div>';
-                grid.appendChild(div);
-            } else {
-                emptyPlaceholder.style.display = '';
-            }
-        } else if (emptyPlaceholder) {
-            emptyPlaceholder.style.display = 'none';
-        }
+        if (cntResultados) cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
     }
 
-    if (inputBusqueda) {
-        inputBusqueda.addEventListener('input', aplicarFiltros);
-    }
+    if (inputBusqueda) inputBusqueda.addEventListener('input', aplicarFiltros);
 
     filterButtons.forEach(btn => {
         btn.addEventListener('click', function() {
             filterButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
-            currentStatus = this.getAttribute('data-status');
+            currentStatus = this.dataset.filter || 'todos';
             aplicarFiltros();
         });
     });
+
+    const modal = document.getElementById('modal');
+    if (modal) modal.addEventListener('click', e => { if (e.target === modal) cerrarModal(); });
 });
 </script>
 
