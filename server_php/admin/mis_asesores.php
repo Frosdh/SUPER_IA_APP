@@ -366,13 +366,13 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
             ?>
             <div class="ac"
                  id="ac-<?= $asesorKeyEsc ?>"
-                 style="cursor:pointer;"
-                 onclick="window.location='detalle_asesor.php?id=<?= urlencode($asesorKey) ?>'"
                  data-search-name="<?= strtolower(htmlspecialchars($nombre)) ?>"
                  data-search-user="<?= strtolower(htmlspecialchars($asesor['usuario'] ?? '')) ?>"
                  data-search-email="<?= strtolower(htmlspecialchars($email)) ?>">
                 <div class="ac-stripe"></div>
-                <div class="ac-body">
+                <!-- cuerpo → editar asesor -->
+                <div class="ac-body" style="cursor:pointer;"
+                     onclick="window.location='detalle_asesor.php?id=<?= urlencode($asesorKey) ?>'">
                     <div class="ac-avatar"><?= $inicial ?></div>
                     <h3 class="ac-name"><?= $nombre ?></h3>
                     <p class="ac-email"><i class="fas fa-envelope" style="margin-right:5px;color:#94a3b8;font-size:10px;"></i><?= $email ?></p>
@@ -380,7 +380,12 @@ $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
                 </div>
                 <div class="ac-footer">
                     <span class="ac-badge"><i class="fas fa-user-group"></i> <?= $total ?> cliente<?= $total !== 1 ? 's' : '' ?></span>
-                    <span class="ac-arrow"><i class="fas fa-chevron-right"></i></span>
+                    <!-- flecha → ver clientes -->
+                    <span class="ac-arrow" id="arrow-<?= $asesorKeyEsc ?>"
+                          style="cursor:pointer;"
+                          onclick="event.stopPropagation(); toggleClientes('<?= $asesorKeyEsc ?>')">
+                        <i class="fas fa-chevron-right"></i>
+                    </span>
                 </div>
             </div>
             <?php endforeach; ?>
