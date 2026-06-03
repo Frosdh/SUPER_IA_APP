@@ -103,10 +103,14 @@ if ($action === 'enviar_otp') {
             'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
         ]);
     } else {
+        file_put_contents(
+            __DIR__ . '/email_send_mobile.log',
+            date('Y-m-d H:i:s') . " SMTP FALLO para $email: $mailErr\n",
+            FILE_APPEND | LOCK_EX
+        );
         echo json_encode([
-            'status'    => 'error',
-            'message'   => 'SMTP Error: ' . ($mailErr ?: 'email_config.php no encontrado o credenciales incorrectas'),
-            'smtp_error' => $mailErr,
+            'status'  => 'error',
+            'message' => 'No se pudo enviar el correo. Verifica que el email sea correcto o contacta al administrador.',
         ]);
     }
     exit;

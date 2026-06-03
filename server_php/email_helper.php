@@ -105,31 +105,71 @@ function _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromNam
 // ── Función principal de envío ────────────────────────────────────────────────
 function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
 {
+    $logFile = __DIR__ . '/email_send.log';
+    $log = function(string $msg) use ($logFile) {
+        file_put_contents($logFile, date('Y-m-d H:i:s') . " $msg\n", FILE_APPEND | LOCK_EX);
+    };
+
     list($cfg, $cfgErr) = loadEmailConfig();
+    if ($cfg === null) {
+        $log("[ERROR] Config: $cfgErr");
+        return [false, $cfgErr];
+    }
 
     $fromEmail = $cfg['from_email'] ?? 'noreply@super-ia.com';
     $fromName  = $cfg['from_name']  ?? 'Super_IA';
-
     $errors = [];
 
-    // 1️⃣  localhost SMTP (solo Linux/hosting — skipped en Windows)
-    list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
-    if ($ok) return [true, null];
-    $errors[] = "localhost:25 → $err";
+    $log("[START] Enviando a: $toEmail | Asunto: $subject");
 
-    // 2️⃣  SMTP externo con credenciales
-    if ($cfg !== null && empty($cfgErr) && !empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
+    // 1️⃣  SMTP principal (Gmail u otro configurado)
+    if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
+        $log("[TRY] SMTP principal {$cfg['host']}:{$cfg['port']} as {$cfg['username']}");
         list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
-        if ($ok) return [true, null];
-        $errors[] = "SMTP {$cfg['host']}:{$cfg['port']} → $err";
+        if ($ok) { $log("[OK] SMTP principal exitoso"); return [true, null]; }
+        $log("[FAIL] SMTP principal: $err");
+        $errors[] = "{$cfg['host']}:{$cfg['port']} → $err";
     }
 
-    // 3️⃣  PHP mail() nativo (solo Linux/hosting)
-    list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromName);
-    if ($ok) return [true, null];
-    $errors[] = "mail() → $err";
+    // 2️⃣  SMTP de respaldo (hosting propio)
+    if (!empty($cfg['fallback_password'])) {
+        $fallbackCfg = [
+            'host'       => $cfg['fallback_host'],
+            'port'       => $cfg['fallback_port'],
+            'secure'     => $cfg['fallback_secure'],
+            'username'   => $cfg['fallback_username'],
+            'password'   => $cfg['fallback_password'],
+            'from_email' => $cfg['fallback_from'] ?? $cfg['fallback_username'],
+            'from_name'  => $fromName,
+        ];
+        $log("[TRY] SMTP fallback {$fallbackCfg['host']}:{$fallbackCfg['port']}");
+        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $fallbackCfg);
+        if ($ok) { $log("[OK] SMTP fallback exitoso"); return [true, null]; }
+        $log("[FAIL] SMTP fallback: $err");
+        $errors[] = "{$fallbackCfg['host']} → $err";
+    }
 
-    return [false, implode(' | ', $errors)];
+    // 3️⃣  localhost SMTP (solo en hosting Linux — skipped en Windows)
+    if (!_isWindows()) {
+        $log("[TRY] localhost:25");
+        list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
+        if ($ok) { $log("[OK] localhost SMTP exitoso"); return [true, null]; }
+        $log("[FAIL] localhost: $err");
+        $errors[] = "localhost → $err";
+    }
+
+    // 4️⃣  PHP mail() nativo
+    if (!_isWindows()) {
+        $log("[TRY] PHP mail()");
+        list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromName);
+        if ($ok) { $log("[OK] mail() exitoso"); return [true, null]; }
+        $log("[FAIL] mail(): $err");
+        $errors[] = "mail() → $err";
+    }
+
+    $allErrors = implode(' | ', $errors);
+    $log("[ERROR FINAL] Todos los métodos fallaron: $allErrors");
+    return [false, $allErrors];
 }
 
 

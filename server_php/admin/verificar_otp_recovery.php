@@ -14,12 +14,9 @@ $email = $_SESSION['recovery_email'];
 $role  = $_SESSION['recovery_role'] ?? 'admin';
 $error = '';
 
-// ── Modo desarrollo: el correo no se pudo enviar, mostrar código en pantalla ──
-$devOtp = '';
-if (!empty($_SESSION['recovery_dev_otp'])) {
-    $devOtp = $_SESSION['recovery_dev_otp'];
-    unset($_SESSION['recovery_dev_otp']); // mostrar solo una vez
-}
+// ── Fallback: mostrar código si el email no se pudo enviar ──
+$devOtp = $_SESSION['recovery_dev_otp'] ?? '';
+// No lo borramos aquí — se borra después de que el usuario lo use (POST)
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $codigo = trim($_POST['codigo'] ?? '');
@@ -40,7 +37,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             // Marcar como usado
             $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE id = ?")->execute([$row['id']]);
-            // Guardar en sesión que el OTP fue validado
+            // Limpiar dev_otp y marcar OTP validado
+            unset($_SESSION['recovery_dev_otp']);
             $_SESSION['recovery_otp_ok'] = true;
             header('Location: nueva_password.php');
             exit;
@@ -91,6 +89,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <?php if ($error): ?>
             <div class="alert-error"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
+        <?php endif; ?>
+
+        <?php if (!empty($devOtp)): ?>
+        <div style="background:#fef9c3;border:1.5px solid #fde047;border-radius:12px;padding:14px 18px;margin-bottom:18px;text-align:center;">
+            <div style="font-size:12px;color:#78350f;font-weight:700;margin-bottom:6px;">
+                <i class="fas fa-exclamation-triangle"></i> El correo no pudo enviarse — tu código es:
+            </div>
+            <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#92400e;"><?= htmlspecialchars($devOtp) ?></div>
+            <div style="font-size:11px;color:#a16207;margin-top:4px;">Configura el SMTP en <code>email_config.php</code> para que llegue al correo</div>
+        </div>
         <?php endif; ?>
 
         <form method="POST" id="otp-form">
