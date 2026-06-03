@@ -85,23 +85,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mailError = 'No se encontró email_helper.php';
             }
 
+            // Siempre guardamos el código en sesión para mostrarlo en pantalla
+            $_SESSION['recovery_email']   = $email;
+            $_SESSION['recovery_role']    = $postRole;
+            $_SESSION['recovery_dev_otp'] = $codigo; // siempre visible en pantalla
+
             if ($sent) {
-                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Código OTP enviado a $email. Código: $codigo\n", FILE_APPEND);
-                $_SESSION['recovery_email']   = $email;
-                $_SESSION['recovery_role']    = $postRole;
-                unset($_SESSION['recovery_dev_otp']); // limpiar fallback previo
-                header('Location: verificar_otp_recovery.php');
-                exit;
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - OTP enviado a $email: $codigo\n", FILE_APPEND);
             } else {
-                // SMTP no disponible (común en XAMPP/Windows).
-                // Guardamos el código en sesión para mostrarlo en pantalla como fallback de desarrollo.
-                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error SMTP a $email: $mailError. Código: $codigo\n", FILE_APPEND);
-                $_SESSION['recovery_email']   = $email;
-                $_SESSION['recovery_role']    = $postRole;
-                $_SESSION['recovery_dev_otp'] = $codigo; // mostrar en pantalla
-                header('Location: verificar_otp_recovery.php');
-                exit;
+                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error SMTP a $email: $mailError\n", FILE_APPEND);
             }
+            header('Location: verificar_otp_recovery.php');
+            exit;
         }
     }
 }

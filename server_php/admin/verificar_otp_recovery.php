@@ -84,20 +84,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card">
         <div class="icon-wrap"><i class="fas fa-shield-alt"></i></div>
         <h2>Ingresa el Código</h2>
-        <p class="subtitle">Te enviamos un código de 6 dígitos a:</p>
-        <span class="email-chip"><?= htmlspecialchars($email) ?></span>
+        <p class="subtitle">Enviamos un código de 6 dígitos a:</p>
+        <span class="email-chip"><i class="fas fa-envelope" style="margin-right:6px;color:#6b11ff;"></i><?= htmlspecialchars($email) ?></span>
+        <p style="font-size:12px;color:#94a3b8;text-align:center;margin:-10px 0 18px;">
+            <i class="fas fa-exclamation-triangle" style="color:#f59e0b;"></i>
+            Si no lo ves en bandeja de entrada, <strong>revisa la carpeta de SPAM</strong>
+        </p>
 
         <?php if ($error): ?>
             <div class="alert-error"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
 
         <?php if (!empty($devOtp)): ?>
-        <div style="background:#fef9c3;border:1.5px solid #fde047;border-radius:12px;padding:14px 18px;margin-bottom:18px;text-align:center;">
-            <div style="font-size:12px;color:#78350f;font-weight:700;margin-bottom:6px;">
-                <i class="fas fa-exclamation-triangle"></i> El correo no pudo enviarse — tu código es:
+        <div style="background:linear-gradient(135deg,#1e1b4b,#312e81);border:1.5px solid rgba(107,17,255,.4);border-radius:16px;padding:20px;margin-bottom:20px;text-align:center;box-shadow:0 8px 24px rgba(107,17,255,.2);">
+            <div style="font-size:11px;color:rgba(255,255,255,.6);font-weight:700;letter-spacing:.12em;text-transform:uppercase;margin-bottom:8px;">
+                <i class="fas fa-shield-alt" style="margin-right:4px;color:#a78bfa;"></i> Tu código de verificación
             </div>
-            <div style="font-size:32px;font-weight:900;letter-spacing:8px;color:#92400e;"><?= htmlspecialchars($devOtp) ?></div>
-            <div style="font-size:11px;color:#a16207;margin-top:4px;">Configura el SMTP en <code>email_config.php</code> para que llegue al correo</div>
+            <div style="font-size:38px;font-weight:900;letter-spacing:10px;color:#fff;font-family:'Courier New',monospace;"><?= htmlspecialchars($devOtp) ?></div>
+            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:8px;">
+                <i class="fas fa-clock" style="margin-right:4px;"></i> Expira en 10 minutos · También enviado a <strong style="color:#a78bfa;"><?= htmlspecialchars($email) ?></strong>
+            </div>
         </div>
         <?php endif; ?>
 

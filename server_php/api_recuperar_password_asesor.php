@@ -97,22 +97,27 @@ if ($action === 'enviar_otp') {
         );
     }
 
-    if ($sent) {
-        echo json_encode([
-            'status'  => 'success',
-            'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
-        ]);
-    } else {
+    // Siempre devolver el código para que la app pueda mostrarlo en pantalla
+    $response = [
+        'status'  => 'success',
+        'message' => 'Código generado. Revisa tu correo o usa el código que aparece aquí.',
+        'codigo'  => $codigo,  // la app lo muestra en pantalla como respaldo
+        'email'   => $email,
+    ];
+
+    if (!$sent) {
         file_put_contents(
             __DIR__ . '/email_send_mobile.log',
             date('Y-m-d H:i:s') . " SMTP FALLO para $email: $mailErr\n",
             FILE_APPEND | LOCK_EX
         );
-        echo json_encode([
-            'status'  => 'error',
-            'message' => 'No se pudo enviar el correo. Verifica que el email sea correcto o contacta al administrador.',
-        ]);
+        $response['email_enviado'] = false;
+        $response['message'] = 'No llegó al correo — usa el código que aparece en pantalla.';
+    } else {
+        $response['email_enviado'] = true;
     }
+
+    echo json_encode($response);
     exit;
 }
 

@@ -65,8 +65,10 @@ function _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, array $
         $mail->SMTPSecure = $cfg['secure'];
         $mail->Port       = (int)$cfg['port'];
         $mail->CharSet    = 'UTF-8';
+        $mail->Encoding   = 'base64';
         $mail->Timeout    = 20;
         $mail->setFrom($cfg['from_email'], $cfg['from_name']);
+        $mail->addReplyTo($cfg['from_email'], $cfg['from_name']);
         $mail->SMTPOptions = [
             'ssl' => [
                 'verify_peer'       => false,
@@ -74,6 +76,11 @@ function _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, array $
                 'allow_self_signed' => true,
             ],
         ];
+        // Anti-spam headers
+        $mail->addCustomHeader('X-Mailer', 'Super_IA-Mailer');
+        $mail->addCustomHeader('X-Priority', '1');
+        $mail->addCustomHeader('Importance', 'High');
+        $mail->addCustomHeader('Precedence', 'bulk');
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = $subject;
@@ -89,17 +96,27 @@ function _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, array $
 // ── Estrategia 3: PHP mail() nativo (solo en Linux/hosting, NO Windows) ───────
 function _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromName)
 {
-    // En Windows PHP mail() retorna true sin enviar → no usarlo
     if (_isWindows()) {
         return [false, 'PHP mail() no funcional en Windows/XAMPP'];
     }
-    $headers  = "From: $fromName <$fromEmail>\r\n";
-    $headers .= "Reply-To: $fromEmail\r\n";
-    $headers .= "MIME-Version: 1.0\r\n";
-    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
-    $headers .= "X-Mailer: Super_IA\r\n";
-    $ok = @mail($toEmail, $subject, $plainBody, $headers);
-    return [$ok, $ok ? null : 'PHP mail() falló — verifica la configuración del servidor'];
+    $boundary = md5(time());
+    $headers  = "MIME-Version: 1.0\r\n";
+    $headers .= "Content-Type: multipart/alternative; boundary=\"{$boundary}\"\r\n";
+    $headers .= "From: {$fromName} <{$fromEmail}>\r\n";
+    $headers .= "Reply-To: {$fromEmail}\r\n";
+    $headers .= "Return-Path: {$fromEmail}\r\n";
+    $headers .= "X-Mailer: Super_IA/1.0\r\n";
+    $headers .= "X-Priority: 1\r\n";
+
+    // Build multipart body with plain text only (avoids spam triggers)
+    $body  = "--{$boundary}\r\n";
+    $body .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $body .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+    $body .= $plainBody . "\r\n";
+    $body .= "--{$boundary}--";
+
+    $ok = @mail($toEmail, '=?UTF-8?B?' . base64_encode($subject) . '?=', $body, $headers);
+    return [$ok, $ok ? null : 'PHP mail() falló — el servidor no tiene sendmail configurado'];
 }
 
 // ── Función principal de envío ────────────────────────────────────────────────
@@ -120,51 +137,64 @@ function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
     $fromName  = $cfg['from_name']  ?? 'Super_IA';
     $errors = [];
 
-    $log("[START] Enviando a: $toEmail | Asunto: $subject");
+    $log("[START] Enviando a: $toEmail | From: $fromEmail | Asunto: $subject");
 
-    // 1️⃣  SMTP principal (Gmail u otro configurado)
-    if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
-        $log("[TRY] SMTP principal {$cfg['host']}:{$cfg['port']} as {$cfg['username']}");
-        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
-        if ($ok) { $log("[OK] SMTP principal exitoso"); return [true, null]; }
-        $log("[FAIL] SMTP principal: $err");
-        $errors[] = "{$cfg['host']}:{$cfg['port']} → $err";
+    // 1️⃣  PHP mail() nativo del servidor (cPanel hosting — más confiable y sin spam)
+    //     Usa noreply@corporativoqbank.com para que salga desde el propio dominio
+    if (!_isWindows()) {
+        $domainFrom      = 'noreply@corporativoqbank.com';
+        $domainFromName  = $fromName;
+        $log("[TRY] PHP mail() con FROM=$domainFrom");
+        list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, $domainFrom, $domainFromName);
+        if ($ok) { $log("[OK] PHP mail() exitoso"); return [true, null]; }
+        $log("[FAIL] PHP mail(): $err");
+        $errors[] = "mail() → $err";
     }
 
-    // 2️⃣  SMTP de respaldo (hosting propio)
+    // 2️⃣  SMTP del hosting (fallback con password)
     if (!empty($cfg['fallback_password'])) {
         $fallbackCfg = [
-            'host'       => $cfg['fallback_host'],
-            'port'       => $cfg['fallback_port'],
-            'secure'     => $cfg['fallback_secure'],
-            'username'   => $cfg['fallback_username'],
+            'host'       => $cfg['fallback_host']     ?? 'mail.corporativoqbank.com',
+            'port'       => $cfg['fallback_port']     ?? 465,
+            'secure'     => $cfg['fallback_secure']   ?? 'ssl',
+            'username'   => $cfg['fallback_username'] ?? 'angelespinozav@corporativoqbank.com',
             'password'   => $cfg['fallback_password'],
-            'from_email' => $cfg['fallback_from'] ?? $cfg['fallback_username'],
+            'from_email' => $cfg['fallback_from']     ?? 'angelespinozav@corporativoqbank.com',
             'from_name'  => $fromName,
         ];
-        $log("[TRY] SMTP fallback {$fallbackCfg['host']}:{$fallbackCfg['port']}");
+        $log("[TRY] SMTP hosting {$fallbackCfg['host']}:{$fallbackCfg['port']}");
         list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $fallbackCfg);
-        if ($ok) { $log("[OK] SMTP fallback exitoso"); return [true, null]; }
-        $log("[FAIL] SMTP fallback: $err");
+        if ($ok) { $log("[OK] SMTP hosting exitoso"); return [true, null]; }
+        $log("[FAIL] SMTP hosting: $err");
         $errors[] = "{$fallbackCfg['host']} → $err";
     }
 
-    // 3️⃣  localhost SMTP (solo en hosting Linux — skipped en Windows)
+    // 3️⃣  Gmail SMTP (puede ir a spam si TO y FROM son @gmail.com)
+    if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
+        $log("[TRY] Gmail SMTP {$cfg['host']}:{$cfg['port']} as {$cfg['username']}");
+        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
+        if ($ok) { $log("[OK] Gmail SMTP exitoso"); return [true, null]; }
+        $log("[FAIL] Gmail SMTP: $err");
+        $errors[] = "{$cfg['host']}:{$cfg['port']} → $err";
+
+        // Puerto alternativo Gmail (465 si 587 falló, o viceversa)
+        $altPort   = ($cfg['port'] == 587) ? 465 : 587;
+        $altSecure = ($altPort == 465) ? 'ssl' : 'tls';
+        $altCfg    = array_merge($cfg, ['port' => $altPort, 'secure' => $altSecure]);
+        $log("[TRY] Gmail alt port $altPort");
+        list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $altCfg);
+        if ($ok) { $log("[OK] Gmail alt exitoso"); return [true, null]; }
+        $log("[FAIL] Gmail alt: $err");
+        $errors[] = "{$cfg['host']}:{$altPort} → $err";
+    }
+
+    // 4️⃣  localhost SMTP
     if (!_isWindows()) {
         $log("[TRY] localhost:25");
         list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
-        if ($ok) { $log("[OK] localhost SMTP exitoso"); return [true, null]; }
+        if ($ok) { $log("[OK] localhost exitoso"); return [true, null]; }
         $log("[FAIL] localhost: $err");
         $errors[] = "localhost → $err";
-    }
-
-    // 4️⃣  PHP mail() nativo
-    if (!_isWindows()) {
-        $log("[TRY] PHP mail()");
-        list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromName);
-        if ($ok) { $log("[OK] mail() exitoso"); return [true, null]; }
-        $log("[FAIL] mail(): $err");
-        $errors[] = "mail() → $err";
     }
 
     $allErrors = implode(' | ', $errors);
