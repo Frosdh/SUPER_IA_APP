@@ -32,25 +32,23 @@ $supervisor_rol    = $_SESSION['supervisor_rol']    ?? 'Supervisor';
 $error   = $_GET['error']   ?? '';
 $success = $_GET['success'] ?? '';
 
-// ── Cargar cooperativas (modo público) ────────────────────
+// ── Recuperar datos previos del formulario (si hubo error) ─
+$formPrev = $_SESSION['form_prev'] ?? [];
+unset($_SESSION['form_prev']);
+
+function fv(string $key, string $default = ''): string {
+    global $formPrev;
+    return htmlspecialchars($formPrev[$key] ?? $default, ENT_QUOTES, 'UTF-8');
+}
+
+// ── Cargar cooperativas desde unidad_bancaria (modo público) ──
 $cooperativas = [];
 if (!$modo_supervisor) {
     try {
-        $stmt = $pdo->query("SELECT DISTINCT id_cooperativa, nombre FROM cooperativas ORDER BY nombre ASC LIMIT 50");
-        $cooperativas = $stmt->fetchAll();
-        if (empty($cooperativas)) throw new Exception('empty');
+        $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria WHERE activo = 1 ORDER BY nombre ASC");
+        $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $e) {
-        try {
-            $stmt = $pdo->query("SELECT DISTINCT id AS id_cooperativa, nombre FROM cooperativas ORDER BY nombre ASC LIMIT 50");
-            $cooperativas = $stmt->fetchAll();
-        } catch (\Throwable $e2) {
-            $cooperativas = [
-                ['id_cooperativa' => 1, 'nombre' => 'Super_IA - Quito'],
-                ['id_cooperativa' => 2, 'nombre' => 'Super_IA - Guayaquil'],
-                ['id_cooperativa' => 3, 'nombre' => 'Super_IA - Cuenca'],
-                ['id_cooperativa' => 4, 'nombre' => 'Super_IA - Ambato'],
-            ];
-        }
+        $cooperativas = [];
     }
 }
 
@@ -132,23 +130,99 @@ if ($modo_supervisor) {
             padding-bottom: 40px;
         }
 
-        /* ── PÚBLICO (modo sin sesión) ── */
+        /* ── PÚBLICO — tema rol ASESOR (verde) ── */
         body.public-mode {
             font-family:'Inter','Segoe UI',sans-serif;
-            background:linear-gradient(135deg,#1e1b4b 0%,#312e81 40%,#1e3a5f 100%);
-            min-height:100vh; display:flex; align-items:center; justify-content:center;
-            padding:2rem; position:relative;
+            background: linear-gradient(155deg,#0a1f12 0%,#0f2d1a 45%,#122b22 100%);
+            background-attachment: fixed;
+            min-height:100vh;
+            display:flex; align-items:flex-start; justify-content:center;
+            padding:2.5rem 1.5rem 4rem;
+            overflow-y: auto;
+            position:relative;
         }
-        body.public-mode::before { content:''; position:absolute; width:500px; height:500px; border-radius:50%; background:radial-gradient(circle,rgba(107,17,255,.18) 0%,transparent 70%); top:-150px; left:-100px; }
-        body.public-mode::after  { content:''; position:absolute; width:400px; height:400px; border-radius:50%; background:radial-gradient(circle,rgba(49,130,254,.15) 0%,transparent 70%); bottom:-100px; right:-80px; }
-        .public-wrapper { width:100%; max-width:620px; position:relative; z-index:1; }
+        body.public-mode::before {
+            content:''; position:fixed; width:600px; height:600px; border-radius:50%;
+            background:radial-gradient(circle, rgba(74,222,128,.13) 0%, transparent 65%);
+            top:-180px; left:-160px; pointer-events:none; z-index:0;
+        }
+        body.public-mode::after {
+            content:''; position:fixed; width:500px; height:500px; border-radius:50%;
+            background:radial-gradient(circle, rgba(74,222,128,.09) 0%, transparent 65%);
+            bottom:-150px; right:-120px; pointer-events:none; z-index:0;
+        }
+        .public-wrapper { width:100%; max-width:640px; position:relative; z-index:1; }
         .public-header { text-align:center; margin-bottom:2rem; }
-        .public-header .icon-wrap { width:62px; height:62px; background:linear-gradient(135deg,#6b11ff,#3182fe); border-radius:18px; display:flex; align-items:center; justify-content:center; font-size:26px; color:#fff; margin:0 auto 16px; }
-        .public-header h1 { font-size:26px; font-weight:800; color:#fff; margin-bottom:6px; }
-        .public-header p { color:rgba(255,255,255,.68); font-size:14px; }
-        .public-card { background:#fff; border-radius:22px; padding:36px; box-shadow:0 30px 80px rgba(0,0,0,.40); }
-        .pub-back { display:inline-flex; align-items:center; gap:7px; color:rgba(255,255,255,.75); text-decoration:none; font-size:13px; font-weight:600; margin-bottom:1.5rem; transition:.2s; }
-        .pub-back:hover { color:#fff; }
+        .public-header .icon-wrap {
+            width:68px; height:68px;
+            background:linear-gradient(135deg,#16A34A,#4ADE80);
+            border-radius:20px; display:flex; align-items:center; justify-content:center;
+            font-size:28px; color:#fff; margin:0 auto 16px;
+            box-shadow: 0 8px 28px rgba(74,222,128,.40);
+        }
+        .public-header h1 { font-size:28px; font-weight:800; color:#fff; margin-bottom:6px; letter-spacing:-.3px; }
+        .public-header p { color:rgba(255,255,255,.65); font-size:14px; }
+        .public-card {
+            background: rgba(18,42,24,.82);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            border: 1px solid rgba(74,222,128,.22);
+            border-radius:22px; padding:36px;
+            box-shadow: 0 24px 64px rgba(0,0,0,.50), inset 0 1px 0 rgba(74,222,128,.12);
+        }
+        /* Inputs dentro de la card pública */
+        .public-card .form-group input,
+        .public-card .form-group select {
+            background: rgba(255,255,255,.08);
+            border: 1.5px solid rgba(74,222,128,.25);
+            color: #e8f5ec;
+        }
+        .public-card .form-group input::placeholder { color:rgba(255,255,255,.32); }
+        .public-card .form-group input:focus,
+        .public-card .form-group select:focus {
+            border-color: #4ADE80;
+            box-shadow: 0 0 0 3px rgba(74,222,128,.18);
+            background: rgba(255,255,255,.11);
+            color: #fff;
+        }
+        .public-card .form-group label { color:rgba(220,252,231,.85); font-weight:600; }
+        .public-card .section-title {
+            color:#4ADE80; border-color:rgba(74,222,128,.45);
+            background: rgba(74,222,128,.06); border-radius:8px 8px 0 0;
+            padding: 6px 10px 10px;
+        }
+        .public-card .section-title i { color:#4ADE80 !important; }
+        .public-card .btn-submit {
+            background: linear-gradient(135deg,#16A34A,#4ADE80);
+            color:#071510; font-weight:800; font-size:15px;
+            box-shadow: 0 4px 20px rgba(74,222,128,.40);
+            border-radius:12px;
+        }
+        .public-card .btn-submit:hover {
+            transform:translateY(-2px);
+            box-shadow: 0 8px 30px rgba(74,222,128,.55);
+        }
+        .public-card .file-upload {
+            border: 2px dashed rgba(74,222,128,.30);
+            background: rgba(74,222,128,.05);
+        }
+        .public-card .file-upload:hover {
+            border-color: #4ADE80;
+            background: rgba(74,222,128,.10);
+        }
+        .public-card .file-input-label i { color:#4ADE80; font-size:30px; }
+        .public-card .file-input-label div { color:#a7f3c4; font-weight:700; }
+        .public-card .file-input-label small { color:rgba(255,255,255,.40); }
+        .public-card select option { background:#112218; color:#e8f5ec; }
+        .pub-back {
+            display:inline-flex; align-items:center; gap:7px;
+            color:rgba(255,255,255,.65); text-decoration:none;
+            font-size:13px; font-weight:600; margin-bottom:1.8rem;
+            transition:.2s; padding:6px 14px;
+            background:rgba(255,255,255,.06); border-radius:8px;
+            border:1px solid rgba(255,255,255,.10);
+        }
+        .pub-back:hover { color:#4ADE80; background:rgba(74,222,128,.10); border-color:rgba(74,222,128,.25); }
 
         /* ── FORM COMÚN ── */
         .page-header { margin-bottom:20px; }
@@ -183,6 +257,12 @@ if ($modo_supervisor) {
         .alert { padding:13px 17px; border-radius:10px; margin-bottom:18px; font-size:14px; display:flex; align-items:flex-start; gap:10px; }
         .alert-success { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
         .alert-danger  { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+        .public-card .alert-success { background:rgba(74,222,128,.12); border-color:rgba(74,222,128,.35); color:#4ADE80; }
+        .public-card .alert-danger  { background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.35); color:#f87171; }
+        .field-feedback { display:block; font-size:12px; margin-top:4px; min-height:15px; }
+        .field-feedback.error { color:#ef4444; }
+        .field-feedback.ok    { color:#10b981; }
+        .public-card .field-feedback.ok { color:#4ADE80; }
         .pass-hint { margin-top:5px; font-size:12px; display:none; }
         .eye-btn { position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#9ca3af; cursor:pointer; padding:0; font-size:14px; }
         .eye-btn:hover { color:var(--brand-navy); }
@@ -216,7 +296,7 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 <?php else: ?>
 <!-- ════════════════ MODO PÚBLICO ════════════════ -->
 <div class="public-wrapper">
-    <a href="login.php?role=supervisor" class="pub-back"><i class="fas fa-arrow-left me-1"></i> Volver al Login</a>
+    <a href="login.php?role=asesor" class="pub-back"><i class="fas fa-arrow-left me-1"></i> Volver al Login</a>
     <div class="public-header">
         <div class="icon-wrap"><i class="fas fa-user-tie"></i></div>
         <h1>Registro de Asesor</h1>
@@ -246,14 +326,42 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
                 <select name="id_cooperativa" id="id_cooperativa" required>
                     <option value="">-- Selecciona una cooperativa --</option>
                     <?php foreach ($cooperativas as $c): ?>
-                        <option value="<?= (int)$c['id_cooperativa'] ?>"><?= htmlspecialchars($c['nombre']) ?></option>
+                        <option value="<?= htmlspecialchars($c['id_cooperativa']) ?>"
+                            <?= fv('id_cooperativa') === htmlspecialchars($c['id_cooperativa']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($c['nombre']) ?>
+                        </option>
                     <?php endforeach; ?>
                 </select>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-user-tie me-1"></i> Supervisor</label>
-                <select name="id_supervisor" id="id_supervisor" required disabled>
-                    <option value="">-- Primero selecciona una cooperativa --</option>
+                <select name="id_supervisor" id="id_supervisor" required
+                        <?= fv('id_cooperativa') ? '' : 'disabled' ?>>
+                    <option value="">-- Selecciona un supervisor --</option>
+                    <?php
+                    // Si hay cooperativa previa, pre-cargar supervisores desde PHP
+                    if (fv('id_cooperativa')) {
+                        try {
+                            $stSup = $pdo->prepare("
+                                SELECT u.id AS id_usuario, u.nombre
+                                FROM supervisor sup
+                                JOIN usuario u       ON u.id  = sup.usuario_id
+                                JOIN jefe_agencia ja ON ja.id = sup.jefe_agencia_id
+                                JOIN agencia ag      ON ag.id = ja.agencia_id
+                                WHERE ag.unidad_bancaria_id = ? AND u.activo = 1 AND u.estado_aprobacion = 'aprobado'
+                                ORDER BY u.nombre
+                            ");
+                            $stSup->execute([$formPrev['id_cooperativa']]);
+                            foreach ($stSup->fetchAll(PDO::FETCH_ASSOC) as $s):
+                    ?>
+                            <option value="<?= htmlspecialchars($s['id_usuario']) ?>"
+                                <?= fv('id_supervisor') === htmlspecialchars($s['id_usuario']) ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($s['nombre']) ?>
+                            </option>
+                    <?php   endforeach;
+                        } catch (\Throwable $e2) {}
+                    }
+                    ?>
                 </select>
             </div>
             <?php endif; ?>
@@ -263,27 +371,27 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             <div class="row-cols">
                 <div class="form-group">
                     <label><i class="fas fa-user me-1"></i> Nombres</label>
-                    <input type="text" name="nombres" placeholder="Ej: Juan Carlos" required>
+                    <input type="text" name="nombres" placeholder="Ej: Juan Carlos" required value="<?= fv('nombres') ?>">
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-user me-1"></i> Apellidos</label>
-                    <input type="text" name="apellidos" placeholder="Ej: García López" required>
+                    <input type="text" name="apellidos" placeholder="Ej: García López" required value="<?= fv('apellidos') ?>">
                 </div>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-id-card me-1"></i> Cédula de Identidad</label>
-                <input type="text" id="cedula" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required>
+                <input type="text" id="cedula" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required value="<?= fv('cedula') ?>">
                 <span id="cedula-feedback" class="field-feedback"></span>
             </div>
             <div class="row-cols">
                 <div class="form-group">
                     <label><i class="fas fa-envelope me-1"></i> Email</label>
-                    <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" required>
+                    <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" required value="<?= fv('email') ?>">
                     <span id="email-feedback" class="field-feedback"></span>
                 </div>
                 <div class="form-group">
                     <label><i class="fas fa-phone me-1"></i> Teléfono</label>
-                    <input type="tel" name="telefono" placeholder="0987654321" required>
+                    <input type="tel" name="telefono" placeholder="0987654321" required value="<?= fv('telefono') ?>">
                 </div>
             </div>
 
@@ -292,7 +400,7 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             <div class="form-row-cols-3">
                 <div class="form-group">
                     <label><i class="fas fa-user-circle me-1"></i> Usuario</label>
-                    <input type="text" id="usuario" name="usuario" placeholder="Ej: jgarcia" minlength="4" required>
+                    <input type="text" id="usuario" name="usuario" placeholder="Ej: jgarcia" minlength="4" required value="<?= fv('usuario') ?>">
                     <span id="usuario-feedback" class="field-feedback"></span>
                 </div>
                 <div class="form-group">
@@ -309,50 +417,54 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
                         <button type="button" class="eye-btn" onclick="toggleVis('pass2','eye2')"><i class="fas fa-eye" id="eye2"></i></button>
                     </div>
                     <div class="pass-hint" id="passHint"></div>
+           
                 </div>
             </div>
 
             <!-- Credencial -->
-            <div class="section-title"><i class="fas fa-file-pdf" style="color:var(--brand-yellow-deep);"></i> Credencial / Nombramiento <span style="font-weight:400;text-transform:none;font-size:11px;color:#9ca3af;">(opcional)</span></div>
-            <div class="form-group">
-                <label><i class="fas fa-file-pdf me-1"></i> Adjuntar documento — PDF, JPG, PNG · Máx. 5 MB</label>
-                <div class="file-upload" id="dropZone">
-                    <label for="credencial" class="file-input-label">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <div>Haz clic o arrastra tu archivo aquí</div>
-                        <small>PDF, JPG o PNG · Máx. 5 MB</small>
-                        <div class="file-name" id="fileName"></div>
-                    </label>
-                    <input type="file" name="credencial" id="credencial" accept=".pdf,.jpg,.jpeg,.png">
-                </div>
+            <div class="section-title"><i class="fas fa-file-alt" style="color:var(--brand-yellow-deep);"></i> Credencial / Nombramiento <small style="font-weight:400;text-transform:none;font-size:11px;">(opcional)</small></div>
+            <div class="file-upload" id="dropZone">
+                <label class="file-input-label" for="credencial">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <div>Arrastra aquí o haz clic para subir</div>
+                    <small>PDF, JPG o PNG · máx. 5 MB</small>
+                </label>
+                <input type="file" id="credencial" name="credencial" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                <div class="file-name" id="fileName"></div>
             </div>
 
+            <!-- Submit -->
+            <?php if ($modo_supervisor): ?>
             <div class="form-actions">
                 <button type="submit" class="btn-submit">
-                    <i class="fas fa-paper-plane"></i> <?= $modo_supervisor ? 'Registrar Asesor' : 'Enviar Solicitud' ?>
+                    <i class="fas fa-paper-plane"></i> Enviar Solicitud
                 </button>
             </div>
+            <?php else: ?>
+            <button type="submit" class="btn-submit" style="margin-top:24px;">
+                <i class="fas fa-paper-plane"></i> Enviar Solicitud
+            </button>
+            <?php endif; ?>
 
         </form>
 
 <?php if ($modo_supervisor): ?>
-        </div><!-- /.form-card -->
+    </div><!-- /.form-card -->
     </div><!-- /.form-container-centered -->
-    </div><!-- /.content-area -->
-</div><!-- /.main-content -->
 <?php else: ?>
     </div><!-- /.public-card -->
 </div><!-- /.public-wrapper -->
 <?php endif; ?>
 
 <style>
-.field-feedback { display:block; font-size:12px; margin-top:4px; min-height:16px; }
-.field-feedback.error  { color:#ef4444; }
-.field-feedback.ok     { color:#10b981; }
+.field-feedback { display:block; font-size:12px; margin-top:4px; min-height:15px; }
+.field-feedback.error { color:#ef4444; }
+.field-feedback.ok    { color:#10b981; }
+.public-card .field-feedback.ok { color:#4ADE80; }
 input.input-error { border-color:#ef4444 !important; }
 input.input-ok    { border-color:#10b981 !important; }
 </style>
-<script src="js/validaciones.js"></script>
+
 <script>
 // ── Mostrar/ocultar contraseña ─────────────────────────────
 function toggleVis(inputId, iconId) {
@@ -363,76 +475,20 @@ function toggleVis(inputId, iconId) {
     icon.classList.toggle('fa-eye-slash');
 }
 
-// ── Validación en tiempo real: email, usuario, cédula ─────
-const camposUnicos = [
-    { id: 'email',   campo: 'email',   msgExiste: 'Este correo ya está registrado.' },
-    { id: 'usuario', campo: 'usuario', msgExiste: 'Este nombre de usuario ya está en uso.' },
-    { id: 'cedula',  campo: 'cedula',  msgExiste: 'Esta cédula ya está registrada.' },
-];
-
-let debounceTimers = {};
-
-camposUnicos.forEach(({ id, campo, msgExiste }) => {
-    const input    = document.getElementById(id);
-    const feedback = document.getElementById(id + '-feedback');
-    if (!input || !feedback) return;
-
-    input.addEventListener('blur', () => verificar(input, campo, feedback, msgExiste));
-    input.addEventListener('input', () => {
-        clearTimeout(debounceTimers[id]);
-        feedback.textContent = '';
-        feedback.className = 'field-feedback';
-        input.classList.remove('input-error', 'input-ok');
-        debounceTimers[id] = setTimeout(() => verificar(input, campo, feedback, msgExiste), 600);
-    });
-});
-
-async function verificar(input, campo, feedback, msgExiste) {
-    const val = input.value.trim();
-    if (!val) return;
-    try {
-        const res  = await fetch('api_verificar_campo.php?campo=' + campo + '&valor=' + encodeURIComponent(val));
-        const data = await res.json();
-        if (data.disponible) {
-            feedback.textContent = '✓ Disponible';
-            feedback.className   = 'field-feedback ok';
-            input.classList.remove('input-error');
-            input.classList.add('input-ok');
-        } else {
-            feedback.textContent = '✗ ' + msgExiste;
-            feedback.className   = 'field-feedback error';
-            input.classList.remove('input-ok');
-            input.classList.add('input-error');
-        }
-    } catch(e) { /* silenciar error de red */ }
-}
-
-// Bloquear submit si algún campo tiene error
-document.querySelector('form')?.addEventListener('submit', function(e) {
-    const hayError = document.querySelectorAll('input.input-error').length > 0;
-    if (hayError) {
-        e.preventDefault();
-        alert('Corrige los campos marcados en rojo antes de continuar.');
-    }
-});
-
-// ── Activar validaciones del formulario ───────────────────
-document.addEventListener('DOMContentLoaded', () => {
-    bindValidaciones('form');
-});
-
 // ── Carga dinámica de supervisores (modo público) ─────────
 <?php if (!$modo_supervisor): ?>
 const coopSel = document.getElementById('id_cooperativa');
 const supSel  = document.getElementById('id_supervisor');
 
-coopSel?.addEventListener('change', async function() {
-    const id = this.value;
-    supSel.innerHTML  = '<option value="">-- Cargando... --</option>';
-    supSel.disabled   = true;
-    if (!id) { supSel.innerHTML = '<option value="">-- Primero selecciona una cooperativa --</option>'; return; }
+async function cargarSupervisores(idCoop) {
+    supSel.innerHTML = '<option value="">⏳ Cargando...</option>';
+    supSel.disabled  = true;
+    if (!idCoop) {
+        supSel.innerHTML = '<option value="">-- Primero selecciona una cooperativa --</option>';
+        return;
+    }
     try {
-        const res  = await fetch('get_supervisores_por_cooperativa.php?id_cooperativa=' + encodeURIComponent(id));
+        const res  = await fetch('get_supervisores_por_cooperativa.php?id_cooperativa=' + encodeURIComponent(idCoop));
         const data = await res.json();
         supSel.innerHTML = '<option value="">-- Selecciona un supervisor --</option>';
         if (data.supervisores?.length) {
@@ -444,48 +500,107 @@ coopSel?.addEventListener('change', async function() {
             });
             supSel.disabled = false;
         } else {
-            supSel.innerHTML = '<option value="" disabled>No hay supervisores en esta cooperativa</option>';
+            const msg = data.mensaje || 'No hay supervisores en esta cooperativa';
+            supSel.innerHTML = '<option value="" disabled>' + msg + '</option>';
         }
     } catch(err) {
-        supSel.innerHTML = '<option value="" disabled>Error al cargar</option>';
+        supSel.innerHTML = '<option value="" disabled>Error al cargar supervisores</option>';
     }
+}
+
+coopSel?.addEventListener('change', function() {
+    cargarSupervisores(this.value);
+});
+
+// Si ya viene una cooperativa pre-seleccionada (error previo), cargar sus supervisores
+document.addEventListener('DOMContentLoaded', () => {
+    if (coopSel?.value) cargarSupervisores(coopSel.value);
 });
 <?php endif; ?>
+
+// ── Validación en tiempo real: email, usuario, cédula ─────
+const camposUnicos = [
+    { id: 'email',   campo: 'email',   msgExiste: 'Este correo ya está registrado.' },
+    { id: 'usuario', campo: 'usuario', msgExiste: 'Este nombre de usuario ya está en uso.' },
+    { id: 'cedula',  campo: 'cedula',  msgExiste: 'Esta cédula ya está registrada.' },
+];
+let debounceTimers = {};
+
+camposUnicos.forEach(({ id, campo, msgExiste }) => {
+    const input    = document.getElementById(id);
+    const feedback = document.getElementById(id + '-feedback');
+    if (!input || !feedback) return;
+
+    input.addEventListener('blur', () => verificarCampo(input, campo, feedback, msgExiste));
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimers[id]);
+        feedback.textContent = '';
+        feedback.className = 'field-feedback';
+        input.classList.remove('input-error', 'input-ok');
+        debounceTimers[id] = setTimeout(() => verificarCampo(input, campo, feedback, msgExiste), 600);
+    });
+});
+
+async function verificarCampo(input, campo, feedback, msgExiste) {
+    const val = input.value.trim();
+    if (!val) return;
+    try {
+        const res  = await fetch('api_verificar_campo.php?campo=' + campo + '&valor=' + encodeURIComponent(val));
+        const data = await res.json();
+        if (data.disponible) {
+            feedback.textContent = '✓ Disponible';
+            feedback.className   = 'field-feedback ok';
+            input.classList.remove('input-error'); input.classList.add('input-ok');
+        } else {
+            feedback.textContent = '✗ ' + msgExiste;
+            feedback.className   = 'field-feedback error';
+            input.classList.remove('input-ok'); input.classList.add('input-error');
+        }
+    } catch(e) {}
+}
+
+// ── Bloquear submit si hay errores ────────────────────────
+document.querySelector('form')?.addEventListener('submit', function(e) {
+    if (document.querySelectorAll('input.input-error').length > 0) {
+        e.preventDefault(); alert('Corrige los campos marcados antes de continuar.'); return;
+    }
+    <?php if (!$modo_supervisor): ?>
+    const coop = document.getElementById('id_cooperativa');
+    const sup  = document.getElementById('id_supervisor');
+    if (!coop?.value) { e.preventDefault(); coop.style.borderColor='#ef4444'; coop.focus(); alert('Debes seleccionar una cooperativa.'); return; }
+    if (!sup?.value)  { e.preventDefault(); sup.style.borderColor='#ef4444';  sup.focus();  alert('Debes seleccionar un supervisor.');   return; }
+    <?php endif; ?>
+});
 
 // ── File upload ───────────────────────────────────────────
 const fileInput = document.getElementById('credencial');
 const dropZone  = document.getElementById('dropZone');
 const fileName  = document.getElementById('fileName');
-const allowed   = ['application/pdf','image/jpeg','image/png'];
-const maxSize   = 5 * 1024 * 1024;
+const allowedExt = ['pdf','jpg','jpeg','png'];
+const maxSize    = 5 * 1024 * 1024;
 
 function handleFile(file) {
     if (!file) return;
-    if (!allowed.includes(file.type)) {
-        fileName.textContent = '❌ Tipo no permitido (PDF, JPG, PNG)';
-        fileName.className   = 'file-name show';
-        fileInput.value = ''; return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!allowedExt.includes(ext)) {
+        fileName.textContent = '❌ Tipo no permitido. Usa PDF, JPG o PNG';
+        fileName.className   = 'file-name show'; fileInput.value = ''; return;
     }
     if (file.size > maxSize) {
         fileName.textContent = '❌ Archivo muy grande (máx. 5 MB)';
-        fileName.className   = 'file-name show';
-        fileInput.value = ''; return;
+        fileName.className   = 'file-name show'; fileInput.value = ''; return;
     }
     fileName.textContent = '✅ ' + file.name;
     fileName.className   = 'file-name show';
 }
 
-dropZone.addEventListener('click',     () => fileInput.click());
-fileInput.addEventListener('change',   () => handleFile(fileInput.files[0]));
-dropZone.addEventListener('dragover',  e  => { e.preventDefault(); dropZone.style.borderColor = '#123a6d'; });
-dropZone.addEventListener('dragleave', ()  => { dropZone.style.borderColor = ''; });
-dropZone.addEventListener('drop', e => {
-    e.preventDefault();
-    dropZone.style.borderColor = '';
-    if (e.dataTransfer.files.length) {
-        fileInput.files = e.dataTransfer.files;
-        handleFile(fileInput.files[0]);
-    }
+dropZone?.addEventListener('click',    () => fileInput.click());
+fileInput?.addEventListener('change',  () => handleFile(fileInput.files[0]));
+dropZone?.addEventListener('dragover', e  => { e.preventDefault(); dropZone.style.borderColor='#4ADE80'; });
+dropZone?.addEventListener('dragleave',()  => { dropZone.style.borderColor=''; });
+dropZone?.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.style.borderColor = '';
+    if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFile(fileInput.files[0]); }
 });
 </script>
 </body>

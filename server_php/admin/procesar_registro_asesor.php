@@ -98,11 +98,14 @@ if ($credencial_presente) {
     if ($archivo_upload['error'] !== UPLOAD_ERR_OK) {
         $errores[] = 'Error en la subida del archivo';
     } else {
-        $tipos_permitidos = ['application/pdf', 'image/jpeg', 'image/png'];
+        $tipos_permitidos = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/octet-stream'];
+        $ext_permitidas   = ['pdf', 'jpg', 'jpeg', 'png'];
+        $ext_archivo      = strtolower(pathinfo($archivo_upload['name'], PATHINFO_EXTENSION));
         $tamaño_maximo    = 5 * 1024 * 1024; // 5 MB
 
-        if (!in_array($archivo_upload['type'], $tipos_permitidos)) {
-            $errores[] = 'Tipo de archivo no permitido (PDF, JPG, PNG)';
+        $tipo_ok = in_array($archivo_upload['type'], $tipos_permitidos) || in_array($ext_archivo, $ext_permitidas);
+        if (!$tipo_ok) {
+            $errores[] = 'Tipo de archivo no permitido. Usa PDF, JPG o PNG.';
         } elseif ($archivo_upload['size'] > $tamaño_maximo) {
             $errores[] = 'Archivo muy grande (máximo 5 MB)';
         } else {
@@ -160,8 +163,18 @@ if (empty($errores)) {
     }
 }
 
-// ── Retornar errores ──────────────────────────────────────
+// ── Retornar errores (guardar datos en sesión para repoblar el formulario) ──
 if (!empty($errores)) {
+    $_SESSION['form_prev'] = [
+        'id_cooperativa' => $_POST['id_cooperativa'] ?? '',
+        'id_supervisor'  => $_POST['id_supervisor']  ?? '',
+        'nombres'        => $nombres,
+        'apellidos'      => $apellidos,
+        'cedula'         => $cedula,
+        'email'          => $email,
+        'telefono'       => $telefono,
+        'usuario'        => $usuario,
+    ];
     header("Location: $form_origen?error=" . urlencode(implode(', ', $errores)));
     exit;
 }

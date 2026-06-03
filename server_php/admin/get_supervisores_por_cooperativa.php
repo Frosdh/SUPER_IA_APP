@@ -1,73 +1,65 @@
 <?php
+// get_supervisores_por_cooperativa.php
+// Devuelve supervisores activos de una unidad_bancaria (cooperativa).
+// Intenta dos rutas de unión y devuelve todos los que coincidan por cualquiera.
 require_once 'db_admin.php';
-
 header('Content-Type: application/json');
 
-$id_cooperativa = $_GET['id_cooperativa'] ?? null;
+$id_cooperativa = trim($_GET['id_cooperativa'] ?? '');
 
-if (!$id_cooperativa || !is_numeric($id_cooperativa)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'ID de cooperativa inválido', 'supervisores' => []]);
+if (!$id_cooperativa) {
+    echo json_encode(['supervisores' => []]);
     exit;
 }
 
 $supervisores = [];
 
 try {
-    // Detectar columna de cooperativa en usuarios
-    $userCols = $pdo->query("SHOW COLUMNS FROM usuarios")->fetchAll(PDO::FETCH_ASSOC);
-    $userFields = array_map(fn($c) => $c['Field'], $userCols);
+    // Ruta 1: supervisor → jefe_agencia → agencia → unidad_bancaria_id
+    // Ruta 2: usuario.agencia_id → agencia → unidad_bancaria_id
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT u.id AS id_usuario, u.nombre
+        FROM usuario u
+        JOIN supervisor sup ON sup.usuario_id = u.id
+        WHERE u.activo = 1
+          AND u.estado_aprobacion = 'aprobado'
+          AND u.rol = 'supervisor'
+          AND (
+              -- Ruta directa: usuario tiene agencia asignada
+              EXISTS (
+                  SELECT 1 FROM agencia ag
+                  WHERE ag.id = u.agencia_id
+                    AND ag.unidad_bancaria_id = ?
+              )
+              OR
+              -- Ruta jerárquica: supervisor → jefe_agencia → agencia
+              EXISTS (
+                  SELECT 1
+                  FROM jefe_agencia ja
+                  JOIN agencia ag2 ON ag2.id = ja.agencia_id
+                  WHERE ja.id = sup.jefe_agencia_id
+                    AND ag2.unidad_bancaria_id = ?
+              )
+          )
+        ORDER BY u.nombre
+    ");
+    $stmt->execute([$id_cooperativa, $id_cooperativa]);
+    $supervisores = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $userCoopCol = null;
-    foreach (['id_cooperativa_fk', 'id_cooperativa', 'cooperativa_id'] as $candidate) {
-        if (in_array($candidate, $userFields, true)) {
-            $userCoopCol = $candidate;
-            break;
-        }
-    }
+} catch (\Throwable $e) {
+    // Si falla todo, devolver error legible
+    echo json_encode(['supervisores' => [], 'debug' => $e->getMessage()]);
+    exit;
+}
 
-    if ($userCoopCol) {
-        $stmt = $pdo->prepare("
-            SELECT u.id_usuario, CONCAT(u.nombres, ' ', u.apellidos) AS nombre
-            FROM usuarios u
-            JOIN roles r ON u.id_rol_fk = r.id_rol
-            WHERE r.nombre = 'Supervisor'
-              AND u.`{$userCoopCol}` = ?
-            ORDER BY u.nombres, u.apellidos
-        ");
-        $stmt->execute([$id_cooperativa]);
-        $supervisores = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        // Si no existe relación, devolver todos (mantiene compatibilidad)
-        $stmt = $pdo->prepare("
-            SELECT u.id_usuario, CONCAT(u.nombres, ' ', u.apellidos) AS nombre
-            FROM usuarios u
-            JOIN roles r ON u.id_rol_fk = r.id_rol
-            WHERE r.nombre = 'Supervisor'
-            ORDER BY u.nombres, u.apellidos
-        ");
-        $stmt->execute();
-        $supervisores = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-} catch (Exception $e) {
-    // Si la relación u.id_cooperativa_fk no existe, intentar con query simple
-    try {
-        $stmt = $pdo->prepare("
-            SELECT u.id_usuario, CONCAT(u.nombres, ' ', u.apellidos) AS nombre
-            FROM usuarios u
-            JOIN roles r ON u.id_rol_fk = r.id_rol
-            WHERE r.nombre = 'Supervisor'
-            ORDER BY u.nombres, u.apellidos
-        ");
-        $stmt->execute();
-        $supervisores = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } catch (Exception $e2) {
-        http_response_code(500);
-        echo json_encode(['error' => 'Error al obtener supervisores', 'supervisores' => []]);
-        exit;
-    }
+// Si no hay supervisores por ninguna ruta, devolver lista vacía con mensaje
+if (empty($supervisores)) {
+    echo json_encode([
+        'supervisores' => [],
+        'mensaje'      => 'No hay supervisores registrados para esta cooperativa.'
+    ]);
+    exit;
 }
 
 echo json_encode(['supervisores' => $supervisores]);
 exit;
-?>
