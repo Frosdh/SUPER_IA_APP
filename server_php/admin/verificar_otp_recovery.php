@@ -91,6 +91,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Si no lo ves en bandeja de entrada, <strong>revisa la carpeta de SPAM</strong>
         </p>
 
+        <?php if ($devOtp): ?>
+        <div style="background:#fffbeb;border:2px dashed #f59e0b;border-radius:12px;padding:14px;text-align:center;margin-bottom:18px;">
+            <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.06em;">⚠️ Código de emergencia</div>
+            <div style="font-size:24px;font-weight:800;color:#d97706;letter-spacing:6px;margin:6px 0;font-family:monospace;"><?= htmlspecialchars($devOtp) ?></div>
+            <div style="font-size:11px;color:#92400e;">El envío por correo no está disponible. Copia este código para continuar.</div>
+        </div>
+        <?php endif; ?>
+
         <?php if ($error): ?>
             <div class="alert-error"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>

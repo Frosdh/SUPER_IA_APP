@@ -1,8 +1,9 @@
 <?php
 // ============================================================
 // admin/recuperar_password.php — Paso 1: Ingresar email
-// Genera una contraseña provisional aleatoria, la actualiza en
-// la base de datos y la envía al correo del usuario.
+// Genera un código OTP de 6 dígitos, lo guarda en la BD y lo
+// envía al correo del usuario vía Gmail SMTP (PHPMailer).
+// Si el envío falla, muestra el código en pantalla como emergencia.
 // ============================================================
 require_once 'db_admin.php';
 
@@ -11,90 +12,84 @@ if (!in_array($role, ['super_admin', 'admin', 'supervisor', 'asesor'])) $role = 
 
 $error   = '';
 $success = '';
+$codigoMostrar = '';
+$emailMostrar  = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $email     = trim($_POST['email'] ?? '');
-    $postRole  = $_POST['role'] ?? $role;
+    $email    = trim($_POST['email'] ?? '');
+    $postRole = $_POST['role'] ?? $role;
 
-    // Log de depuración inicial
     $logFile = __DIR__ . '/recuperar_debug.log';
-    $logMsg = date('Y-m-d H:i:s') . " - Intento de recuperación para Email: $email, Rol POST: $postRole\n";
+    $logMsg  = date('Y-m-d H:i:s') . " - Intento de recuperación para Email: $email, Rol POST: $postRole\n";
     file_put_contents($logFile, $logMsg, FILE_APPEND);
 
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Ingresa un correo electrónico válido.';
         file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error: Correo inválido ($email)\n", FILE_APPEND);
     } else {
-        try {
-            // Buscar usuario por email SIN filtrar por rol
-            // Cualquier usuario activo (asesor, supervisor, gerente, superadmin) puede recuperar su contraseña
-            $stmt = $pdo->prepare("SELECT id, nombre FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
-            $stmt->execute([$email]);
-            $user = $stmt->fetch();
+        // Buscar usuario por email (cualquier rol activo)
+        $stmt = $pdo->prepare("SELECT id, nombre FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
+        $stmt->execute([$email]);
+        $user = $stmt->fetch();
 
-            if (!$user) {
-                file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email\n", FILE_APPEND);
-                // Por seguridad, redirigimos igual para no revelar si el correo existe
-                $_SESSION['recovery_email'] = $email;
-                $_SESSION['recovery_role']  = $postRole;
-                header('Location: verificar_otp_recovery.php');
-                exit;
-            }
+        // Siempre generamos OTP para no revelar si el email existe o no
+        $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expira_en = date('Y-m-d H:i:s', time() + 600);
 
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . "\n", FILE_APPEND);
+        // Invalidar OTPs anteriores e insertar el nuevo
+        $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE email = ? AND usado = 0")->execute([$email]);
+        $pdo->prepare("INSERT INTO email_otp_codes (email, codigo, expira_en, usado, creado_en) VALUES (?, ?, ?, 0, NOW())")
+            ->execute([$email, $codigo, $expira_en]);
 
-            // Generar OTP de 6 dígitos
-            $codigo    = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-            $expira_en = date('Y-m-d H:i:s', time() + 600); // 10 minutos
+        $_SESSION['recovery_email']   = $email;
+        $_SESSION['recovery_role']    = $postRole;
+        $_SESSION['recovery_dev_otp'] = $codigo;
+        session_write_close();
 
-            // Invalidar OTPs anteriores e insertar el nuevo
-            $pdo->prepare("UPDATE email_otp_codes SET usado = 1 WHERE email = ? AND usado = 0")
-                ->execute([$email]);
-            $pdo->prepare(
-                "INSERT INTO email_otp_codes (email, codigo, expira_en, usado, creado_en)
-                 VALUES (?, ?, ?, 0, NOW())"
-            )->execute([$email, $codigo, $expira_en]);
-
-            // Guardar en sesión y cerrar para no bloquear
-            $_SESSION['recovery_email']   = $email;
-            $_SESSION['recovery_role']    = $postRole;
-            $_SESSION['recovery_dev_otp'] = $codigo;
-            session_write_close();
-
-            // Enviar email
-            $emailHelperPath = __DIR__ . '/../email_helper.php';
-            $sent      = false;
-            $mailError = '';
-            if (file_exists($emailHelperPath)) {
-                require_once $emailHelperPath;
-                list($sent, $mailError) = sendEmailMessage(
-                    $email,
-                    'Código de recuperación — Super_IA',
-                    buildOtpEmailHtml($codigo),
-                    buildOtpEmailText($codigo)
-                );
-            } else {
-                $mailError = 'No se encontró email_helper.php';
-            }
-
-            file_put_contents(
-                $logFile,
-                date('Y-m-d H:i:s') . ' - ' . ($sent ? "OTP enviado" : "SMTP falló: $mailError") . " | email=$email | codigo=$codigo\n",
-                FILE_APPEND
-            );
-
+        if (!$user) {
+            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email (OTP generado por seguridad)\n", FILE_APPEND);
             header('Location: verificar_otp_recovery.php');
             exit;
-
-        } catch (\Throwable $e) {
-            $error = 'Error interno. Intenta de nuevo.';
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - EXCEPCIÓN: " . $e->getMessage() . " | email=$email\n", FILE_APPEND);
         }
+
+        file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . "\n", FILE_APPEND);
+
+        // ─── Enviar el código por email ───────────────────────────
+        $emailHelperPath = __DIR__ . '/../email_helper.php';
+        $sent      = false;
+        $mailError = '';
+
+        if (file_exists($emailHelperPath)) {
+            require_once $emailHelperPath;
+            list($sent, $mailError) = sendEmailMessage(
+                $email,
+                'Código de recuperación — Super_IA',
+                buildOtpEmailHtml($codigo),
+                buildOtpEmailText($codigo)
+            );
+        } else {
+            $mailError = 'No se encontró email_helper.php';
+        }
+
+        file_put_contents(
+            $logFile,
+            date('Y-m-d H:i:s') . ' - ' . ($sent ? "OTP enviado exitosamente" : "SMTP falló: $mailError") . " | email=$email | codigo=$codigo\n",
+            FILE_APPEND
+        );
+
+        if ($sent) {
+            // ✅ Email enviado — redirigir a verificar código
+            header('Location: verificar_otp_recovery.php');
+            exit;
+        }
+
+        // ❌ Email falló — mostrar el código en pantalla como emergencia
+        $codigoMostrar = $codigo;
+        $emailMostrar  = $email;
+        $error = 'No se pudo enviar el correo electrónico.';
     }
 }
-
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -112,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .card{width:440px;max-width:95vw;background:#fff;border-radius:20px;padding:44px 40px;box-shadow:0 30px 80px rgba(0,0,0,.40);position:relative;z-index:1;}
         .icon-wrap{width:60px;height:60px;background:linear-gradient(135deg,#6b11ff,#3182fe);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:24px;color:#fff;margin:0 auto 20px;}
         h2{font-size:22px;font-weight:800;color:#1e293b;text-align:center;margin-bottom:6px;}
-        .subtitle{font-size:13.5px;color:#64748b;text-align:center;margin-bottom:28px;line-height:1.5;}
+        .subtitle{font-size:13.5px;color:#64748b;text-align:center;margin-bottom:20px;line-height:1.5;}
         .inp-group{margin-bottom:18px;}
         .inp-group label{display:block;font-size:12.5px;font-weight:600;color:#374151;margin-bottom:7px;}
         .inp-wrap{position:relative;}
@@ -123,8 +118,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .btn-main:hover{opacity:.92;transform:translateY(-2px);}
         .btn-back{display:block;text-align:center;margin-top:14px;padding:10px;background:transparent;border:1.5px solid #e5e7eb;border-radius:11px;color:#64748b;font-size:13px;font-weight:600;text-decoration:none;transition:.2s;}
         .btn-back:hover{background:#f8fafc;color:#1e293b;}
+        .btn-continuar{display:block;text-align:center;margin-top:14px;padding:12px;background:linear-gradient(135deg,#6b11ff,#3182fe);border:none;border-radius:11px;color:#fff;font-size:14px;font-weight:700;text-decoration:none;transition:.22s;box-shadow:0 6px 20px rgba(107,17,255,.30);font-family:'Inter',sans-serif;}
+        .btn-continuar:hover{opacity:.92;transform:translateY(-2px);}
         .alert-error{background:#fef2f2;border:1px solid #fecaca;color:#dc2626;border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
         .alert-ok{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:10px;padding:11px 16px;font-size:13px;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+        .codigo-fallback{background:#fffbeb;border:2px dashed #f59e0b;border-radius:14px;padding:20px;text-align:center;margin-bottom:18px;}
+        .codigo-fallback .label{font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.06em;}
+        .codigo-fallback .code{font-size:32px;font-weight:800;color:#d97706;letter-spacing:8px;margin:8px 0;font-family:monospace;}
+        .codigo-fallback .msg{font-size:12px;color:#92400e;line-height:1.5;}
         .footer{margin-top:24px;text-align:center;font-size:12px;color:#9ca3af;}
     </style>
 </head>
@@ -137,22 +138,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <?php if ($error): ?>
             <div class="alert-error"><i class="fas fa-exclamation-circle"></i><?= htmlspecialchars($error) ?></div>
         <?php endif; ?>
-        <?php if ($success): ?>
-            <div class="alert-ok"><i class="fas fa-check-circle"></i><?= htmlspecialchars($success) ?></div>
-        <?php endif; ?>
 
-        <?php if (!$success): ?>
-        <form method="POST">
-            <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
-            <div class="inp-group">
-                <label>Correo Electrónico</label>
-                <div class="inp-wrap">
-                    <i class="fas fa-envelope"></i>
-                    <input type="email" name="email" placeholder="tu@correo.com" required autocomplete="off">
+        <?php if ($codigoMostrar): ?>
+            <div class="codigo-fallback">
+                <div class="label">⚠️ No se pudo enviar el email</div>
+                <div class="code"><?= htmlspecialchars($codigoMostrar) ?></div>
+                <div class="msg">
+                    Copia este código y úsalo en la siguiente pantalla.<br>
+                    <strong>Email:</strong> <?= htmlspecialchars($emailMostrar) ?><br>
+                    <small>Verifica la configuración SMTP en email_config.php para que los correos se envíen automáticamente.</small>
                 </div>
             </div>
-            <button type="submit" class="btn-main"><i class="fas fa-paper-plane me-2"></i>Enviar Código</button>
-        </form>
+            <a href="verificar_otp_recovery.php" class="btn-continuar">
+                <i class="fas fa-arrow-right me-2"></i>Ya tengo el código — Continuar
+            </a>
+        <?php else: ?>
+            <form method="POST">
+                <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
+                <div class="inp-group">
+                    <label>Correo Electrónico</label>
+                    <div class="inp-wrap">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" name="email" placeholder="tu@correo.com" required autocomplete="off">
+                    </div>
+                </div>
+                <button type="submit" class="btn-main"><i class="fas fa-paper-plane me-2"></i>Enviar Código</button>
+            </form>
         <?php endif; ?>
 
         <a href="login_selector.php" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Volver al Login</a>
