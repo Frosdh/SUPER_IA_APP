@@ -32,7 +32,7 @@ $tests = [
 ];
 
 $username   = 'edwinchoez83@gmail.com';
-$password   = 'abzudapfzcsjkeoz';
+$password   = 'abzudapfzcsjkeoz';   // App Password actualizada 2026-06-08
 $toEmail    = $_GET['to'] ?? 'edwinchoez25@gmail.com';
 
 echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
