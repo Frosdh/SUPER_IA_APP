@@ -32,8 +32,8 @@ $tests = [
 ];
 
 $username   = 'edwinchoez83@gmail.com';
-$password   = 'ccmpxrfxotsgldvw';
-$toEmail    = $_GET['to'] ?? $username;
+$password   = 'abzudapfzcsjkeoz';
+$toEmail    = $_GET['to'] ?? 'edwinchoez25@gmail.com';
 
 echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
 <title>SMTP Diagnóstico — Super_IA</title>

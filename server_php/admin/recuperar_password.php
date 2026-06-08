@@ -10,22 +10,26 @@ require_once 'db_admin.php';
 $role = $_GET['role'] ?? 'admin';
 if (!in_array($role, ['super_admin', 'admin', 'supervisor', 'asesor'])) $role = 'admin';
 
-$error   = '';
-$success = '';
+$error         = '';
+$success       = '';
 $codigoMostrar = '';
 $emailMostrar  = '';
+$smtpError     = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email    = trim($_POST['email'] ?? '');
     $postRole = $_POST['role'] ?? $role;
 
-    $logFile = __DIR__ . '/recuperar_debug.log';
-    $logMsg  = date('Y-m-d H:i:s') . " - Intento de recuperación para Email: $email, Rol POST: $postRole\n";
-    file_put_contents($logFile, $logMsg, FILE_APPEND);
+    // Log en server_php/ — carpeta con permisos de escritura confirmados
+    $logFile = realpath(__DIR__ . '/..') . '/email_recovery.log';
+    $log = function(string $msg) use ($logFile) {
+        file_put_contents($logFile, date('Y-m-d H:i:s') . " $msg\n", FILE_APPEND | LOCK_EX);
+    };
+    $log("[RECOVERY] Intento para Email: $email, Rol: $postRole");
 
     if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $error = 'Ingresa un correo electrónico válido.';
-        file_put_contents($logFile, date('Y-m-d H:i:s') . " - Error: Correo inválido ($email)\n", FILE_APPEND);
+        $log("[ERROR] Correo inválido: $email");
     } else {
         // Buscar usuario por email (cualquier rol activo)
         $stmt = $pdo->prepare("SELECT id, nombre FROM usuario WHERE email = ? AND activo = 1 LIMIT 1");
@@ -47,19 +51,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         session_write_close();
 
         if (!$user) {
-            file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario NO encontrado para Email: $email (OTP generado por seguridad)\n", FILE_APPEND);
+            $log("[INFO] Usuario NO encontrado para $email — redirigiendo igualmente");
             header('Location: verificar_otp_recovery.php');
             exit;
         }
 
-        file_put_contents($logFile, date('Y-m-d H:i:s') . " - Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre'] . "\n", FILE_APPEND);
+        $log("[INFO] Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre']);
 
         // ─── Enviar el código por email ───────────────────────────
-        $emailHelperPath = __DIR__ . '/../email_helper.php';
+        // Usar realpath() para resolver la ruta de forma robusta en Windows/XAMPP
+        $emailHelperPath = realpath(__DIR__ . '/../email_helper.php');
         $sent      = false;
         $mailError = '';
 
-        if (file_exists($emailHelperPath)) {
+        $log("[TRY] email_helper path: " . ($emailHelperPath ?: 'NO ENCONTRADO en ' . __DIR__ . '/../email_helper.php'));
+
+        if ($emailHelperPath && file_exists($emailHelperPath)) {
             require_once $emailHelperPath;
             list($sent, $mailError) = sendEmailMessage(
                 $email,
@@ -68,14 +75,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 buildOtpEmailText($codigo)
             );
         } else {
-            $mailError = 'No se encontró email_helper.php';
+            $mailError = 'No se encontró email_helper.php (ruta: ' . __DIR__ . '/../email_helper.php)';
         }
 
-        file_put_contents(
-            $logFile,
-            date('Y-m-d H:i:s') . ' - ' . ($sent ? "OTP enviado exitosamente" : "SMTP falló: $mailError") . " | email=$email | codigo=$codigo\n",
-            FILE_APPEND
-        );
+        $log($sent ? "[OK] OTP enviado a $email" : "[FAIL] SMTP error: $mailError | email=$email | codigo=$codigo");
 
         if ($sent) {
             // ✅ Email enviado — redirigir a verificar código
@@ -86,6 +89,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // ❌ Email falló — mostrar el código en pantalla como emergencia
         $codigoMostrar = $codigo;
         $emailMostrar  = $email;
+        $smtpError     = $mailError; // para mostrar en pantalla
         $error = 'No se pudo enviar el correo electrónico.';
     }
 }
@@ -145,10 +149,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="code"><?= htmlspecialchars($codigoMostrar) ?></div>
                 <div class="msg">
                     Copia este código y úsalo en la siguiente pantalla.<br>
-                    <strong>Email:</strong> <?= htmlspecialchars($emailMostrar) ?><br>
-                    <small>Verifica la configuración SMTP en email_config.php para que los correos se envíen automáticamente.</small>
+                    <strong>Email destino:</strong> <?= htmlspecialchars($emailMostrar) ?><br>
+                    <?php if ($smtpError): ?>
+                        <small style="color:#b45309;"><strong>Error SMTP:</strong> <?= htmlspecialchars($smtpError) ?></small><br>
+                    <?php endif; ?>
+                    <small>Revisa <code>server_php/email_recovery.log</code> para más detalles.</small>
                 </div>
             </div>
+            <!-- Botón reintentar envío -->
+            <form method="POST" style="margin-bottom:10px;">
+                <input type="hidden" name="role" value="<?= htmlspecialchars($role) ?>">
+                <input type="hidden" name="email" value="<?= htmlspecialchars($emailMostrar) ?>">
+                <button type="submit" class="btn-main" style="background:linear-gradient(135deg,#059669,#0284c7);">
+                    <i class="fas fa-redo me-2"></i>Reintentar envío de código
+                </button>
+            </form>
             <a href="verificar_otp_recovery.php" class="btn-continuar">
                 <i class="fas fa-arrow-right me-2"></i>Ya tengo el código — Continuar
             </a>
