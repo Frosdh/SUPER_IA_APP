@@ -81,13 +81,23 @@ if ($action === 'enviar_otp') {
                 ->execute([$email, $codigo, $expira_en]);
 
             // Enviar email ANTES de responder para garantizar que se procese
-            _enviarEmailOtp($email, $codigo);
+            [$sent, $err] = _enviarEmailOtp($email, $codigo);
 
-            echo json_encode([
-                'status'  => 'success',
-                'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
-                'email'   => $email,
-            ]);
+            if ($sent) {
+                echo json_encode([
+                    'status'  => 'success',
+                    'message' => 'Código enviado a tu correo. Revisa tu bandeja de entrada.',
+                    'email'   => $email,
+                ]);
+            } else {
+                echo json_encode([
+                    'status'  => 'success',
+                    'message' => 'No se pudo enviar el email. Usa este código de emergencia.',
+                    'email'   => $email,
+                    'codigo_emergencia' => $codigo,
+                    'smtp_error' => $err,
+                ]);
+            }
         } else {
             // Por seguridad respondemos igual aunque no exista el usuario
             echo json_encode([
@@ -177,7 +187,7 @@ exit;
 // ══════════════════════════════════════════════════════════
 // FUNCIÓN: Enviar email con OTP
 // ══════════════════════════════════════════════════════════
-function _enviarEmailOtp(string $toEmail, string $codigo): void
+function _enviarEmailOtp(string $toEmail, string $codigo): array
 {
     $logFile = __DIR__ . '/email_send_mobile.log';
 
@@ -185,7 +195,7 @@ function _enviarEmailOtp(string $toEmail, string $codigo): void
         $helperPath = __DIR__ . '/email_helper.php';
         if (!file_exists($helperPath)) {
             file_put_contents($logFile, date('Y-m-d H:i:s') . " email_helper.php no encontrado\n", FILE_APPEND);
-            return;
+            return [false, "email_helper.php no encontrado"];
         }
 
         require_once $helperPath;
@@ -200,11 +210,13 @@ function _enviarEmailOtp(string $toEmail, string $codigo): void
             date('Y-m-d H:i:s') . ($sent ? " OK" : " FAIL: $err") . " | to=$toEmail | code=$codigo\n",
             FILE_APPEND | LOCK_EX
         );
+        return [$sent, $err];
     } catch (\Throwable $e) {
         file_put_contents(
             $logFile,
             date('Y-m-d H:i:s') . " EXCEPTION: " . $e->getMessage() . " | to=$toEmail\n",
             FILE_APPEND | LOCK_EX
         );
+        return [false, $e->getMessage()];
     }
 }

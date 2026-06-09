@@ -22,12 +22,17 @@ class _VerificarOtpScreenState extends State<VerificarOtpScreen> {
   bool _reenvioLoading = false;
   String _email = '';
 
+  String? _codigoEmergencia;
+  String? _smtpError;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is Map) {
       _email = (args['email'] ?? '').toString();
+      _codigoEmergencia = args['codigo_emergencia']?.toString();
+      _smtpError = args['smtp_error']?.toString();
     }
   }
 
@@ -105,14 +110,35 @@ class _VerificarOtpScreenState extends State<VerificarOtpScreen> {
     setState(() => _reenvioLoading = true);
     try {
       final api = ApiProvider();
-      await api.enviarOtpAsesor(email: _email);
+      final res = await api.enviarOtpAsesor(email: _email);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Código reenviado. Revisa tu correo.'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      
+      if (res['status'] == 'success') {
+        if (res['codigo_emergencia'] != null) {
+          setState(() {
+            _codigoEmergencia = res['codigo_emergencia']?.toString();
+            _smtpError = res['smtp_error']?.toString();
+          });
+        } else {
+          setState(() {
+            _codigoEmergencia = null;
+            _smtpError = null;
+          });
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Código reenviado. Revisa tu correo.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message'] ?? 'Error al reenviar'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     } catch (_) {
     } finally {
       if (mounted) setState(() => _reenvioLoading = false);
@@ -279,6 +305,58 @@ class _VerificarOtpScreenState extends State<VerificarOtpScreen> {
                     ),
                   ),
                   const SizedBox(height: 26),
+
+                  if (_codigoEmergencia != null)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 22),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.amber.shade600, width: 2),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded, color: Colors.amber.shade900),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'No se pudo enviar el correo electrónico',
+                                  style: TextStyle(
+                                    color: Colors.amber.shade900,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Usa este código de emergencia:',
+                            style: TextStyle(color: Colors.amber.shade900),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _codigoEmergencia!,
+                            style: TextStyle(
+                              color: Colors.orange.shade900,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 8,
+                            ),
+                          ),
+                          if (_smtpError != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Error SMTP: $_smtpError',
+                              style: TextStyle(color: Colors.red.shade900, fontSize: 12),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
 
                   // OTP boxes card
                   Container(

@@ -37,10 +37,23 @@ class _RecuperarPasswordScreenState extends State<RecuperarPasswordScreen> {
       if (!mounted) return;
 
       if ((res['status'] ?? '') == 'success') {
+        if (res['codigo_emergencia'] != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚠️ Falló email. Código emergencia: ${res['codigo_emergencia']}'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        }
         Navigator.pushNamed(
           context,
           VerificarOtpScreen.route,
-          arguments: {'email': _emailController.text.trim()},
+          arguments: {
+            'email': _emailController.text.trim(),
+            'codigo_emergencia': res['codigo_emergencia'],
+            'smtp_error': res['smtp_error'],
+          },
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
