@@ -13,43 +13,63 @@ require_once '../db_config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 $is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-if (!$is_supervisor) {
+$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
+if (!$is_supervisor && !$is_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
 }
 
-$supervisor_id = $_SESSION['supervisor_id'] ?? null;
+$supervisor_id = $is_supervisor ? ($_SESSION['supervisor_id'] ?? null) : null;
 $fecha         = trim($_GET['fecha'] ?? date('Y-m-d'));
 
-if (!$supervisor_id) {
-    http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'supervisor_id no encontrado']);
-    exit;
-}
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha)) {
     $fecha = date('Y-m-d');
 }
 
 try {
-    $sql = "
-        SELECT
-            t.asesor_id,
-            COUNT(*) AS total
-        FROM tarea t
-        JOIN asesor a      ON a.id = t.asesor_id
-        JOIN supervisor s  ON s.id = a.supervisor_id
-        LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
-        WHERE s.usuario_id = ?
-          AND t.estado = 'completada'
-          AND t.fecha_realizada = ?
-          AND ec.id IS NOT NULL
-        GROUP BY t.asesor_id
-    ";
-
-    $st = $conn->prepare($sql);
+    if ($is_supervisor) {
+        if (!$supervisor_id) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'supervisor_id no encontrado']);
+            exit;
+        }
+        $sql = "
+            SELECT
+                t.asesor_id,
+                COUNT(*) AS total
+            FROM tarea t
+            JOIN asesor a      ON a.id = t.asesor_id
+            JOIN supervisor s  ON s.id = a.supervisor_id
+            LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+            WHERE s.usuario_id = ?
+              AND t.estado = 'completada'
+              AND t.fecha_realizada = ?
+              AND ec.id IS NOT NULL
+            GROUP BY t.asesor_id
+        ";
+        $st = $conn->prepare($sql);
+    } else {
+        // Admin: todas las encuestas del día
+        $sql = "
+            SELECT
+                t.asesor_id,
+                COUNT(*) AS total
+            FROM tarea t
+            LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+            WHERE t.estado = 'completada'
+              AND t.fecha_realizada = ?
+              AND ec.id IS NOT NULL
+            GROUP BY t.asesor_id
+        ";
+        $st = $conn->prepare($sql);
+    }
     if (!$st) throw new Exception('Prepare resumen: ' . $conn->error);
-    $st->bind_param('ss', $supervisor_id, $fecha);
+    if ($is_supervisor) {
+        $st->bind_param('ss', $supervisor_id, $fecha);
+    } else {
+        $st->bind_param('s', $fecha);
+    }
     $st->execute();
     $res = $st->get_result();
 

@@ -31,6 +31,7 @@ try {
     $supervisor_table_id = $row['supervisor_table_id'];
 } catch (\Throwable $e) { header('Location: mis_supervisores.php'); exit; }
 
+
 // ── Cargar datos ───────────────────────────────────────────
 $stUsr = $pdo->prepare("SELECT * FROM usuario WHERE id = ? LIMIT 1");
 $stUsr->execute([$supervisor_usuario_id]);

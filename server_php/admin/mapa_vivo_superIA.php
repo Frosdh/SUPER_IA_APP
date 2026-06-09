@@ -441,42 +441,47 @@ $totalPendientes    = 0;
 <?php $navTitle = ''; $navIcon = ''; $navSubtitle = '';
 if ($is_admin) {
     require_once '_sidebar_gerente.php';
-    // _sidebar_gerente.php solo emite <div class="sidebar">.
-    // _sidebar_supervisor.php también abre .main-content, .navbar-custom y .content-area.
-    // Los añadimos aquí para que la estructura HTML sea idéntica.
-    ?>
-<div class="main-content">
-    <div class="navbar-custom">
-        <div class="nav-title-group"></div>
-        <div class="user-info">
-            <div>
-                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
-                <small>Gerente General</small>
-            </div>
-            <a href="logout.php" style="background:rgba(239,68,68,.18);color:#fca5a5;border:1px solid rgba(239,68,68,.4);padding:7px 14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s;"
-               onmouseover="this.style.background='rgba(239,68,68,.35)'" onmouseout="this.style.background='rgba(239,68,68,.18)'">
-                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
-            </a>
-        </div>
-    </div>
-    <div class="content-area">
-<?php } else { require_once '_sidebar_supervisor.php'; } ?>
+} else {
+    require_once '_sidebar_supervisor.php';
+}
+?>
 <style>
 /* Override supervisor_layout.css for map page — needs flex column + no overflow-y auto */
+html, body { height: 100% !important; overflow: hidden !important; }
+.main-content {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    min-height: 0 !important;
+    width: auto !important;
+}
 .content-area {
+    flex: 1 !important;
     display: flex !important;
     flex-direction: column !important;
     overflow: hidden !important;
     overflow-y: hidden !important;
     padding: 20px !important;
+    min-height: 0 !important;
 }
-.main-content {
-    width: auto !important;
+.map-row {
+    flex: 1 !important;
+    display: flex !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
 }
-/* Map must fill entire content area */
+.map-container {
+    flex: 1 !important;
+    min-width: 0 !important;
+    position: relative !important;
+}
+/* Map must fill entire container — explicit pixel fallback via JS */
 #map {
-    height: 100% !important;
+    position: absolute !important;
+    top: 0 !important; left: 0 !important;
     width: 100% !important;
+    height: 100% !important;
 }
 </style>
 
@@ -626,12 +631,28 @@ if ($is_admin) {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // ── Mapa Leaflet ────────────────────────────────────────────────
-const map = L.map('map').setView([-1.65, -78.65], 7);
+const map = L.map('map', { preferCanvas: true }).setView([-1.65, -78.65], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19
 }).addTo(map);
+
+// Forzar recalculo de dimensiones después de que el layout flex aplique
+function fixMapSize() {
+    const mc = document.querySelector('.map-container');
+    const el = document.getElementById('map');
+    if (mc && el) {
+        const h = mc.getBoundingClientRect().height;
+        if (h > 0) { el.style.height = h + 'px'; }
+    }
+    map.invalidateSize();
+}
+window.addEventListener('load', function() {
+    fixMapSize();
+    setTimeout(fixMapSize, 300);
+});
+window.addEventListener('resize', fixMapSize);
 
 let markerGroup = (typeof L.MarkerClusterGroup === 'function')
     ? new L.MarkerClusterGroup({ maxClusterRadius: 80 })

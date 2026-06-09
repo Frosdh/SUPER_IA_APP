@@ -85,7 +85,6 @@ try {
         $result = $stmt->get_result();
     }
 
-    $result   = $result; // alias
     $asesores = [];
     $now      = time();
 
@@ -106,7 +105,7 @@ try {
             'ultima_vez' => $row['ultima_vez'],
         ];
     }
-    $stmt->close();
+    if (isset($stmt) && $stmt !== false) $stmt->close();
 
     echo json_encode([
         'status'   => 'ok',

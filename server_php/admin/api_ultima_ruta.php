@@ -14,20 +14,16 @@ require_once '../db_config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 $is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-if (!$is_supervisor) {
+$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
+if (!$is_supervisor && !$is_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
 }
 
-$supervisor_id = $_SESSION['supervisor_id'] ?? null;
+$supervisor_id = $is_supervisor ? ($_SESSION['supervisor_id'] ?? null) : null;
 $asesor_id     = trim($_GET['asesor_id'] ?? '');
 
-if (!$supervisor_id) {
-    http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'supervisor_id no encontrado']);
-    exit;
-}
 if ($asesor_id === '') {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'asesor_id requerido']);
@@ -35,26 +31,38 @@ if ($asesor_id === '') {
 }
 
 try {
-    // Verificar que el asesor pertenece a este supervisor
-    $stVerify = $conn->prepare("
-        SELECT a.id, u.nombre
-        FROM asesor a
-        JOIN supervisor s ON s.id = a.supervisor_id
-        JOIN usuario    u ON u.id = a.usuario_id
-        WHERE a.id = ? AND s.usuario_id = ?
-        LIMIT 1
-    ");
-    if (!$stVerify) throw new Exception('Prepare verify: ' . $conn->error);
-    $stVerify->bind_param('ss', $asesor_id, $supervisor_id);
-    $stVerify->execute();
-    $asesorRow = $stVerify->get_result()->fetch_assoc();
-    $stVerify->close();
+    $asesorNombre = '';
+    if ($is_supervisor) {
+        if (!$supervisor_id) {
+            http_response_code(400);
+            echo json_encode(['status' => 'error', 'message' => 'supervisor_id no encontrado']);
+            exit;
+        }
+        // Verificar que el asesor pertenece a este supervisor
+        $stVerify = $conn->prepare("
+            SELECT a.id, u.nombre
+            FROM asesor a
+            JOIN supervisor s ON s.id = a.supervisor_id
+            JOIN usuario    u ON u.id = a.usuario_id
+            WHERE a.id = ? AND s.usuario_id = ?
+            LIMIT 1
+        ");
+        if (!$stVerify) throw new Exception('Prepare verify: ' . $conn->error);
+        $stVerify->bind_param('ss', $asesor_id, $supervisor_id);
+        $stVerify->execute();
+        $asesorRow = $stVerify->get_result()->fetch_assoc();
+        $stVerify->close();
 
-    if (!$asesorRow) {
-        echo json_encode(['status' => 'error', 'message' => 'Asesor no encontrado o no pertenece al supervisor']);
-        exit;
+        if (!$asesorRow) {
+            echo json_encode(['status' => 'error', 'message' => 'Asesor no encontrado o no pertenece al supervisor']);
+            exit;
+        }
+        $asesorNombre = $asesorRow['nombre'];
+    } else {
+        // Admin: solo verificar que el asesor existe
+        $stCheck = $conn->prepare("SELECT u.nombre FROM asesor a JOIN usuario u ON u.id=a.usuario_id WHERE a.id=? LIMIT 1");
+        if ($stCheck) { $stCheck->bind_param('s', $asesor_id); $stCheck->execute(); $r = $stCheck->get_result()->fetch_assoc(); $asesorNombre = $r['nombre'] ?? ''; $stCheck->close(); }
     }
-    $asesorNombre = $asesorRow['nombre'];
 
     // Asegurar tabla ruta_segmento
     $conn->query("

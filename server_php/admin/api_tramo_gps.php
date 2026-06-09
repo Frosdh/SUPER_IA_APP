@@ -15,13 +15,14 @@ require_once '../db_config.php';
 if (session_status() === PHP_SESSION_NONE) session_start();
 
 $is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-if (!$is_supervisor) {
+$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
+if (!$is_supervisor && !$is_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
 }
 
-$supervisor_id = $_SESSION['supervisor_id'] ?? null;
+$supervisor_id = $is_supervisor ? ($_SESSION['supervisor_id'] ?? null) : null;
 $asesor_id     = trim($_GET['asesor_id'] ?? '');
 $desde         = trim($_GET['desde'] ?? '');
 $hasta         = trim($_GET['hasta'] ?? '');
@@ -75,24 +76,26 @@ $desde = $desdeDt->format('Y-m-d H:i:s');
 $hasta = $hastaDt->format('Y-m-d H:i:s');
 
 try {
-    // Verificar que el asesor pertenece a este supervisor
-    $stVerify = $conn->prepare("
-        SELECT a.id
-        FROM asesor a
-        JOIN supervisor s ON s.id = a.supervisor_id
-        WHERE a.id = ? AND s.usuario_id = ?
-        LIMIT 1
-    ");
-    if (!$stVerify) throw new Exception('Prepare verify: ' . $conn->error);
-    $stVerify->bind_param('ss', $asesor_id, $supervisor_id);
-    $stVerify->execute();
-    $ok = $stVerify->get_result()->fetch_assoc();
-    $stVerify->close();
+    if ($is_supervisor) {
+        // Verificar que el asesor pertenece a este supervisor
+        $stVerify = $conn->prepare("
+            SELECT a.id
+            FROM asesor a
+            JOIN supervisor s ON s.id = a.supervisor_id
+            WHERE a.id = ? AND s.usuario_id = ?
+            LIMIT 1
+        ");
+        if (!$stVerify) throw new Exception('Prepare verify: ' . $conn->error);
+        $stVerify->bind_param('ss', $asesor_id, $supervisor_id);
+        $stVerify->execute();
+        $ok = $stVerify->get_result()->fetch_assoc();
+        $stVerify->close();
 
-    if (!$ok) {
-        http_response_code(404);
-        echo json_encode(['status' => 'error', 'message' => 'Asesor no encontrado o no pertenece al supervisor']);
-        exit;
+        if (!$ok) {
+            http_response_code(404);
+            echo json_encode(['status' => 'error', 'message' => 'Asesor no encontrado o no pertenece al supervisor']);
+            exit;
+        }
     }
 
     // Obtener puntos GPS en el rango solicitado
