@@ -94,13 +94,16 @@ try {
         // SuperAdmin y Admin ven todos los clientes
         $query = "
             SELECT cp.id, cp.nombre, cp.cedula, cp.email, cp.telefono, cp.telefono2 as celular, cp.estado,
-                   CONCAT_WS(' - ', cp.zona, cp.ciudad) as region, 
+                   CONCAT_WS(' - ', cp.zona, cp.ciudad) as region,
                    CASE WHEN cp.estado = 'descartado' THEN 0 ELSE 1 END as activo,
-                   cp.created_at as fecha_creacion, 
-                   u.nombre as asesor_nombre
+                   cp.created_at as fecha_creacion,
+                   u.nombre as asesor_nombre,
+                   us.nombre as supervisor_nombre
             FROM cliente_prospecto cp
             LEFT JOIN asesor a ON cp.asesor_id = a.id
             LEFT JOIN usuario u ON a.usuario_id = u.id
+            LEFT JOIN supervisor s ON a.supervisor_id = s.id
+            LEFT JOIN usuario us ON s.usuario_id = us.id
             ORDER BY cp.created_at DESC
         ";
         $col_asesor = true;
@@ -240,6 +243,33 @@ foreach ($clientes as $c) {
     }
 }
 sort($asesores_lista);
+
+// Para el gerente: cargar supervisores con sus asesores (para filtro en cascada)
+$supervisores_data = [];   // ['sup_nombre_lower' => ['label' => 'Nombre', 'asesores' => [...]]]
+if ($user_role === 'admin') {
+    try {
+        $stSup = $pdo->query("
+            SELECT us.nombre AS supervisor_nombre, ua.nombre AS asesor_nombre
+            FROM supervisor s
+            JOIN usuario us ON us.id = s.usuario_id
+            LEFT JOIN asesor a ON a.supervisor_id = s.id
+            LEFT JOIN usuario ua ON ua.id = a.usuario_id
+            ORDER BY us.nombre, ua.nombre
+        ");
+        foreach ($stSup->fetchAll() as $row) {
+            $sKey = mb_strtolower(trim($row['supervisor_nombre']));
+            if (!isset($supervisores_data[$sKey])) {
+                $supervisores_data[$sKey] = ['label' => trim($row['supervisor_nombre']), 'asesores' => []];
+            }
+            if ($row['asesor_nombre']) {
+                $aKey = mb_strtolower(trim($row['asesor_nombre']));
+                if (!in_array($aKey, $supervisores_data[$sKey]['asesores'])) {
+                    $supervisores_data[$sKey]['asesores'][] = $aKey;
+                }
+            }
+        }
+    } catch (PDOException $e) {}
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -647,7 +677,7 @@ if ($user_role === 'supervisor') {
             <!-- FILTER BAR -->
             <div class="filter-bar">
 
-                <!-- FILA 1: búsqueda de texto + asesor + limpiar -->
+                <!-- FILA 1: búsqueda de texto + supervisor + asesor + limpiar -->
                 <div class="filter-top">
                     <div class="fi-group">
                         <i class="fas fa-search fi-ico"></i>
@@ -658,12 +688,23 @@ if ($user_role === 'supervisor') {
                         <input type="text" id="fiCedula" class="fi-input" placeholder="Buscar por cédula…">
                     </div>
                     <div class="fi-divider"></div>
+                    <?php if ($user_role === 'admin'): ?>
+                    <div class="fi-group fi-group-wide">
+                        <i class="fas fa-user-shield fi-ico"></i>
+                        <select id="fiSupervisor" class="fi-select">
+                            <option value="">Todos los supervisores</option>
+                            <?php foreach($supervisores_data as $sKey => $sData): ?>
+                            <option value="<?=htmlspecialchars($sKey)?>"><?=htmlspecialchars($sData['label'])?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <?php endif; ?>
                     <div class="fi-group fi-group-wide">
                         <i class="fas fa-user-tie fi-ico"></i>
                         <select id="fiAsesor" class="fi-select">
                             <option value="">Todos los asesores</option>
                             <?php foreach($asesores_lista as $an): ?>
-                            <option value="<?=htmlspecialchars($an)?>"><?=htmlspecialchars($an)?></option>
+                            <option value="<?=htmlspecialchars(mb_strtolower(trim($an)))?>"><?=htmlspecialchars($an)?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -747,6 +788,7 @@ if ($user_role === 'supervisor') {
                             data-nombre="<?=htmlspecialchars(mb_strtolower(trim($cliente['nombre']??'')))?>"
                             data-cedula="<?=htmlspecialchars($cliente['cedula']??'')?>"
                             data-asesor="<?=htmlspecialchars(mb_strtolower(trim($cliente['asesor_nombre']??'')))?>"
+                            data-supervisor="<?=htmlspecialchars(mb_strtolower(trim($cliente['supervisor_nombre']??'')))?>"
                             data-estado="<?=htmlspecialchars($estadoKey)?>"
                             style="transition:all 0.2s ease;">
                             <td class="ps-4 py-3">
@@ -805,10 +847,43 @@ if ($user_role === 'supervisor') {
 <script>
 document.addEventListener('DOMContentLoaded', function() {
 
-  const fiNombre  = document.getElementById('fiNombre');
-  const fiCedula  = document.getElementById('fiCedula');
-  const fiAsesor  = document.getElementById('fiAsesor');
-  const fiClear   = document.getElementById('fiClear');
+  const fiNombre     = document.getElementById('fiNombre');
+  const fiCedula     = document.getElementById('fiCedula');
+  const fiAsesor     = document.getElementById('fiAsesor');
+  const fiSupervisor = document.getElementById('fiSupervisor');
+  const fiClear      = document.getElementById('fiClear');
+
+  // Mapa supervisor → asesores (generado desde PHP, solo para admin/gerente)
+  const supAsesorMap = <?= json_encode(
+      array_map(fn($v) => $v['asesores'], $supervisores_data),
+      JSON_UNESCAPED_UNICODE
+  ) ?>;
+
+  // Guardar todas las opciones del select de asesores para restaurarlas
+  const todasOpcionesAsesor = fiAsesor
+      ? Array.from(fiAsesor.options).map(o => ({ value: o.value, text: o.text }))
+      : [];
+
+  // Cuando cambia el supervisor → filtrar opciones del select de asesor
+  if (fiSupervisor) {
+      fiSupervisor.addEventListener('change', function () {
+          const supKey = this.value;
+          const permitidos = supKey ? (supAsesorMap[supKey] || []) : null;
+          // Reconstruir opciones de asesor
+          fiAsesor.innerHTML = '';
+          todasOpcionesAsesor.forEach(function (o) {
+              if (o.value === '' || !permitidos || permitidos.includes(o.value)) {
+                  const opt = document.createElement('option');
+                  opt.value = o.value;
+                  opt.textContent = o.text;
+                  fiAsesor.appendChild(opt);
+              }
+          });
+          // Si el asesor seleccionado ya no está disponible, resetear
+          if (permitidos && !permitidos.includes(fiAsesor.value)) fiAsesor.value = '';
+          applyFilters();
+      });
+  }
   const cntEl     = document.getElementById('cntResultados');
   const tagsBox   = document.getElementById('fiTagsBox');
   const allRows   = Array.from(document.querySelectorAll('table tbody tr.client-row'));
@@ -822,23 +897,26 @@ document.addEventListener('DOMContentLoaded', function() {
     const fNom = (fiNombre.value || '').trim().toLowerCase();
     const fCed = (fiCedula.value || '').trim().toLowerCase();
     const fAse = (fiAsesor.value || '').trim().toLowerCase();
+    const fSup = fiSupervisor ? (fiSupervisor.value || '').trim().toLowerCase() : '';
     const fEst = activeEstado;
     const fLet = activeLetter.toLowerCase();
 
     let vis = 0;
     allRows.forEach(row => {
-      const nombre = row.dataset.nombre || '';
-      const cedula = row.dataset.cedula || '';
-      const asesor = row.dataset.asesor || '';
-      const estado = row.dataset.estado || '';
+      const nombre     = row.dataset.nombre     || '';
+      const cedula     = row.dataset.cedula     || '';
+      const asesor     = row.dataset.asesor     || '';
+      const supervisor = row.dataset.supervisor || '';
+      const estado     = row.dataset.estado     || '';
 
       const okNom = !fNom || nombre.includes(fNom);
       const okCed = !fCed || cedula.includes(fCed);
       const okAse = !fAse || asesor === fAse;
+      const okSup = !fSup || supervisor === fSup;
       const okEst = !fEst || estado === fEst;
       const okLet = !fLet || nombre.startsWith(fLet);
 
-      if (okNom && okCed && okAse && okEst && okLet) {
+      if (okNom && okCed && okAse && okSup && okEst && okLet) {
         row.style.display = '';
         vis++;
       } else {
@@ -884,6 +962,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (fNom) tag(`Nombre: "${fiNombre.value}"`,  () => { fiNombre.value = ''; applyFilters(); });
     if (fCed) tag(`Cédula: "${fiCedula.value}"`,  () => { fiCedula.value = ''; applyFilters(); });
+    if (fSup && fiSupervisor) tag(`Supervisor: ${fiSupervisor.options[fiSupervisor.selectedIndex]?.text || fSup}`, () => { fiSupervisor.value = ''; fiSupervisor.dispatchEvent(new Event('change')); });
     if (fAse) tag(`Asesor: ${fiAsesor.options[fiAsesor.selectedIndex]?.text || fAse}`, () => { fiAsesor.value = ''; applyFilters(); });
     if (fEst) tag(`Estado: ${estadoLabel[fEst] || fEst}`, () => setEstado(''));
     if (fLet) tag(`Letra: ${fLet.toUpperCase()}`, () => setLetter(''));
@@ -922,14 +1001,23 @@ document.addEventListener('DOMContentLoaded', function() {
     fiNombre.value = '';
     fiCedula.value = '';
     fiAsesor.value = '';
+    if (fiSupervisor) {
+        fiSupervisor.value = '';
+        // Restaurar todas las opciones del asesor
+        fiAsesor.innerHTML = '';
+        todasOpcionesAsesor.forEach(function(o) {
+            const opt = document.createElement('option');
+            opt.value = o.value; opt.textContent = o.text;
+            fiAsesor.appendChild(opt);
+        });
+    }
     setEstado('');
     setLetter('');
   });
 
   /* ── listeners de inputs ─────────────────────────────── */
   [fiNombre, fiCedula, fiAsesor].forEach(el => {
-    el.addEventListener('input', applyFilters);
-    el.addEventListener('change', applyFilters);
+    if (el) { el.addEventListener('input', applyFilters); el.addEventListener('change', applyFilters); }
   });
 
 });

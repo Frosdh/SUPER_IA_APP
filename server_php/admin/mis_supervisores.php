@@ -134,6 +134,35 @@ if (!empty($supervisores)) {
     } catch (PDOException $e) {}
 }
 
+// ── Cargar asesores de cada supervisor ───────────────────────
+$asesores_por_sup = [];   // [ supervisor_table_id => [ ['nombre'=>..,'email'=>..,'telefono'=>..,'clientes'=>..], ... ] ]
+if (!empty($supervisores)) {
+    try {
+        $supIds = array_column($supervisores, 'supervisor_table_id');
+        $ph = implode(',', array_fill(0, count($supIds), '?'));
+        $stA = $pdo->prepare("
+            SELECT a.supervisor_id,
+                   u.nombre, u.email, u.telefono,
+                   (SELECT COUNT(*) FROM cliente_prospecto cp WHERE cp.asesor_id = a.id) AS total_clientes
+            FROM asesor a
+            JOIN usuario u ON u.id = a.usuario_id
+            WHERE a.supervisor_id IN ($ph) AND u.activo = 1
+            ORDER BY u.nombre ASC
+        ");
+        $stA->execute($supIds);
+        foreach ($stA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $asesores_por_sup[$row['supervisor_id']][] = $row;
+        }
+    } catch (PDOException $e) {}
+}
+
+// ── Solicitudes de supervisores pendientes ────────────────────
+$solicitudes_supervisores = 0;
+try {
+    $st = $pdo->query("SELECT COUNT(*) FROM solicitudes_supervisor WHERE estado='pendiente'");
+    $solicitudes_supervisores = (int)$st->fetchColumn();
+} catch (PDOException $e) {}
+
 $currentPage = 'supervisores';
 
 // Funciones helpers ─────────────────────────────────────────
@@ -165,86 +194,219 @@ function iniciales(string $nombre): string {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
 <style>
-/* ── Página específica ── */
-.page-hero{background:linear-gradient(135deg,#0f2544 0%,#122e58 60%,#1a3a6b 100%);border-radius:20px;padding:32px 36px;margin-bottom:28px;display:flex;align-items:center;justify-content:space-between;gap:24px;border:1px solid rgba(96,165,250,.15);}
-.page-hero h1{font-size:1.7rem;font-weight:900;color:#fff;margin:0 0 6px;}
-.page-hero p{font-size:.9rem;color:#94a3b8;margin:0;}
-.hero-icon{width:60px;height:60px;border-radius:16px;background:rgba(96,165,250,.15);display:flex;align-items:center;justify-content:center;font-size:1.6rem;color:#60a5fa;flex-shrink:0;}
+/* ── Página específica — gama navaja + amarillo como mis_asesores ── */
+.ma-page-header{
+    display:flex;align-items:center;gap:14px;
+    margin-bottom:28px;
+    padding-bottom:18px;
+    border-bottom:2px solid #e8eef6;
+}
+.ma-page-icon{
+    width:52px;height:52px;border-radius:14px;
+    background:linear-gradient(135deg,#0a2748,#1e4d8c);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 4px 14px rgba(10,39,72,.22);
+    flex-shrink:0;
+}
+.ma-page-icon i{color:#ffdd00;font-size:22px;}
+.ma-page-title{font-size:22px;font-weight:900;color:#0a2748;margin:0;}
+.ma-page-sub{font-size:13px;color:#94a3b8;margin:2px 0 0;font-weight:500;}
+
+/* Badge de notificación */
+.sol-badge {
+    position:absolute;top:-8px;right:-8px;
+    background:#ef4444;color:#fff;
+    font-size:11px;font-weight:800;
+    min-width:20px;height:20px;border-radius:10px;
+    padding:0 5px;
+    display:flex;align-items:center;justify-content:center;
+    border:2px solid #fff;
+    animation:pulse-badge 2s infinite;
+    box-shadow:0 0 0 0 rgba(239,68,68,.6);
+}
+@keyframes pulse-badge {
+    0%   { box-shadow: 0 0 0 0 rgba(239,68,68,.6); }
+    70%  { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+    100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+}
+
+.btn-navy {
+    background:#0a2748;color:#fff;
+    border:2px solid #0a2748;border-radius:10px;
+    padding:8px 16px;font-size:13.5px;font-weight:700;
+    transition:all .2s ease;text-decoration:none;
+    display:inline-flex;align-items:center;gap:6px;
+}
+.btn-navy:hover{background:#1e4d8c;border-color:#1e4d8c;color:#fff;transform:translateY(-1px);box-shadow:0 4px 12px rgba(10,39,72,.15);}
+.btn-outline-navy{
+    background:transparent;color:#0a2748;
+    border:2px solid #0a2748;border-radius:10px;
+    padding:8px 16px;font-size:13.5px;font-weight:700;
+    transition:all .2s ease;text-decoration:none;
+    display:inline-flex;align-items:center;gap:6px;position:relative;
+}
+.btn-outline-navy:hover{background:rgba(10,39,72,.05);color:#0a2748;transform:translateY(-1px);}
+
+/* Stats row — como supervisor_index */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;}
+.stat-mini{background:#fff;border:1.5px solid #d7e0ea;border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(10,39,72,.06);}
+.stat-mini-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
+.smi-blue{background:rgba(10,39,72,.08);color:#0a2748;}
+.smi-green{background:rgba(34,197,94,.1);color:#16a34a;}
+.smi-purple{background:rgba(139,92,246,.08);color:#7c3aed;}
+.smi-red{background:rgba(239,68,68,.08);color:#dc2626;}
+.stat-mini-val{font-size:1.4rem;font-weight:900;color:#0a2748;line-height:1;}
+.stat-mini-lbl{font-size:.75rem;color:#64748b;margin-top:3px;}
 
 /* Toolbar */
 .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:24px;flex-wrap:wrap;}
-.search-box{display:flex;align-items:center;gap:8px;background:#112035;border:1px solid rgba(96,165,250,.2);border-radius:10px;padding:8px 14px;flex:1;min-width:200px;max-width:340px;}
-.search-box input{background:none;border:none;outline:none;color:#e2e8f0;font-size:.88rem;width:100%;}
-.search-box input::placeholder{color:#475569;}
+.search-box{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #d7e0ea;border-radius:10px;padding:8px 14px;flex:1;min-width:200px;max-width:340px;box-shadow:0 2px 8px rgba(10,39,72,.04);}
+.search-box input{background:none;border:none;outline:none;color:#0a2748;font-size:.88rem;width:100%;}
+.search-box input::placeholder{color:#94a3b8;}
 .filter-btns{display:flex;gap:6px;flex-wrap:wrap;}
-.fbtn{padding:7px 15px;border-radius:9px;font-size:.8rem;font-weight:700;border:1px solid rgba(96,165,250,.2);background:#0f2544;color:#94a3b8;cursor:pointer;transition:.2s;text-decoration:none;}
-.fbtn.active,.fbtn:hover{background:rgba(96,165,250,.15);color:#60a5fa;border-color:#60a5fa;}
-.fbtn-add{background:rgba(96,165,250,.15);color:#60a5fa;border-color:#60a5fa;display:flex;align-items:center;gap:6px;}
-.fbtn-add:hover{background:rgba(96,165,250,.3);}
+.fbtn{padding:7px 15px;border-radius:9px;font-size:.8rem;font-weight:700;border:1.5px solid #d7e0ea;background:#fff;color:#64748b;cursor:pointer;transition:.2s;text-decoration:none;}
+.fbtn.active,.fbtn:hover{background:rgba(10,39,72,.06);color:#0a2748;border-color:#0a2748;}
+.fbtn-add{background:#0a2748;color:#ffdd00;border-color:#0a2748;display:flex;align-items:center;gap:6px;}
+.fbtn-add:hover{background:#1e4d8c;color:#ffdd00;border-color:#1e4d8c;}
 
-/* Stats row */
-.stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:26px;}
-.stat-mini{background:#112035;border:1px solid rgba(96,165,250,.12);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:14px;}
-.stat-mini-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0;}
-.smi-blue{background:rgba(96,165,250,.12);color:#60a5fa;}
-.smi-green{background:rgba(52,211,153,.1);color:#34d399;}
-.smi-purple{background:rgba(167,139,250,.1);color:#a78bfa;}
-.smi-red{background:rgba(248,113,113,.1);color:#f87171;}
-.stat-mini-val{font-size:1.4rem;font-weight:900;color:#e2e8f0;line-height:1;}
-.stat-mini-lbl{font-size:.75rem;color:#64748b;margin-top:3px;}
-
-/* Cards grid */
-.sups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:18px;margin-bottom:32px;}
-.sup-card{background:#112035;border:1px solid rgba(96,165,250,.12);border-radius:16px;padding:22px;transition:border-color .2s,transform .2s;}
-.sup-card:hover{border-color:rgba(96,165,250,.4);transform:translateY(-2px);}
-.sup-card-header{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
-.sup-avatar{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#1e40af,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:800;color:#fff;flex-shrink:0;letter-spacing:.5px;}
-.sup-name{font-size:.98rem;font-weight:800;color:#e2e8f0;line-height:1.2;}
+/* Cards grid — como mis_asesores */
+.sups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin-bottom:32px;}
+.sup-card{
+    background:#fff;border-radius:18px;
+    border:2px solid #e2eaf4;
+    box-shadow:0 3px 12px rgba(10,39,72,.07);
+    transition:all .2s;overflow:hidden;
+}
+.sup-card:hover{transform:translateY(-4px);box-shadow:0 10px 28px rgba(10,39,72,.15);border-color:#93c5fd;}
+.sup-card.active{border-color:#0a2748;box-shadow:0 6px 22px rgba(10,39,72,.22);}
+.sup-stripe{height:5px;background:linear-gradient(90deg,#0a2748,#1e4d8c,#ffdd00);}
+.sup-card-body{padding:18px 18px 0;}
+.sup-card-header{display:flex;align-items:center;gap:14px;margin-bottom:14px;}
+.sup-avatar{
+    width:48px;height:48px;border-radius:14px;
+    background:linear-gradient(135deg,#0a2748,#1e4d8c);
+    display:flex;align-items:center;justify-content:center;
+    font-size:1.1rem;font-weight:900;color:#ffdd00;
+    flex-shrink:0;letter-spacing:.5px;
+    box-shadow:0 3px 10px rgba(10,39,72,.2);
+}
+.sup-name{font-size:.98rem;font-weight:800;color:#0a2748;line-height:1.2;}
 .sup-email{font-size:.75rem;color:#64748b;margin-top:2px;}
-.sup-card-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;}
-.sc-stat{background:rgba(15,37,68,.7);border-radius:10px;padding:10px 8px;text-align:center;}
-.sc-stat-val{font-size:1.1rem;font-weight:800;color:#e2e8f0;}
-.sc-stat-lbl{font-size:.68rem;color:#64748b;margin-top:2px;}
-.sup-card-footer{display:flex;align-items:center;justify-content:space-between;padding-top:10px;border-top:1px solid rgba(96,165,250,.08);}
-.sup-actions{display:flex;gap:6px;}
-.btn-sm{padding:5px 12px;border-radius:8px;font-size:.75rem;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:5px;transition:.18s;border:none;cursor:pointer;}
-.btn-outline{background:rgba(96,165,250,.08);color:#60a5fa;border:1px solid rgba(96,165,250,.2);}
-.btn-outline:hover{background:rgba(96,165,250,.2);}
-.btn-danger-sm{background:rgba(239,68,68,.08);color:#f87171;border:1px solid rgba(239,68,68,.2);}
-.btn-danger-sm:hover{background:rgba(239,68,68,.18);}
 
 /* Badges */
 .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:.7rem;font-weight:700;}
-.badge-success{background:rgba(52,211,153,.12);color:#34d399;}
-.badge-danger{background:rgba(248,113,113,.1);color:#f87171;}
-.badge-warning{background:rgba(251,191,36,.12);color:#fbbf24;}
+.badge-success{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;}
+.badge-danger{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;}
+.badge-warning{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+.alert-chip{display:inline-flex;align-items:center;gap:4px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:8px;font-size:.7rem;font-weight:700;padding:2px 8px;}
 
-/* Alerta badge */
-.alert-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(239,68,68,.12);color:#f87171;border-radius:8px;font-size:.7rem;font-weight:700;padding:2px 8px;}
+/* Stats dentro de la card — 3 columnas */
+.sup-card-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;}
+.sc-stat{background:#f8fafc;border-radius:10px;padding:10px 8px;text-align:center;border:1px solid #edf2f9;}
+.sc-stat-val{font-size:1.1rem;font-weight:900;color:#0a2748;}
+.sc-stat-lbl{font-size:.68rem;color:#64748b;margin-top:2px;font-weight:600;}
 
-/* Tabla (vista alternativa) */
-.table-container{background:#112035;border:1px solid rgba(96,165,250,.1);border-radius:16px;overflow:hidden;}
-.table-header{padding:16px 20px;border-bottom:1px solid rgba(96,165,250,.1);display:flex;align-items:center;justify-content:space-between;}
-.table-header h3{font-size:1rem;font-weight:800;color:#e2e8f0;margin:0;}
-table.t-sups{width:100%;border-collapse:collapse;}
-table.t-sups th{padding:11px 16px;text-align:left;font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid rgba(96,165,250,.08);}
-table.t-sups td{padding:12px 16px;font-size:.85rem;color:#cbd5e1;border-bottom:1px solid rgba(96,165,250,.06);vertical-align:middle;}
-table.t-sups tr:last-child td{border-bottom:none;}
-table.t-sups tr:hover td{background:rgba(96,165,250,.04);}
-.td-name{font-weight:700;color:#e2e8f0;}
-.td-email{font-size:.78rem;color:#64748b;}
-.num-chip{display:inline-flex;align-items:center;gap:4px;background:rgba(96,165,250,.08);color:#60a5fa;border-radius:7px;padding:2px 9px;font-size:.78rem;font-weight:700;}
+/* Meta bar */
+.meta-bar{margin-bottom:14px;}
+.meta-bar-row{display:flex;justify-content:space-between;margin-bottom:4px;}
+.meta-bar-label{font-size:.73rem;color:#64748b;font-weight:600;}
+.meta-bar-value{font-size:.73rem;font-weight:700;color:#0a2748;}
+.meta-track{height:5px;background:#e8eef6;border-radius:3px;overflow:hidden;}
+.meta-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#0a2748,#1e4d8c);}
 
-/* Estado vacío */
+/* Footer de la card */
+.sup-card-footer{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:12px 18px;
+    background:#f8fafc;
+    border-top:1px solid #edf2f9;
+}
+.sup-actions{display:flex;gap:6px;}
+.btn-sm{padding:5px 12px;border-radius:8px;font-size:.75rem;font-weight:700;text-decoration:none;display:flex;align-items:center;gap:5px;transition:.18s;border:none;cursor:pointer;}
+.btn-outline{background:#eef2ff;color:#4f46e5;border:1px solid #c7d2fe;}
+.btn-outline:hover{background:#dde4ff;}
+.btn-danger-sm{background:#fef2f2;color:#dc2626;border:1px solid #fecaca;}
+.btn-danger-sm:hover{background:#fee2e2;}
+
+/* Flechita expandir asesores */
+.sup-arrow{
+    width:32px;height:32px;border-radius:50%;
+    background:#eef2ff;display:flex;align-items:center;justify-content:center;
+    color:#4f46e5;font-size:14px;cursor:pointer;
+    transition:transform .25s,background .18s;
+    border:none;flex-shrink:0;
+}
+.sup-arrow:hover{background:#dde4ff;}
+.sup-arrow.rotated{background:#0a2748;color:#ffdd00;transform:rotate(90deg);}
+
+/* Panel expandible de asesores */
+.asesores-panel{
+    display:none;
+    background:#f0f5fb;
+    border-radius:0 0 18px 18px;
+    border-top:2px solid #0a2748;
+    padding:20px;
+    animation:apIn .22s ease-out;
+}
+.asesores-panel.show{display:block;}
+@keyframes apIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+.ap-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:14px;padding-bottom:10px;
+    border-bottom:2px solid #dde5f0;flex-wrap:wrap;gap:8px;
+}
+.ap-title{
+    font-size:14px;font-weight:800;color:#0a2748;
+    display:flex;align-items:center;gap:8px;
+}
+.ap-title i{color:#ffdd00;background:#0a2748;width:24px;height:24px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;}
+.ap-close{
+    border:none;background:rgba(10,39,72,.08);color:#0a2748;
+    width:28px;height:28px;border-radius:50%;cursor:pointer;
+    font-size:13px;display:flex;align-items:center;justify-content:center;
+    transition:.18s;
+}
+.ap-close:hover{background:#0a2748;color:#fff;}
+
+/* Grid de asesores dentro del panel */
+.asesores-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    gap:12px;
+}
+.asesor-mini{
+    background:#fff;border-radius:12px;
+    border:1.5px solid #d7e0ea;padding:12px 14px;
+    display:flex;align-items:center;gap:10px;
+    box-shadow:0 2px 6px rgba(10,39,72,.05);
+    transition:.18s;
+}
+.asesor-mini:hover{transform:translateY(-2px);box-shadow:0 6px 14px rgba(10,39,72,.12);border-color:#93c5fd;}
+.asesor-mini-av{
+    width:32px;height:32px;border-radius:8px;
+    background:linear-gradient(135deg,#0a2748,#1e4d8c);
+    display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:900;color:#ffdd00;flex-shrink:0;
+}
+.asesor-mini-info{min-width:0;flex:1;}
+.asesor-mini-name{font-size:12px;font-weight:800;color:#0a2748;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.asesor-mini-meta{font-size:10px;color:#64748b;margin-top:1px;}
+.asesor-mini-clientes{font-size:10px;font-weight:700;color:#0a2748;background:#eef2ff;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+
+/* Empty dentro del panel */
+.ap-empty{text-align:center;padding:20px;color:#94a3b8;font-size:13px;}
+.ap-empty i{display:block;font-size:24px;margin-bottom:6px;opacity:.4;}
+
+/* Estado vacío global */
 .empty-state{text-align:center;padding:60px 20px;}
-.empty-icon{font-size:3rem;color:#1e3a5f;margin-bottom:16px;}
+.empty-icon{font-size:3rem;color:#94a3b8;margin-bottom:16px;}
 .empty-state h3{font-size:1.1rem;font-weight:700;color:#475569;margin:0 0 8px;}
-.empty-state p{font-size:.85rem;color:#334155;}
+.empty-state p{font-size:.85rem;color:#64748b;}
 
 /* Responsive */
 @media(max-width:900px){
     .stats-row{grid-template-columns:1fr 1fr;}
-    .page-hero{flex-direction:column;align-items:flex-start;}
 }
 @media(max-width:600px){
     .stats-row{grid-template-columns:1fr;}
@@ -256,24 +418,24 @@ table.t-sups tr:hover td{background:rgba(96,165,250,.04);}
 </head>
 <body>
 <?php
-// Variables para el sidebar
 $alertas_pendientes = $alertas_pendientes_sidebar;
 require_once '_sidebar_gerente.php';
 ?>
 
 <!-- ══════════ CONTENIDO PRINCIPAL ══════════ -->
 
-<!-- Hero -->
-<div class="page-hero">
-    <div>
-        <h1><i class="fas fa-users-gear" style="color:#60a5fa;margin-right:10px;"></i>Mis Supervisores</h1>
-        <p>Supervisores activos bajo tu gestión · <?= date('d/m/Y') ?></p>
+<!-- HEADER -->
+<div class="ma-page-header">
+    <div class="ma-page-icon"><i class="fas fa-users-gear"></i></div>
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3" style="flex:1;">
+        <div>
+            <h1 class="ma-page-title">Mis Supervisores</h1>
+            <p class="ma-page-sub">Supervisores bajo tu gestión · <?= date('d/m/Y') ?></p>
+        </div>
     </div>
-    <div class="hero-icon"><i class="fas fa-users-gear"></i></div>
 </div>
 
 <?php
-// ── Totales para stats row ───────────────────────────────────
 $total_asesores_suma = array_sum(array_column($supervisores, 'total_asesores'));
 $total_clientes_suma = array_sum(array_column($supervisores, 'total_clientes'));
 $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'));
@@ -315,7 +477,7 @@ $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'))
 <div class="toolbar">
     <form method="get" action="" style="display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap;">
         <div class="search-box">
-            <i class="fas fa-search" style="color:#475569;"></i>
+            <i class="fas fa-search" style="color:#94a3b8;"></i>
             <input type="text" name="q" placeholder="Buscar supervisor..." value="<?= htmlspecialchars($q) ?>">
         </div>
         <div class="filter-btns">
@@ -328,24 +490,29 @@ $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'))
             <?php endforeach; ?>
         </div>
     </form>
-    <a href="registro_supervisor.php" class="fbtn fbtn-add">
-        <i class="fas fa-user-plus"></i> Agregar Supervisor
+    <a href="registro_supervisor.php" class="btn-navy">
+        <i class="fas fa-user-plus"></i> Crear Supervisor
+    </a>
+    <a href="administrar_solicitudes_supervisor.php" class="btn-outline-navy" style="position:relative;">
+        <i class="fas fa-file-circle-check"></i> Solicitudes de Supervisores
+        <?php if ($solicitudes_supervisores > 0): ?>
+        <span class="sol-badge"><?= $solicitudes_supervisores ?></span>
+        <?php endif; ?>
     </a>
 </div>
 
 <?php if (empty($supervisores)): ?>
-<!-- Estado vacío -->
 <div class="empty-state">
     <div class="empty-icon"><i class="fas fa-users-slash"></i></div>
     <?php if ($q || $filtro_est !== 'todos'): ?>
         <h3>Sin resultados</h3>
-        <p>No se encontraron supervisores con esos filtros. <a href="mis_supervisores.php" style="color:#60a5fa;">Limpiar filtros</a></p>
+        <p>No se encontraron supervisores con esos filtros. <a href="mis_supervisores.php" style="color:#0a2748;">Limpiar filtros</a></p>
     <?php elseif (empty($pre_sup_ids)): ?>
         <h3>Sin supervisores asignados</h3>
         <p>Tu cuenta aún no tiene supervisores a cargo. Verifica que tu perfil esté vinculado a una agencia o contacta al administrador.</p>
     <?php else: ?>
         <h3>No hay supervisores registrados</h3>
-        <p>Aún no tienes supervisores asignados. <a href="registro_supervisor.php" style="color:#60a5fa;">Agregar el primero</a></p>
+        <p>Aún no tienes supervisores asignados. <a href="registro_supervisor.php" style="color:#0a2748;">Agregar el primero</a></p>
     <?php endif; ?>
 </div>
 
@@ -365,48 +532,52 @@ $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'))
     $meta_     = (int)($sup['meta_asesores']  ?? 0);
     $uid       = $sup['usuario_id']         ?? '';
     $sid       = $sup['supervisor_table_id'] ?? '';
+    $supKey    = $sid;
 ?>
-<div class="sup-card">
-    <div class="sup-card-header">
-        <div class="sup-avatar"><?= iniciales($nombre) ?></div>
-        <div style="flex:1;min-width:0;">
-            <div class="sup-name"><?= htmlspecialchars($nombre) ?></div>
-            <div class="sup-email"><?= htmlspecialchars($email) ?></div>
-            <div style="margin-top:5px;">
-                <?= badge_estado($sup) ?>
-                <?php if ($alertas_ > 0): ?>
-                <span class="alert-chip" style="margin-left:4px;"><i class="fas fa-bell"></i> <?= $alertas_ ?> alerta<?= $alertas_ > 1 ? 's' : '' ?></span>
-                <?php endif; ?>
+<div class="sup-card" id="sup-card-<?= $supKey ?>">
+    <div class="sup-stripe"></div>
+    <div class="sup-card-body">
+        <div class="sup-card-header">
+            <div class="sup-avatar"><?= iniciales($nombre) ?></div>
+            <div style="flex:1;min-width:0;">
+                <div class="sup-name"><?= htmlspecialchars($nombre) ?></div>
+                <div class="sup-email"><?= htmlspecialchars($email) ?></div>
+                <div style="margin-top:5px;">
+                    <?= badge_estado($sup) ?>
+                    <?php if ($alertas_ > 0): ?>
+                    <span class="alert-chip" style="margin-left:4px;"><i class="fas fa-bell"></i> <?= $alertas_ ?></span>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
-    </div>
 
-    <div class="sup-card-stats">
-        <div class="sc-stat">
-            <div class="sc-stat-val" style="color:#60a5fa;"><?= $asesores_ ?></div>
-            <div class="sc-stat-lbl">Asesores</div>
+        <div class="sup-card-stats">
+            <div class="sc-stat">
+                <div class="sc-stat-val"><?= $asesores_ ?></div>
+                <div class="sc-stat-lbl">Asesores</div>
+            </div>
+            <div class="sc-stat">
+                <div class="sc-stat-val"><?= $clientes_ ?></div>
+                <div class="sc-stat-lbl">Clientes</div>
+            </div>
+            <div class="sc-stat">
+                <div class="sc-stat-val"><?= $tareas_ ?></div>
+                <div class="sc-stat-lbl">Tareas hoy</div>
+            </div>
         </div>
-        <div class="sc-stat">
-            <div class="sc-stat-val" style="color:#34d399;"><?= $clientes_ ?></div>
-            <div class="sc-stat-lbl">Clientes</div>
-        </div>
-        <div class="sc-stat">
-            <div class="sc-stat-val" style="color:#a78bfa;"><?= $tareas_ ?></div>
-            <div class="sc-stat-lbl">Tareas hoy</div>
-        </div>
-    </div>
 
-    <?php if ($meta_ > 0): ?>
-    <div style="margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-            <span style="font-size:.73rem;color:#64748b;">Meta asesores</span>
-            <span style="font-size:.73rem;font-weight:700;color:#94a3b8;"><?= $asesores_ ?> / <?= $meta_ ?></span>
+        <?php if ($meta_ > 0): ?>
+        <div class="meta-bar">
+            <div class="meta-bar-row">
+                <span class="meta-bar-label">Meta asesores</span>
+                <span class="meta-bar-value"><?= $asesores_ ?> / <?= $meta_ ?></span>
+            </div>
+            <div class="meta-track">
+                <div class="meta-fill" style="width:<?= min(100, $meta_ > 0 ? round($asesores_*100/$meta_) : 0) ?>%;"></div>
+            </div>
         </div>
-        <div style="height:5px;background:rgba(96,165,250,.1);border-radius:3px;overflow:hidden;">
-            <div style="height:100%;width:<?= min(100, $meta_ > 0 ? round($asesores_*100/$meta_) : 0) ?>%;background:linear-gradient(90deg,#3b82f6,#60a5fa);border-radius:3px;"></div>
-        </div>
+        <?php endif; ?>
     </div>
-    <?php endif; ?>
 
     <div class="sup-card-footer">
         <div class="sup-actions">
@@ -415,76 +586,93 @@ $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'))
             </a>
             <?php if ($alertas_ > 0): ?>
             <a href="alertas.php?supervisor_id=<?= urlencode($sid) ?>" class="btn-sm btn-danger-sm">
-                <i class="fas fa-bell"></i> Alertas
+                <i class="fas fa-bell"></i>
             </a>
             <?php endif; ?>
         </div>
-        <span style="font-size:.72rem;color:#334155;"><?= $activo ? 'En línea' : 'Inactivo' ?></span>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:.72rem;color:#64748b;font-weight:600;"><?= $asesores_ ?> asesores</span>
+            <button class="sup-arrow" id="arrow-<?= $supKey ?>" onclick="toggleAsesores('<?= $supKey ?>')">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Panel expandible de asesores -->
+    <div class="asesores-panel" id="panel-<?= $supKey ?>">
+        <div class="ap-header">
+            <div class="ap-title">
+                <i class="fas fa-users"></i>
+                Asesores de <strong style="margin-left:4px;"><?= htmlspecialchars($nombre) ?></strong>
+                <span style="background:#e0f2fe;color:#0369a1;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:800;margin-left:6px;"><?= $asesores_ ?></span>
+            </div>
+            <button class="ap-close" onclick="toggleAsesores('<?= $supKey ?>')"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="asesores-grid" id="asesores-grid-<?= $supKey ?>">
+            <?php
+            $lista = $asesores_por_sup[$sid] ?? [];
+            if (empty($lista)): ?>
+            <div class="ap-empty" style="grid-column:1/-1;">
+                <i class="fas fa-inbox"></i>
+                Sin asesores activos asignados
+            </div>
+            <?php else:
+            foreach ($lista as $ase):
+                $anombre = htmlspecialchars($ase['nombre'] ?? '—');
+                $aemail  = htmlspecialchars($ase['email'] ?? '');
+                $atel    = htmlspecialchars($ase['telefono'] ?? '');
+                $aclientes = (int)($ase['total_clientes'] ?? 0);
+                $ainicial = mb_strtoupper(mb_substr(trim($ase['nombre'] ?? 'A'), 0, 1));
+            ?>
+            <div class="asesor-mini">
+                <div class="asesor-mini-av"><?= $ainicial ?></div>
+                <div class="asesor-mini-info">
+                    <div class="asesor-mini-name" title="<?= $anombre ?>"><?= $anombre ?></div>
+                    <div class="asesor-mini-meta"><i class="fas fa-envelope" style="margin-right:3px;"></i><?= $aemail ?></div>
+                </div>
+                <span class="asesor-mini-clientes"><i class="fas fa-user-group"></i> <?= $aclientes ?></span>
+            </div>
+            <?php endforeach; endif; ?>
+        </div>
     </div>
 </div>
 <?php endforeach; ?>
 </div>
 
-<!-- Tabla compacta debajo de las cards -->
-<div class="table-container">
-    <div class="table-header">
-        <h3><i class="fas fa-table-list" style="color:#60a5fa;margin-right:8px;"></i>Resumen detallado</h3>
-        <span style="font-size:.8rem;color:#475569;"><?= $total_sups ?> supervisor<?= $total_sups !== 1 ? 'es' : '' ?></span>
-    </div>
-    <div style="overflow-x:auto;">
-    <table class="t-sups">
-        <thead>
-            <tr>
-                <th>Supervisor</th>
-                <th>Estado</th>
-                <th>Asesores</th>
-                <th>Clientes</th>
-                <th>Alertas</th>
-                <th>Acciones</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php foreach ($supervisores as $sup):
-            $uid2 = $sup['usuario_id']         ?? '';
-            $sid2 = $sup['supervisor_table_id'] ?? '';
-        ?>
-        <tr>
-            <td>
-                <div class="td-name"><?= htmlspecialchars($sup['nombre'] ?? '—') ?></div>
-                <div class="td-email"><?= htmlspecialchars($sup['email'] ?? '') ?></div>
-            </td>
-            <td><?= badge_estado($sup) ?></td>
-            <td><span class="num-chip"><i class="fas fa-user-tie"></i> <?= (int)($sup['total_asesores'] ?? 0) ?></span></td>
-            <td><span class="num-chip" style="color:#34d399;background:rgba(52,211,153,.08);"><i class="fas fa-address-book"></i> <?= (int)($sup['total_clientes'] ?? 0) ?></span></td>
-            <td>
-                <?php $al = (int)($sup['alertas_sin_ver'] ?? 0); ?>
-                <?php if ($al > 0): ?>
-                <span class="num-chip" style="color:#f87171;background:rgba(248,113,113,.08);">
-                    <i class="fas fa-bell"></i> <?= $al ?>
-                </span>
-                <?php else: ?>
-                <span style="color:#334155;font-size:.78rem;">—</span>
-                <?php endif; ?>
-            </td>
-            <td>
-                <div style="display:flex;gap:6px;">
-                    <a href="perfil_supervisor.php?id=<?= urlencode($uid2) ?>" class="btn-sm btn-outline" title="Ver perfil">
-                        <i class="fas fa-eye"></i>
-                    </a>
-                    <?php if ((int)($sup['alertas_sin_ver'] ?? 0) > 0): ?>
-                    <a href="alertas.php?supervisor_id=<?= urlencode($sid2) ?>" class="btn-sm btn-danger-sm" title="Ver alertas">
-                        <i class="fas fa-bell"></i>
-                    </a>
-                    <?php endif; ?>
-                </div>
-            </td>
-        </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-    </div>
-</div>
 <?php endif; ?>
+
+<script>
+var supervisorActivo = null;
+
+function toggleAsesores(id) {
+    if (supervisorActivo === id) {
+        cerrarPanel(id);
+        return;
+    }
+    if (supervisorActivo) cerrarPanel(supervisorActivo);
+
+    supervisorActivo = id;
+    var card = document.getElementById('sup-card-' + id);
+    if (card) card.classList.add('active');
+    var arrow = document.getElementById('arrow-' + id);
+    if (arrow) arrow.classList.add('rotated');
+    var panel = document.getElementById('panel-' + id);
+    if (panel) {
+        panel.classList.add('show');
+        setTimeout(function(){ panel.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 80);
+    }
+}
+
+function cerrarPanel(id) {
+    var card = document.getElementById('sup-card-' + id);
+    if (card) card.classList.remove('active');
+    var arrow = document.getElementById('arrow-' + id);
+    if (arrow) arrow.classList.remove('rotated');
+    var panel = document.getElementById('panel-' + id);
+    if (panel) panel.classList.remove('show');
+    if (supervisorActivo === id) supervisorActivo = null;
+}
+</script>
 
 </div><!-- .content-area -->
 </div><!-- .main-content -->
