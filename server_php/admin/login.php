@@ -6,7 +6,7 @@ if (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_i
     exit;
 }
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
-    header('Location: index.php');
+    header('Location: gerente_index.php');
     exit;
 }
 if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
@@ -138,7 +138,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_nombre'] = $admin['nombre'];
             $_SESSION['admin_rol'] = $admin['rol'];
             session_write_close();
-            header('Location: index.php');
+            header('Location: gerente_index.php');
             exit;
         } else {
             $error = 'Credenciales de administrador incorrectas.';

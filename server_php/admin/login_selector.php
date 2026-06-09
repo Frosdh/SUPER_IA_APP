@@ -5,7 +5,7 @@ $BUILD = '2026-04-14a';
 
 // Si ya hay una sesión activa, redirigir al panel correspondiente
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
-    header('Location: index.php');
+    header('Location: gerente_index.php');
     exit;
 }
 if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
