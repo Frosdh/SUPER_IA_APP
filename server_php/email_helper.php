@@ -38,7 +38,7 @@ function _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromE
         $mail->SMTPAuth   = false;
         $mail->SMTPSecure = '';
         $mail->CharSet    = 'UTF-8';
-        $mail->Timeout    = 10;
+        $mail->Timeout    = 5;
         $mail->setFrom($fromEmail, $fromName);
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
@@ -66,7 +66,7 @@ function _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, array $
         $mail->Port       = (int)$cfg['port'];
         $mail->CharSet    = 'UTF-8';
         $mail->Encoding   = 'base64';
-        $mail->Timeout    = 20;
+        $mail->Timeout    = 8;   // reducido para no bloquear hosting con puertos cerrados
         $mail->setFrom($cfg['from_email'], $cfg['from_name']);
         $mail->addReplyTo($cfg['from_email'], $cfg['from_name']);
         $mail->SMTPOptions = [
@@ -123,7 +123,7 @@ function _sendViaNativeMail($toEmail, $subject, $plainBody, $fromEmail, $fromNam
 function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
 {
     $logFile = __DIR__ . '/email_send.log';
-    $log = function(string $msg) use ($logFile) {
+    $log = function($msg) use ($logFile) {
         file_put_contents($logFile, date('Y-m-d H:i:s') . " $msg\n", FILE_APPEND | LOCK_EX);
     };
 
@@ -138,6 +138,15 @@ function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
     $errors = [];
 
     $log("[START] Enviando a: $toEmail | From: $fromEmail | Asunto: $subject");
+
+    // 0️⃣  Localhost SMTP (hosting cPanel/Plesk — sin autenticación, solo Linux)
+    if (!_isWindows()) {
+        $log("[TRY] localhost:25 (sin auth)");
+        list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
+        if ($ok) { $log("[OK] localhost:25 exitoso"); return [true, null]; }
+        $log("[FAIL] localhost:25: $err");
+        $errors[] = "localhost:25 → $err";
+    }
 
     // 1️⃣  Gmail SMTP puerto 587 (TLS)
     if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {

@@ -17,12 +17,15 @@ $emailMostrar  = '';
 $smtpError     = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Evitar 500 por timeout SMTP en hosting — dar tiempo suficiente
+    @set_time_limit(120);
+
     $email    = trim($_POST['email'] ?? '');
     $postRole = $_POST['role'] ?? $role;
 
     // Log en server_php/ — carpeta con permisos de escritura confirmados
     $logFile = realpath(__DIR__ . '/..') . '/email_recovery.log';
-    $log = function(string $msg) use ($logFile) {
+    $log = function($msg) use ($logFile) {
         file_put_contents($logFile, date('Y-m-d H:i:s') . " $msg\n", FILE_APPEND | LOCK_EX);
     };
     $log("[RECOVERY] Intento para Email: $email, Rol: $postRole");
