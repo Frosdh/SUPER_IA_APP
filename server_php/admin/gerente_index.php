@@ -58,16 +58,13 @@ try {
 // Para compatibilidad con código antiguo que usaba $ja_id (singular)
 $ja_id = $ja_ids[0] ?? null;
 
-// ── IDs de asesores de esos supervisores ────────────────────
+// ── IDs de asesores: TODOS (igual que clientes.php para rol admin) ──────────
+// El gerente tiene visión global del equipo, igual que el directorio de clientes
 $asesor_ids = [];
-if (!empty($supervisor_ids)) {
-    try {
-        $phSup = implode(',', array_fill(0, count($supervisor_ids), '?'));
-        $st = $pdo->prepare("SELECT id FROM asesor WHERE supervisor_id IN ($phSup)");
-        $st->execute($supervisor_ids);
-        $asesor_ids = $st->fetchAll(PDO::FETCH_COLUMN);
-    } catch (PDOException $e) {}
-}
+try {
+    $st = $pdo->query("SELECT id FROM asesor");
+    $asesor_ids = $st->fetchAll(PDO::FETCH_COLUMN);
+} catch (PDOException $e) {}
 
 // ── KPIs principales ─────────────────────────────────────────
 $total_supervisores  = count($supervisor_ids);
@@ -84,24 +81,18 @@ $monto_ops           = 0.0;
 
 $mesI = date('Y-m-01'); $mesF = date('Y-m-t');
 
-if (!empty($supervisor_ids)) {
-    try {
-        $phSup = implode(',', array_fill(0, count($supervisor_ids), '?'));
-
-        // Asesores activos bajo estos supervisores
-        $st = $pdo->prepare("SELECT COUNT(*) FROM asesor a JOIN usuario u ON u.id=a.usuario_id WHERE a.supervisor_id IN ($phSup) AND u.activo=1");
-        $st->execute($supervisor_ids);
-        $total_asesores = (int)$st->fetchColumn();
-    } catch (PDOException $e) {}
-}
+// Total asesores (todos, igual que directorio)
+try {
+    $st = $pdo->query("SELECT COUNT(*) FROM asesor");
+    $total_asesores = (int)$st->fetchColumn();
+} catch (PDOException $e) {}
 
 if (!empty($asesor_ids)) {
     try {
         $phAs = implode(',', array_fill(0, count($asesor_ids), '?'));
 
-        // Clientes totales / activos
-        $st = $pdo->prepare("SELECT COUNT(*) as tot, SUM(CASE WHEN estado!='descartado' THEN 1 ELSE 0 END) as act FROM cliente_prospecto WHERE asesor_id IN ($phAs)");
-        $st->execute($asesor_ids);
+        // Clientes totales / activos (todos los del sistema)
+        $st = $pdo->query("SELECT COUNT(*) as tot, SUM(CASE WHEN estado!='descartado' THEN 1 ELSE 0 END) as act FROM cliente_prospecto");
         $rowC = $st->fetch();
         $total_clientes   = (int)($rowC['tot'] ?? 0);
         $clientes_activos = (int)($rowC['act'] ?? 0);
@@ -113,13 +104,11 @@ if (!empty($asesor_ids)) {
         $tareas_hoy        = (int)($rowT['tot']  ?? 0);
         $tareas_completadas = (int)($rowT['comp'] ?? 0);
 
-        // Alertas sin ver (de estos supervisores)
-        if (!empty($supervisor_ids)) {
-            $phSup2 = implode(',', array_fill(0, count($supervisor_ids), '?'));
-            $st = $pdo->prepare("SELECT COUNT(*) FROM alerta_modificacion WHERE supervisor_id IN ($phSup2) AND vista_supervisor=0");
-            $st->execute($supervisor_ids);
+        // Alertas sin ver (todas, vista global igual que clientes)
+        try {
+            $st = $pdo->query("SELECT COUNT(*) FROM alerta_modificacion WHERE vista_supervisor=0");
             $alertas_pendientes = (int)$st->fetchColumn();
-        }
+        } catch (PDOException $e) {}
 
         // Fichas de crédito aprobadas del mes
         $st = $pdo->prepare("SELECT COUNT(DISTINCT fp.id) as cnt, COALESCE(SUM(CAST(fc.monto_credito AS DECIMAL(15,2))),0) as monto

@@ -15,18 +15,15 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-if (!$is_supervisor) {
+$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
+
+if (!$is_supervisor && !$is_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
 }
 
-$supervisor_id = $_SESSION['supervisor_id'] ?? null;
-if (!$supervisor_id) {
-    http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'supervisor_id no encontrado en sesión']);
-    exit;
-}
+$supervisor_id = $is_supervisor ? ($_SESSION['supervisor_id'] ?? null) : null;
 
 $ubicaciones = [];
 $error_msg = '';
@@ -41,47 +38,61 @@ try {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
     );
 
-    $query = "
-        SELECT DISTINCT
-            ua.asesor_id,
-            ua.latitud,
-            ua.longitud,
-            ua.timestamp,
-            COALESCE(ua.precision_m, 0) AS precision_m,
-            u.nombre AS asesor_nombre
-        FROM ubicacion_asesor ua
-        INNER JOIN asesor a  ON a.id   = ua.asesor_id
-        INNER JOIN supervisor s ON s.id = a.supervisor_id
-        INNER JOIN usuario u ON u.id   = a.usuario_id
-        LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
-        WHERE s.usuario_id = ?
-          AND ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
-          AND ua.latitud  IS NOT NULL
-          AND ua.longitud IS NOT NULL
-          AND COALESCE(ap.estado, 'conectado') != 'desconectado'
-        ORDER BY ua.asesor_id DESC, ua.timestamp DESC
-    ";
-
-    $stmt = $conn->prepare($query);
-    if (!$stmt) {
-        throw new Exception('Error preparando query: ' . $conn->error);
-    }
-
-    $stmt->bind_param('s', $supervisor_id);
-    if (!$stmt->execute()) {
-        throw new Exception('Error ejecutando query: ' . $stmt->error);
-    }
-
-    $result = $stmt->get_result();
-    $map = [];
-    while ($row = $result->fetch_assoc()) {
-        $aid = $row['asesor_id'];
-        if (!isset($map[$aid])) {
-            $map[$aid] = $row;
+    if ($is_admin) {
+        // Gerente: vista global — todos los asesores del sistema
+        $query = "
+            SELECT DISTINCT
+                ua.asesor_id, ua.latitud, ua.longitud, ua.timestamp,
+                COALESCE(ua.precision_m, 0) AS precision_m,
+                u.nombre AS asesor_nombre
+            FROM ubicacion_asesor ua
+            INNER JOIN asesor  a  ON a.id  = ua.asesor_id
+            INNER JOIN usuario u  ON u.id  = a.usuario_id
+            LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
+            WHERE ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+              AND ua.latitud  IS NOT NULL
+              AND ua.longitud IS NOT NULL
+              AND COALESCE(ap.estado, 'conectado') != 'desconectado'
+            ORDER BY ua.asesor_id DESC, ua.timestamp DESC
+        ";
+        $stmt = $conn->query($query);
+        if (!$stmt) throw new Exception('Error en query: ' . $conn->error);
+        $map = [];
+        while ($row = $stmt->fetch_assoc()) {
+            if (!isset($map[$row['asesor_id']])) $map[$row['asesor_id']] = $row;
         }
+        $ubicaciones = array_values($map);
+    } else {
+        // Supervisor: solo sus asesores
+        $query = "
+            SELECT DISTINCT
+                ua.asesor_id, ua.latitud, ua.longitud, ua.timestamp,
+                COALESCE(ua.precision_m, 0) AS precision_m,
+                u.nombre AS asesor_nombre
+            FROM ubicacion_asesor ua
+            INNER JOIN asesor      a  ON a.id   = ua.asesor_id
+            INNER JOIN supervisor  s  ON s.id   = a.supervisor_id
+            INNER JOIN usuario     u  ON u.id   = a.usuario_id
+            LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
+            WHERE s.usuario_id = ?
+              AND ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+              AND ua.latitud  IS NOT NULL
+              AND ua.longitud IS NOT NULL
+              AND COALESCE(ap.estado, 'conectado') != 'desconectado'
+            ORDER BY ua.asesor_id DESC, ua.timestamp DESC
+        ";
+        $stmt = $conn->prepare($query);
+        if (!$stmt) throw new Exception('Error preparando query: ' . $conn->error);
+        $stmt->bind_param('s', $supervisor_id);
+        if (!$stmt->execute()) throw new Exception('Error ejecutando query: ' . $stmt->error);
+        $result = $stmt->get_result();
+        $map = [];
+        while ($row = $result->fetch_assoc()) {
+            if (!isset($map[$row['asesor_id']])) $map[$row['asesor_id']] = $row;
+        }
+        $ubicaciones = array_values($map);
+        $stmt->close();
     }
-    $ubicaciones = array_values($map);
-    $stmt->close();
 
 } catch (Exception $e) {
     $error_msg = $e->getMessage();

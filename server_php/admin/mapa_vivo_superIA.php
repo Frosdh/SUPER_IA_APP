@@ -10,37 +10,41 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 $is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-if (!$is_supervisor) {
+$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
+
+if (!$is_supervisor && !$is_admin) {
     header('Location: login.php?role=supervisor');
     exit;
 }
 
-$supervisor_id    = $_SESSION['supervisor_id'] ?? null;
-$supervisor_nombre = $_SESSION['supervisor_nombre'] ?? 'Supervisor';
+$supervisor_id     = $is_supervisor ? ($_SESSION['supervisor_id']     ?? null) : null;
+$supervisor_nombre = $is_supervisor ? ($_SESSION['supervisor_nombre'] ?? 'Supervisor') : ($_SESSION['admin_nombre'] ?? 'Gerente');
 
 // ── Contador de alertas pendientes ───────────────────────────
 $totalAlertasPendientes = 0;
 try {
-    // Resolver el id real de la tabla supervisor (supervisor.id, no usuario.id)
-    $stSup = $conn->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
-    if ($stSup) {
-        $stSup->bind_param('s', $supervisor_id);
-        $stSup->execute();
-        $rowSup = $stSup->get_result()->fetch_assoc();
-        $sup_table_id = $rowSup ? $rowSup['id'] : null;
-        $stSup->close();
-
-        if ($sup_table_id) {
-            $stAl = $conn->prepare(
-                'SELECT COUNT(*) AS cnt FROM alerta_modificacion
-                 WHERE supervisor_id = ? AND vista_supervisor = 0'
-            );
-            if ($stAl) {
-                $stAl->bind_param('s', $sup_table_id);
-                $stAl->execute();
-                $rowAl = $stAl->get_result()->fetch_assoc();
-                $totalAlertasPendientes = (int)($rowAl['cnt'] ?? 0);
-                $stAl->close();
+    if ($is_admin) {
+        // Gerente: todas las alertas sin ver
+        $resAl = $conn->query('SELECT COUNT(*) AS cnt FROM alerta_modificacion WHERE vista_supervisor = 0');
+        if ($resAl) $totalAlertasPendientes = (int)($resAl->fetch_assoc()['cnt'] ?? 0);
+    } else {
+        // Supervisor: solo las suyas
+        $stSup = $conn->prepare('SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1');
+        if ($stSup) {
+            $stSup->bind_param('s', $supervisor_id);
+            $stSup->execute();
+            $rowSup = $stSup->get_result()->fetch_assoc();
+            $sup_table_id = $rowSup ? $rowSup['id'] : null;
+            $stSup->close();
+            if ($sup_table_id) {
+                $stAl = $conn->prepare('SELECT COUNT(*) AS cnt FROM alerta_modificacion WHERE supervisor_id = ? AND vista_supervisor = 0');
+                if ($stAl) {
+                    $stAl->bind_param('s', $sup_table_id);
+                    $stAl->execute();
+                    $rowAl = $stAl->get_result()->fetch_assoc();
+                    $totalAlertasPendientes = (int)($rowAl['cnt'] ?? 0);
+                    $stAl->close();
+                }
             }
         }
     }
@@ -63,45 +67,64 @@ try {
          MODIFY asesor_id VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL"
     );
 
-    $query = "
-        SELECT DISTINCT
-            ua.asesor_id, ua.latitud, ua.longitud, ua.timestamp,
-            COALESCE(ua.precision_m, 0) AS precision_m,
-            u.nombre AS asesor_nombre
-        FROM ubicacion_asesor ua
-        INNER JOIN asesor     a  ON a.id        = ua.asesor_id
-        INNER JOIN supervisor s  ON s.id        = a.supervisor_id
-        INNER JOIN usuario    u  ON u.id        = a.usuario_id
-        LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
-        WHERE s.usuario_id = ?
-          AND ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
-          AND ua.latitud  IS NOT NULL
-          AND ua.longitud IS NOT NULL
-          AND COALESCE(ap.estado, 'conectado') != 'desconectado'
-        ORDER BY ua.asesor_id DESC, ua.timestamp DESC
-    ";
-
-    $stmt = $conn->prepare($query);
-    if ($stmt) {
-        $stmt->bind_param('s', $supervisor_id);
-        if (!$stmt->execute()) {
-            $error_msg = 'Error en query: ' . $stmt->error;
-            error_log($error_msg);
-        } else {
-            $result = $stmt->get_result();
-            $map    = [];
-            while ($row = $result->fetch_assoc()) {
-                $aid = $row['asesor_id'];
-                if (!isset($map[$aid])) {
-                    $map[$aid] = $row;
-                }
-            }
+    if ($is_admin) {
+        // Gerente: todos los asesores del sistema
+        $resUb = $conn->query("
+            SELECT DISTINCT ua.asesor_id, ua.latitud, ua.longitud, ua.timestamp,
+                COALESCE(ua.precision_m,0) AS precision_m, u.nombre AS asesor_nombre
+            FROM ubicacion_asesor ua
+            INNER JOIN asesor  a  ON a.id = ua.asesor_id
+            INNER JOIN usuario u  ON u.id = a.usuario_id
+            LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
+            WHERE ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+              AND ua.latitud IS NOT NULL AND ua.longitud IS NOT NULL
+              AND COALESCE(ap.estado,'conectado') != 'desconectado'
+            ORDER BY ua.asesor_id DESC, ua.timestamp DESC
+        ");
+        if ($resUb) {
+            $map = [];
+            while ($row = $resUb->fetch_assoc()) { if (!isset($map[$row['asesor_id']])) $map[$row['asesor_id']] = $row; }
             $ubicaciones = array_values($map);
         }
-        $stmt->close();
     } else {
-        $error_msg = 'Error preparando statement: ' . $conn->error;
-        error_log($error_msg);
+        // Supervisor: solo los suyos
+        $query = "
+            SELECT DISTINCT
+                ua.asesor_id, ua.latitud, ua.longitud, ua.timestamp,
+                COALESCE(ua.precision_m, 0) AS precision_m,
+                u.nombre AS asesor_nombre
+            FROM ubicacion_asesor ua
+            INNER JOIN asesor     a  ON a.id        = ua.asesor_id
+            INNER JOIN supervisor s  ON s.id        = a.supervisor_id
+            INNER JOIN usuario    u  ON u.id        = a.usuario_id
+            LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
+            WHERE s.usuario_id = ?
+              AND ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
+              AND ua.latitud  IS NOT NULL
+              AND ua.longitud IS NOT NULL
+              AND COALESCE(ap.estado, 'conectado') != 'desconectado'
+            ORDER BY ua.asesor_id DESC, ua.timestamp DESC
+        ";
+        $stmt = $conn->prepare($query);
+        if ($stmt) {
+            $stmt->bind_param('s', $supervisor_id);
+            if (!$stmt->execute()) {
+                $error_msg = 'Error en query: ' . $stmt->error;
+                error_log($error_msg);
+            } else {
+                $result = $stmt->get_result();
+                $map    = [];
+                while ($row = $result->fetch_assoc()) {
+                    $aid = $row['asesor_id'];
+                    if (!isset($map[$aid])) $map[$aid] = $row;
+                }
+                $ubicaciones = array_values($map);
+            }
+            $stmt->close();
+        } else {
+            $error_msg = 'Error preparando statement: ' . $conn->error;
+            error_log($error_msg);
+        }
     }
 } catch (Exception $e) {
     $error_msg = 'Excepción: ' . $e->getMessage();
@@ -111,44 +134,37 @@ try {
 // ── Cargar TODOS los asesores (online + offline) para el panel ──
 $todos_asesores = [];
 try {
-    $sqlTodos = "
-        SELECT
-            a.id            AS asesor_id,
-            u.nombre        AS asesor_nombre,
-            COALESCE(ap.estado, 'desconectado') AS estado,
-            ua.latitud,
-            ua.longitud,
-            ua.timestamp    AS ultima_vez
-        FROM asesor a
-        JOIN supervisor s  ON s.id  = a.supervisor_id
-        JOIN usuario    u  ON u.id  = a.usuario_id
-        LEFT JOIN asesor_presencia ap ON ap.asesor_id = a.id
-        LEFT JOIN (
+    $subUltima = "LEFT JOIN (
             SELECT ua1.asesor_id, ua1.latitud, ua1.longitud, ua1.timestamp
             FROM ubicacion_asesor ua1
-            INNER JOIN (
-                SELECT asesor_id, MAX(timestamp) AS max_ts
-                FROM ubicacion_asesor
-                GROUP BY asesor_id
-            ) latest ON latest.asesor_id = ua1.asesor_id
-                    AND latest.max_ts    = ua1.timestamp
-        ) ua ON ua.asesor_id = a.id
-        WHERE s.usuario_id = ?
-        ORDER BY
-            CASE WHEN COALESCE(ap.estado, 'desconectado') = 'conectado' THEN 0 ELSE 1 END,
-            u.nombre ASC
-    ";
-    $stTodos = $conn->prepare($sqlTodos);
-    if ($stTodos) {
-        $stTodos->bind_param('s', $supervisor_id);
-        $stTodos->execute();
-        $resTodos = $stTodos->get_result();
+            INNER JOIN (SELECT asesor_id, MAX(timestamp) AS max_ts FROM ubicacion_asesor GROUP BY asesor_id) latest
+                ON latest.asesor_id = ua1.asesor_id AND latest.max_ts = ua1.timestamp
+        ) ua ON ua.asesor_id = a.id";
+
+    if ($is_admin) {
+        $sqlTodos = "SELECT a.id AS asesor_id, u.nombre AS asesor_nombre,
+            COALESCE(ap.estado,'desconectado') AS estado, ua.latitud, ua.longitud, ua.timestamp AS ultima_vez
+            FROM asesor a JOIN usuario u ON u.id=a.usuario_id
+            LEFT JOIN asesor_presencia ap ON ap.asesor_id=a.id $subUltima
+            ORDER BY CASE WHEN COALESCE(ap.estado,'desconectado')='conectado' THEN 0 ELSE 1 END, u.nombre ASC";
+        $resTodos = $conn->query($sqlTodos);
+    } else {
+        $sqlTodos = "SELECT a.id AS asesor_id, u.nombre AS asesor_nombre,
+            COALESCE(ap.estado,'desconectado') AS estado, ua.latitud, ua.longitud, ua.timestamp AS ultima_vez
+            FROM asesor a JOIN supervisor s ON s.id=a.supervisor_id JOIN usuario u ON u.id=a.usuario_id
+            LEFT JOIN asesor_presencia ap ON ap.asesor_id=a.id $subUltima
+            WHERE s.usuario_id=?
+            ORDER BY CASE WHEN COALESCE(ap.estado,'desconectado')='conectado' THEN 0 ELSE 1 END, u.nombre ASC";
+        $stTodos = $conn->prepare($sqlTodos);
+        if ($stTodos) { $stTodos->bind_param('s', $supervisor_id); $stTodos->execute(); $resTodos = $stTodos->get_result(); }
+    }
+
+    if (!empty($resTodos)) {
         $now = time();
         while ($row = $resTodos->fetch_assoc()) {
             $online = ($row['estado'] === 'conectado');
             if (!$online && $row['ultima_vez']) {
-                $diff = $now - strtotime($row['ultima_vez']);
-                if ($diff <= 120) $online = true;
+                if ($now - strtotime($row['ultima_vez']) <= 120) $online = true;
             }
             $todos_asesores[] = [
                 'asesor_id'  => $row['asesor_id'],
@@ -159,7 +175,7 @@ try {
                 'ultima_vez' => $row['ultima_vez'],
             ];
         }
-        $stTodos->close();
+        if (!$is_admin && isset($stTodos)) $stTodos->close();
     }
 } catch (\Throwable $eTodos) { /* no bloquear la página */ }
 
@@ -422,7 +438,8 @@ $totalPendientes    = 0;
 </head>
 <body>
 
-<?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle = ''; $navIcon = ''; $navSubtitle = '';
+if ($is_admin) { require_once '_sidebar_gerente.php'; } else { require_once '_sidebar_supervisor.php'; } ?>
 <style>
 /* Override supervisor_layout.css for map page — needs flex column + no overflow-y auto */
 .content-area {
