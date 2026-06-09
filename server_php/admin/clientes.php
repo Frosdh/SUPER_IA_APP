@@ -315,13 +315,16 @@ if ($user_role === 'asesor') {
     } catch (PDOException $e) {}
 }
 if ($user_role === 'supervisor') {
-    $navTitle = ''; $navIcon = ''; $navSubtitle = ''; 
-    require_once '_sidebar_supervisor.php'; 
+    $navTitle = ''; $navIcon = ''; $navSubtitle = '';
+    require_once '_sidebar_supervisor.php';
 } elseif ($user_role === 'asesor') {
     $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';
     require_once '_sidebar_asesor.php';
+} elseif ($user_role === 'admin') {
+    $currentPage = 'clientes';
+    require_once '_sidebar_gerente.php';
 } else {
-    // Sidebar genérico para otros roles (Admin / SuperAdmin)
+    // Sidebar genérico para SuperAdmin
 ?>
 <div class="sidebar">
     <div class="sidebar-brand"><i class="fas fa-chart-pie"></i><span>Super_IA</span></div>

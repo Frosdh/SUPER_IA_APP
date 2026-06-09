@@ -614,11 +614,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
     </style>
 <?php 
 if ($user_role === 'supervisor') {
-    $navTitle = ''; 
-    $navIcon = '';
-    $navSubtitle = '';
-    require_once '_sidebar_supervisor.php'; 
-} else { ?>
+    $navTitle = ''; $navIcon = ''; $navSubtitle = '';
+    require_once '_sidebar_supervisor.php';
+} elseif ($user_role === 'admin') {
+    $currentPage = 'alertas';
+    require_once '_sidebar_gerente.php';
+    ?>
+<div class="main-content">
+    <div class="navbar-custom">
+        <h2><i class="fas fa-bell me-2" style="color:var(--brand-yellow)"></i> Centro de Alertas</h2>
+        <div class="user-info">
+            <div style="text-align:right;">
+                <strong><?= htmlspecialchars($_SESSION['admin_nombre'] ?? 'Gerente') ?></strong><br>
+                <small style="opacity:.7;"><?= htmlspecialchars($_SESSION['admin_rol'] ?? 'Gerente') ?></small>
+            </div>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt me-1"></i> Cerrar Sesión</a>
+        </div>
+    </div>
+    <div class="content-area">
+<?php } else { ?>
 <!-- SIDEBAR Y NAVBAR LEGACY PARA OTROS ROLES -->
 <div class="sidebar">...</div>
 <div class="main-content">

@@ -2,13 +2,14 @@
 if (session_status() === PHP_SESSION_NONE)
   session_start();
 require_once 'db_admin.php';
-if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in'] !== true) {
+$is_admin_gerente = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+if (!isset($_SESSION['supervisor_logged_in']) && !$is_admin_gerente) {
   header('Location:login.php?role=supervisor');
   exit;
 }
-$supervisor_usuario_id = $_SESSION['supervisor_id'];
-$supervisor_nombre = $_SESSION['supervisor_nombre'] ?? '';
-$supervisor_rol = $_SESSION['supervisor_rol'] ?? 'Supervisor';
+$supervisor_usuario_id = $is_admin_gerente ? null : ($_SESSION['supervisor_id'] ?? null);
+$supervisor_nombre     = $is_admin_gerente ? ($_SESSION['admin_nombre'] ?? 'Gerente') : ($_SESSION['supervisor_nombre'] ?? '');
+$supervisor_rol        = $is_admin_gerente ? ($_SESSION['admin_rol'] ?? 'Gerente') : ($_SESSION['supervisor_rol'] ?? 'Supervisor');
 // Resolver supervisor.id de forma robusta: la sesión puede contener usuario_id o supervisor.id
 $supervisor_table_id = null;
 try {
@@ -637,7 +638,15 @@ $currentPage = 'recuperacion';
 </head>
 
 <body>
-  <?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
+  <?php
+  $navTitle = ''; $navIcon = ''; $navSubtitle = '';
+  if ($is_admin_gerente) {
+      $currentPage = 'recuperacion';
+      require_once '_sidebar_gerente.php';
+  } else {
+      require_once '_sidebar_supervisor.php';
+  }
+  ?>
 
       <div class="page-header">
         <h1><i class="fas fa-user-clock"></i> Recuperación de Cartera</h1>

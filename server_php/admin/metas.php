@@ -7,7 +7,8 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 
 require_once 'db_admin.php';   // PDO ($pdo)
 
-if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in'] !== true) {
+$is_admin_gerente = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+if (!isset($_SESSION['supervisor_logged_in']) && !$is_admin_gerente) {
     header('Location: login.php?role=supervisor');
     exit;
 }
@@ -520,8 +521,15 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
 </head>
 <body>
 
-<?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; ?>
-<?php require_once '_sidebar_supervisor.php'; ?>
+<?php
+$navTitle = ''; $navIcon = ''; $navSubtitle = '';
+if ($is_admin_gerente) {
+    $currentPage = 'metas';
+    require_once '_sidebar_gerente.php';
+} else {
+    require_once '_sidebar_supervisor.php';
+}
+?>
 
 <?php if ($flash): ?>
     <div class="flash flash-<?= htmlspecialchars($flash['type']) ?>"><?= $flash['msg'] ?></div>

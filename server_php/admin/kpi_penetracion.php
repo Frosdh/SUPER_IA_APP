@@ -12,8 +12,9 @@ date_default_timezone_set('America/Guayaquil');
 
 require_once 'db_admin.php';   // PDO ($pdo)
 
-// Verificar rol (Supervisor o Gerente)
-$es_gerente = (isset($_SESSION['gerente_logged_in']) && $_SESSION['gerente_logged_in'] === true);
+// Verificar rol (Supervisor o Gerente/Admin)
+$es_gerente    = (isset($_SESSION['admin_logged_in'])   && $_SESSION['admin_logged_in']   === true)
+              || (isset($_SESSION['gerente_logged_in']) && $_SESSION['gerente_logged_in'] === true);
 $es_supervisor = (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true);
 
 if (!$es_gerente && !$es_supervisor) {
@@ -21,9 +22,9 @@ if (!$es_gerente && !$es_supervisor) {
     exit;
 }
 
-$user_id = $_SESSION['gerente_id'] ?? $_SESSION['supervisor_id'];
-$user_nombre = $_SESSION['gerente_nombre'] ?? $_SESSION['supervisor_nombre'] ?? 'Usuario';
-$user_rol = $_SESSION['rol'] ?? 'Supervisor';
+$user_id     = $_SESSION['admin_id']     ?? $_SESSION['gerente_id']     ?? $_SESSION['supervisor_id'];
+$user_nombre = $_SESSION['admin_nombre'] ?? $_SESSION['gerente_nombre'] ?? $_SESSION['supervisor_nombre'] ?? 'Usuario';
+$user_rol    = $_SESSION['admin_rol']    ?? $_SESSION['rol']             ?? 'Supervisor';
 
 // ── Subdivisiones Principales ───────────────────────────────
 $vistas_orden = ['actividad', 'mercado', 'interes', 'prospeccion', 'frio', 'evaluacion', 'eficiencia', 'postventa', 'recuperacion', 'operaciones'];
@@ -1422,7 +1423,14 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
 
 <body>
 
-    <?php require_once $es_gerente ? '_sidebar.php' : '_sidebar_supervisor.php'; ?>
+    <?php
+    if ($es_gerente) {
+        $currentPage = 'reportes_penetracion';
+        require_once '_sidebar_gerente.php';
+    } else {
+        require_once '_sidebar_supervisor.php';
+    }
+    ?>
 
     <?php if ($es_gerente): ?>
     <div class="main-content">
