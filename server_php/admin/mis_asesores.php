@@ -3,7 +3,23 @@ require_once 'db_admin.php';
 
 $session_missing = false;
 if (session_status() === PHP_SESSION_NONE) session_start();
-if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in'] !== true) {
+
+// ── Determinar modo: supervisor propietario ó admin/gerente viendo un supervisor específico ──
+$viewing_supervisor_id = null; // tabla supervisor.id
+$is_admin_view = false;
+
+if (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true) {
+    $session_missing = false;
+    $viewing_supervisor_id = null; // se resuelve abajo
+} elseif (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
+    $get_sup_id = $_GET['supervisor_id'] ?? null;
+    if ($get_sup_id) {
+        $viewing_supervisor_id = $get_sup_id;
+        $is_admin_view = true;
+    } else {
+        $session_missing = true;
+    }
+} else {
     $session_missing = true;
 }
 
@@ -13,55 +29,46 @@ $session_user_id = $_SESSION['supervisor_id'] ?? $_SESSION['id_usuario'] ?? $_SE
 $asesores = [];
 $clientes_por_asesor = [];
 
-if (!$session_missing && $session_user_id) {
-    // Intentar la consulta heredada; si falla, intentar fallback con tablas `usuario` + `asesor`
-    try {
-        $supervisor_id = intval($session_user_id);
-        $asesores = $pdo->query(
-            "SELECT u.id_usuario, u.usuario, u.nombres, u.apellidos, u.email, u.telefono, u.ciudad, r.nombre as rol,\n" .
-            "       COUNT(c.id_cliente) as total_clientes\n" .
-            "FROM usuarios u\n" .
-            "JOIN roles r ON u.id_rol_fk = r.id_rol\n" .
-            "LEFT JOIN clientes c ON c.asesor_id_fk = u.id_usuario\n" .
-            "WHERE r.nombre = 'Asesor' AND u.supervisor_id_fk = $supervisor_id\n" .
-            "GROUP BY u.id_usuario, u.usuario\n" .
-            "ORDER BY u.nombres"
-        )->fetchAll();
-    } catch (Exception $e) {
-        // fallback: nuevo esquema
+if (!$session_missing) {
+    $supId = $viewing_supervisor_id;
+    if (!$supId && $session_user_id) {
+        // supervisor propio: resolver supervisor.id desde usuario_id
         try {
             $stmt = $pdo->prepare("SELECT id FROM supervisor WHERE usuario_id = ? LIMIT 1");
             $stmt->execute([$session_user_id]);
-            $supRow = $stmt->fetch();
-            if ($supRow && isset($supRow['id'])) {
-                $supId = $supRow['id'];
-                $stmt = $pdo->prepare(
-                    "SELECT a.id AS asesor_id, u.id AS usuario_id, u.nombre AS nombre_completo, u.email, NULL AS telefono, COUNT(cp.id) AS total_clientes\n" .
-                    "FROM asesor a\n" .
-                    "JOIN usuario u ON u.id = a.usuario_id\n" .
-                    "LEFT JOIN cliente_prospecto cp ON cp.asesor_id = a.id\n" .
-                    "WHERE a.supervisor_id = ?\n" .
-                    "GROUP BY a.id, u.id, u.nombre, u.email\n" .
-                    "ORDER BY u.nombre"
-                );
-                $stmt->execute([$supId]);
-                $rows = $stmt->fetchAll();
-                foreach ($rows as $r) {
-                    $parts = explode(' ', trim($r['nombre_completo']), 2);
-                    $asesores[] = [
-                        'id_usuario' => $r['usuario_id'],
-                        'usuario' => strstr($r['email'], '@', true) ?: $r['email'],
-                        'nombres' => $parts[0] ?? '',
-                        'apellidos' => $parts[1] ?? '',
-                        'email' => $r['email'],
-                        'telefono' => $r['telefono'] ?? '',
-                        'ciudad' => '',
-                        'total_clientes' => $r['total_clientes'] ?? 0
-                    ];
-                }
+            $supId = $stmt->fetchColumn() ?: null;
+        } catch (Exception $e) {
+            $supId = null;
+        }
+    }
+
+    if ($supId) {
+        try {
+            $stmt = $pdo->prepare(
+                "SELECT a.id AS asesor_id, u.id AS usuario_id, u.nombre AS nombre_completo, u.email, NULL AS telefono, COUNT(cp.id) AS total_clientes\n" .
+                "FROM asesor a\n" .
+                "JOIN usuario u ON u.id = a.usuario_id\n" .
+                "LEFT JOIN cliente_prospecto cp ON cp.asesor_id = a.id\n" .
+                "WHERE a.supervisor_id = ?\n" .
+                "GROUP BY a.id, u.id, u.nombre, u.email\n" .
+                "ORDER BY u.nombre"
+            );
+            $stmt->execute([$supId]);
+            $rows = $stmt->fetchAll();
+            foreach ($rows as $r) {
+                $parts = explode(' ', trim($r['nombre_completo']), 2);
+                $asesores[] = [
+                    'id_usuario' => $r['usuario_id'],
+                    'usuario' => strstr($r['email'], '@', true) ?: $r['email'],
+                    'nombres' => $parts[0] ?? '',
+                    'apellidos' => $parts[1] ?? '',
+                    'email' => $r['email'],
+                    'telefono' => $r['telefono'] ?? '',
+                    'ciudad' => '',
+                    'total_clientes' => $r['total_clientes'] ?? 0
+                ];
             }
         } catch (Exception $e2) {
-            // dejar vacío
             $asesores = [];
         }
     }
@@ -71,20 +78,19 @@ if (!$session_missing && $session_user_id) {
         $aid_usuario = $asesor['usuario_id'] ?? $asesor['id_usuario'] ?? null;
         if (!$aid_usuario) continue;
 
-        // Query cliente_prospecto con esquema nuevo (usuario_id puede ser UUID)
         try {
             $stmt = $pdo->prepare(
-                "SELECT 
-                    cp.id AS id_cliente,
-                    cp.nombre,
-                    COALESCE(cp.cedula, '') AS cedula,
-                    cp.email,
-                    cp.telefono,
-                    cp.telefono2,
-                    CASE WHEN cp.estado != 'descartado' THEN 1 ELSE 0 END AS activo
-                 FROM cliente_prospecto cp
-                 WHERE cp.asesor_id = (SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1)
-                 ORDER BY cp.nombre"
+                "SELECT \n" .
+                "    cp.id AS id_cliente,\n" .
+                "    cp.nombre,\n" .
+                "    COALESCE(cp.cedula, '') AS cedula,\n" .
+                "    cp.email,\n" .
+                "    cp.telefono,\n" .
+                "    cp.telefono2,\n" .
+                "    CASE WHEN cp.estado != 'descartado' THEN 1 ELSE 0 END AS activo\n" .
+                " FROM cliente_prospecto cp\n" .
+                " WHERE cp.asesor_id = (SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1)\n" .
+                " ORDER BY cp.nombre"
             );
             $stmt->execute([$aid_usuario]);
             $clientes = $stmt->fetchAll();
@@ -100,19 +106,21 @@ $currentPage        = 'asesores';
 $alertas_pendientes = 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 
-// ── Contar solicitudes pendientes de asesor ───────────────
+// ── Contar solicitudes pendientes de asesor (solo para el supervisor propio, no vista admin) ──
 $solicitudes_pendientes = 0;
-try {
-    $session_user_id = $_SESSION['supervisor_id'] ?? null;
-    if ($session_user_id) {
-        $stPend = $pdo->prepare("
-            SELECT COUNT(*) FROM solicitudes_asesor
-            WHERE id_supervisor = ? AND estado = 'pendiente'
-        ");
-        $stPend->execute([$session_user_id]);
-        $solicitudes_pendientes = (int)$stPend->fetchColumn();
-    }
-} catch (\Throwable $e) { $solicitudes_pendientes = 0; }
+if (!$is_admin_view) {
+    try {
+        $session_user_id = $_SESSION['supervisor_id'] ?? null;
+        if ($session_user_id) {
+            $stPend = $pdo->prepare("
+                SELECT COUNT(*) FROM solicitudes_asesor
+                WHERE id_supervisor = ? AND estado = 'pendiente'
+            ");
+            $stPend->execute([$session_user_id]);
+            $solicitudes_pendientes = (int)$stPend->fetchColumn();
+        }
+    } catch (\Throwable $e) { $solicitudes_pendientes = 0; }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -355,7 +363,13 @@ try {
 </head>
 <body>
 
-<?php $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervisor.php'; ?>
+<?php $navTitle = ''; $navIcon = ''; $navSubtitle = '';
+if ($is_admin_view) {
+    require_once '_sidebar_gerente.php';
+} else {
+    require_once '_sidebar_supervisor.php';
+}
+?>
 
 
     <!-- HEADER -->

@@ -439,7 +439,28 @@ $totalPendientes    = 0;
 <body>
 
 <?php $navTitle = ''; $navIcon = ''; $navSubtitle = '';
-if ($is_admin) { require_once '_sidebar_gerente.php'; } else { require_once '_sidebar_supervisor.php'; } ?>
+if ($is_admin) {
+    require_once '_sidebar_gerente.php';
+    // _sidebar_gerente.php solo emite <div class="sidebar">.
+    // _sidebar_supervisor.php también abre .main-content, .navbar-custom y .content-area.
+    // Los añadimos aquí para que la estructura HTML sea idéntica.
+    ?>
+<div class="main-content">
+    <div class="navbar-custom">
+        <div class="nav-title-group"></div>
+        <div class="user-info">
+            <div>
+                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
+                <small>Gerente General</small>
+            </div>
+            <a href="logout.php" style="background:rgba(239,68,68,.18);color:#fca5a5;border:1px solid rgba(239,68,68,.4);padding:7px 14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s;"
+               onmouseover="this.style.background='rgba(239,68,68,.35)'" onmouseout="this.style.background='rgba(239,68,68,.18)'">
+                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </a>
+        </div>
+    </div>
+    <div class="content-area">
+<?php } else { require_once '_sidebar_supervisor.php'; } ?>
 <style>
 /* Override supervisor_layout.css for map page — needs flex column + no overflow-y auto */
 .content-area {

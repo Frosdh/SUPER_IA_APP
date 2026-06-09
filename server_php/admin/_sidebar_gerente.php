@@ -18,6 +18,7 @@ switch ($currentPage) {
     case 'solicitudes_supervisor':
     case 'solicitudes_admin':
         $currentPage = 'solicitudes'; break;
+    case 'asesores':
     case 'administrar_asesores':
     case 'administrar_supervisores':
         $currentPage = 'supervisores'; break;
