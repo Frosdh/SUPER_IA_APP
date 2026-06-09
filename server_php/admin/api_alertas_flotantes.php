@@ -36,20 +36,8 @@ if ($is_supervisor) {
     $admin_rol = $_SESSION['admin_rol'] ?? 'jefe_agencia';
     $jaIds = [];
     try {
-        if ($admin_rol === 'jefe_agencia') {
-            $st = $pdo->prepare('SELECT id FROM jefe_agencia WHERE usuario_id = ?');
-            $st->execute([$admin_id]);
-            $jaIds = $st->fetchAll(PDO::FETCH_COLUMN);
-        } elseif ($admin_rol === 'gerente_general') {
-            $st = $pdo->prepare('SELECT unidad_bancaria_id FROM gerente_general WHERE usuario_id = ? LIMIT 1');
-            $st->execute([$admin_id]);
-            $ub_id = $st->fetchColumn() ?: null;
-            if ($ub_id) {
-                $st = $pdo->prepare('SELECT ja.id FROM jefe_agencia ja JOIN agencia ag ON ag.id=ja.agencia_id WHERE ag.unidad_bancaria_id=?');
-                $st->execute([$ub_id]);
-                $jaIds = $st->fetchAll(PDO::FETCH_COLUMN);
-            }
-        }
+        require_once __DIR__ . '/helper_ja_ids.php';
+        $jaIds = resolver_ja_ids($pdo, $admin_id);
         if (!empty($jaIds)) {
             $phJa = implode(',', array_fill(0, count($jaIds), '?'));
             $st = $pdo->prepare("SELECT id FROM supervisor WHERE jefe_agencia_id IN ($phJa)");

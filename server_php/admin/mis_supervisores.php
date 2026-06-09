@@ -21,22 +21,10 @@ $ja_ids          = [];
 $ja_id           = null; // primer ja_id (para compatibilidad)
 $pre_sup_ids     = [];   // supervisor ids resueltos antes del filtro de búsqueda
 
+require_once __DIR__ . '/helper_ja_ids.php';
 try {
-    if ($gerente_rol === 'jefe_agencia') {
-        $st = $pdo->prepare('SELECT id FROM jefe_agencia WHERE usuario_id = ?');
-        $st->execute([$gerente_usuario_id]);
-        $ja_ids = $st->fetchAll(PDO::FETCH_COLUMN);
-
-    } elseif ($gerente_rol === 'gerente_general') {
-        $st = $pdo->prepare('SELECT unidad_bancaria_id FROM gerente_general WHERE usuario_id = ? LIMIT 1');
-        $st->execute([$gerente_usuario_id]);
-        $ub_id = $st->fetchColumn() ?: null;
-        if ($ub_id) {
-            $st = $pdo->prepare('SELECT ja.id FROM jefe_agencia ja JOIN agencia ag ON ag.id = ja.agencia_id WHERE ag.unidad_bancaria_id = ?');
-            $st->execute([$ub_id]);
-            $ja_ids = $st->fetchAll(PDO::FETCH_COLUMN);
-        }
-    }
+    // Combina jefe_agencia propio + cadena gerente_general (sin depender del rol)
+    $ja_ids = resolver_ja_ids($pdo, $gerente_usuario_id);
 
     $ja_id = $ja_ids[0] ?? null;
 

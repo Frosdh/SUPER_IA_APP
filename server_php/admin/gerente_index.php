@@ -22,26 +22,10 @@ $gerente_rol        = $_SESSION['admin_rol'] ?? 'Gerente';
 $supervisor_ids = [];
 $ja_ids         = [];   // jefe_agencia ids (puede ser >1 para gerente_general)
 
+require_once __DIR__ . '/helper_ja_ids.php';
 try {
-    if ($gerente_rol === 'jefe_agencia') {
-        // Caso 1: jefe_agencia
-        $st = $pdo->prepare('SELECT id FROM jefe_agencia WHERE usuario_id = ?');
-        $st->execute([$gerente_usuario_id]);
-        $ja_ids = $st->fetchAll(PDO::FETCH_COLUMN);
-
-    } elseif ($gerente_rol === 'gerente_general') {
-        // Caso 2: gerente_general → obtener unidad_bancaria_id
-        $st = $pdo->prepare('SELECT unidad_bancaria_id FROM gerente_general WHERE usuario_id = ? LIMIT 1');
-        $st->execute([$gerente_usuario_id]);
-        $ub_id = $st->fetchColumn() ?: null;
-
-        if ($ub_id) {
-            // Todos los jefe_agencia de esa unidad_bancaria
-            $st = $pdo->prepare('SELECT ja.id FROM jefe_agencia ja JOIN agencia ag ON ag.id = ja.agencia_id WHERE ag.unidad_bancaria_id = ?');
-            $st->execute([$ub_id]);
-            $ja_ids = $st->fetchAll(PDO::FETCH_COLUMN);
-        }
-    }
+    // Combina jefe_agencia propio + cadena gerente_general (sin depender del rol)
+    $ja_ids = resolver_ja_ids($pdo, $gerente_usuario_id);
 
     // Supervisores de esos jefe_agencia
     if (!empty($ja_ids)) {
