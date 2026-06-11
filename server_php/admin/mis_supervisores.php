@@ -129,7 +129,7 @@ if (!empty($supervisores)) {
         $supIds = array_column($supervisores, 'supervisor_table_id');
         $ph = implode(',', array_fill(0, count($supIds), '?'));
         $stA = $pdo->prepare("
-            SELECT a.supervisor_id,
+            SELECT a.id AS asesor_id, a.supervisor_id,
                    u.nombre, u.email, u.telefono,
                    (SELECT COUNT(*) FROM cliente_prospecto cp WHERE cp.asesor_id = a.id) AS total_clientes
             FROM asesor a
@@ -140,6 +140,34 @@ if (!empty($supervisores)) {
         $stA->execute($supIds);
         foreach ($stA->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $asesores_por_sup[$row['supervisor_id']][] = $row;
+        }
+    } catch (PDOException $e) {}
+}
+
+// ── Cargar clientes de cada asesor (para panel "Clientes de…") ──
+$clientes_por_asesor = [];   // [ asesor_id => [ clientes... ] ]
+if (!empty($asesores_por_sup)) {
+    try {
+        $aseIds = [];
+        foreach ($asesores_por_sup as $lst) {
+            foreach ($lst as $a) { if (!empty($a['asesor_id'])) $aseIds[] = $a['asesor_id']; }
+        }
+        if (!empty($aseIds)) {
+            $phA = implode(',', array_fill(0, count($aseIds), '?'));
+            $stC = $pdo->prepare("
+                SELECT cp.asesor_id,
+                       cp.nombre,
+                       COALESCE(cp.cedula,'') AS cedula,
+                       cp.email, cp.telefono, cp.telefono2,
+                       CASE WHEN cp.estado != 'descartado' THEN 1 ELSE 0 END AS activo
+                FROM cliente_prospecto cp
+                WHERE cp.asesor_id IN ($phA)
+                ORDER BY cp.nombre ASC
+            ");
+            $stC->execute($aseIds);
+            foreach ($stC->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $clientes_por_asesor[$row['asesor_id']][] = $row;
+            }
         }
     } catch (PDOException $e) {}
 }
@@ -386,6 +414,80 @@ function iniciales(string $nombre): string {
 .ap-empty{text-align:center;padding:20px;color:#94a3b8;font-size:13px;}
 .ap-empty i{display:block;font-size:24px;margin-bottom:6px;opacity:.4;}
 
+/* ── Panel de clientes por asesor (igual que mis_asesores) ── */
+.asesor-mini{cursor:pointer;}
+.asesor-mini.active{border-color:#0a2748;background:#eef4fc;}
+.cp-panel{
+    display:none;
+    background:#f0f5fb;
+    border-radius:18px;
+    border:2px solid #0a2748;
+    padding:20px;
+    margin-top:14px;
+    grid-column:1/-1;
+    animation:cpIn .22s ease-out;
+}
+.cp-panel.show{display:block;}
+@keyframes cpIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+.cp-panel-header{
+    display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:16px;padding-bottom:12px;
+    border-bottom:2px solid #dde5f0;
+    flex-wrap:wrap;gap:8px;
+}
+.cp-panel-title{font-size:15px;font-weight:800;color:#0a2748;display:flex;align-items:center;gap:8px;}
+.cp-panel-title i{color:#ffdd00;background:#0a2748;width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;}
+.cp-close{
+    border:none;background:rgba(10,39,72,.08);color:#0a2748;
+    width:32px;height:32px;border-radius:50%;cursor:pointer;
+    font-size:14px;display:flex;align-items:center;justify-content:center;transition:.18s;
+}
+.cp-close:hover{background:#0a2748;color:#fff;}
+.cp-search{
+    display:flex;align-items:center;gap:6px;background:#fff;
+    border:1.5px solid #d7e0ea;border-radius:8px;padding:6px 10px;width:240px;
+}
+.cp-search i{color:#94a3b8;font-size:12px;}
+.cp-search input{border:none;outline:none;flex:1;font-size:13px;min-width:0;}
+.clientes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
+.cc{
+    background:#fff;border-radius:14px;border:1.5px solid #d7e0ea;
+    box-shadow:0 2px 8px rgba(10,39,72,.06);padding:14px 15px;transition:all .18s;
+}
+.cc:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(10,39,72,.13);border-color:#93c5fd;}
+.cc-top{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;}
+.cc-icon{
+    width:36px;height:36px;border-radius:10px;flex-shrink:0;
+    background:linear-gradient(135deg,#eff6ff,#dbeafe);
+    display:flex;align-items:center;justify-content:center;color:#1e40af;font-size:14px;
+}
+.cc-name{font-size:13px;font-weight:800;color:#0a2748;margin:0 0 2px;line-height:1.3;}
+.cc-ci{font-size:11px;color:#94a3b8;font-weight:600;margin:0;}
+.cc-contact{
+    font-size:11px;color:#64748b;display:flex;flex-direction:column;gap:3px;
+    padding-top:8px;border-top:1px solid #f0f4f8;
+}
+.cc-contact span{display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cc-contact i{color:#94a3b8;width:12px;flex-shrink:0;}
+.cc-status{margin-top:9px;padding-top:8px;border-top:1px solid #f0f4f8;}
+.pill-activo{
+    display:inline-flex;align-items:center;gap:4px;
+    background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;
+    border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;
+}
+.pill-inactivo{
+    display:inline-flex;align-items:center;gap:4px;
+    background:#fef2f2;color:#991b1b;border:1px solid #fecaca;
+    border-radius:20px;padding:2px 10px;font-size:10.5px;font-weight:700;
+}
+.cc-empty{
+    grid-column:1/-1;text-align:center;padding:30px 20px;
+    color:#94a3b8;font-size:14px;background:#fff;
+    border-radius:14px;border:1.5px dashed #d7e0ea;
+}
+.cc-empty i{display:block;font-size:24px;margin-bottom:8px;opacity:.5;}
+.d-none{display:none!important;}
+
 /* Estado vacío global */
 .empty-state{text-align:center;padding:60px 20px;}
 .empty-icon{font-size:3rem;color:#94a3b8;margin-bottom:16px;}
@@ -606,13 +708,14 @@ $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'))
             </div>
             <?php else:
             foreach ($lista as $ase):
+                $aid     = htmlspecialchars($ase['asesor_id'] ?? '', ENT_QUOTES, 'UTF-8');
                 $anombre = htmlspecialchars($ase['nombre'] ?? '—');
                 $aemail  = htmlspecialchars($ase['email'] ?? '');
                 $atel    = htmlspecialchars($ase['telefono'] ?? '');
                 $aclientes = (int)($ase['total_clientes'] ?? 0);
                 $ainicial = mb_strtoupper(mb_substr(trim($ase['nombre'] ?? 'A'), 0, 1));
             ?>
-            <div class="asesor-mini">
+            <div class="asesor-mini" id="ase-<?= $aid ?>" onclick="toggleClientes('<?= $aid ?>')" title="Ver clientes de <?= $anombre ?>">
                 <div class="asesor-mini-av"><?= $ainicial ?></div>
                 <div class="asesor-mini-info">
                     <div class="asesor-mini-name" title="<?= $anombre ?>"><?= $anombre ?></div>
@@ -622,6 +725,74 @@ $total_alertas_suma  = array_sum(array_column($supervisores, 'alertas_sin_ver'))
             </div>
             <?php endforeach; endif; ?>
         </div>
+
+        <!-- Paneles de clientes por asesor -->
+        <?php foreach ($lista as $ase):
+            $aid      = htmlspecialchars($ase['asesor_id'] ?? '', ENT_QUOTES, 'UTF-8');
+            $anombre  = htmlspecialchars($ase['nombre'] ?? '—');
+            $clientes = $clientes_por_asesor[$ase['asesor_id'] ?? ''] ?? [];
+        ?>
+        <div class="cp-panel" id="cpanel-<?= $aid ?>">
+            <div class="cp-panel-header">
+                <div class="cp-panel-title">
+                    <i class="fas fa-users"></i>
+                    Clientes de <strong style="margin-left:4px;"><?= $anombre ?></strong>
+                    <span style="background:#e0f2fe;color:#0369a1;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:800;margin-left:6px;"><?= count($clientes) ?></span>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <?php if (!empty($clientes)): ?>
+                    <div class="cp-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" class="client-search-input" placeholder="Buscar cliente..." data-asesor-id="<?= $aid ?>" oninput="filterClients(this)">
+                    </div>
+                    <?php endif; ?>
+                    <button class="cp-close" onclick="cerrarClientes('<?= $aid ?>')"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="clientes-grid">
+                <?php if (empty($clientes)): ?>
+                    <div class="cc-empty"><i class="fas fa-inbox"></i>Sin clientes asignados aún</div>
+                <?php else: foreach ($clientes as $c):
+                    $cnombre = trim($c['nombre'] ?? '');
+                    $cnombre = htmlspecialchars($cnombre !== '' ? $cnombre : 'Sin nombre');
+                    $ccedula = htmlspecialchars($c['cedula'] ?? '');
+                    $cemail  = htmlspecialchars($c['email'] ?? '');
+                    $ctel    = htmlspecialchars($c['telefono2'] ?: ($c['telefono'] ?? ''));
+                    $activo  = !empty($c['activo']);
+                ?>
+                <div class="cc"
+                     data-search-name="<?= mb_strtolower($cnombre) ?>"
+                     data-search-cedula="<?= mb_strtolower($ccedula) ?>">
+                    <div class="cc-top">
+                        <div class="cc-icon"><i class="fas fa-user"></i></div>
+                        <div style="min-width:0;">
+                            <p class="cc-name"><?= $cnombre ?></p>
+                            <?php if ($ccedula): ?>
+                            <p class="cc-ci"><i class="fas fa-id-card" style="margin-right:3px;"></i>CI: <?= $ccedula ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="cc-contact">
+                        <?php if ($cemail): ?><span><i class="fas fa-envelope"></i><?= $cemail ?></span><?php endif; ?>
+                        <?php if ($ctel): ?><span><i class="fas fa-phone"></i><?= $ctel ?></span><?php endif; ?>
+                    </div>
+                    <div class="cc-status">
+                        <?php if ($activo): ?>
+                            <span class="pill-activo"><i class="fas fa-check-circle"></i> Activo</span>
+                        <?php else: ?>
+                            <span class="pill-inactivo"><i class="fas fa-times-circle"></i> Inactivo</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <div class="cc-empty d-none client-search-empty">
+                    <i class="fas fa-search-minus"></i>
+                    No se encontraron clientes coincidentes
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endforeach; ?>
     </div>
 </div>
 <?php endforeach; ?>
@@ -659,6 +830,61 @@ function cerrarPanel(id) {
     var panel = document.getElementById('panel-' + id);
     if (panel) panel.classList.remove('show');
     if (supervisorActivo === id) supervisorActivo = null;
+    if (asesorActivo) cerrarClientes(asesorActivo);
+}
+
+/* ── Panel de clientes por asesor ── */
+var asesorActivo = null;
+
+function toggleClientes(id) {
+    if (asesorActivo === id) {
+        cerrarClientes(id);
+        return;
+    }
+    if (asesorActivo) cerrarClientes(asesorActivo);
+
+    asesorActivo = id;
+    var mini = document.getElementById('ase-' + id);
+    if (mini) mini.classList.add('active');
+    var panel = document.getElementById('cpanel-' + id);
+    if (panel) {
+        panel.classList.add('show');
+        setTimeout(function(){ panel.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 80);
+    }
+}
+
+function cerrarClientes(id) {
+    var mini = document.getElementById('ase-' + id);
+    if (mini) mini.classList.remove('active');
+    var panel = document.getElementById('cpanel-' + id);
+    if (panel) {
+        panel.classList.remove('show');
+        var inp = panel.querySelector('.client-search-input');
+        if (inp) { inp.value = ''; filterClients(inp); }
+    }
+    if (asesorActivo === id) asesorActivo = null;
+}
+
+function filterClients(input) {
+    var query = input.value.toLowerCase().trim();
+    var panel = document.getElementById('cpanel-' + input.getAttribute('data-asesor-id'));
+    if (!panel) return;
+
+    var cards = panel.querySelectorAll('.clientes-grid .cc');
+    var visibles = 0;
+    cards.forEach(function(card) {
+        var name = card.getAttribute('data-search-name') || '';
+        var cedula = card.getAttribute('data-search-cedula') || '';
+        if (name.includes(query) || cedula.includes(query)) {
+            card.style.display = '';
+            visibles++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    var emptyEl = panel.querySelector('.client-search-empty');
+    if (emptyEl) emptyEl.classList.toggle('d-none', visibles > 0);
 }
 </script>
 

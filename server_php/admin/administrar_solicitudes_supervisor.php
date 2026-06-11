@@ -32,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         id_cooperativa INT NOT NULL,
                         id_administrador INT NOT NULL,
                         usuario VARCHAR(50) NOT NULL UNIQUE,
+                        cedula VARCHAR(13) NULL,
                         nombres VARCHAR(100) NOT NULL,
                         apellidos VARCHAR(100) NOT NULL,
                         email VARCHAR(100) NOT NULL UNIQUE,
@@ -44,11 +45,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         observaciones TEXT NULL
                     )
                 ");
-                
+
                 // Verificar si la columna credencial_archivo existe, si no agregarla
                 $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'credencial_archivo'");
                 if (!$stmt->fetch()) {
                     $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER telefono");
+                }
+
+                // Verificar si la columna cedula existe, si no agregarla
+                $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'cedula'");
+                if (!$stmt->fetch()) {
+                    $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
                 }
 
                 // Obtener datos de la solicitud
@@ -61,10 +68,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!$is_super_admin && $solicitud['id_administrador'] != $admin_id) {
                         $mensaje_error = "❌ No tienes permiso para procesar esta solicitud.";
                     } else {
+                        // Asegurar que la columna cedula exista en la tabla usuarios
+                        $chkCed = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'cedula'");
+                        if (!$chkCed->fetch()) {
+                            $pdo->exec("ALTER TABLE usuarios ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
+                        }
+
                         // Insertar usuario en tabla usuarios con rol Supervisor (asumiendo id_rol = 3)
                         $stmt = $pdo->prepare("
-                            INSERT INTO usuarios (usuario, clave, nombres, apellidos, email, telefono, activo, id_rol_fk)
-                            VALUES (?, ?, ?, ?, ?, ?, 1, 3)
+                            INSERT INTO usuarios (usuario, clave, nombres, apellidos, email, telefono, cedula, activo, id_rol_fk)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 1, 3)
                         ");
 
                         $stmt->execute([
@@ -73,7 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $solicitud['nombres'],
                             $solicitud['apellidos'],
                             $solicitud['email'],
-                            $solicitud['telefono']
+                            $solicitud['telefono'],
+                            $solicitud['cedula']
                         ]);
 
                         // Actualizar solicitud como aprobada
@@ -125,6 +139,7 @@ try {
             id_cooperativa INT NOT NULL,
             id_administrador INT NOT NULL,
             usuario VARCHAR(50) NOT NULL UNIQUE,
+            cedula VARCHAR(13) NULL,
             nombres VARCHAR(100) NOT NULL,
             apellidos VARCHAR(100) NOT NULL,
             email VARCHAR(100) NOT NULL UNIQUE,
@@ -137,11 +152,17 @@ try {
             observaciones TEXT NULL
         )
     ");
-    
+
     // Verificar si la columna credencial_archivo existe, si no agregarla
     $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'credencial_archivo'");
     if (!$stmt->fetch()) {
         $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER telefono");
+    }
+
+    // Verificar si la columna cedula existe, si no agregarla
+    $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'cedula'");
+    if (!$stmt->fetch()) {
+        $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
     }
 } catch (Exception $e) {}
 
@@ -338,6 +359,7 @@ $currentPage = 'solicitudes_supervisor';
                     <thead>
                         <tr>
                             <th>Usuario</th>
+                            <th>Cédula</th>
                             <th>Nombre</th>
                             <th>Email</th>
                             <th>Credencial</th>
@@ -349,7 +371,7 @@ $currentPage = 'solicitudes_supervisor';
                     <tbody>
                         <?php if (empty($solicitudes)): ?>
                         <tr>
-                            <td colspan="7" style="text-align: center; color: #9ca3af; padding: 30px;">
+                            <td colspan="8" style="text-align: center; color: #9ca3af; padding: 30px;">
                                 <i class="fas fa-inbox me-2"></i>No hay solicitudes
                             </td>
                         </tr>
@@ -357,6 +379,7 @@ $currentPage = 'solicitudes_supervisor';
                             <?php foreach ($solicitudes as $solicitud): ?>
                             <tr>
                                 <td><strong><?php echo htmlspecialchars($solicitud['usuario']); ?></strong></td>
+                                <td><?php echo htmlspecialchars($solicitud['cedula'] ?? ''); ?></td>
                                 <td><?php echo htmlspecialchars($solicitud['nombres'] . ' ' . $solicitud['apellidos']); ?></td>
                                 <td><?php echo htmlspecialchars($solicitud['email']); ?></td>
                                 <td>
@@ -495,10 +518,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (fila.querySelector('td[colspan]')) return;
                 
                 const usuario = fila.querySelector('td:nth-child(1)').textContent.toLowerCase();
-                const nombre = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
-                const email = fila.querySelector('td:nth-child(3)').textContent.toLowerCase();
-                
-                if (usuario.includes(term) || nombre.includes(term) || email.includes(term)) {
+                const cedula = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
+                const nombre = fila.querySelector('td:nth-child(3)').textContent.toLowerCase();
+                const email = fila.querySelector('td:nth-child(4)').textContent.toLowerCase();
+
+                if (usuario.includes(term) || cedula.includes(term) || nombre.includes(term) || email.includes(term)) {
                     fila.style.display = '';
                     visibles++;
                 } else {
@@ -514,7 +538,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     const tbody = document.querySelector('.table tbody');
                     const tr = document.createElement('tr');
                     tr.className = 'empty-row';
-                    tr.innerHTML = '<td colspan="7" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</td>';
+                    tr.innerHTML = '<td colspan="8" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</td>';
                     tbody.appendChild(tr);
                 } else {
                     emptyRow.querySelector('td').innerHTML = `<i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes para "${this.value}".`;

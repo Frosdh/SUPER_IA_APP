@@ -306,9 +306,15 @@ try {
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="telefono"><i class="fas fa-phone me-2"></i>Teléfono</label>
-                    <input type="tel" name="telefono" id="telefono" class="form-control" placeholder="+593 98 1234567" required>
+                <div class="row-cols">
+                    <div class="form-group">
+                        <label for="cedula"><i class="fas fa-id-card me-2"></i>Cédula de Identidad</label>
+                        <input type="text" name="cedula" id="cedula" class="form-control" placeholder="1712345678" maxlength="10" inputmode="numeric" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="telefono"><i class="fas fa-phone me-2"></i>Teléfono</label>
+                        <input type="tel" name="telefono" id="telefono" class="form-control" placeholder="+593 98 1234567" required>
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -347,7 +353,16 @@ try {
         </div>
     </div>
 
+<script src="js/validaciones.js"></script>
 <script>
+// ── Validar cédula ecuatoriana en tiempo real ──────────────
+const cedulaInput = document.getElementById('cedula');
+cedulaInput.addEventListener('input', function() {
+    this.value = this.value.replace(/\D/g, '').slice(0, 10);
+    const r = validarCedulaEc(this.value);
+    setFieldState(this, this.value ? r.ok : null, r.msg);
+});
+
 // ── Mostrar/ocultar contraseña ─────────────────────────────
 function toggleVis(inputId, iconId) {
     const inp  = document.getElementById(inputId);
@@ -382,12 +397,28 @@ passInput.addEventListener('input', checkPasswords);
 confirmInput.addEventListener('input', checkPasswords);
 
 document.querySelector('form').addEventListener('submit', function(e) {
+    let valido = true;
+
     if (passInput.value !== confirmInput.value) {
-        e.preventDefault();
         passMsg.style.display = 'block';
         passMsg.style.color   = '#ef4444';
         passMsg.textContent   = '✖ Las contraseñas no coinciden';
-        confirmInput.focus();
+        valido = false;
+    }
+
+    const rCedula = validarCedulaEc(cedulaInput.value);
+    if (!setFieldState(cedulaInput, !!cedulaInput.value && rCedula.ok, cedulaInput.value ? rCedula.msg : 'La cédula es requerida')) {
+        valido = false;
+    }
+
+    if (!valido) {
+        e.preventDefault();
+        if (!cedulaInput.value || !rCedula.ok) {
+            cedulaInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            cedulaInput.focus();
+        } else {
+            confirmInput.focus();
+        }
     }
 });
 

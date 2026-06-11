@@ -1,5 +1,6 @@
 <?php
 require_once 'db_admin.php';
+require_once __DIR__ . '/funciones_validacion.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: registro_supervisor.php');
@@ -12,6 +13,7 @@ $administrador = $_POST['administrador'] ?? '';
 $nombres = trim($_POST['nombres'] ?? '');
 $apellidos = trim($_POST['apellidos'] ?? '');
 $usuario = trim($_POST['usuario'] ?? '');
+$cedula = trim($_POST['cedula'] ?? '');
 $email = trim($_POST['email'] ?? '');
 $telefono = trim($_POST['telefono'] ?? '');
 $password         = $_POST['password'] ?? '';
@@ -26,6 +28,8 @@ if (empty($administrador)) $errores[] = 'El administrador es requerido';
 if (empty($nombres)) $errores[] = 'Los nombres son requeridos';
 if (empty($apellidos)) $errores[] = 'Los apellidos son requeridos';
 if (empty($usuario) || strlen($usuario) < 4) $errores[] = 'Usuario debe tener al menos 4 caracteres';
+$rCedula = validarCedulaEc($cedula);
+if (!$rCedula['ok']) $errores[] = $rCedula['msg'];
 if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
 if (empty($password) || strlen($password) < 6) $errores[] = 'Contraseña debe tener al menos 6 caracteres';
 if ($password !== $password_confirm) $errores[] = 'Las contraseñas no coinciden';
@@ -84,6 +88,7 @@ try {
             id_cooperativa INT NOT NULL,
             id_administrador INT NOT NULL,
             usuario VARCHAR(50) NOT NULL UNIQUE,
+            cedula VARCHAR(13) NULL,
             nombres VARCHAR(100) NOT NULL,
             apellidos VARCHAR(100) NOT NULL,
             email VARCHAR(100) NOT NULL UNIQUE,
@@ -96,11 +101,17 @@ try {
             observaciones TEXT NULL
         )
     ");
-    
+
     // Verificar si la columna credencial_archivo existe, si no agregarla
     $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'credencial_archivo'");
     if (!$stmt->fetch()) {
         $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER telefono");
+    }
+
+    // Verificar si la columna cedula existe, si no agregarla
+    $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'cedula'");
+    if (!$stmt->fetch()) {
+        $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
     }
 
     // Hash de contraseña
@@ -108,15 +119,16 @@ try {
 
     // Insertar solicitud
     $stmt = $pdo->prepare("
-        INSERT INTO solicitudes_supervisor 
-        (id_cooperativa, id_administrador, usuario, nombres, apellidos, email, password_hash, telefono, credencial_archivo)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO solicitudes_supervisor
+        (id_cooperativa, id_administrador, usuario, cedula, nombres, apellidos, email, password_hash, telefono, credencial_archivo)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
 
     $stmt->execute([
         $cooperativa,
         $administrador,
         $usuario,
+        $cedula,
         $nombres,
         $apellidos,
         $email,
