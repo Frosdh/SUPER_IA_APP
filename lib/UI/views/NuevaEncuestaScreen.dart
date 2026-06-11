@@ -2709,7 +2709,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           contenido: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _botonesYNo(
               valor: _p2EsCliente,
-              onChanged: (v) => _p2EsCliente = v,
+              onChanged: (v) {
+                _p2EsCliente = v;
+                if (v == false) {
+                  // Si no es cliente, la pregunta 3 no aplica: limpiar respuesta.
+                  _p3Satisfaccion = null;
+                  _p3ObsCtrl.clear();
+                }
+              },
             ),
             if (_p2EsCliente == true) ...[
               const SizedBox(height: 12),
@@ -2753,6 +2760,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
 
         // ── PREGUNTA 3 ─────────────────────────────────────────────
+        // Solo se muestra si el prospecto respondió "Sí" en la pregunta 2
+        // (es cliente de la institución). Si respondió "No", no aplica.
+        if (_p2EsCliente == true)
         _tarjeta(
           numero: '3',
           titulo: '¿Qué tan a gusto está con nuestros servicios?',
