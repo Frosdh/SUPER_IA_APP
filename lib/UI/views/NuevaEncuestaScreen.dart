@@ -2809,14 +2809,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           ]),
         ),
 
-        const SizedBox(height: 12),
-        _botonFinalizar(
-          label: 'Continuar con la encuesta',
-          sublabel: 'Ingresar datos personales y del negocio',
-          onTap: () {
-            setState(() => _paso = _Paso.datosCliente);
-          },
-        ),
         const SizedBox(height: 24),
       ],
     );

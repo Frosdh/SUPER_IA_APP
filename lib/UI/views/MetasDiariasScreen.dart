@@ -91,6 +91,12 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
       case 'piggy-bank':       return Icons.savings_outlined;
       case 'wallet':           return Icons.account_balance_wallet_outlined;
       case 'chart-line':       return Icons.show_chart_outlined;
+      case 'walking':          return Icons.directions_walk_outlined;
+      case 'university':       return Icons.account_balance_outlined;
+      case 'coins':            return Icons.monetization_on_outlined;
+      case 'chart-pie':        return Icons.pie_chart_outline;
+      case 'file-invoice-dollar': return Icons.receipt_long_outlined;
+      case 'dollar-sign':      return Icons.attach_money;
       default:                 return Icons.flag_outlined;
     }
   }
@@ -280,6 +286,7 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
     final int meta = (item['meta'] as num?)?.toInt() ?? 0;
     final int avance = (item['avance'] as num?)?.toInt() ?? 0;
     final bool cumplido = item['cumplido'] == true;
+    final bool esMonto = item['es_monto'] == true;
     final int pct = (item['pct'] as num?)?.toInt() ?? 0;
 
     if (meta == 0) return const SizedBox.shrink(); // no mostrar metas no asignadas
@@ -320,7 +327,10 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
                 const SizedBox(height: 4),
                 Row(
                   children: [
-                    Text('$avance / $meta',
+                    Text(
+                        esMonto
+                            ? '\$$avance / \$$meta'
+                            : '$avance / $meta',
                         style: TextStyle(
                             color: color,
                             fontWeight: FontWeight.w700,
