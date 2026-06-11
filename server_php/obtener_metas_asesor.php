@@ -70,12 +70,12 @@ try {
                    m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones,
                    m.meta_visitas,
                    m.meta_monto_creditos_aprobados, m.meta_cuentas_ahorro_abiertas,
-                   m.meta_inversiones_aprobadas, m.meta_creditos_aprobados,
+                   m.meta_inversiones_aprobadas,
                    v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
                    v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
                    v.avance_visitas,
                    v.avance_monto_creditos_aprobados, v.avance_cuentas_ahorro_abiertas,
-                   v.avance_inversiones_aprobadas, v.avance_creditos_aprobados
+                   v.avance_inversiones_aprobadas
             FROM meta_asesor_diaria m
             LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
             WHERE m.asesor_id = ? AND m.fecha = ?
@@ -94,7 +94,7 @@ try {
                         m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones,
                         m.meta_visitas,
                         m.meta_monto_creditos_aprobados, m.meta_cuentas_ahorro_abiertas,
-                        m.meta_inversiones_aprobadas, m.meta_creditos_aprobados
+                        m.meta_inversiones_aprobadas
                  FROM meta_asesor_diaria m
                  WHERE m.asesor_id = ? AND m.fecha = ?
                  LIMIT 1";
@@ -118,7 +118,6 @@ try {
             $meta['avance_monto_creditos_aprobados'] = 0;
             $meta['avance_cuentas_ahorro_abiertas'] = 0;
             $meta['avance_inversiones_aprobadas'] = 0;
-            $meta['avance_creditos_aprobados'] = 0;
         }
     }
 
@@ -136,12 +135,12 @@ try {
              'meta_cuenta_ahorros','meta_cuenta_corriente','meta_inversiones',
              'meta_visitas',
              'meta_monto_creditos_aprobados','meta_cuentas_ahorro_abiertas',
-             'meta_inversiones_aprobadas','meta_creditos_aprobados',
+             'meta_inversiones_aprobadas',
              'avance_encuestas','avance_clientes_nuevos','avance_creditos',
              'avance_cuenta_ahorros','avance_cuenta_corriente','avance_inversiones',
              'avance_visitas',
              'avance_monto_creditos_aprobados','avance_cuentas_ahorro_abiertas',
-             'avance_inversiones_aprobadas','avance_creditos_aprobados'];
+             'avance_inversiones_aprobadas'];
     foreach ($ints as $k) { $meta[$k] = (int)($meta[$k] ?? 0); }
 
     // ── Evaluar estado automáticamente ───────────────────────
@@ -170,7 +169,6 @@ try {
         ['meta_monto_creditos_aprobados','avance_monto_creditos_aprobados'],
         ['meta_cuentas_ahorro_abiertas','avance_cuentas_ahorro_abiertas'],
         ['meta_inversiones_aprobadas','avance_inversiones_aprobadas'],
-        ['meta_creditos_aprobados','avance_creditos_aprobados'],
     ];
     foreach ($pares as [$mk, $ak]) {
         if ($meta[$mk] > 0 && $meta[$ak] < $meta[$mk]) { $cumplio = false; break; }
@@ -209,7 +207,6 @@ try {
         'monto_creditos_aprobados'   => ['label' => 'Monto créditos aprobados (día)', 'icon' => 'dollar-sign', 'monto' => true],
         'cuentas_ahorro_abiertas'    => ['label' => 'Cuentas de ahorro abiertas', 'icon' => 'coins'],
         'inversiones_aprobadas'      => ['label' => 'Inversiones aprobadas',      'icon' => 'chart-pie'],
-        'creditos_aprobados'         => ['label' => 'Créditos aprobados',         'icon' => 'file-invoice-dollar'],
     ];
     $items = [];
     foreach ($labels as $k => $info) {

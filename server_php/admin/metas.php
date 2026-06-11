@@ -58,6 +58,135 @@ if (!$metas_instaladas) {
     ];
 }
 
+// ── Auto-migración de columnas y vista de metas (se ejecuta en cada carga,
+//    no solo al guardar, para que la app móvil no quede rota hasta que el
+//    supervisor presione "Asignar Meta Diaria") ──────────────────────────
+if ($metas_instaladas) {
+    // Auto-crear columnas si faltan (para evitar errores SQLSTATE[42S22])
+    try {
+        $cols_exist = $pdo->query("SHOW COLUMNS FROM meta_asesor_diaria")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('meta_visitas', $cols_exist)) {
+            $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN meta_visitas INT DEFAULT 0 AFTER meta_inversiones");
+            $cols_exist[] = 'meta_visitas';
+        }
+
+        // Si una ejecución previa creó meta_cuentas_corriente_abiertas (concepto antiguo),
+        // renombrarla al nuevo concepto: monto diario de créditos aprobados/desembolsados.
+        if (in_array('meta_cuentas_corriente_abiertas', $cols_exist) && !in_array('meta_monto_creditos_aprobados', $cols_exist)) {
+            $pdo->exec("ALTER TABLE meta_asesor_diaria CHANGE COLUMN meta_cuentas_corriente_abiertas meta_monto_creditos_aprobados INT NOT NULL DEFAULT 0");
+            $cols_exist = array_values(array_diff($cols_exist, ['meta_cuentas_corriente_abiertas']));
+            $cols_exist[] = 'meta_monto_creditos_aprobados';
+        }
+
+        // Nuevos objetivos del día: monto de créditos aprobados, cuentas/inversiones aprobadas
+        $nuevas_metas_cols = [
+            'meta_monto_creditos_aprobados'  => 'meta_visitas',
+            'meta_cuentas_ahorro_abiertas'   => 'meta_monto_creditos_aprobados',
+            'meta_inversiones_aprobadas'     => 'meta_cuentas_ahorro_abiertas',
+        ];
+        foreach ($nuevas_metas_cols as $col => $after) {
+            if (!in_array($col, $cols_exist)) {
+                $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN $col INT NOT NULL DEFAULT 0 AFTER $after");
+                $cols_exist[] = $col;
+            }
+        }
+
+        $cols_asesor = $pdo->query("SHOW COLUMNS FROM asesor")->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('meta_visitas', $cols_asesor)) {
+            $pdo->exec("ALTER TABLE asesor ADD COLUMN meta_visitas INT DEFAULT 0");
+            $cols_asesor[] = 'meta_visitas';
+        }
+        if (in_array('meta_cuentas_corriente_abiertas', $cols_asesor) && !in_array('meta_monto_creditos_aprobados', $cols_asesor)) {
+            $pdo->exec("ALTER TABLE asesor CHANGE COLUMN meta_cuentas_corriente_abiertas meta_monto_creditos_aprobados INT DEFAULT 0");
+            $cols_asesor = array_values(array_diff($cols_asesor, ['meta_cuentas_corriente_abiertas']));
+            $cols_asesor[] = 'meta_monto_creditos_aprobados';
+        }
+        foreach (array_keys($nuevas_metas_cols) as $col) {
+            if (!in_array($col, $cols_asesor)) {
+                $pdo->exec("ALTER TABLE asesor ADD COLUMN $col INT DEFAULT 0");
+                $cols_asesor[] = $col;
+            }
+        }
+    } catch (PDOException $e) {}
+
+    // Auto-actualizar la vista v_meta_asesor_avance agregando los nuevos avances,
+    // preservando el resto de columnas existentes (lee la definición actual y la reescribe).
+    try {
+        $viewCols = $pdo->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'v_meta_asesor_avance'")->fetchAll(PDO::FETCH_COLUMN);
+        if ($viewCols) {
+            // Helper: agrega columnas calculadas a la vista, insertándolas antes del FROM
+            // principal y preservando el resto de la definición actual.
+            $addAvanceCols = function (string $colsTemplate) use ($pdo) {
+                $createRow = $pdo->query("SHOW CREATE VIEW v_meta_asesor_avance")->fetch(PDO::FETCH_ASSOC);
+                $createSql = $createRow['Create View'] ?? '';
+                if (!$createSql || !preg_match('/\bAS\s+(select.*)$/is', $createSql, $mSel)) return;
+                $selectBody = $mSel[1];
+                $patternFrom = '/\bFROM\s+(?:`[^`]+`\.)?`meta_asesor_diaria`(?:\s+(?:AS\s+)?`(\w+)`)?/i';
+                if (!preg_match($patternFrom, $selectBody, $mFrom)) return;
+                $alias = (!empty($mFrom[1])) ? $mFrom[1] : 'meta_asesor_diaria';
+                $a = "`$alias`";
+                $nuevasCols = str_replace('__A__', $a, $colsTemplate);
+                $selectBody2 = preg_replace($patternFrom, $nuevasCols . ' $0', $selectBody, 1, $cntFrom);
+                if ($cntFrom > 0) {
+                    $pdo->exec("CREATE OR REPLACE VIEW v_meta_asesor_avance AS " . $selectBody2);
+                }
+            };
+
+            $colMontoCreditos = "
+  ,(SELECT COALESCE(SUM(`crm`.`monto_aprobado`),0) FROM `credito_proceso` `crm`
+      WHERE `crm`.`asesor_id` = __A__.`asesor_id`
+        AND `crm`.`estado_credito` IN ('aprobado','desembolsado')
+        AND `crm`.`updated_at` IS NOT NULL
+        AND CAST(`crm`.`updated_at` AS DATE) = __A__.`fecha`
+    ) AS `avance_monto_creditos_aprobados`
+";
+
+            if (!in_array('avance_creditos_aprobados', $viewCols)) {
+                // Primera migración: agrega los nuevos avances
+                $addAvanceCols($colMontoCreditos . "
+  ,(SELECT COUNT(0) FROM `ficha_producto` `fpca`
+      WHERE `fpca`.`producto_tipo` = 'cuenta_ahorros'
+        AND `fpca`.`estado_revision` = 'aprobada'
+        AND `fpca`.`revision_at` IS NOT NULL
+        AND CAST(`fpca`.`revision_at` AS DATE) = __A__.`fecha`
+        AND (`fpca`.`asesor_id` COLLATE utf8mb4_unicode_ci = __A__.`asesor_id`
+             OR `fpca`.`usuario_id` COLLATE utf8mb4_unicode_ci = (SELECT `aa2`.`usuario_id` FROM `asesor` `aa2` WHERE `aa2`.`id` = __A__.`asesor_id`))
+    ) AS `avance_cuentas_ahorro_abiertas`
+  ,(SELECT COUNT(0) FROM `ficha_producto` `fpi`
+      WHERE `fpi`.`producto_tipo` = 'inversiones'
+        AND `fpi`.`estado_revision` = 'aprobada'
+        AND `fpi`.`revision_at` IS NOT NULL
+        AND CAST(`fpi`.`revision_at` AS DATE) = __A__.`fecha`
+        AND (`fpi`.`asesor_id` COLLATE utf8mb4_unicode_ci = __A__.`asesor_id`
+             OR `fpi`.`usuario_id` COLLATE utf8mb4_unicode_ci = (SELECT `aa3`.`usuario_id` FROM `asesor` `aa3` WHERE `aa3`.`id` = __A__.`asesor_id`))
+    ) AS `avance_inversiones_aprobadas`
+");
+                $viewCols[] = 'avance_monto_creditos_aprobados';
+                $viewCols[] = 'avance_cuentas_ahorro_abiertas';
+                $viewCols[] = 'avance_inversiones_aprobadas';
+            } elseif (!in_array('avance_monto_creditos_aprobados', $viewCols)) {
+                // Una ejecución previa creó avance_cuentas_corriente_abiertas (concepto antiguo);
+                // se agrega el nuevo avance de monto diario de créditos aprobados/desembolsados.
+                $addAvanceCols($colMontoCreditos);
+                $viewCols[] = 'avance_monto_creditos_aprobados';
+            }
+
+            // Avance de "Visitas": tareas completadas en el día (tabla `tarea`).
+            if (!in_array('avance_visitas', $viewCols)) {
+                $addAvanceCols("
+  ,(SELECT COUNT(0) FROM `tarea` `tv`
+      WHERE `tv`.`asesor_id` = __A__.`asesor_id`
+        AND `tv`.`estado` = 'completada'
+        AND `tv`.`fecha_realizada` IS NOT NULL
+        AND `tv`.`fecha_realizada` = __A__.`fecha`
+    ) AS `avance_visitas`
+");
+                $viewCols[] = 'avance_visitas';
+            }
+        }
+    } catch (PDOException $e) {}
+}
+
 // ── Guardar meta ─────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_instaladas) {
     $asesor_id = $_POST['asesor_id'] ?? '';
@@ -72,7 +201,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
     $m_cca     = (int)($_POST['meta_monto_creditos_aprobados'] ?? 0);
     $m_caa     = (int)($_POST['meta_cuentas_ahorro_abiertas'] ?? 0);
     $m_inva    = (int)($_POST['meta_inversiones_aprobadas'] ?? 0);
-    $m_creap   = (int)($_POST['meta_creditos_aprobados'] ?? 0);
     $obs       = trim($_POST['observaciones'] ?? '');
 
     if ($asesor_id) {
@@ -107,119 +235,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                 }
             }
 
-            // Auto-crear columnas si faltan (para evitar errores SQLSTATE[42S22])
-            try {
-                $cols_exist = $pdo->query("SHOW COLUMNS FROM meta_asesor_diaria")->fetchAll(PDO::FETCH_COLUMN);
-                if (!in_array('meta_visitas', $cols_exist)) {
-                    $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN meta_visitas INT DEFAULT 0 AFTER meta_inversiones");
-                    $cols_exist[] = 'meta_visitas';
-                }
-
-                // Si una ejecución previa creó meta_cuentas_corriente_abiertas (concepto antiguo),
-                // renombrarla al nuevo concepto: monto diario de créditos aprobados/desembolsados.
-                if (in_array('meta_cuentas_corriente_abiertas', $cols_exist) && !in_array('meta_monto_creditos_aprobados', $cols_exist)) {
-                    $pdo->exec("ALTER TABLE meta_asesor_diaria CHANGE COLUMN meta_cuentas_corriente_abiertas meta_monto_creditos_aprobados INT NOT NULL DEFAULT 0");
-                    $cols_exist = array_values(array_diff($cols_exist, ['meta_cuentas_corriente_abiertas']));
-                    $cols_exist[] = 'meta_monto_creditos_aprobados';
-                }
-
-                // Nuevos objetivos del día: monto de créditos aprobados, cuentas/inversiones aprobadas
-                $nuevas_metas_cols = [
-                    'meta_monto_creditos_aprobados'  => 'meta_visitas',
-                    'meta_cuentas_ahorro_abiertas'   => 'meta_monto_creditos_aprobados',
-                    'meta_inversiones_aprobadas'     => 'meta_cuentas_ahorro_abiertas',
-                    'meta_creditos_aprobados'        => 'meta_inversiones_aprobadas',
-                ];
-                foreach ($nuevas_metas_cols as $col => $after) {
-                    if (!in_array($col, $cols_exist)) {
-                        $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN $col INT NOT NULL DEFAULT 0 AFTER $after");
-                        $cols_exist[] = $col;
-                    }
-                }
-
-                $cols_asesor = $pdo->query("SHOW COLUMNS FROM asesor")->fetchAll(PDO::FETCH_COLUMN);
-                if (!in_array('meta_visitas', $cols_asesor)) {
-                    $pdo->exec("ALTER TABLE asesor ADD COLUMN meta_visitas INT DEFAULT 0");
-                    $cols_asesor[] = 'meta_visitas';
-                }
-                if (in_array('meta_cuentas_corriente_abiertas', $cols_asesor) && !in_array('meta_monto_creditos_aprobados', $cols_asesor)) {
-                    $pdo->exec("ALTER TABLE asesor CHANGE COLUMN meta_cuentas_corriente_abiertas meta_monto_creditos_aprobados INT DEFAULT 0");
-                    $cols_asesor = array_values(array_diff($cols_asesor, ['meta_cuentas_corriente_abiertas']));
-                    $cols_asesor[] = 'meta_monto_creditos_aprobados';
-                }
-                foreach (array_keys($nuevas_metas_cols) as $col) {
-                    if (!in_array($col, $cols_asesor)) {
-                        $pdo->exec("ALTER TABLE asesor ADD COLUMN $col INT DEFAULT 0");
-                        $cols_asesor[] = $col;
-                    }
-                }
-            } catch (PDOException $e) {}
-
-            // Auto-actualizar la vista v_meta_asesor_avance agregando los nuevos avances,
-            // preservando el resto de columnas existentes (lee la definición actual y la reescribe).
-            try {
-                $viewCols = $pdo->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'v_meta_asesor_avance'")->fetchAll(PDO::FETCH_COLUMN);
-                if ($viewCols) {
-                    // Helper: agrega columnas calculadas a la vista, insertándolas antes del FROM
-                    // principal y preservando el resto de la definición actual.
-                    $addAvanceCols = function (string $colsTemplate) use ($pdo) {
-                        $createRow = $pdo->query("SHOW CREATE VIEW v_meta_asesor_avance")->fetch(PDO::FETCH_ASSOC);
-                        $createSql = $createRow['Create View'] ?? '';
-                        if (!$createSql || !preg_match('/\bAS\s+(select.*)$/is', $createSql, $mSel)) return;
-                        $selectBody = $mSel[1];
-                        $patternFrom = '/\bFROM\s+(?:`[^`]+`\.)?`meta_asesor_diaria`(?:\s+(?:AS\s+)?`(\w+)`)?/i';
-                        if (!preg_match($patternFrom, $selectBody, $mFrom)) return;
-                        $alias = (!empty($mFrom[1])) ? $mFrom[1] : 'meta_asesor_diaria';
-                        $a = "`$alias`";
-                        $nuevasCols = str_replace('__A__', $a, $colsTemplate);
-                        $selectBody2 = preg_replace($patternFrom, $nuevasCols . ' $0', $selectBody, 1, $cntFrom);
-                        if ($cntFrom > 0) {
-                            $pdo->exec("CREATE OR REPLACE VIEW v_meta_asesor_avance AS " . $selectBody2);
-                        }
-                    };
-
-                    $colMontoCreditos = "
-  ,(SELECT COALESCE(SUM(`crm`.`monto_aprobado`),0) FROM `credito_proceso` `crm`
-      WHERE `crm`.`asesor_id` = __A__.`asesor_id`
-        AND `crm`.`estado_credito` IN ('aprobado','desembolsado')
-        AND `crm`.`updated_at` IS NOT NULL
-        AND CAST(`crm`.`updated_at` AS DATE) = __A__.`fecha`
-    ) AS `avance_monto_creditos_aprobados`
-";
-
-                    if (!in_array('avance_creditos_aprobados', $viewCols)) {
-                        // Primera migración: agrega los 4 nuevos avances
-                        $addAvanceCols($colMontoCreditos . "
-  ,(SELECT COUNT(0) FROM `ficha_producto` `fpca`
-      WHERE `fpca`.`producto_tipo` = 'cuenta_ahorros'
-        AND `fpca`.`estado_revision` = 'aprobada'
-        AND `fpca`.`revision_at` IS NOT NULL
-        AND CAST(`fpca`.`revision_at` AS DATE) = __A__.`fecha`
-        AND (`fpca`.`asesor_id` COLLATE utf8mb4_unicode_ci = __A__.`asesor_id`
-             OR `fpca`.`usuario_id` COLLATE utf8mb4_unicode_ci = (SELECT `aa2`.`usuario_id` FROM `asesor` `aa2` WHERE `aa2`.`id` = __A__.`asesor_id`))
-    ) AS `avance_cuentas_ahorro_abiertas`
-  ,(SELECT COUNT(0) FROM `ficha_producto` `fpi`
-      WHERE `fpi`.`producto_tipo` = 'inversiones'
-        AND `fpi`.`estado_revision` = 'aprobada'
-        AND `fpi`.`revision_at` IS NOT NULL
-        AND CAST(`fpi`.`revision_at` AS DATE) = __A__.`fecha`
-        AND (`fpi`.`asesor_id` COLLATE utf8mb4_unicode_ci = __A__.`asesor_id`
-             OR `fpi`.`usuario_id` COLLATE utf8mb4_unicode_ci = (SELECT `aa3`.`usuario_id` FROM `asesor` `aa3` WHERE `aa3`.`id` = __A__.`asesor_id`))
-    ) AS `avance_inversiones_aprobadas`
-  ,(SELECT COUNT(0) FROM `credito_proceso` `crap`
-      WHERE `crap`.`asesor_id` = __A__.`asesor_id`
-        AND `crap`.`estado_credito` IN ('aprobado','desembolsado')
-        AND `crap`.`updated_at` IS NOT NULL
-        AND CAST(`crap`.`updated_at` AS DATE) = __A__.`fecha`
-    ) AS `avance_creditos_aprobados`
-");
-                    } elseif (!in_array('avance_monto_creditos_aprobados', $viewCols)) {
-                        // Una ejecución previa creó avance_cuentas_corriente_abiertas (concepto antiguo);
-                        // se agrega el nuevo avance de monto diario de créditos aprobados/desembolsados.
-                        $addAvanceCols($colMontoCreditos);
-                    }
-                }
-            } catch (PDOException $e) {}
+            // (La auto-creación de columnas y la migración de la vista
+            // v_meta_asesor_avance ahora se ejecutan arriba, en cada carga
+            // de la página, no solo al guardar.)
 
             // Algunas instalaciones agregaron meta_asesor_diaria.supervisor_id como NOT NULL.
             // Aun así, el filtrado se mantiene por asesor.supervisor_id.
@@ -230,14 +248,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                 'meta_cuenta_ahorros', 'meta_cuenta_corriente', 'meta_inversiones',
                 'meta_visitas',
                 'meta_monto_creditos_aprobados', 'meta_cuentas_ahorro_abiertas',
-                'meta_inversiones_aprobadas', 'meta_creditos_aprobados',
+                'meta_inversiones_aprobadas',
                 'observaciones'
             ];
             $vals = [
                 $asesor_id, $fecha,
                 $m_enc, $m_cli, $m_cre, $m_cah, $m_cco, $m_inv,
                 $m_vis,
-                $m_cca, $m_caa, $m_inva, $m_creap,
+                $m_cca, $m_caa, $m_inva,
                 $obs
             ];
             if ($has_supervisor_id) {
@@ -262,7 +280,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                       meta_monto_creditos_aprobados = VALUES(meta_monto_creditos_aprobados),
                       meta_cuentas_ahorro_abiertas = VALUES(meta_cuentas_ahorro_abiertas),
                       meta_inversiones_aprobadas = VALUES(meta_inversiones_aprobadas),
-                      meta_creditos_aprobados = VALUES(meta_creditos_aprobados),
                       observaciones = VALUES(observaciones)";
 
             if ($has_supervisor_id) {
@@ -282,13 +299,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                     meta_cuenta_ahorros = :m4, meta_cuenta_corriente = :m5, meta_inversiones = :m6,
                     meta_visitas = :m7,
                     meta_monto_creditos_aprobados = :m8, meta_cuentas_ahorro_abiertas = :m9,
-                    meta_inversiones_aprobadas = :m10, meta_creditos_aprobados = :m11
+                    meta_inversiones_aprobadas = :m10
                     WHERE id = :aid");
                 $stBase->execute([
                     ':m1' => $m_enc, ':m2' => $m_cli, ':m3' => $m_cre,
                     ':m4' => $m_cah, ':m5' => $m_cco, ':m6' => $m_inv,
                     ':m7' => $m_vis,
-                    ':m8' => $m_cca, ':m9' => $m_caa, ':m10' => $m_inva, ':m11' => $m_creap,
+                    ':m8' => $m_cca, ':m9' => $m_caa, ':m10' => $m_inva,
                     ':aid' => $asesor_id
                 ]);
             } catch (PDOException $e_base) {
@@ -325,7 +342,7 @@ if ($supervisor_table_id && $metas_instaladas) {
                    v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
                    v.avance_visitas,
                    v.avance_monto_creditos_aprobados, v.avance_cuentas_ahorro_abiertas,
-                   v.avance_inversiones_aprobadas, v.avance_creditos_aprobados
+                   v.avance_inversiones_aprobadas
             FROM meta_asesor_diaria m
             JOIN asesor a ON a.id = m.asesor_id
             JOIN usuario u ON u.id = a.usuario_id
@@ -344,7 +361,7 @@ if ($supervisor_table_id && $metas_instaladas) {
                             0 AS avance_cuenta_ahorros, 0 AS avance_cuenta_corriente, 0 AS avance_inversiones,
                             0 AS avance_visitas,
                             0 AS avance_monto_creditos_aprobados, 0 AS avance_cuentas_ahorro_abiertas,
-                            0 AS avance_inversiones_aprobadas, 0 AS avance_creditos_aprobados
+                            0 AS avance_inversiones_aprobadas
                      FROM meta_asesor_diaria m
                      JOIN asesor a ON a.id = m.asesor_id
                      JOIN usuario u ON u.id = a.usuario_id
@@ -387,7 +404,6 @@ if ($supervisor_table_id && $metas_instaladas) {
                 ['meta_monto_creditos_aprobados','avance_monto_creditos_aprobados'],
                 ['meta_cuentas_ahorro_abiertas','avance_cuentas_ahorro_abiertas'],
                 ['meta_inversiones_aprobadas','avance_inversiones_aprobadas'],
-                ['meta_creditos_aprobados','avance_creditos_aprobados'],
             ];
             $cumplio = true;
             foreach ($pares as [$mk, $ak]) {
@@ -750,10 +766,6 @@ if ($is_admin_gerente) {
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-chart-pie me-1"></i> Inversiones Aprobadas</label>
                                         <input type="number" name="meta_inversiones_aprobadas" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
-                                    <div class="col-4">
-                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-file-invoice-dollar me-1"></i> Créditos Aprobados</label>
-                                        <input type="number" name="meta_creditos_aprobados" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -806,7 +818,6 @@ if ($is_admin_gerente) {
                                 <th class="text-center">Monto Créditos Aprob.</th>
                                 <th class="text-center">Ctas. Ahorro Abiertas</th>
                                 <th class="text-center">Inversiones Aprob.</th>
-                                <th class="text-center">Créditos Aprob.</th>
                                 <th class="text-center">Estado</th>
                             </tr>
                         </thead>
@@ -858,7 +869,6 @@ if ($is_admin_gerente) {
                                 <td class="text-center"><?= $fmtProgressMoney($m['avance_monto_creditos_aprobados'] ?? 0, $m['meta_monto_creditos_aprobados'] ?? 0) ?></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_cuentas_ahorro_abiertas'] ?? 0, $m['meta_cuentas_ahorro_abiertas'] ?? 0) ?></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_inversiones_aprobadas'] ?? 0, $m['meta_inversiones_aprobadas'] ?? 0) ?></td>
-                                <td class="text-center"><?= $fmtProgress($m['avance_creditos_aprobados'] ?? 0, $m['meta_creditos_aprobados'] ?? 0) ?></td>
                                 <td class="text-center">
                                     <span class="badge-premium <?= $estClass ?>"><?= $estLabel ?></span>
                                 </td>
