@@ -78,58 +78,78 @@ try {
                'inversiones','visitas','monto_creditos_aprobados','cuentas_ahorro_abiertas',
                'inversiones_aprobadas'];
 
+    // Detectar dinámicamente qué columnas meta_* existen en meta_asesor_diaria
+    // y qué columnas avance_* existen en v_meta_asesor_avance, para no romper
+    // la consulta si todavía no se han migrado las columnas nuevas.
+    $colsMeta = [];
+    $rcm = $conn->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'meta_asesor_diaria'");
+    if ($rcm) {
+        while ($row = $rcm->fetch_assoc()) { $colsMeta[$row['COLUMN_NAME']] = true; }
+    }
+
+    $colsAvance = [];
+    $existeVista = false;
+    $rca = $conn->query("SELECT COLUMN_NAME FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'v_meta_asesor_avance'");
+    if ($rca) {
+        while ($row = $rca->fetch_assoc()) { $colsAvance[$row['COLUMN_NAME']] = true; $existeVista = true; }
+    }
+
     $selectMeta = [];
-    $selectAv   = [];
     foreach ($campos as $c) {
-        $selectMeta[] = "COALESCE(SUM(m.meta_$c),0) AS meta_$c";
-        $selectAv[]   = "COALESCE(SUM(v.avance_$c),0) AS avance_$c";
+        if (isset($colsMeta["meta_$c"])) {
+            $selectMeta[] = "COALESCE(SUM(m.meta_$c),0) AS meta_$c";
+        }
+    }
+
+    $selectAv = [];
+    if ($existeVista) {
+        foreach ($campos as $c) {
+            if (isset($colsAvance["avance_$c"])) {
+                $selectAv[] = "COALESCE(SUM(v.avance_$c),0) AS avance_$c";
+            }
+        }
     }
 
     $datos = null;
 
-    // Intento principal: con la vista de avances
-    $sql = "SELECT " . implode(', ', array_merge($selectMeta, $selectAv)) . ",
-                   COUNT(*) AS dias_asignados,
-                   MAX(m.observaciones) AS observaciones
-            FROM meta_asesor_diaria m
-            LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
-            WHERE m.asesor_id = ? AND m.fecha BETWEEN ? AND ?";
+    if (!empty($selectMeta)) {
+        if (!empty($selectAv)) {
+            $sql = "SELECT " . implode(', ', array_merge($selectMeta, $selectAv)) . ",
+                           COUNT(*) AS dias_asignados,
+                           MAX(m.observaciones) AS observaciones
+                    FROM meta_asesor_diaria m
+                    LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
+                    WHERE m.asesor_id = ? AND m.fecha BETWEEN ? AND ?";
+        } else {
+            // Sin vista de avances (o sin columnas avance_* compatibles): solo metas
+            $sql = "SELECT " . implode(', ', $selectMeta) . ",
+                           COUNT(*) AS dias_asignados,
+                           MAX(m.observaciones) AS observaciones
+                    FROM meta_asesor_diaria m
+                    WHERE m.asesor_id = ? AND m.fecha BETWEEN ? AND ?";
+        }
 
-    $st = null;
-    try {
-        $st = $conn->prepare($sql);
-    } catch (Throwable $e) {
-        $st = false;
+        $st = null;
+        try {
+            $st = $conn->prepare($sql);
+        } catch (Throwable $e) {
+            $st = false;
+        }
+
+        if ($st) {
+            $st->bind_param('sss', $asesor_id, $fecha_inicio, $fecha_fin);
+            $st->execute();
+            $res = $st->get_result();
+            $datos = $res ? $res->fetch_assoc() : null;
+            $st->close();
+        }
     }
 
-    if ($st) {
-        $st->bind_param('sss', $asesor_id, $fecha_inicio, $fecha_fin);
-        $st->execute();
-        $res = $st->get_result();
-        $datos = $res ? $res->fetch_assoc() : null;
-        $st->close();
-    } else {
-        // Fallback sin vista de avances: solo metas, avances quedan en 0
-        $sql2 = "SELECT " . implode(', ', $selectMeta) . ",
-                        COUNT(*) AS dias_asignados,
-                        MAX(observaciones) AS observaciones
-                 FROM meta_asesor_diaria
-                 WHERE asesor_id = ? AND fecha BETWEEN ? AND ?";
-        $st2 = null;
-        try {
-            $st2 = $conn->prepare($sql2);
-        } catch (Throwable $e) {
-            $st2 = false;
-        }
-        if ($st2) {
-            $st2->bind_param('sss', $asesor_id, $fecha_inicio, $fecha_fin);
-            $st2->execute();
-            $res2 = $st2->get_result();
-            $datos = $res2 ? $res2->fetch_assoc() : null;
-            $st2->close();
-            if ($datos) {
-                foreach ($campos as $c) { $datos["avance_$c"] = 0; }
-            }
+    // Completar con 0 los campos meta_*/avance_* que no existan o no se hayan consultado
+    if ($datos) {
+        foreach ($campos as $c) {
+            if (!isset($datos["meta_$c"]))   { $datos["meta_$c"] = 0; }
+            if (!isset($datos["avance_$c"])) { $datos["avance_$c"] = 0; }
         }
     }
 
