@@ -80,7 +80,13 @@ try {
             LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
             WHERE m.asesor_id = ? AND m.fecha = ?
             LIMIT 1";
-    $st = $conn->prepare($sql);
+    $st = null;
+    try {
+        $st = $conn->prepare($sql);
+    } catch (Throwable $e) {
+        $st = false;
+    }
+    
     if ($st) {
         $st->bind_param('ss', $asesor_id, $fecha);
         $st->execute();
@@ -88,19 +94,23 @@ try {
         $meta = $res ? $res->fetch_assoc() : null;
         $st->close();
     } else {
-        // Fallback: sin avances (avances se devuelven como 0)
-        $sql2 = "SELECT m.id AS meta_id, m.asesor_id, m.fecha, m.estado, m.observaciones,
-                        m.meta_encuestas, m.meta_clientes_nuevos, m.meta_creditos,
-                        m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones,
-                        m.meta_visitas,
-                        m.meta_monto_creditos_aprobados, m.meta_cuentas_ahorro_abiertas,
-                        m.meta_inversiones_aprobadas
-                 FROM meta_asesor_diaria m
-                 WHERE m.asesor_id = ? AND m.fecha = ?
-                 LIMIT 1";
-        $st2 = $conn->prepare($sql2);
+        // Fallback: sin avances (avances se devuelven como 0) o si faltan columnas específicas
+        $sql2 = "SELECT *, id AS meta_id FROM meta_asesor_diaria WHERE asesor_id = ? AND fecha = ? LIMIT 1";
+        $st2 = null;
+        try {
+            $st2 = $conn->prepare($sql2);
+        } catch (Throwable $e) {
+            $st2 = false;
+        }
+        
         if (!$st2) {
-            throw new Exception('Error preparando consulta de metas: ' . $conn->error);
+            // Si incluso el fallback falla, retornar que no hay meta
+            resp(true, [
+                'tiene_meta' => false,
+                'meta'       => null,
+                'fecha'      => $fecha,
+                'mensaje_ui' => 'Ocurrió un error leyendo las metas (columnas faltantes). Pide al administrador que asigne la meta nuevamente.'
+            ]);
         }
         $st2->bind_param('ss', $asesor_id, $fecha);
         $st2->execute();

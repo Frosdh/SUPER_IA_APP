@@ -1,9 +1,11 @@
 // ============================================================
 // MetasDiariasScreen.dart
-// Muestra al asesor las metas diarias que le asignó el supervisor.
+// Muestra al asesor sus metas, en dos pestañas:
+//   - "Metas del día": metas diarias asignadas por el supervisor.
+//   - "Metas del mes": suma de metas del mes y % de cumplimiento.
 // Estados posibles: pendiente / completado / no_cumplido
-// El backend (obtener_metas_asesor.php) actualiza el estado
-// automáticamente si ya son las 18:00 o el asesor cumplió.
+// El backend actualiza el estado automáticamente si ya son
+// las 18:00 (día) o si el mes ya cerró (mes).
 // ============================================================
 import 'dart:async';
 import 'dart:convert';
@@ -20,25 +22,48 @@ class MetasDiariasScreen extends StatefulWidget {
   State<MetasDiariasScreen> createState() => _MetasDiariasScreenState();
 }
 
-class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
+class _MetasDiariasScreenState extends State<MetasDiariasScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  // ── Estado: metas del día ──────────────────────────────────
   bool _loading = true;
   String? _error;
   bool _tieneMeta = false;
   String _mensajeUI = '';
   Map<String, dynamic>? _meta;
+
+  // ── Estado: metas del mes ──────────────────────────────────
+  bool _loadingMes = true;
+  String? _errorMes;
+  bool _tieneMetaMes = false;
+  String _mensajeUIMes = '';
+  Map<String, dynamic>? _metaMes;
+
   Timer? _autoRefresh;
+
+  static const _meses = [
+    '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _cargar();
+    _cargarMes();
     // Refresca cada 60s para ir actualizando el avance
-    _autoRefresh = Timer.periodic(const Duration(seconds: 60), (_) => _cargar());
+    _autoRefresh = Timer.periodic(const Duration(seconds: 60), (_) {
+      _cargar();
+      _cargarMes();
+    });
   }
 
   @override
   void dispose() {
     _autoRefresh?.cancel();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -80,6 +105,47 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
       setState(() => _error = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _cargarMes() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingMes = true;
+      _errorMes = null;
+    });
+
+    try {
+      final asesorId = await AuthPrefs.getAsesorId();
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final mesActual = DateTime.now().toIso8601String().substring(0, 7); // YYYY-MM
+
+      final url = Uri.parse('${Constants.apiBaseUrl}/obtener_metas_mes_asesor.php');
+      final resp = await http.post(url, body: {
+        if (asesorId.isNotEmpty) 'asesor_id': asesorId,
+        if (usuarioId.isNotEmpty) 'usuario_id': usuarioId,
+        'mes': mesActual,
+      }).timeout(const Duration(seconds: 20));
+
+      final decoded = json.decode(resp.body);
+      if (decoded is! Map) throw Exception('Respuesta inválida');
+      if (decoded['status'] != 'success') {
+        throw Exception(decoded['message']?.toString() ?? 'Error');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _tieneMetaMes = decoded['tiene_meta'] == true;
+        _mensajeUIMes = decoded['mensaje_ui']?.toString() ?? '';
+        _metaMes = _tieneMetaMes
+            ? Map<String, dynamic>.from(decoded['meta'] as Map)
+            : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _errorMes = e.toString());
+    } finally {
+      if (mounted) setState(() => _loadingMes = false);
     }
   }
 
@@ -130,51 +196,91 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF4F6F9),
       appBar: AppBar(
-        title: const Text('Metas del día'),
+        title: const Text('Mis Metas'),
         backgroundColor: const Color(0xFF0A2748),
         foregroundColor: Colors.white,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loading ? null : _cargar,
+            onPressed: (_loading || _loadingMes)
+                ? null
+                : () {
+                    _cargar();
+                    _cargarMes();
+                  },
           ),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: const Color(0xFFFFDD00),
+          indicatorWeight: 3,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white60,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+          tabs: const [
+            Tab(text: 'METAS DEL DÍA'),
+            Tab(text: 'METAS DEL MES'),
+          ],
+        ),
       ),
-      body: RefreshIndicator(
-        onRefresh: _cargar,
-        child: _loading && _meta == null
-            ? const Center(child: CircularProgressIndicator())
-            : _error != null
-                ? _buildError()
-                : !_tieneMeta
-                    ? _buildNoMeta()
-                    : _buildMeta(),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // ── Pestaña: Metas del día ─────────────────────────
+          RefreshIndicator(
+            onRefresh: _cargar,
+            child: _loading && _meta == null
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? _buildError(_error!, _cargar)
+                    : !_tieneMeta
+                        ? _buildNoMeta(
+                            _mensajeUI,
+                            'El supervisor aún no te asignó metas para hoy.',
+                          )
+                        : _buildMeta(),
+          ),
+          // ── Pestaña: Metas del mes ──────────────────────────
+          RefreshIndicator(
+            onRefresh: _cargarMes,
+            child: _loadingMes && _metaMes == null
+                ? const Center(child: CircularProgressIndicator())
+                : _errorMes != null
+                    ? _buildError(_errorMes!, _cargarMes)
+                    : !_tieneMetaMes
+                        ? _buildNoMeta(
+                            _mensajeUIMes,
+                            'El supervisor aún no te asignó metas para este mes.',
+                          )
+                        : _buildMetaMes(),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildError() => ListView(
+  Widget _buildError(String mensaje, Future<void> Function() onRetry) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 80),
           const Icon(Icons.error_outline, size: 48, color: Colors.redAccent),
           const SizedBox(height: 12),
-          Text(_error ?? '', textAlign: TextAlign.center),
+          Text(mensaje, textAlign: TextAlign.center),
           const SizedBox(height: 16),
-          ElevatedButton(onPressed: _cargar, child: const Text('Reintentar')),
+          Center(
+            child: ElevatedButton(onPressed: onRetry, child: const Text('Reintentar')),
+          ),
         ],
       );
 
-  Widget _buildNoMeta() => ListView(
+  Widget _buildNoMeta(String mensajeUI, String fallback) => ListView(
         padding: const EdgeInsets.all(24),
         children: [
           const SizedBox(height: 80),
           const Icon(Icons.inbox_outlined, size: 56, color: Colors.grey),
           const SizedBox(height: 12),
           Text(
-            _mensajeUI.isNotEmpty
-                ? _mensajeUI
-                : 'El supervisor aún no te asignó metas para hoy.',
+            mensajeUI.isNotEmpty ? mensajeUI : fallback,
             textAlign: TextAlign.center,
             style: const TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
           ),
@@ -195,90 +301,158 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // Tarjeta resumen con estado
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFF0A2748), Color(0xFF123A6D)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: const [
-              BoxShadow(color: Color(0x22000000), blurRadius: 14, offset: Offset(0, 6)),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(_estadoIcon(estado), color: color, size: 30),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      _estadoLabel(estado),
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 18,
-                        letterSpacing: .6,
-                      ),
-                    ),
-                  ),
-                  Text('$pctTotal%',
-                      style: const TextStyle(
-                          color: Color(0xFFFFDD00),
-                          fontWeight: FontWeight.w900,
-                          fontSize: 28)),
-                ],
-              ),
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: pctTotal / 100,
-                  minHeight: 10,
-                  backgroundColor: Colors.white24,
-                  color: const Color(0xFFFFDD00),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                estado == 'pendiente'
-                    ? 'Tienes hasta las 6:00 pm para cumplir las metas.'
-                    : estado == 'completado'
-                        ? '¡Felicitaciones! Cumpliste todas las metas del día.'
-                        : 'El día cerró sin completar todas las metas.',
-                style: const TextStyle(color: Colors.white70, fontSize: 13),
-              ),
-              if (obs.isNotEmpty) ...[
-                const Divider(color: Colors.white24, height: 20),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.sticky_note_2_outlined,
-                        color: Colors.white70, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(obs,
-                          style: const TextStyle(color: Colors.white, fontSize: 13)),
-                    ),
-                  ],
-                ),
-              ],
-            ],
-          ),
+        _buildResumenCard(
+          estado: estado,
+          pctTotal: pctTotal,
+          color: color,
+          descripcion: estado == 'pendiente'
+              ? 'Tienes hasta las 6:00 pm para cumplir las metas.'
+              : estado == 'completado'
+                  ? '¡Felicitaciones! Cumpliste todas las metas del día.'
+                  : 'El día cerró sin completar todas las metas.',
+          obs: obs,
         ),
-
         const SizedBox(height: 18),
-
-        // Lista de metas individuales
         ...items.map(_buildItemMeta).toList(),
-
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  Widget _buildMetaMes() {
+    final meta = _metaMes!;
+    final estado = meta['estado']?.toString() ?? 'pendiente';
+    final pctTotal = (meta['pct_total'] as num?)?.toInt() ?? 0;
+    final items = (meta['items'] as List?)
+            ?.map((e) => Map<String, dynamic>.from(e as Map))
+            .toList() ??
+        [];
+    final obs = meta['observaciones']?.toString() ?? '';
+    final color = _estadoColor(estado);
+    final diasAsignados = (meta['dias_asignados'] as num?)?.toInt() ?? 0;
+
+    String mesLabel = '';
+    final mesStr = meta['mes']?.toString() ?? '';
+    if (mesStr.contains('-')) {
+      final partes = mesStr.split('-');
+      final mNum = int.tryParse(partes[1]) ?? 0;
+      if (mNum >= 1 && mNum <= 12) {
+        mesLabel = '${_meses[mNum]} ${partes[0]}';
+      }
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _buildResumenCard(
+          estado: estado,
+          pctTotal: pctTotal,
+          color: color,
+          titulo: mesLabel.isNotEmpty ? 'Meta de $mesLabel' : null,
+          descripcion: estado == 'completado'
+              ? '¡Felicitaciones! Cumpliste todas las metas del mes.'
+              : estado == 'no_cumplido'
+                  ? 'El mes cerró sin completar todas las metas.'
+                  : 'Progreso acumulado en los $diasAsignados día(s) con meta asignada este mes.',
+          obs: obs,
+        ),
+        const SizedBox(height: 18),
+        ...items.map(_buildItemMeta).toList(),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _buildResumenCard({
+    required String estado,
+    required int pctTotal,
+    required Color color,
+    required String descripcion,
+    String? titulo,
+    String obs = '',
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0A2748), Color(0xFF123A6D)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: const [
+          BoxShadow(color: Color(0x22000000), blurRadius: 14, offset: Offset(0, 6)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (titulo != null) ...[
+            Text(
+              titulo,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+                letterSpacing: .8,
+              ),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Row(
+            children: [
+              Icon(_estadoIcon(estado), color: color, size: 30),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  _estadoLabel(estado),
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    letterSpacing: .6,
+                  ),
+                ),
+              ),
+              Text('$pctTotal%',
+                  style: const TextStyle(
+                      color: Color(0xFFFFDD00),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 28)),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: LinearProgressIndicator(
+              value: pctTotal / 100,
+              minHeight: 10,
+              backgroundColor: Colors.white24,
+              color: const Color(0xFFFFDD00),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            descripcion,
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          if (obs.isNotEmpty) ...[
+            const Divider(color: Colors.white24, height: 20),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.sticky_note_2_outlined,
+                    color: Colors.white70, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(obs,
+                      style: const TextStyle(color: Colors.white, fontSize: 13)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 

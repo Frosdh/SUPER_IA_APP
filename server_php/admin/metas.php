@@ -191,6 +191,7 @@ if ($metas_instaladas) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_instaladas) {
     $asesor_id = $_POST['asesor_id'] ?? '';
     $fecha     = $_POST['fecha'] ?? date('Y-m-d');
+    $modo_meta = ($_POST['modo_meta'] ?? 'dia') === 'mes' ? 'mes' : 'dia';
     $m_enc     = (int)($_POST['meta_encuestas'] ?? 0);
     $m_cli     = (int)($_POST['meta_clientes_nuevos'] ?? 0);
     $m_cre     = (int)($_POST['meta_creditos'] ?? 0);
@@ -219,7 +220,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                 }
             }
 
-            
+
             // Compatibilidad: algunas instalaciones no tienen actualizado_at
             $has_actualizado_at = false;
             try {
@@ -242,77 +243,184 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
             // Algunas instalaciones agregaron meta_asesor_diaria.supervisor_id como NOT NULL.
             // Aun así, el filtrado se mantiene por asesor.supervisor_id.
 
-            $cols = [
-                'asesor_id', 'fecha',
-                'meta_encuestas', 'meta_clientes_nuevos', 'meta_creditos',
-                'meta_cuenta_ahorros', 'meta_cuenta_corriente', 'meta_inversiones',
-                'meta_visitas',
-                'meta_monto_creditos_aprobados', 'meta_cuentas_ahorro_abiertas',
-                'meta_inversiones_aprobadas',
-                'observaciones'
+            // Closure: guarda/actualiza la meta de un asesor para UNA fecha concreta
+            $guardarMetaDia = function (string $fAsesorId, string $fFecha, array $v, string $fObs) use ($pdo, $has_supervisor_id, $has_actualizado_at, $supervisor_table_id) {
+                $cols = [
+                    'asesor_id', 'fecha',
+                    'meta_encuestas', 'meta_clientes_nuevos', 'meta_creditos',
+                    'meta_cuenta_ahorros', 'meta_cuenta_corriente', 'meta_inversiones',
+                    'meta_visitas',
+                    'meta_monto_creditos_aprobados', 'meta_cuentas_ahorro_abiertas',
+                    'meta_inversiones_aprobadas',
+                    'observaciones'
+                ];
+                $vals = [
+                    $fAsesorId, $fFecha,
+                    $v['meta_encuestas'], $v['meta_clientes_nuevos'], $v['meta_creditos'],
+                    $v['meta_cuenta_ahorros'], $v['meta_cuenta_corriente'], $v['meta_inversiones'],
+                    $v['meta_visitas'],
+                    $v['meta_monto_creditos_aprobados'], $v['meta_cuentas_ahorro_abiertas'],
+                    $v['meta_inversiones_aprobadas'],
+                    $fObs
+                ];
+                if ($has_supervisor_id) {
+                    $cols[] = 'supervisor_id';
+                    $vals[] = (string)$supervisor_table_id;
+                }
+
+                $placeholders = implode(',', array_fill(0, count($cols), '?'));
+                $colList = implode(', ', $cols);
+
+                // NOTA: las metas numéricas se ACUMULAN sobre lo que ya existía para
+                // ese asesor/fecha (en vez de reemplazarlo). Así, si ya había una
+                // meta "por día" y luego se asigna una meta "por mes" (que se
+                // reparte entre los días laborales), ambas se suman para ese día.
+                $sql = "INSERT INTO meta_asesor_diaria ($colList)
+                        VALUES ($placeholders)
+                        ON DUPLICATE KEY UPDATE
+                          estado = IF(estado IN (\"completado\",\"no_cumplido\"), estado, \"pendiente\"),
+                          meta_encuestas = meta_encuestas + VALUES(meta_encuestas),
+                          meta_clientes_nuevos = meta_clientes_nuevos + VALUES(meta_clientes_nuevos),
+                          meta_creditos = meta_creditos + VALUES(meta_creditos),
+                          meta_cuenta_ahorros = meta_cuenta_ahorros + VALUES(meta_cuenta_ahorros),
+                          meta_cuenta_corriente = meta_cuenta_corriente + VALUES(meta_cuenta_corriente),
+                          meta_inversiones = meta_inversiones + VALUES(meta_inversiones),
+                          meta_visitas = meta_visitas + VALUES(meta_visitas),
+                          meta_monto_creditos_aprobados = meta_monto_creditos_aprobados + VALUES(meta_monto_creditos_aprobados),
+                          meta_cuentas_ahorro_abiertas = meta_cuentas_ahorro_abiertas + VALUES(meta_cuentas_ahorro_abiertas),
+                          meta_inversiones_aprobadas = meta_inversiones_aprobadas + VALUES(meta_inversiones_aprobadas),
+                          observaciones = IF(VALUES(observaciones) = '', observaciones, IF(observaciones = '' OR observaciones IS NULL, VALUES(observaciones), CONCAT(observaciones, '\\n---\\n', VALUES(observaciones))))";
+
+                if ($has_supervisor_id) {
+                    $sql .= ", supervisor_id = VALUES(supervisor_id)";
+                }
+                if ($has_actualizado_at) {
+                    $sql .= ", actualizado_at = CURRENT_TIMESTAMP";
+                }
+
+                $st = $pdo->prepare($sql);
+                $st->execute($vals);
+            };
+
+            // Reparte un total entre $n días: el residuo se asigna a los primeros días
+            $distribuirMeta = function (int $total, int $n): array {
+                if ($n <= 0) return [];
+                $base  = intdiv($total, $n);
+                $resto = $total % $n;
+                $out = [];
+                for ($i = 0; $i < $n; $i++) {
+                    $out[] = $base + ($i < $resto ? 1 : 0);
+                }
+                return $out;
+            };
+
+            $valoresIngresados = [
+                'meta_encuestas'                => $m_enc,
+                'meta_clientes_nuevos'           => $m_cli,
+                'meta_creditos'                  => $m_cre,
+                'meta_cuenta_ahorros'            => $m_cah,
+                'meta_cuenta_corriente'          => $m_cco,
+                'meta_inversiones'               => $m_inv,
+                'meta_visitas'                   => $m_vis,
+                'meta_monto_creditos_aprobados'  => $m_cca,
+                'meta_cuentas_ahorro_abiertas'   => $m_caa,
+                'meta_inversiones_aprobadas'     => $m_inva,
             ];
-            $vals = [
-                $asesor_id, $fecha,
-                $m_enc, $m_cli, $m_cre, $m_cah, $m_cco, $m_inv,
-                $m_vis,
-                $m_cca, $m_caa, $m_inva,
-                $obs
-            ];
-            if ($has_supervisor_id) {
-                $cols[] = 'supervisor_id';
-                $vals[] = (string)$supervisor_table_id;
+
+            if ($modo_meta === 'mes') {
+                // ── Modo "Por Mes": los valores ingresados son TOTALES del mes.
+                // Se reparten entre los días lunes a viernes que quedan desde
+                // la fecha indicada hasta el fin de ese mes.
+                $inicio = new DateTime($fecha);
+                $fin    = new DateTime($inicio->format('Y-m-01'));
+                $fin->modify('last day of this month');
+
+                $diasLaborales = [];
+                $cursor = clone $inicio;
+                while ($cursor <= $fin) {
+                    $dow = (int)$cursor->format('N'); // 1=lunes ... 7=domingo
+                    if ($dow >= 1 && $dow <= 5) {
+                        $diasLaborales[] = $cursor->format('Y-m-d');
+                    }
+                    $cursor->modify('+1 day');
+                }
+
+                $numDias = count($diasLaborales);
+
+                if ($numDias === 0) {
+                    $flash = ['type' => 'error', 'msg' => 'No quedan días laborales (lunes a viernes) en el mes a partir de la fecha indicada.'];
+                } else {
+                    // Reparte cada objetivo entre los días laborales restantes
+                    $distribuciones = [];
+                    foreach ($valoresIngresados as $campo => $total) {
+                        $distribuciones[$campo] = $distribuirMeta($total, $numDias);
+                    }
+
+                    foreach ($diasLaborales as $idx => $fDia) {
+                        $vDia = [];
+                        foreach ($valoresIngresados as $campo => $total) {
+                            $vDia[$campo] = $distribuciones[$campo][$idx];
+                        }
+                        $guardarMetaDia((string)$asesor_id, $fDia, $vDia, $obs);
+                    }
+
+                    // Actualizar metas base del asesor con el reparto del primer día generado
+                    try {
+                        $stBase = $pdo->prepare("UPDATE asesor SET
+                            meta_encuestas = :m1, meta_clientes_nuevos = :m2, meta_creditos = :m3,
+                            meta_cuenta_ahorros = :m4, meta_cuenta_corriente = :m5, meta_inversiones = :m6,
+                            meta_visitas = :m7,
+                            meta_monto_creditos_aprobados = :m8, meta_cuentas_ahorro_abiertas = :m9,
+                            meta_inversiones_aprobadas = :m10
+                            WHERE id = :aid");
+                        $stBase->execute([
+                            ':m1' => $distribuciones['meta_encuestas'][0],
+                            ':m2' => $distribuciones['meta_clientes_nuevos'][0],
+                            ':m3' => $distribuciones['meta_creditos'][0],
+                            ':m4' => $distribuciones['meta_cuenta_ahorros'][0],
+                            ':m5' => $distribuciones['meta_cuenta_corriente'][0],
+                            ':m6' => $distribuciones['meta_inversiones'][0],
+                            ':m7' => $distribuciones['meta_visitas'][0],
+                            ':m8' => $distribuciones['meta_monto_creditos_aprobados'][0],
+                            ':m9' => $distribuciones['meta_cuentas_ahorro_abiertas'][0],
+                            ':m10' => $distribuciones['meta_inversiones_aprobadas'][0],
+                            ':aid' => $asesor_id
+                        ]);
+                    } catch (PDOException $e_base) {}
+
+                    $flash = [
+                        'type' => 'success',
+                        'msg'  => "Meta mensual asignada correctamente. Se repartió entre <b>{$numDias} día(s) laborales</b> (lunes a viernes), del " .
+                                  date('d/m/Y', strtotime($diasLaborales[0])) . " al " . date('d/m/Y', strtotime($diasLaborales[$numDias - 1])) .
+                                  ". Si esos días ya tenían metas asignadas, esta cantidad se <b>sumó</b> a lo existente."
+                    ];
+                }
+            } else {
+                // ── Modo "Por Día" (comportamiento original): se guarda tal cual para la fecha indicada
+                $guardarMetaDia((string)$asesor_id, $fecha, $valoresIngresados, $obs);
+
+                // También actualizar las metas base en la tabla asesor (como solicitó el usuario)
+                try {
+                    $stBase = $pdo->prepare("UPDATE asesor SET
+                        meta_encuestas = :m1, meta_clientes_nuevos = :m2, meta_creditos = :m3,
+                        meta_cuenta_ahorros = :m4, meta_cuenta_corriente = :m5, meta_inversiones = :m6,
+                        meta_visitas = :m7,
+                        meta_monto_creditos_aprobados = :m8, meta_cuentas_ahorro_abiertas = :m9,
+                        meta_inversiones_aprobadas = :m10
+                        WHERE id = :aid");
+                    $stBase->execute([
+                        ':m1' => $m_enc, ':m2' => $m_cli, ':m3' => $m_cre,
+                        ':m4' => $m_cah, ':m5' => $m_cco, ':m6' => $m_inv,
+                        ':m7' => $m_vis,
+                        ':m8' => $m_cca, ':m9' => $m_caa, ':m10' => $m_inva,
+                        ':aid' => $asesor_id
+                    ]);
+                } catch (PDOException $e_base) {
+                    // Si las columnas no existen en asesor, ignorar o manejar silenciosamente
+                }
+
+                $flash = ['type' => 'success', 'msg' => 'Meta asignada correctamente. Si ese día ya tenía una meta, esta cantidad se <b>sumó</b> a lo existente.'];
             }
-
-            $placeholders = implode(',', array_fill(0, count($cols), '?'));
-            $colList = implode(', ', $cols);
-
-            $sql = "INSERT INTO meta_asesor_diaria ($colList)
-                    VALUES ($placeholders)
-                    ON DUPLICATE KEY UPDATE
-                      estado = IF(estado IN (\"completado\",\"no_cumplido\"), estado, \"pendiente\"),
-                      meta_encuestas = VALUES(meta_encuestas),
-                      meta_clientes_nuevos = VALUES(meta_clientes_nuevos),
-                      meta_creditos = VALUES(meta_creditos),
-                      meta_cuenta_ahorros = VALUES(meta_cuenta_ahorros),
-                      meta_cuenta_corriente = VALUES(meta_cuenta_corriente),
-                      meta_inversiones = VALUES(meta_inversiones),
-                      meta_visitas = VALUES(meta_visitas),
-                      meta_monto_creditos_aprobados = VALUES(meta_monto_creditos_aprobados),
-                      meta_cuentas_ahorro_abiertas = VALUES(meta_cuentas_ahorro_abiertas),
-                      meta_inversiones_aprobadas = VALUES(meta_inversiones_aprobadas),
-                      observaciones = VALUES(observaciones)";
-
-            if ($has_supervisor_id) {
-                $sql .= ", supervisor_id = VALUES(supervisor_id)";
-            }
-            if ($has_actualizado_at) {
-                $sql .= ", actualizado_at = CURRENT_TIMESTAMP";
-            }
-
-            $st = $pdo->prepare($sql);
-            $st->execute($vals);
-
-            // También actualizar las metas base en la tabla asesor (como solicitó el usuario)
-            try {
-                $stBase = $pdo->prepare("UPDATE asesor SET
-                    meta_encuestas = :m1, meta_clientes_nuevos = :m2, meta_creditos = :m3,
-                    meta_cuenta_ahorros = :m4, meta_cuenta_corriente = :m5, meta_inversiones = :m6,
-                    meta_visitas = :m7,
-                    meta_monto_creditos_aprobados = :m8, meta_cuentas_ahorro_abiertas = :m9,
-                    meta_inversiones_aprobadas = :m10
-                    WHERE id = :aid");
-                $stBase->execute([
-                    ':m1' => $m_enc, ':m2' => $m_cli, ':m3' => $m_cre,
-                    ':m4' => $m_cah, ':m5' => $m_cco, ':m6' => $m_inv,
-                    ':m7' => $m_vis,
-                    ':m8' => $m_cca, ':m9' => $m_caa, ':m10' => $m_inva,
-                    ':aid' => $asesor_id
-                ]);
-            } catch (PDOException $e_base) {
-                // Si las columnas no existen en asesor, ignorar o manejar silenciosamente
-            }
-
-            $flash = ['type' => 'success', 'msg' => 'Meta asignada correctamente'];
         } catch (PDOException $e) {
             $flash = ['type' => 'error', 'msg' => 'Error: ' . $e->getMessage()];
         }
@@ -700,8 +808,24 @@ if ($is_admin_gerente) {
                 <span class="badge-premium badge-navy-soft">Nueva Asignación</span>
             </div>
             <div class="section-body">
-                <form method="post" action="metas.php">
+                <form method="post" action="metas.php" id="formAsignarMeta">
                     <div class="row g-4">
+                        <div class="col-12">
+                            <div class="d-flex flex-wrap align-items-center gap-3 p-3" style="background:#f8fafc; border-radius:14px; border:1px solid #e2e8f0;">
+                                <span class="form-label fw-bold small text-muted mb-0 text-uppercase"><i class="fas fa-sliders-h me-1"></i> Tipo de Asignación:</span>
+                                <div class="btn-group" role="group" aria-label="Tipo de asignación">
+                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaDia" value="dia" checked autocomplete="off" onchange="cambiarModoMeta()">
+                                    <label class="btn btn-outline-primary" for="modoMetaDia" style="border-radius:10px 0 0 10px;"><i class="fas fa-calendar-day me-1"></i> Por Día</label>
+
+                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaMes" value="mes" autocomplete="off" onchange="cambiarModoMeta()">
+                                    <label class="btn btn-outline-primary" for="modoMetaMes" style="border-radius:0 10px 10px 0;"><i class="fas fa-calendar-alt me-1"></i> Por Mes</label>
+                                </div>
+                                <div id="hintModoMes" class="small text-muted mb-0" style="display:none; flex:1 1 260px;">
+                                    <i class="fas fa-circle-info text-warning me-1"></i>
+                                    Los valores de <b>Objetivos</b> serán el <b>total del mes</b> y se repartirán automáticamente entre los días <b>lunes a viernes</b> restantes del mes, a partir de la fecha indicada. Si algún día ya tenía una meta asignada, lo nuevo se <b>suma</b> a lo existente (no lo reemplaza).
+                                </div>
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <div class="form-section h-100">
                                 <h4><i class="fas fa-user-tie"></i> Información General</h4>
@@ -716,15 +840,16 @@ if ($is_admin_gerente) {
                                         </select>
                                     </div>
                                     <div class="col-12">
-                                        <label class="form-label fw-bold small text-muted">Fecha de Aplicación</label>
-                                        <input type="date" name="fecha" class="form-control form-control-lg shadow-sm" value="<?= htmlspecialchars($fecha_filtro) ?>" required style="border-radius:12px; border-color:#e2e8f0;">
+                                        <label class="form-label fw-bold small text-muted" id="lblFechaAplicacion">Fecha de Aplicación</label>
+                                        <input type="date" name="fecha" id="inputFechaMeta" class="form-control form-control-lg shadow-sm" value="<?= htmlspecialchars($fecha_filtro) ?>" required style="border-radius:12px; border-color:#e2e8f0;">
+                                        <small class="text-muted" id="smallFechaAyuda" style="display:none;"></small>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-section h-100">
-                                <h4><i class="fas fa-bullseye"></i> Objetivos del Día</h4>
+                                <h4 id="lblObjetivosTitulo"><i class="fas fa-bullseye"></i> Objetivos del Día</h4>
                                 <div class="row g-3">
                                     <div class="col-4">
                                         <label class="form-label small fw-bold text-muted"><i class="fas fa-poll me-1"></i> Encuestas</label>
@@ -755,7 +880,7 @@ if ($is_admin_gerente) {
                                         <input type="number" name="meta_visitas" class="form-control shadow-sm" min="0" value="0" style="border-radius:10px;">
                                     </div>
                                     <div class="col-4">
-                                        <label class="form-label small fw-bold text-muted"><i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/día)</label>
+                                        <label class="form-label small fw-bold text-muted" id="lblMontoCreditos"><i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/día)</label>
                                         <input type="number" name="meta_monto_creditos_aprobados" class="form-control shadow-sm" min="0" value="0" placeholder="Ej: 5000" style="border-radius:10px;">
                                     </div>
                                     <div class="col-4">
@@ -777,7 +902,7 @@ if ($is_admin_gerente) {
                         </div>
                         <div class="col-12 text-center pt-2">
                             <button type="submit" class="btn-save px-5 shadow" style="height:50px; border-radius:15px; font-weight:800; letter-spacing:0.5px;">
-                                <i class="fas fa-save me-2"></i> ESTABLECER METAS
+                                <i class="fas fa-save me-2"></i> <span id="lblBotonGuardar">ESTABLECER METAS</span>
                             </button>
                         </div>
                     </div>
@@ -1040,5 +1165,67 @@ if ($is_admin_gerente) {
     </div>
     </div><!-- /.content-area -->
 </div><!-- /.main-content -->
+
+<script>
+function cambiarModoMeta() {
+    const esMes = document.getElementById('modoMetaMes').checked;
+    const hint = document.getElementById('hintModoMes');
+    const lblFecha = document.getElementById('lblFechaAplicacion');
+    const lblTitulo = document.getElementById('lblObjetivosTitulo');
+    const lblBoton = document.getElementById('lblBotonGuardar');
+    const smallFecha = document.getElementById('smallFechaAyuda');
+    const inputFecha = document.getElementById('inputFechaMeta');
+
+    hint.style.display = esMes ? 'block' : 'none';
+    lblFecha.textContent = esMes ? 'Fecha de Inicio (dentro del mes)' : 'Fecha de Aplicación';
+    lblTitulo.innerHTML = esMes
+        ? '<i class="fas fa-bullseye"></i> Objetivos del Mes (Totales)'
+        : '<i class="fas fa-bullseye"></i> Objetivos del Día';
+    lblBoton.textContent = esMes ? 'ESTABLECER METAS DEL MES' : 'ESTABLECER METAS';
+
+    const lblMonto = document.getElementById('lblMontoCreditos');
+    lblMonto.innerHTML = esMes
+        ? '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/mes)'
+        : '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/día)';
+
+    if (esMes) {
+        smallFecha.style.display = 'block';
+        actualizarResumenMes();
+    } else {
+        smallFecha.style.display = 'none';
+    }
+}
+
+function actualizarResumenMes() {
+    const smallFecha = document.getElementById('smallFechaAyuda');
+    const inputFecha = document.getElementById('inputFechaMeta');
+    if (!inputFecha.value) {
+        smallFecha.textContent = '';
+        return;
+    }
+    const [y, m, d] = inputFecha.value.split('-').map(Number);
+    const inicio = new Date(y, m - 1, d);
+    const fin = new Date(y, m, 0); // último día del mes
+
+    let dias = 0;
+    const cursor = new Date(inicio);
+    while (cursor <= fin) {
+        const dow = cursor.getDay(); // 0=domingo ... 6=sábado
+        if (dow >= 1 && dow <= 5) dias++;
+        cursor.setDate(cursor.getDate() + 1);
+    }
+    const opts = { day: '2-digit', month: '2-digit', year: 'numeric' };
+    smallFecha.innerHTML = '<i class="fas fa-info-circle"></i> Se repartirán los objetivos entre <b>' + dias + '</b> día(s) laborales: del ' +
+        inicio.toLocaleDateString('es-ES', opts) + ' al ' + fin.toLocaleDateString('es-ES', opts) + '.';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('inputFechaMeta').addEventListener('change', function () {
+        if (document.getElementById('modoMetaMes').checked) actualizarResumenMes();
+    });
+    cambiarModoMeta();
+});
+</script>
+
 </body>
 </html>
