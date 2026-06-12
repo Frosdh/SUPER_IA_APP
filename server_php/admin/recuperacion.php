@@ -655,6 +655,31 @@ $currentPage = 'recuperacion';
         </button>
       </div>
 
+      <!-- RECUPERACIONES PENDIENTES DE REVISIÓN -->
+      <div class="section-card" id="cardRevision">
+        <div class="section-header">
+          <h5><i class="fa-solid fa-clipboard-check" style="color:#f59e0b;"></i> Recuperaciones por revisar</h5>
+          <span class="sec-badge" id="badgeRevisionCount" style="background:#f59e0b;">0</span>
+        </div>
+        <div id="revisionEmpty" class="empty-msg">
+          <i class="fas fa-check-circle" style="color:#10b981;"></i>
+          <p>No hay recuperaciones pendientes de revisión.</p>
+        </div>
+        <div class="table-responsive" id="revisionTableWrap" style="display:none;">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3 py-3">CLIENTE</th>
+                <th class="py-3">ASESOR</th>
+                <th class="py-3">OBSERVACIONES DEL ASESOR</th>
+                <th class="py-3">FINALIZADA</th>
+                <th class="text-end pe-3 py-3">REVISIÓN</th>
+              </tr>
+            </thead>
+            <tbody id="revisionTbody"></tbody>
+          </table>
+        </div>
+      </div>
 
       <!-- FILTROS — búsqueda + A-Z -->
       <style>
@@ -1248,6 +1273,112 @@ $currentPage = 'recuperacion';
 
       // Exponer filtrarTabla al scope global (input usa oninput)
       window.filtrarTabla = filtrarTabla;
+    })();
+  </script>
+
+  <!-- ===== REVISIÓN DE RECUPERACIONES (pendientes de aprobación) ===== -->
+  <script>
+    (function () {
+      function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      function showToastRev(msg, type) {
+        var t = document.createElement('div');
+        t.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:9999;background:' + (type === 'success' ? '#065f46' : type === 'danger' ? '#991b1b' : '#854d0e') + ';color:#fff;padding:14px 20px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 8px 24px rgba(0,0,0,.18);max-width:340px;';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(function () { t.remove(); }, 4000);
+      }
+
+      function cargarRevision() {
+        fetch('obtener_recuperaciones_revision.php')
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j.status !== 'success') return;
+            var tbody = document.getElementById('revisionTbody');
+            var wrap  = document.getElementById('revisionTableWrap');
+            var empty = document.getElementById('revisionEmpty');
+            var badge = document.getElementById('badgeRevisionCount');
+            var items = j.pendientes || [];
+
+            if (badge) badge.textContent = items.length;
+
+            if (!items.length) {
+              if (wrap) wrap.style.display = 'none';
+              if (empty) empty.style.display = '';
+              return;
+            }
+
+            if (empty) empty.style.display = 'none';
+            if (wrap) wrap.style.display = '';
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            items.forEach(function (it) {
+              var tr = document.createElement('tr');
+              tr.className = 'rec-row';
+              var fecha = it.fecha_realizada
+                ? (it.fecha_realizada + (it.hora_realizada ? ' ' + it.hora_realizada : ''))
+                : '—';
+              tr.innerHTML =
+                '<td class="ps-3 py-3">' +
+                  '<div class="fw-bold" style="font-size:14.5px;color:#1e293b;">' + escapeHtml(it.cliente_nombre || '—') + '</div>' +
+                  '<div class="text-muted small mt-1" style="font-size:11.5px;">' + escapeHtml(it.cliente_cedula || '—') + ' &middot; ' + escapeHtml(it.cliente_telefono || '—') + '</div>' +
+                '</td>' +
+                '<td class="py-3"><span class="text-secondary" style="font-size:13.5px;font-weight:500;">' + escapeHtml(it.asesor_nombre || '—') + '</span></td>' +
+                '<td class="py-3" style="font-size:13px;max-width:320px;">' + escapeHtml(it.observaciones || '—') + '</td>' +
+                '<td class="py-3 text-secondary" style="font-size:13px;">' + escapeHtml(fecha) + '</td>' +
+                '<td class="text-end pe-3 py-3" style="white-space:nowrap;">' +
+                  '<button class="btn btn-sm btn-success btn-revisar" data-id="' + escapeHtml(it.id) + '" data-accion="aprobar" style="font-weight:700;margin-right:6px;"><i class="fas fa-check"></i> Aprobar</button>' +
+                  '<button class="btn btn-sm btn-outline-danger btn-revisar" data-id="' + escapeHtml(it.id) + '" data-accion="rechazar" style="font-weight:700;"><i class="fas fa-times"></i> Rechazar</button>' +
+                '</td>';
+              tbody.appendChild(tr);
+            });
+          })
+          .catch(function () {});
+      }
+
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.btn-revisar');
+        if (!btn) return;
+
+        var id = btn.dataset.id;
+        var accion = btn.dataset.accion;
+        var observacion = '';
+
+        if (accion === 'rechazar') {
+          observacion = prompt('Motivo del rechazo (opcional, se notifica internamente):', '');
+          if (observacion === null) return; // canceló el prompt
+        } else {
+          if (!confirm('¿Confirmas que el cliente pagó (o vino a pagar a ventanilla) y apruebas esta recuperación como finalizada?')) return;
+        }
+
+        btn.disabled = true;
+        fetch('revisar_recuperacion.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tarea_id: id, accion: accion, observacion: observacion })
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j.status === 'success') {
+              showToastRev('✅ ' + j.message, 'success');
+              cargarRevision();
+            } else {
+              btn.disabled = false;
+              showToastRev('❌ ' + (j.message || 'Error'), 'danger');
+            }
+          })
+          .catch(function () {
+            btn.disabled = false;
+            showToastRev('❌ Error de red', 'danger');
+          });
+      });
+
+      cargarRevision();
     })();
   </script>
 </body>

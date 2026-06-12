@@ -80,8 +80,21 @@ try {
         }
     }
 
+    // Asegurar columnas de revisión de recuperación (migración no destructiva)
+    foreach ([
+        'revision_recuperacion'     => "ADD COLUMN revision_recuperacion ENUM('pendiente','aprobada','rechazada') DEFAULT NULL AFTER hora_realizada",
+        'revision_recuperacion_at'  => "ADD COLUMN revision_recuperacion_at DATETIME DEFAULT NULL AFTER revision_recuperacion",
+        'revision_recuperacion_por' => "ADD COLUMN revision_recuperacion_por VARCHAR(64) DEFAULT NULL AFTER revision_recuperacion_at",
+        'revision_recuperacion_obs' => "ADD COLUMN revision_recuperacion_obs TEXT DEFAULT NULL AFTER revision_recuperacion_por",
+    ] as $col => $ddl) {
+        $chk = $conn->query("SHOW COLUMNS FROM tarea LIKE '$col'");
+        if ($chk && $chk->num_rows === 0) {
+            $conn->query("ALTER TABLE tarea $ddl");
+        }
+    }
+
     // Verificar tarea pertenece al asesor
-    $stChk = $conn->prepare('SELECT estado FROM tarea WHERE id = ? AND asesor_id = ? LIMIT 1');
+    $stChk = $conn->prepare('SELECT estado, tipo_tarea FROM tarea WHERE id = ? AND asesor_id = ? LIMIT 1');
     $stChk->bind_param('ss', $tarea_id, $asesor_id);
     $stChk->execute();
     $r = $stChk->get_result()->fetch_assoc();
@@ -92,7 +105,8 @@ try {
         exit;
     }
 
-    $estado = (string)($r['estado'] ?? '');
+    $estado    = (string)($r['estado'] ?? '');
+    $tipoTarea = (string)($r['tipo_tarea'] ?? '');
     if ($estado === 'cancelada') {
         echo json_encode(['status' => 'error', 'message' => 'La tarea está cancelada'], JSON_UNESCAPED_UNICODE);
         exit;
@@ -103,18 +117,38 @@ try {
         exit;
     }
 
-    $stUp = $conn->prepare(
-        "UPDATE tarea
-         SET estado='completada',
-             fecha_realizada = CURDATE(),
-             hora_realizada  = CURTIME(),
-             estado_seleccion_prev = NULL,
-             seleccionada_dia = NULL,
-             seleccionada_at  = NULL,
-             seleccion_fijada = 0,
-             seleccion_fijada_at = NULL
-         WHERE id = ? AND asesor_id = ?"
-    );
+    if ($tipoTarea === 'recuperacion') {
+        // Las recuperaciones quedan pendientes de revisión del supervisor
+        $stUp = $conn->prepare(
+            "UPDATE tarea
+             SET estado='completada',
+                 fecha_realizada = CURDATE(),
+                 hora_realizada  = CURTIME(),
+                 estado_seleccion_prev = NULL,
+                 seleccionada_dia = NULL,
+                 seleccionada_at  = NULL,
+                 seleccion_fijada = 0,
+                 seleccion_fijada_at = NULL,
+                 revision_recuperacion = 'pendiente',
+                 revision_recuperacion_at = NULL,
+                 revision_recuperacion_por = NULL,
+                 revision_recuperacion_obs = NULL
+             WHERE id = ? AND asesor_id = ?"
+        );
+    } else {
+        $stUp = $conn->prepare(
+            "UPDATE tarea
+             SET estado='completada',
+                 fecha_realizada = CURDATE(),
+                 hora_realizada  = CURTIME(),
+                 estado_seleccion_prev = NULL,
+                 seleccionada_dia = NULL,
+                 seleccionada_at  = NULL,
+                 seleccion_fijada = 0,
+                 seleccion_fijada_at = NULL
+             WHERE id = ? AND asesor_id = ?"
+        );
+    }
     $stUp->bind_param('ss', $tarea_id, $asesor_id);
     $ok = $stUp->execute();
     $stUp->close();
