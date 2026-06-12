@@ -634,6 +634,155 @@ $currentPage = 'recuperacion';
     .mora-input-row {
       -moz-appearance: textfield;
     }
+
+    /* ══════════ PAGE HEADER (estilo "Mis Asesores") ══════════ */
+    .ma-page-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 2px solid #e8eef6;
+      flex-wrap: wrap;
+    }
+    .ma-page-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #0a2748, #1e4d8c);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(10, 39, 72, .22);
+      flex-shrink: 0;
+    }
+    .ma-page-icon i { color: #ffdd00; font-size: 22px; }
+    .ma-page-title { font-size: 22px; font-weight: 900; color: #0a2748; margin: 0; }
+    .ma-page-sub { font-size: 13px; color: #94a3b8; margin: 2px 0 0; font-weight: 500; }
+
+    .btn-navy {
+      background: #0a2748;
+      color: #fff;
+      border: 2px solid #0a2748;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-size: 13.5px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .btn-navy:hover {
+      background: #1e4d8c;
+      border-color: #1e4d8c;
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(10, 39, 72, .15);
+    }
+    .btn-outline-navy {
+      background: transparent;
+      color: #0a2748;
+      border: 2px solid #0a2748;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-size: 13.5px;
+      font-weight: 700;
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .btn-outline-navy:hover {
+      background: rgba(10, 39, 72, .05);
+      color: #0a2748;
+      transform: translateY(-1px);
+    }
+
+    /* ══════════ CRÉDITOS — GRID DE TARJETAS ══════════ */
+    .creditos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 18px;
+      padding: 20px;
+    }
+    .cred-card {
+      background: #fff;
+      border-radius: 16px;
+      border: 2px solid #e2eaf4;
+      box-shadow: 0 3px 12px rgba(10, 39, 72, .07);
+      overflow: hidden;
+      transition: all .2s;
+      display: flex;
+      flex-direction: column;
+    }
+    .cred-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 26px rgba(10, 39, 72, .13);
+      border-color: #93c5fd;
+    }
+    .cred-stripe { height: 5px; background: linear-gradient(90deg, #0a2748, #1e4d8c, #ffdd00); }
+    .cred-body { padding: 16px 16px 14px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+    .cred-top { display: flex; align-items: flex-start; gap: 12px; }
+    .cred-avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #0a2748, #1e4d8c);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 900;
+      color: #ffdd00;
+      flex-shrink: 0;
+      box-shadow: 0 3px 10px rgba(10, 39, 72, .2);
+    }
+    .cred-name { font-size: 14.5px; font-weight: 800; color: #0a2748; margin: 0 0 2px; line-height: 1.25; }
+    .cred-sub { font-size: 11.5px; color: #94a3b8; margin: 0; font-weight: 600; }
+    .cred-chk { margin-left: auto; width: 18px; height: 18px; flex-shrink: 0; margin-top: 4px; }
+    .cred-info-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #f0f4f8;
+    }
+    .cred-info-label { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #94a3b8; font-weight: 800; margin: 0 0 2px; }
+    .cred-info-val { font-size: 13px; font-weight: 700; color: #1e293b; margin: 0; }
+    .cred-mora-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #f0f4f8;
+    }
+    .cred-footer { padding: 12px 16px; background: #f8fafc; border-top: 1px solid #edf2f9; }
+    .cred-footer .btn-crear { width: 100%; justify-content: center; }
+
+    /* ══════════ ESTADO / REVISIÓN — BADGES ══════════ */
+    .estado-badge {
+      display: inline-block;
+      padding: 4px 11px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .estado-programada { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .estado-en_proceso { background: #fff8e1; color: #b25e00; border: 1px solid #ffe0b2; }
+    .estado-postergada { background: #f3e8ff; color: #7c3aed; border: 1px solid #e9d5ff; }
+    .estado-completada { background: #e2fbe8; color: #107c41; border: 1px solid #c3f2cc; }
+    .estado-cancelada { background: #fdebee; color: #c51162; border: 1px solid #ffcdd2; }
+    .revision-pendiente { background: #fff8e1; color: #b25e00; border: 1px solid #ffe0b2; }
+    .revision-aprobada { background: #e2fbe8; color: #107c41; border: 1px solid #c3f2cc; }
+    .revision-rechazada { background: #fdebee; color: #c51162; border: 1px solid #ffcdd2; }
+    .revision-na { background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; }
   </style>
 </head>
 
@@ -648,11 +797,20 @@ $currentPage = 'recuperacion';
   }
   ?>
 
-      <div class="page-header">
-        <h1><i class="fas fa-user-clock"></i> Recuperación de Cartera</h1>
-        <button class="btn-bulk" id="btnBulkCrear" style="display:none;">
-          <i class="fas fa-bolt"></i> Crear tareas (seleccionados)
-        </button>
+      <!-- HEADER -->
+      <div class="ma-page-header">
+        <div class="ma-page-icon"><i class="fas fa-user-clock"></i></div>
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-3" style="flex:1;">
+          <div>
+            <h1 class="ma-page-title">Recuperación de Cartera</h1>
+            <p class="ma-page-sub">Revisa, crea y da seguimiento a las recuperaciones de tu equipo</p>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a href="#cardCreditos" class="btn-navy">
+              <i class="fas fa-plus"></i> Nueva Recuperación
+            </a>
+          </div>
+        </div>
       </div>
 
       <!-- RECUPERACIONES PENDIENTES DE REVISIÓN -->
@@ -677,6 +835,54 @@ $currentPage = 'recuperacion';
               </tr>
             </thead>
             <tbody id="revisionTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- LISTA DE RECUPERACIONES (todas las tareas, cualquier estado) -->
+      <div class="section-card" id="cardListaRecuperaciones">
+        <div class="section-header">
+          <h5><i class="fa-solid fa-list-check" style="color:#0a2748;"></i> Lista de Recuperaciones</h5>
+          <span class="sec-badge" id="badgeListaCount">0</span>
+        </div>
+        <div style="padding:14px 20px;border-bottom:1px solid var(--brand-border);display:flex;gap:10px;flex-wrap:wrap;align-items:center;background:#fafbfc;">
+          <select id="listaEstadoFiltro" class="form-select form-select-sm" style="width:auto;">
+            <option value="">Todos los estados</option>
+            <option value="programada">Programada</option>
+            <option value="en_proceso">En proceso</option>
+            <option value="postergada">Postergada</option>
+            <option value="completada">Completada</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+          <?php if (!empty($asesores_lista)): ?>
+          <select id="listaAsesorFiltro" class="form-select form-select-sm" style="width:auto;">
+            <option value="">Todos los asesores</option>
+            <?php foreach ($asesores_lista as $as): ?>
+              <option value="<?= htmlspecialchars($as['id']) ?>"><?= htmlspecialchars($as['nombre']) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <?php endif; ?>
+          <input type="text" id="listaBuscar" class="form-control form-control-sm" style="width:220px;" placeholder="Buscar cliente o cédula…">
+          <button class="btn btn-sm btn-outline-secondary" id="listaRefrescar" type="button"><i class="fas fa-rotate"></i> Actualizar</button>
+          <div class="ms-auto d-flex gap-2 flex-wrap" id="listaResumen" style="font-size:11.5px;"></div>
+        </div>
+        <div id="listaEmpty" class="empty-msg">
+          <i class="fas fa-inbox" style="color:#94a3b8;"></i>
+          <p>No hay recuperaciones para mostrar.</p>
+        </div>
+        <div class="table-responsive" id="listaTableWrap" style="display:none;">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th class="ps-3 py-3">CLIENTE</th>
+                <th class="py-3">ASESOR</th>
+                <th class="py-3 text-center">ESTADO</th>
+                <th class="py-3">PROGRAMADA / REALIZADA</th>
+                <th class="py-3 text-center">REVISIÓN</th>
+                <th class="pe-3 py-3">OBSERVACIONES</th>
+              </tr>
+            </thead>
+            <tbody id="listaTbody"></tbody>
           </table>
         </div>
       </div>
@@ -905,101 +1111,100 @@ $currentPage = 'recuperacion';
         </div>
       </div>
 
-      <!-- TABLA -->
-      <div class="section-card">
-        <div class="section-header" style="background: #fff; border-bottom: 1px solid #edf2f7; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between;">
+      <!-- CRÉDITOS — GRID DE TARJETAS -->
+      <div class="section-card" id="cardCreditos">
+        <div class="section-header" style="background: #fff; border-bottom: 1px solid #edf2f7; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <h5 style="font-size: 16px; font-weight: 800; margin: 0; color: #0a2748; display: flex; align-items: center; gap: 10px;">
             <i class="fa-solid fa-list-ul" style="color: #dc2626;"></i> Créditos Aprobados / Desembolsados
           </h5>
-          <span class="sec-badge" style="background-color: #0a2748; color: #fff; border-radius: 20px; font-weight: 800; padding: 6px 14px; font-size: 12px;"><?= count($creditos) ?> créditos</span>
+          <div class="d-flex align-items-center gap-3 flex-wrap">
+            <?php if (!empty($creditos)): ?>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:#64748b;cursor:pointer;margin:0;">
+              <input type="checkbox" id="chkAll" title="Seleccionar todos"> Seleccionar todos
+            </label>
+            <?php endif; ?>
+            <span class="sec-badge" style="background-color: #0a2748; color: #fff; border-radius: 20px; font-weight: 800; padding: 6px 14px; font-size: 12px;"><?= count($creditos) ?> créditos</span>
+          </div>
         </div>
         <?php if (empty($creditos)): ?>
           <div class="empty-msg"><i class="fas fa-check-circle" style="color:#10b981;"></i>
             <p>No se encontraron créditos aprobados<?= $q ? ' con esos filtros' : '' ?>.</p>
           </div>
         <?php else: ?>
-          <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-              <thead>
-                <tr>
-                  <th style="width:36px;"><input type="checkbox" id="chkAll" title="Seleccionar todos"></th>
-                  <th class="ps-3 py-3">CLIENTE</th>
-                  <th class="py-3">ASESOR</th>
-                  <th class="py-3">MONTO</th>
-                  <th class="py-3">DESEMBOLSO</th>
-                  <th class="py-3 text-center">MESES DESDE DESEMB.</th>
-                  <th class="py-3 text-center">MESES EN MORA</th>
-                  <th class="text-end pe-3 py-3"></th>
-                </tr>
-              </thead>
-              <tbody class="border-top-0">
-                <!-- Mensaje vacío al filtrar (JS lo muestra/oculta) -->
-                <tr id="emptyFiltered" style="display:none;">
-                  <td colspan="8" class="text-center py-5">
-                    <div class="text-muted mb-3"><i class="fas fa-search fa-3x opacity-25"></i></div>
-                    <h6 class="fw-bold text-muted">No hay créditos que coincidan con la búsqueda</h6>
-                    <p class="small text-muted">Intenta ajustando los filtros.</p>
-                  </td>
-                </tr>
-                <?php foreach ($creditos as $cr):
-                  $fechaRaw = !empty($cr['fecha_desembolso']) ? $cr['fecha_desembolso'] : $cr['created_at'];
-                  try { $dt0 = new DateTime($fechaRaw); } catch(Throwable $_) { $dt0 = new DateTime(); }
-                  $dt1 = new DateTime();
-                  $meses = max(0, (int) (($dt1->format('Y') - $dt0->format('Y')) * 12 + ($dt1->format('n') - $dt0->format('n'))));
-                  $nombreDisplay = htmlspecialchars(trim($cr['cliente_nombre']??'') ?: ($cr['cedula']??'—'));
-                  ?>
-                  <tr class="rec-row" data-nombre="<?= strtolower(htmlspecialchars($cr['cliente_nombre']??'')) ?>" data-cedula="<?= strtolower(htmlspecialchars($cr['cedula']??'')) ?>" data-asesor="<?= strtolower(htmlspecialchars($cr['asesor_nombre']??'')) ?>" data-meses="<?= $meses ?>" style="transition:all 0.2s ease;">
-                    <td style="width:36px;"><input type="checkbox" class="chk-rec" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
+          <div class="creditos-grid" id="creditosGrid">
+            <?php foreach ($creditos as $cr):
+              $fechaRaw = !empty($cr['fecha_desembolso']) ? $cr['fecha_desembolso'] : $cr['created_at'];
+              try { $dt0 = new DateTime($fechaRaw); } catch(Throwable $_) { $dt0 = new DateTime(); }
+              $dt1 = new DateTime();
+              $meses = max(0, (int) (($dt1->format('Y') - $dt0->format('Y')) * 12 + ($dt1->format('n') - $dt0->format('n'))));
+              $nombreDisplay = htmlspecialchars(trim($cr['cliente_nombre']??'') ?: ($cr['cedula']??'—'));
+              $nombreBase = trim($cr['cliente_nombre'] ?? '') ?: ($cr['cedula'] ?? '?');
+              $inicial = strtoupper(mb_substr($nombreBase, 0, 1));
+              $badgeClass = $meses <= 3 ? 'mora-ok' : ($meses <= 6 ? 'mora-mid' : 'mora-high');
+              ?>
+              <div class="cred-card" data-nombre="<?= strtolower(htmlspecialchars($cr['cliente_nombre']??'')) ?>" data-cedula="<?= strtolower(htmlspecialchars($cr['cedula']??'')) ?>" data-asesor="<?= strtolower(htmlspecialchars($cr['asesor_nombre']??'')) ?>" data-meses="<?= $meses ?>">
+                <div class="cred-stripe"></div>
+                <div class="cred-body">
+                  <div class="cred-top">
+                    <div class="cred-avatar"><?= htmlspecialchars($inicial) ?></div>
+                    <div style="flex:1;min-width:0;">
+                      <h3 class="cred-name"><?= htmlspecialchars(strtolower($cr['cliente_nombre'] ?? '—')) ?></h3>
+                      <p class="cred-sub"><?= htmlspecialchars($cr['cedula'] ?? '—') ?> &middot; <?= htmlspecialchars($cr['telefono'] ?? '—') ?></p>
+                    </div>
+                    <input type="checkbox" class="chk-rec cred-chk" data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
                         data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
-                        data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"></td>
-                    <td class="ps-3 py-3">
-                      <div class="fw-bold text-navy" style="font-size:14.5px; color: #1e293b;"><?= htmlspecialchars(strtolower($cr['cliente_nombre'] ?? '—')) ?></div>
-                      <div class="text-muted small mt-1" style="font-size:11.5px; font-family: sans-serif; letter-spacing: 0.3px;">
-                        <?= htmlspecialchars($cr['cedula'] ?? '—') ?> &middot; <?= htmlspecialchars($cr['telefono'] ?? '—') ?>
-                      </div>
-                    </td>
-                    <td class="py-3">
-                      <span class="text-secondary" style="font-size:13.5px; font-weight: 500;"><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></span>
-                    </td>
-                    <td class="py-3 fw-bold text-navy" style="font-size:13.5px; color: #1e293b;">
-                      <?= is_numeric($cr['monto_aprobado']??'') ? '$'.number_format((float)$cr['monto_aprobado'],2) : (htmlspecialchars($cr['monto_aprobado']??'') ?: '—') ?>
-                    </td>
-                    <td class="py-3 text-secondary" style="font-size:13.5px;">
-                      <?= !empty($fechaRaw) ? date('d/m/Y', strtotime($fechaRaw)) : '—' ?>
-                    </td>
-                    <td class="py-3 text-center">
-                      <?php
-                      $badgeClass = $meses <= 3 ? 'mora-ok' : ($meses <= 6 ? 'mora-mid' : 'mora-high');
-                      ?>
-                      <span class="mora-badge <?= $badgeClass ?>">
-                        <?= $meses ?> mes<?= $meses != 1 ? 'es' : '' ?>
-                      </span>
-                    </td>
-                    <td class="py-3 text-center">
-                      <input type="number" class="mora-val mora-input-row text-center" 
-                             data-credito-id="<?= htmlspecialchars($cr['id']) ?>" 
-                             value="<?= $meses ?>" 
-                             min="0">
-                    </td>
-                    <td class="text-end pe-3 py-3">
-                      <button class="btn btn-crear btn-abrir-modal" 
-                              data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
-                              data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
-                              data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"
-                              data-cliente="<?= $nombreDisplay ?>"
-                              data-meses="<?= $meses ?>">
-                        <i class="fa-solid fa-plus" style="font-size: 11px;"></i> Crear tarea
-                      </button>
-                    </td>
-                  </tr>
-                <?php endforeach; ?>
-              </tbody>
-            </table>
+                        data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>" title="Seleccionar">
+                  </div>
+                  <div class="cred-info-grid">
+                    <div>
+                      <p class="cred-info-label">Asesor</p>
+                      <p class="cred-info-val"><?= htmlspecialchars($cr['asesor_nombre'] ?? '—') ?></p>
+                    </div>
+                    <div>
+                      <p class="cred-info-label">Monto</p>
+                      <p class="cred-info-val"><?= is_numeric($cr['monto_aprobado']??'') ? '$'.number_format((float)$cr['monto_aprobado'],2) : (htmlspecialchars($cr['monto_aprobado']??'') ?: '—') ?></p>
+                    </div>
+                    <div>
+                      <p class="cred-info-label">Desembolso</p>
+                      <p class="cred-info-val"><?= !empty($fechaRaw) ? date('d/m/Y', strtotime($fechaRaw)) : '—' ?></p>
+                    </div>
+                    <div>
+                      <p class="cred-info-label">Desde desemb.</p>
+                      <p class="cred-info-val"><span class="mora-badge <?= $badgeClass ?>"><?= $meses ?> mes<?= $meses != 1 ? 'es' : '' ?></span></p>
+                    </div>
+                  </div>
+                  <div class="cred-mora-row">
+                    <span class="cred-info-label" style="margin:0;">Meses en mora</span>
+                    <input type="number" class="mora-val mora-input-row text-center" style="width:80px;height:36px;"
+                           data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
+                           value="<?= $meses ?>"
+                           min="0">
+                  </div>
+                </div>
+                <div class="cred-footer">
+                  <button class="btn btn-crear btn-abrir-modal"
+                          data-credito-id="<?= htmlspecialchars($cr['id']) ?>"
+                          data-asesor-id="<?= htmlspecialchars($cr['asesor_id'] ?? '') ?>"
+                          data-fuente="<?= htmlspecialchars($cr['fuente'] ?? 'proceso') ?>"
+                          data-cliente="<?= $nombreDisplay ?>"
+                          data-meses="<?= $meses ?>">
+                    <i class="fa-solid fa-plus" style="font-size: 11px;"></i> Crear tarea
+                  </button>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+
+          <!-- Mensaje vacío al filtrar (JS lo muestra/oculta) -->
+          <div id="emptyFiltered" class="empty-msg" style="display:none;">
+            <i class="fas fa-search" style="color:#94a3b8;"></i>
+            <p class="fw-bold text-muted mb-1">No hay créditos que coincidan con la búsqueda</p>
+            <p class="small text-muted mb-0">Intenta ajustando los filtros.</p>
           </div>
 
           <!-- Barra de acción bulk -->
           <div id="bulkBar"
-            style="display:none;padding:14px 20px;border-top:1px solid var(--brand-border);background:#fafbfc;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            style="display:none;padding:14px 20px;border-top:1px solid var(--brand-border);background:#fafbfc;align-items:center;gap:14px;flex-wrap:wrap;">
             <span id="bulkCount" style="font-weight:700;font-size:13.5px;">0 seleccionados</span>
             <select id="bulkAsesorSel" class="form-select form-select-sm" style="width:240px;">
               <option value="">Enviar a: todos los asesores del equipo</option>
@@ -1186,22 +1391,22 @@ $currentPage = 'recuperacion';
         const fiNombre = document.getElementById('fiNombre').value.trim().toLowerCase();
         const fiCedula = document.getElementById('fiCedula').value.trim().toLowerCase();
         const fLetra = window.activeLetter || '';
-        const filas = document.querySelectorAll('tr.rec-row');
+        const tarjetas = document.querySelectorAll('#creditosGrid .cred-card');
         let visibles = 0;
 
-        filas.forEach(function(tr) {
-          const nombre = (tr.dataset.nombre || '').toLowerCase();
-          const cedula = (tr.dataset.cedula || '').toLowerCase();
+        tarjetas.forEach(function(card) {
+          const nombre = (card.dataset.nombre || '').toLowerCase();
+          const cedula = (card.dataset.cedula || '').toLowerCase();
 
           const okNombre = !fiNombre || nombre.includes(fiNombre);
           const okCedula = !fiCedula || cedula.includes(fiCedula);
           const okLetra = !fLetra || nombre.startsWith(fLetra.toLowerCase());
 
           if (okNombre && okCedula && okLetra) {
-            tr.style.display = '';
+            card.style.display = '';
             visibles++;
           } else {
-            tr.style.display = 'none';
+            card.style.display = 'none';
           }
         });
 
@@ -1212,11 +1417,11 @@ $currentPage = 'recuperacion';
         // Mostrar/ocultar empty
         const emptyDiv = document.getElementById('emptyFiltered');
         if (emptyDiv) {
-          emptyDiv.style.display = (visibles === 0 && filas.length > 0) ? '' : 'none';
+          emptyDiv.style.display = (visibles === 0 && tarjetas.length > 0) ? '' : 'none';
         }
 
         // Actualizar badge
-        const badge = document.querySelector('.sec-badge');
+        const badge = document.querySelector('#cardCreditos .sec-badge');
         if (badge) badge.textContent = visibles + ' crédito' + (visibles !== 1 ? 's' : '');
       }
 
@@ -1273,6 +1478,128 @@ $currentPage = 'recuperacion';
 
       // Exponer filtrarTabla al scope global (input usa oninput)
       window.filtrarTabla = filtrarTabla;
+    })();
+  </script>
+
+  <!-- ===== LISTA DE RECUPERACIONES (todas las tareas, cualquier estado) ===== -->
+  <script>
+    (function () {
+      function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+
+      var ESTADO_LABEL = {
+        programada: 'Programada',
+        en_proceso: 'En proceso',
+        postergada: 'Postergada',
+        completada: 'Completada',
+        cancelada: 'Cancelada'
+      };
+
+      function cargarLista() {
+        var params = new URLSearchParams();
+        var estadoSel = document.getElementById('listaEstadoFiltro');
+        var asesorSel = document.getElementById('listaAsesorFiltro');
+        var buscarInp = document.getElementById('listaBuscar');
+        if (estadoSel && estadoSel.value) params.set('estado', estadoSel.value);
+        if (asesorSel && asesorSel.value) params.set('asesor_id', asesorSel.value);
+        if (buscarInp && buscarInp.value.trim()) params.set('q', buscarInp.value.trim());
+
+        fetch('obtener_lista_recuperaciones.php?' + params.toString())
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j.status !== 'success') return;
+            var tbody = document.getElementById('listaTbody');
+            var wrap  = document.getElementById('listaTableWrap');
+            var empty = document.getElementById('listaEmpty');
+            var badge = document.getElementById('badgeListaCount');
+            var resumenEl = document.getElementById('listaResumen');
+            var items = j.tareas || [];
+
+            if (badge) badge.textContent = j.total;
+
+            if (resumenEl && j.resumen) {
+              var r = j.resumen;
+              resumenEl.innerHTML =
+                '<span class="estado-badge estado-programada">Program.: ' + (r.programada || 0) + '</span>' +
+                '<span class="estado-badge estado-en_proceso">En proceso: ' + (r.en_proceso || 0) + '</span>' +
+                '<span class="estado-badge estado-postergada">Posterg.: ' + (r.postergada || 0) + '</span>' +
+                '<span class="estado-badge estado-completada">Completadas: ' + (r.completada || 0) + '</span>';
+            }
+
+            if (!items.length) {
+              if (wrap) wrap.style.display = 'none';
+              if (empty) empty.style.display = '';
+              return;
+            }
+
+            if (empty) empty.style.display = 'none';
+            if (wrap) wrap.style.display = '';
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            items.forEach(function (it) {
+              var tr = document.createElement('tr');
+              tr.className = 'rec-row';
+
+              var estadoKey = it.estado || '';
+              var estadoLbl = ESTADO_LABEL[estadoKey] || estadoKey || '—';
+              var estadoCls = 'estado-' + (estadoKey || 'programada');
+
+              var revisionKey = it.revision_recuperacion;
+              var revisionLbl, revisionCls;
+              if (revisionKey === 'pendiente') { revisionLbl = 'Pendiente'; revisionCls = 'revision-pendiente'; }
+              else if (revisionKey === 'aprobada') { revisionLbl = 'Aprobada'; revisionCls = 'revision-aprobada'; }
+              else if (revisionKey === 'rechazada') { revisionLbl = 'Rechazada'; revisionCls = 'revision-rechazada'; }
+              else { revisionLbl = '—'; revisionCls = 'revision-na'; }
+
+              var fecha;
+              if (estadoKey === 'completada' && it.fecha_realizada) {
+                fecha = it.fecha_realizada + (it.hora_realizada ? ' ' + it.hora_realizada : '');
+              } else {
+                fecha = it.fecha_programada
+                  ? it.fecha_programada + (it.hora_programada ? ' ' + it.hora_programada : '')
+                  : '—';
+              }
+
+              tr.innerHTML =
+                '<td class="ps-3 py-3">' +
+                  '<div class="fw-bold" style="font-size:14px;color:#1e293b;">' + escapeHtml(it.cliente_nombre || '—') + '</div>' +
+                  '<div class="text-muted small mt-1" style="font-size:11.5px;">' + escapeHtml(it.cliente_cedula || '—') + ' &middot; ' + escapeHtml(it.cliente_telefono || '—') + '</div>' +
+                '</td>' +
+                '<td class="py-3"><span class="text-secondary" style="font-size:13px;font-weight:500;">' + escapeHtml(it.asesor_nombre || '—') + '</span></td>' +
+                '<td class="py-3 text-center"><span class="estado-badge ' + estadoCls + '">' + escapeHtml(estadoLbl) + '</span></td>' +
+                '<td class="py-3 text-secondary" style="font-size:12.5px;">' + escapeHtml(fecha) + '</td>' +
+                '<td class="py-3 text-center"><span class="estado-badge ' + revisionCls + '">' + escapeHtml(revisionLbl) + '</span></td>' +
+                '<td class="py-3" style="font-size:12.5px;max-width:280px;">' + escapeHtml(it.observaciones || '—') + '</td>';
+              tbody.appendChild(tr);
+            });
+          })
+          .catch(function () {});
+      }
+
+      var estadoSel   = document.getElementById('listaEstadoFiltro');
+      var asesorSel   = document.getElementById('listaAsesorFiltro');
+      var buscarInp   = document.getElementById('listaBuscar');
+      var refrescarBtn = document.getElementById('listaRefrescar');
+
+      if (estadoSel) estadoSel.addEventListener('change', cargarLista);
+      if (asesorSel) asesorSel.addEventListener('change', cargarLista);
+      if (buscarInp) {
+        var debTimer = null;
+        buscarInp.addEventListener('input', function () {
+          clearTimeout(debTimer);
+          debTimer = setTimeout(cargarLista, 350);
+        });
+      }
+      if (refrescarBtn) refrescarBtn.addEventListener('click', cargarLista);
+
+      cargarLista();
+
+      // Expuesto para que la sección de revisión pueda refrescar esta lista al aprobar/rechazar
+      window.recargarListaRecuperaciones = cargarLista;
     })();
   </script>
 
@@ -1367,6 +1694,7 @@ $currentPage = 'recuperacion';
             if (j.status === 'success') {
               showToastRev('✅ ' + j.message, 'success');
               cargarRevision();
+              if (window.recargarListaRecuperaciones) window.recargarListaRecuperaciones();
             } else {
               btn.disabled = false;
               showToastRev('❌ ' + (j.message || 'Error'), 'danger');

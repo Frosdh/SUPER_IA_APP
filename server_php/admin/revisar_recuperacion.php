@@ -106,7 +106,8 @@ try {
         echo json_encode(['status' => 'error', 'message' => 'Tarea de recuperación no encontrada'], JSON_UNESCAPED_UNICODE);
         exit;
     }
-    if ($tarea['estado'] !== 'completada' || $tarea['revision_recuperacion'] !== 'pendiente') {
+    $revisionActual = $tarea['revision_recuperacion'];
+    if ($tarea['estado'] !== 'completada' || !($revisionActual === 'pendiente' || $revisionActual === null)) {
         echo json_encode(['status' => 'error', 'message' => 'Esta recuperación no está pendiente de revisión'], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -141,6 +142,7 @@ try {
                  seleccion_fijada_at = NULL
              WHERE id = ?"
         );
+        
         $stUp->execute([$revisor_id, $observacion, $tarea_id]);
         $msg = 'Recuperación rechazada. La tarea vuelve a la agenda del asesor.';
     }
