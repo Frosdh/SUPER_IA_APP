@@ -504,8 +504,8 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                         </div>
                     </div>
 
-                    <!-- Pregunta 3 -->
-                    <div class="sub-sec">
+                    <!-- Pregunta 3 (solo si Pregunta 2 = Sí) -->
+                    <div class="sub-sec" id="p3-sec" style="display:none;">
                         <h5 style="color: var(--brand-navy); font-weight: 600; margin-bottom: 10px;">¿Cuál es su nivel de satisfacción o percepción de la institución?</h5>
                         <p style="font-size:13px;color:var(--brand-gray);margin-bottom:12px;">
                             Selecciona una opción:
@@ -1824,6 +1824,7 @@ async function cargarEncuestaParaEditar() {
         document.getElementById('p2-si')?.classList.toggle('checked', p2Cliente === '1');
         document.getElementById('p2-no')?.classList.toggle('checked', p2Cliente === '0');
         document.getElementById('p2-extra').style.display = p2Cliente === '1' ? 'block' : 'none';
+        document.getElementById('p3-sec').style.display = p2Cliente === '1' ? 'block' : 'none';
 
         svById('f-p1_obs', encuesta.p1_obs || '' );
         const p2Products = encuesta.p2_producto ? encuesta.p2_producto.split(',') : [];
@@ -2429,6 +2430,8 @@ async function buscarCedula() {
                     document.getElementById('p2-no')?.classList.toggle('checked', p2Cliente === '0');
                     const p2ExtraEl = document.getElementById('p2-extra');
                     if (p2ExtraEl) p2ExtraEl.style.display = p2Cliente === '1' ? 'block' : 'none';
+                    const p3SecEl2 = document.getElementById('p3-sec');
+                    if (p3SecEl2) p3SecEl2.style.display = p2Cliente === '1' ? 'block' : 'none';
                 }
 
                 fill('f-p1_obs', encuesta.p1_obs || '');
@@ -2658,6 +2661,8 @@ function omitirBusqueda() {
     setVal('hid-prod_interes', '');
     setVal('hid-nivel_interes', '');
     setVal('f-p3_satisfaccion', '');
+    document.getElementById('p3-sec').style.display = 'none';
+    document.getElementById('p2-extra').style.display = 'none';
     setVal('f-estado', 'prospecto');
     setVal('f-tipo_empresa', '');
     setVal('f-nombre_empresa', '');
@@ -2795,6 +2800,8 @@ document.addEventListener('click', function(e){
     if(map[name]) document.getElementById(map[name]).classList.toggle('show', val==='1');
     if(name==='p2_es_cliente'){
         document.getElementById('p2-extra').style.display = val==='1' ? 'block':'none';
+        const p3SecEl = document.getElementById('p3-sec');
+        if (p3SecEl) p3SecEl.style.display = val==='1' ? 'block':'none';
     }
     if(name==='ec_tiene_inversiones'){
         document.getElementById('sec-propuesta-vencimiento').style.display = val==='1' ? 'block':'none';
@@ -2825,6 +2832,8 @@ document.querySelectorAll('.yn-group').forEach(function(g){
             if(map[name]) document.getElementById(map[name]).classList.toggle('show', val==='1');
             if(name==='p2_es_cliente'){
         document.getElementById('p2-extra').style.display = val==='1' ? 'block':'none';
+        const p3SecEl = document.getElementById('p3-sec');
+        if (p3SecEl) p3SecEl.style.display = val==='1' ? 'block':'none';
     }
     if(name==='ec_tiene_inversiones'){
         document.getElementById('sec-propuesta-vencimiento').style.display = val==='1' ? 'block':'none';
