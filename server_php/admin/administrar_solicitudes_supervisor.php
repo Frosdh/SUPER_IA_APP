@@ -196,117 +196,59 @@ $currentPage = 'solicitudes_supervisor';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA - Solicitudes de Supervisor</title>
+    <title>Super_IA - Solicitudes de Supervisores</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; display: flex; height: 100vh; }
-        .sidebar {
-            width: 230px;
-            background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%);
-            color: white;
-            padding: 20px 0;
-            overflow-y: auto;
-            position: fixed;
-            height: 100vh;
-            left: 0;
-            top: 0;
+        :root {
+            --brand-yellow: #ffdd00; --brand-navy: #123a6d; --brand-navy-deep: #0a2748;
+            --brand-border: #d7e0ea; --brand-bg: #f4f6f9; --brand-shadow: 0 16px 34px rgba(18,58,109,.08);
         }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: #fbbf24; }
-        .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
-        .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
-        .sidebar-link.active { background: linear-gradient(90deg, #fbbf24, #f59e0b); color: #1a0f3d; }
-        .main-content { flex: 1; margin-left: 230px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #1a0f3d; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
-        .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
-        .user-info { display: flex; align-items: center; gap: 15px; }
-        .btn-logout { background: rgba(0, 0, 0, 0.1); color: #1a0f3d; border: 1px solid #1a0f3d; padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; font-weight: 600; }
-        .btn-logout:hover { background: rgba(0, 0, 0, 0.2); }
-        .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        .page-header { margin-bottom: 30px; }
-        .page-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #1f2937; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .stat-card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.06); text-align: center; }
-        .stat-card .number { font-size: 32px; font-weight: 700; color: #1f2937; }
-        .stat-card .label { color: #9ca3af; font-size: 13px; margin-top: 5px; }
-        .alert-success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
-        .alert-danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
-        .table-card { background: #fff; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); overflow: hidden; }
-        .table-card .card-header-custom { padding: 20px; border-bottom: 1px solid #f0f0f0; }
-        .table-card h6 { font-weight: 700; margin: 0; font-size: 16px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter','Segoe UI',sans-serif; background: linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%); display: flex; height: 100vh; color: var(--brand-navy-deep); }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 24px; }
+        .stat-card { background: #fff; padding: 22px 20px; border-radius: 14px; box-shadow: 0 2px 8px rgba(0,0,0,.06); text-align: center; border: 1px solid var(--brand-border); }
+        .stat-card .number { font-size: 34px; font-weight: 800; }
+        .stat-card .label { color: #9ca3af; font-size: 13px; margin-top: 5px; font-weight: 500; }
+        .alert-success { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; }
+        .alert-danger  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 12px 16px; border-radius: 10px; margin-bottom: 20px; }
+        .table-card { background: #fff; border-radius: 16px; box-shadow: var(--brand-shadow); overflow: hidden; border: 1px solid var(--brand-border); }
+        .table-card .card-header-custom { padding: 18px 22px; border-bottom: 1px solid var(--brand-border); }
+        .table-card h6 { font-weight: 700; margin: 0; font-size: 16px; color: var(--brand-navy-deep); }
         .table { margin-bottom: 0; }
-        .table thead th { background: #f8f9fa; font-size: 11px; text-transform: uppercase; color: #6c757d; border: none; padding: 14px; }
-        .table tbody td { padding: 14px; vertical-align: middle; border-color: #f5f5f5; }
-        .table tbody tr:hover { background: #fafbff; }
-        .badge-pendiente { background: #fef08a; color: #713f12; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
-        .badge-aprobada { background: #dcfce7; color: #166534; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
-        .badge-rechazada { background: #fee2e2; color: #991b1b; padding: 5px 10px; border-radius: 6px; font-weight: 600; }
-        .btn-aprobar { background: #10b981; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
-        .btn-aprobar:hover { background: #059669; }
-        .btn-rechazar { background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .table thead th { background: #f4f6f9; font-size: 11px; text-transform: uppercase; color: #6c757d; border: none; padding: 13px 14px; letter-spacing: .4px; }
+        .table tbody td { padding: 13px 14px; vertical-align: middle; border-color: #f0f4f8; font-size: 13.5px; }
+        .table tbody tr:hover { background: #f8fafc; }
+        .badge-pendiente { background: #fef08a; color: #713f12; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+        .badge-aprobada  { background: #dcfce7; color: #166534; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+        .badge-rechazada { background: #fee2e2; color: #991b1b; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 12px; }
+        .btn-aprobar  { background: #10b981; color: #fff; border: none; padding: 6px 13px; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; }
+        .btn-aprobar:hover  { background: #059669; }
+        .btn-rechazar { background: #ef4444; color: #fff; border: none; padding: 6px 13px; border-radius: 7px; cursor: pointer; font-size: 12px; font-weight: 700; }
         .btn-rechazar:hover { background: #dc2626; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
-        .modal.show { display: flex; }
-        .modal-content { background: white; border-radius: 12px; padding: 2rem; max-width: 500px; width: 90%; }
-        .modal-header { margin-bottom: 1.5rem; }
-        .modal-header h5 { margin: 0; font-weight: 700; color: #1f2937; }
-        .modal-body { margin-bottom: 1.5rem; }
-        .modal-body textarea { width: 100%; padding: 10px; border: 1px solid #e5e7eb; border-radius: 8px; font-family: 'Inter', sans-serif; resize: vertical; }
-        .modal-footer { display: flex; gap: 10px; justify-content: flex-end; }
-        .modal-footer button { padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer; font-weight: 600; }
-        .btn-primary-modal { background: #3182fe; color: white; }
-        .btn-primary-modal:hover { background: #1e40af; }
-        .btn-secondary-modal { background: #e5e7eb; color: #1f2937; }
-        .btn-secondary-modal:hover { background: #d1d5db; }
+        .sol-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.45); align-items: center; justify-content: center; z-index: 1050; }
+        .sol-modal.show { display: flex; }
+        .sol-modal-box { background: #fff; border-radius: 16px; padding: 2rem; max-width: 520px; width: 92%; box-shadow: 0 24px 48px rgba(0,0,0,.18); }
+        .sol-modal-box h5 { margin: 0 0 1.2rem; font-weight: 800; color: var(--brand-navy-deep); font-size: 18px; }
+        .sol-modal-box textarea { width: 100%; padding: 10px 14px; border: 1.5px solid #e5e7eb; border-radius: 9px; font-family: inherit; resize: vertical; font-size: 13.5px; margin-top: 10px; }
+        .sol-modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 1.4rem; }
+        .sol-modal-footer button { padding: 9px 20px; border-radius: 9px; border: none; cursor: pointer; font-weight: 700; font-size: 14px; }
+        .btn-confirm { background: linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy)); color: #fff; }
+        .btn-cancel  { background: #e5e7eb; color: #374151; }
+        .page-title { font-size: 26px; font-weight: 800; color: var(--brand-navy-deep); margin-bottom: 4px; }
+        .page-sub   { font-size: 14px; color: #64748b; margin-bottom: 22px; }
     </style>
 </head>
 <body>
 
-<!-- SIDEBAR -->
-<div class="sidebar">
-    <div class="sidebar-brand">
-        <i class="fas fa-crown"></i> Super_IA
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <a href="index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-    </div>
-    
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Administración</div>
-        <a href="administrar_solicitudes_supervisor.php" class="sidebar-link active">
-            <i class="fas fa-file-alt"></i> Solicitudes de Supervisor
-        </a>
-    </div>
-</div>
+<?php
+$alertas_pendientes = 0;
+require_once '_sidebar_gerente.php';
+?>
 
-<!-- MAIN CONTENT -->
-<div class="main-content">
-    <!-- NAVBAR -->
-    <div class="navbar-custom">
-        <h2><?php echo $is_super_admin ? '👑' : '🎯'; ?> Super_IA - Solicitudes de Supervisor</h2>
-        <div class="user-info">
-            <div>
-                <strong><?php echo htmlspecialchars($admin_nombre); ?></strong><br>
-                <small><?php echo $is_super_admin ? 'Super Administrador' : 'Administrador'; ?></small>
-            </div>
-            <a href="logout.php" class="btn-logout">Cerrar Sesión</a>
-        </div>
-    </div>
-    
-    <!-- CONTENT -->
-    <div class="content-area">
+    <div style="padding: 30px; padding-bottom: 40px;">
 
-        <div class="page-header">
-            <h1><i class="fas fa-users-cog me-2"></i>Solicitudes de Supervisores</h1>
-        </div>
+        <div class="page-title"><i class="fas fa-clipboard-list me-2"></i>Solicitudes de Supervisores</div>
+        <p class="page-sub">Revisa y gestiona las solicitudes de registro de supervisores.</p>
 
         <?php if ($mensaje_exito): ?>
         <div class="alert-success">
@@ -421,27 +363,22 @@ $currentPage = 'solicitudes_supervisor';
             </div>
         </div>
 
-    </div>
-</div>
+    </div><!-- /.inner padding -->
+</div><!-- /.content-area -->
+</div><!-- /.main-content -->
 
-<!-- MODAL -->
-<div id="modal" class="modal">
-    <div class="modal-content">
-        <div class="modal-header">
-            <h5 id="modal-title">Confirmar</h5>
-        </div>
-        <form id="form-modal" method="POST">
+<!-- MODAL SOLICITUD -->
+<div id="solModal" class="sol-modal">
+    <div class="sol-modal-box">
+        <h5 id="solModalTitle">Confirmar</h5>
+        <form id="solModalForm" method="POST">
             <input type="hidden" name="id_solicitud" id="input-solicitud">
             <input type="hidden" name="accion" id="input-accion">
-            
-            <div class="modal-body">
-                <div id="modal-body-content"></div>
-                <textarea id="observaciones" name="observaciones" placeholder="Observaciones (opcional)..." style="display: none; margin-top: 10px;"></textarea>
-            </div>
-            
-            <div class="modal-footer">
-                <button type="button" class="btn-secondary-modal" onclick="cerrarModal()">Cancelar</button>
-                <button type="submit" class="btn-primary-modal" id="btn-confirmar">Confirmar</button>
+            <div id="modal-body-content"></div>
+            <textarea id="observaciones" name="observaciones" placeholder="Observaciones (opcional)..." style="display:none;"></textarea>
+            <div class="sol-modal-footer">
+                <button type="button" class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
+                <button type="submit" class="btn-confirm" id="btn-confirmar">Confirmar</button>
             </div>
         </form>
     </div>
@@ -449,8 +386,8 @@ $currentPage = 'solicitudes_supervisor';
 
 <script>
 function mostrarModal(accion, id, credencial) {
-    const modal = document.getElementById('modal');
-    const title = document.getElementById('modal-title');
+    const modal = document.getElementById('solModal');
+    const title = document.getElementById('solModalTitle');
     const inputSolicitud = document.getElementById('input-solicitud');
     const inputAccion = document.getElementById('input-accion');
     const modalBody = document.getElementById('modal-body-content');
@@ -498,8 +435,7 @@ function mostrarModal(accion, id, credencial) {
 }
 
 function cerrarModal() {
-    const modal = document.getElementById('modal');
-    modal.classList.remove('show');
+    document.getElementById('solModal').classList.remove('show');
 }
 
 // Lógica de búsqueda en la tabla
@@ -550,15 +486,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-document.getElementById('form-modal').onsubmit = function(e) {
+document.getElementById('solModalForm').onsubmit = function(e) {
     e.preventDefault();
     this.submit();
 };
 
-document.getElementById('modal').onclick = function(e) {
-    if (e.target === this) {
-        cerrarModal();
-    }
+document.getElementById('solModal').onclick = function(e) {
+    if (e.target === this) cerrarModal();
 };
 </script>
 
