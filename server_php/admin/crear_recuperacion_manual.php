@@ -93,8 +93,40 @@ $asesor_override  = !empty($payload['asesor_id']) ? (string)$payload['asesor_id'
 $fecha_prog       = !empty($payload['fecha_programada']) ? trim($payload['fecha_programada']) : date('Y-m-d');
 $mensaje_extra    = trim((string)($payload['mensaje'] ?? ''));
 
-if ($nombre === '') {
-    echo json_encode(['status' => 'error', 'message' => 'El nombre es requerido']); exit;
+// ── Validaciones de campos ──────────────────────────────────────
+$validDate = function (string $d): bool {
+    if ($d === '') return false;
+    $dt = DateTime::createFromFormat('Y-m-d', $d);
+    return $dt instanceof DateTime && $dt->format('Y-m-d') === $d;
+};
+
+if ($nombre === '' || mb_strlen($nombre) < 2) {
+    echo json_encode(['status' => 'error', 'message' => 'El nombre es requerido (mínimo 2 caracteres)']); exit;
+}
+
+if ($cedula !== '' && !preg_match('/^\d{10}$/', $cedula)) {
+    echo json_encode(['status' => 'error', 'message' => 'La cédula debe tener 10 dígitos numéricos']); exit;
+}
+
+if ($correo !== '' && !filter_var($correo, FILTER_VALIDATE_EMAIL)) {
+    echo json_encode(['status' => 'error', 'message' => 'El correo electrónico no es válido']); exit;
+}
+
+if ($montoRaw !== null && $montoRaw !== '' && (!is_numeric($montoRaw) || (float)$montoRaw < 0)) {
+    echo json_encode(['status' => 'error', 'message' => 'El monto del crédito debe ser un número mayor o igual a 0']); exit;
+}
+
+if (isset($payload['meses_mora']) && $payload['meses_mora'] !== ''
+    && (!is_numeric($payload['meses_mora']) || (int)$payload['meses_mora'] < 0 || (int)$payload['meses_mora'] > 999)) {
+    echo json_encode(['status' => 'error', 'message' => 'Los meses en mora deben ser un número entre 0 y 999']); exit;
+}
+
+if ($fechaCreacion !== '' && (!$validDate($fechaCreacion) || $fechaCreacion > date('Y-m-d'))) {
+    echo json_encode(['status' => 'error', 'message' => 'La fecha en que se creó la cuenta no es válida o es una fecha futura']); exit;
+}
+
+if (!$validDate($fecha_prog)) {
+    echo json_encode(['status' => 'error', 'message' => 'La fecha programada no es válida']); exit;
 }
 
 $nombre_full = trim($nombre . ' ' . $apellidos);

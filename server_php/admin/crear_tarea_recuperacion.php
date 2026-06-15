@@ -65,6 +65,21 @@ $meses_mora    = isset($payload['meses_mora']) ? (int)$payload['meses_mora'] : n
 $fecha_prog    = !empty($payload['fecha_programada']) ? trim($payload['fecha_programada']) : date('Y-m-d');
 $mensaje_base  = trim((string)($payload['mensaje'] ?? 'Recuperación: contactar cliente por cuotas pendientes'));
 
+// ── Validaciones de campos ──────────────────────────────────────
+if (isset($payload['meses_mora']) && $payload['meses_mora'] !== ''
+    && (!is_numeric($payload['meses_mora']) || (int)$payload['meses_mora'] < 0 || (int)$payload['meses_mora'] > 999)) {
+    echo json_encode(['status' => 'error', 'message' => 'Los meses en mora deben ser un número entre 0 y 999']); exit;
+}
+
+$validDate = function (string $d): bool {
+    if ($d === '') return false;
+    $dt = DateTime::createFromFormat('Y-m-d', $d);
+    return $dt instanceof DateTime && $dt->format('Y-m-d') === $d;
+};
+if (!$validDate($fecha_prog)) {
+    echo json_encode(['status' => 'error', 'message' => 'La fecha programada no es válida']); exit;
+}
+
 // Si distribuir_equipo: obtener todos los asesores del supervisor
 $asesores_equipo = [];
 if ($distribuir && $supervisor_table_id) {

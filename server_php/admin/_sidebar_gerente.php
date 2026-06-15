@@ -78,20 +78,12 @@ try {
         </a>
     </div>
 
-    <!-- GESTION -->
+    <!-- CLIENTES -->
     <div class="sidebar-section">
-        <div class="sidebar-section-title">GESTIÓN</div>
+        <div class="sidebar-section-title">CLIENTES</div>
         <a href="clientes.php"
            class="sidebar-link <?= ($currentPage === 'clientes') ? 'active' : '' ?>">
             <i class="fas fa-address-book"></i> <span>Clientes</span>
-        </a>
-        <a href="operaciones.php"
-           class="sidebar-link <?= ($currentPage === 'operaciones') ? 'active' : '' ?>">
-            <i class="fas fa-handshake"></i> <span>Operaciones</span>
-        </a>
-        <a href="kpi_penetracion.php"
-           class="sidebar-link <?= ($currentPage === 'reportes_penetracion') ? 'active' : '' ?>">
-            <i class="fas fa-chart-bar"></i> <span>Reportes KPIs</span>
         </a>
         <a href="recuperacion.php"
            class="sidebar-link <?= ($currentPage === 'recuperacion') ? 'active' : '' ?>">
@@ -100,6 +92,15 @@ try {
         <a href="recuperacion_creditos.php"
            class="sidebar-link <?= ($currentPage === 'recuperacion_creditos') ? 'active' : '' ?>">
             <i class="fas fa-hand-holding-dollar"></i> <span>Asignar Recuperación</span>
+        </a>
+    </div>
+
+    <!-- OPERACIONES -->
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">OPERACIONES</div>
+        <a href="operaciones.php"
+           class="sidebar-link <?= ($currentPage === 'operaciones') ? 'active' : '' ?>">
+            <i class="fas fa-handshake"></i> <span>Operaciones</span>
         </a>
         <a href="metas.php"
            class="sidebar-link <?= ($currentPage === 'metas') ? 'active' : '' ?>">
@@ -110,6 +111,10 @@ try {
     <!-- ANÁLISIS -->
     <div class="sidebar-section">
         <div class="sidebar-section-title">ANÁLISIS</div>
+        <a href="kpi_penetracion.php"
+           class="sidebar-link <?= ($currentPage === 'reportes_penetracion') ? 'active' : '' ?>">
+            <i class="fas fa-chart-bar"></i> <span>Reportes KPIs</span>
+        </a>
         <a href="alertas.php"
            class="sidebar-link <?= ($currentPage === 'alertas') ? 'active' : '' ?>">
             <i class="fas fa-bell"></i> <span>Alertas</span>

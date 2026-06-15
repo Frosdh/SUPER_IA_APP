@@ -1214,8 +1214,37 @@ $currentPage = 'recuperacion_creditos';
         modal.show();
       });
 
+      // Valida los campos del modal "Crear Tarea de Recuperación".
+      // Devuelve null si todo está OK, o {field, msg} con el primer error encontrado.
+      function validarModalCrear() {
+        ['modalMeses', 'modalFecha'].forEach(function (id) {
+          marcarInvalido(document.getElementById(id), false);
+        });
+
+        var meses = document.getElementById('modalMeses').value;
+        if (meses !== '' && (isNaN(meses) || Number(meses) < 0 || Number(meses) > 999)) {
+          return { field: 'modalMeses', msg: 'Los meses en mora deben ser un número entre 0 y 999' };
+        }
+
+        var fecha = document.getElementById('modalFecha').value;
+        if (!fecha) {
+          return { field: 'modalFecha', msg: 'La fecha programada es requerida' };
+        }
+
+        return null;
+      }
+
       // Confirmar modal individual
       document.getElementById('btnConfirmarModal').addEventListener('click', function () {
+        var error = validarModalCrear();
+        if (error) {
+          var el = document.getElementById(error.field);
+          marcarInvalido(el, true);
+          if (el) el.focus();
+          showToast(error.msg, 'warning');
+          return;
+        }
+
         var btn = this; btn.disabled = true;
         var cid = document.getElementById('modalCreditoId').value;
         var asesorId = document.getElementById('modalAsesorId').value;
@@ -1263,7 +1292,8 @@ $currentPage = 'recuperacion_creditos';
         btnAbrirManual.addEventListener('click', function () {
           // Limpiar formulario
           ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualCuenta','manualMonto','manualFechaCreacion','manualMeses','manualMensaje']
-            .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+            .forEach(function (id) { var el = document.getElementById(id); if (el) { el.value = ''; el.classList.remove('is-invalid'); } });
+          document.getElementById('manualFechaProg').classList.remove('is-invalid');
           if (manualCuentaChips) manualCuentaChips.querySelectorAll('.cred-chip').forEach(c => c.classList.remove('selected'));
           document.getElementById('manualFechaProg').value = '<?= date('Y-m-d') ?>';
           document.getElementById('manualDistribuir').value = 'todos';
@@ -1271,12 +1301,72 @@ $currentPage = 'recuperacion_creditos';
         });
       }
 
+      // Marca/limpia el estado de error visual de un campo
+      function marcarInvalido(el, invalido) {
+        if (!el) return;
+        el.classList.toggle('is-invalid', !!invalido);
+      }
+
+      // Valida los campos del formulario "Cliente nuevo (no en base)".
+      // Devuelve null si todo está OK, o {field, msg} con el primer error encontrado.
+      function validarManual() {
+        var campos = ['manualNombre','manualCedula','manualCorreo','manualMonto','manualMeses','manualFechaCreacion','manualFechaProg'];
+        campos.forEach(function (id) { marcarInvalido(document.getElementById(id), false); });
+
+        var nombre = document.getElementById('manualNombre').value.trim();
+        if (!nombre || nombre.length < 2) {
+          return { field: 'manualNombre', msg: 'El nombre es requerido (mínimo 2 caracteres)' };
+        }
+
+        var cedula = document.getElementById('manualCedula').value.trim();
+        if (cedula && !/^\d{10}$/.test(cedula)) {
+          return { field: 'manualCedula', msg: 'La cédula debe tener 10 dígitos numéricos' };
+        }
+
+        var correo = document.getElementById('manualCorreo').value.trim();
+        if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
+          return { field: 'manualCorreo', msg: 'El correo electrónico no es válido' };
+        }
+
+        var monto = document.getElementById('manualMonto').value;
+        if (monto !== '' && (isNaN(monto) || Number(monto) < 0)) {
+          return { field: 'manualMonto', msg: 'El monto del crédito debe ser un número mayor o igual a 0' };
+        }
+
+        var meses = document.getElementById('manualMeses').value;
+        if (meses !== '' && (isNaN(meses) || Number(meses) < 0 || Number(meses) > 999)) {
+          return { field: 'manualMeses', msg: 'Los meses en mora deben ser un número entre 0 y 999' };
+        }
+
+        var hoy = new Date().toISOString().slice(0, 10);
+        var fechaCreacion = document.getElementById('manualFechaCreacion').value;
+        if (fechaCreacion && fechaCreacion > hoy) {
+          return { field: 'manualFechaCreacion', msg: 'La fecha en que se creó la cuenta no puede ser futura' };
+        }
+
+        var fechaProg = document.getElementById('manualFechaProg').value;
+        if (!fechaProg) {
+          return { field: 'manualFechaProg', msg: 'La fecha programada es requerida' };
+        }
+
+        return null;
+      }
+
       var btnConfirmarManual = document.getElementById('btnConfirmarManual');
       if (btnConfirmarManual) {
         btnConfirmarManual.addEventListener('click', function () {
           var btn = this;
+
+          var error = validarManual();
+          if (error) {
+            var el = document.getElementById(error.field);
+            marcarInvalido(el, true);
+            if (el) el.focus();
+            showToast(error.msg, 'warning');
+            return;
+          }
+
           var nombre = document.getElementById('manualNombre').value.trim();
-          if (!nombre) { showToast('El nombre es requerido', 'warning'); return; }
 
           var payload = {
             nombre: nombre,
