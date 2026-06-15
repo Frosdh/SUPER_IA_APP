@@ -127,10 +127,6 @@ try {
            class="sidebar-link <?= ($currentPage === 'supervisores') ? 'active' : '' ?>">
             <i class="fas fa-users-gear"></i> <span>Mis Supervisores</span>
         </a>
-        <a href="registro_supervisor.php"
-           class="sidebar-link <?= ($currentPage === 'nuevo_supervisor') ? 'active' : '' ?>">
-            <i class="fas fa-user-plus"></i> <span>Agregar Supervisor</span>
-        </a>
     </div>
 
     <!-- CONFIGURACIÓN -->

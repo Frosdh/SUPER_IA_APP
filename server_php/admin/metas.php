@@ -438,12 +438,20 @@ if ($supervisor_table_id) {
                          ORDER BY u.nombre');
     $st->execute([$supervisor_table_id]);
     $asesores = $st->fetchAll();
+} elseif ($is_admin_gerente) {
+    try {
+        $st = $pdo->query('SELECT a.id, u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE u.activo = 1 ORDER BY u.nombre');
+        $asesores = $st->fetchAll();
+    } catch (Throwable $_) {}
 }
 
 // ── Metas del día actual con avance ──────────────────────────
 $fecha_filtro = $_GET['fecha'] ?? date('Y-m-d');
 $metas_hoy = [];
-if ($supervisor_table_id && $metas_instaladas) {
+if (($supervisor_table_id || $is_admin_gerente) && $metas_instaladas) {
+    $meta_where  = $supervisor_table_id ? 'WHERE a.supervisor_id = ? AND m.fecha = ?' : 'WHERE m.fecha = ?';
+    $meta_params = $supervisor_table_id ? [$supervisor_table_id, $fecha_filtro]       : [$fecha_filtro];
+
     // Intentar con la vista de avances; si no existe, usar avances 0.
     $sql = "SELECT m.*, u.nombre AS asesor_nombre,
                    v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
@@ -455,11 +463,11 @@ if ($supervisor_table_id && $metas_instaladas) {
             JOIN asesor a ON a.id = m.asesor_id
             JOIN usuario u ON u.id = a.usuario_id
             LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
-            WHERE a.supervisor_id = ? AND m.fecha = ?
+            $meta_where
             ORDER BY u.nombre";
     try {
         $st = $pdo->prepare($sql);
-        $st->execute([$supervisor_table_id, $fecha_filtro]);
+        $st->execute($meta_params);
         $metas_hoy = $st->fetchAll();
     } catch (PDOException $e) {
         // Fallback sin la vista
@@ -473,10 +481,10 @@ if ($supervisor_table_id && $metas_instaladas) {
                      FROM meta_asesor_diaria m
                      JOIN asesor a ON a.id = m.asesor_id
                      JOIN usuario u ON u.id = a.usuario_id
-                     WHERE a.supervisor_id = ? AND m.fecha = ?
+                     $meta_where
                      ORDER BY u.nombre";
             $st2 = $pdo->prepare($sql2);
-            $st2->execute([$supervisor_table_id, $fecha_filtro]);
+            $st2->execute($meta_params);
             $metas_hoy = $st2->fetchAll();
         } catch (PDOException $e2) {
             $metas_hoy = [];
@@ -559,7 +567,11 @@ $tareas_completadas = [];
 $tareas_incompletas = [];
 $tareas_programadas = [];
 
-if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
+// Para gerente: sin filtro de supervisor; para supervisor: filtrar por supervisor_id
+$sup_where  = $supervisor_table_id ? 'AND a.supervisor_id = ?' : '';
+$sup_params = $supervisor_table_id ? [$supervisor_table_id]    : [];
+
+if (!empty($asesor_ids_equipo)) {
     // Asegurar que existan las columnas de trazabilidad (no destructivo)
     try {
         $has_pospuesta = (bool)$pdo->query("SHOW COLUMNS FROM tarea LIKE 'pospuesta_de_dia'")->fetchColumn();
@@ -585,11 +597,11 @@ if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
                  JOIN asesor a ON a.id = t.asesor_id
                  JOIN usuario u ON u.id = a.usuario_id
                  LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-                 WHERE a.supervisor_id = ?
-                   AND t.asesor_id IN ($ph)
+                 WHERE t.asesor_id IN ($ph)
+                   $sup_where
                    AND t.estado = 'completada'
                    AND t.fecha_realizada BETWEEN ? AND ?";
-        $paramsC = array_merge([$supervisor_table_id], $asesor_ids_equipo, [$tareas_desde, $tareas_hasta]);
+        $paramsC = array_merge($asesor_ids_equipo, $sup_params, [$tareas_desde, $tareas_hasta]);
         if ($tareas_asesor_filtro !== '') {
             $sqlC .= " AND t.asesor_id = ?";
             $paramsC[] = $tareas_asesor_filtro;
@@ -627,8 +639,8 @@ if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
                  JOIN asesor a ON a.id = t.asesor_id
                  JOIN usuario u ON u.id = a.usuario_id
                  LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-                 WHERE a.supervisor_id = ?
-                   AND t.asesor_id IN ($ph)
+                 WHERE t.asesor_id IN ($ph)
+                   $sup_where
                    AND t.estado <> 'completada'
                    AND (
                         -- Caso pospuesta: cuenta inmediatamente contra el día original
@@ -645,8 +657,8 @@ if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
                            ))
                    )";
         $paramsI = array_merge(
-            [$supervisor_table_id],
             $asesor_ids_equipo,
+            $sup_params,
             [$tareas_desde, $tareas_hasta, $tareas_desde, $tareas_hasta]
         );
         if ($tareas_asesor_filtro !== '') {
@@ -676,8 +688,8 @@ if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
                  JOIN asesor a ON a.id = t.asesor_id
                  JOIN usuario u ON u.id = a.usuario_id
                  LEFT JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-                 WHERE a.supervisor_id = ?
-                   AND t.asesor_id IN ($ph)
+                 WHERE t.asesor_id IN ($ph)
+                   $sup_where
                    AND t.estado NOT IN ('completada','cancelada')
                    AND t.fecha_programada BETWEEN ? AND ?
                    AND (
@@ -685,8 +697,8 @@ if ($supervisor_table_id && !empty($asesor_ids_equipo)) {
                      OR (t.fecha_programada = CURDATE() AND HOUR(NOW()) < 18)
                    )";
         $paramsP = array_merge(
-            [$supervisor_table_id],
             $asesor_ids_equipo,
+            $sup_params,
             [$tareas_desde, $tareas_hasta]
         );
         if ($tareas_asesor_filtro !== '') {
@@ -801,6 +813,7 @@ if ($is_admin_gerente) {
             </div>
         </div>
 
+        <?php if (!$is_admin_gerente): ?>
         <!-- FORMULARIO ASIGNAR META -->
         <div class="section-card mb-4">
             <div class="section-header">
@@ -909,6 +922,7 @@ if ($is_admin_gerente) {
                 </form>
             </div>
         </div>
+        <?php endif; ?>
 
 
         <!-- METAS ACTUALES -->
