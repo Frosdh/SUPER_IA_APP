@@ -130,13 +130,6 @@ try {
     </div>
 
     <!-- CONFIGURACIÓN -->
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">ADMINISTRACIÓN</div>
-        <a href="administrar_solicitudes_supervisor.php"
-           class="sidebar-link <?= ($currentPage === 'solicitudes') ? 'active' : '' ?>">
-            <i class="fas fa-clipboard-list"></i> <span>Solicitudes</span>
-        </a>
-    </div>
 </div>
 
 <!-- ======== NOTIFICACIONES FLOTANTES ======== -->
