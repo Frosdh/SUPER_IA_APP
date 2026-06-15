@@ -142,7 +142,7 @@ try {
                  seleccion_fijada_at = NULL
              WHERE id = ?"
         );
-        
+
         $stUp->execute([$revisor_id, $observacion, $tarea_id]);
         $msg = 'Recuperación rechazada. La tarea vuelve a la agenda del asesor.';
     }
@@ -152,3 +152,4 @@ try {
 } catch (Throwable $e) {
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }
+

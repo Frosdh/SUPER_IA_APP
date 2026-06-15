@@ -88,6 +88,10 @@ if (!isset($alertas_pendientes) || $alertas_pendientes === 0) {
            class="sidebar-link <?= ($currentPage === 'recuperacion') ? 'active' : '' ?>">
             <i class="fas fa-user-clock"></i> <span>Recuperacion</span>
         </a>
+        <a href="recuperacion_creditos.php"
+           class="sidebar-link <?= ($currentPage === 'recuperacion_creditos') ? 'active' : '' ?>">
+            <i class="fas fa-hand-holding-dollar"></i> <span>Creditos</span>
+        </a>
         <a href="metas.php"
            class="sidebar-link <?= ($currentPage === 'metas') ? 'active' : '' ?>">
             <i class="fas fa-bullseye"></i> <span>Metas / Tareas</span>
