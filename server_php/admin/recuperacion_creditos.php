@@ -694,6 +694,9 @@ $currentPage = 'recuperacion_creditos';
             <p class="ma-page-sub">Selecciona créditos y crea nuevas tareas de recuperación para tu equipo</p>
           </div>
           <div class="d-flex align-items-center gap-2 flex-wrap">
+            <button type="button" class="btn-outline-navy" id="btnAbrirManual">
+              <i class="fas fa-user-plus"></i> Cliente nuevo (no en base)
+            </button>
             <a href="recuperacion.php" class="btn-outline-navy">
               <i class="fas fa-list-check"></i> Ver Recuperaciones
             </a>
@@ -1098,6 +1101,97 @@ $currentPage = 'recuperacion_creditos';
     </div>
   </div>
 
+  <!-- ===== MODAL CLIENTE NUEVO (NO EN BASE) ===== -->
+  <div class="modal fade" id="modalManual" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content" style="border-radius:16px;overflow:hidden;">
+        <div class="modal-header"
+          style="background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));color:#fff;border:none;">
+          <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Recuperación — Cliente nuevo (no en base)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body" style="padding:24px;">
+          <p class="text-muted" style="font-size:13px;">
+            Registra los datos básicos de una persona que no aparece en el sistema y crea de inmediato
+            su tarea de recuperación.
+          </p>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Nombres *</label>
+              <input type="text" id="manualNombre" class="form-control" placeholder="Nombres">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Apellidos</label>
+              <input type="text" id="manualApellidos" class="form-control" placeholder="Apellidos">
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Cédula</label>
+              <input type="text" id="manualCedula" class="form-control" placeholder="0000000000" maxlength="10">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Correo</label>
+              <input type="email" id="manualCorreo" class="form-control" placeholder="correo@ejemplo.com">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">¿Qué cuenta/producto tenía?</label>
+            <select id="manualCuenta" class="form-select">
+              <option value="">— Seleccione —</option>
+              <option value="Cuenta de Ahorro">Cuenta de Ahorro</option>
+              <option value="Cuenta Corriente">Cuenta Corriente</option>
+              <option value="Depósito a Plazo Fijo (CDP)">Depósito a Plazo Fijo (CDP)</option>
+              <option value="Crédito de Consumo">Crédito de Consumo</option>
+              <option value="Microcrédito">Microcrédito</option>
+              <option value="Crédito Comercial">Crédito Comercial</option>
+              <option value="Crédito de Vivienda">Crédito de Vivienda</option>
+              <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
+              <option value="otro">Otro</option>
+            </select>
+            <input type="text" id="manualCuentaOtro" class="form-control mt-2" placeholder="Especifique el producto…" style="display:none;">
+          </div>
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Monto del crédito</label>
+              <input type="number" id="manualMonto" class="form-control" min="0" step="0.01" placeholder="0.00">
+            </div>
+            <div class="col-md-6 mb-3">
+              <label class="form-label fw-bold">Fecha en que debe</label>
+              <input type="date" id="manualFechaDebe" class="form-control">
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Meses en mora</label>
+            <input type="number" id="manualMeses" class="form-control" min="0" max="999">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Fecha programada (tarea)</label>
+            <input type="date" id="manualFechaProg" class="form-control" value="<?= date('Y-m-d') ?>">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-bold">Asignar a</label>
+            <select id="manualDistribuir" class="form-select">
+              <option value="todos">Todos los asesores del equipo</option>
+              <?php foreach ($asesores_lista as $as): ?>
+                <option value="asesor_<?= htmlspecialchars($as['id']) ?>"><?= htmlspecialchars($as['nombre']) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <div class="mb-2">
+            <label class="form-label fw-bold">Observaciones</label>
+            <textarea id="manualMensaje" class="form-control" rows="2"
+              placeholder="Notas adicionales para el asesor…"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer" style="border-top:1px solid #e5e7eb;">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-warning fw-bold" id="btnConfirmarManual"><i class="fas fa-check me-1"></i>Guardar y crear tarea</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script>
     (function () {
@@ -1144,6 +1238,75 @@ $currentPage = 'recuperacion_creditos';
             }
           }).catch(() => { btn.disabled = false; showToast('❌ Error de red', 'danger'); });
       });
+
+      // ===== Modal "Cliente nuevo (no en base)" =====
+      var modalManualEl = document.getElementById('modalManual');
+      var modalManual = modalManualEl ? new bootstrap.Modal(modalManualEl) : null;
+      var btnAbrirManual = document.getElementById('btnAbrirManual');
+      // Mostrar/ocultar campo "Otro" producto
+      var manualCuentaSel = document.getElementById('manualCuenta');
+      var manualCuentaOtro = document.getElementById('manualCuentaOtro');
+      if (manualCuentaSel && manualCuentaOtro) {
+        manualCuentaSel.addEventListener('change', function () {
+          manualCuentaOtro.style.display = (this.value === 'otro') ? 'block' : 'none';
+          if (this.value !== 'otro') manualCuentaOtro.value = '';
+        });
+      }
+
+      if (btnAbrirManual && modalManual) {
+        btnAbrirManual.addEventListener('click', function () {
+          // Limpiar formulario
+          ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualCuenta','manualCuentaOtro','manualMonto','manualFechaDebe','manualMeses','manualMensaje']
+            .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
+          if (manualCuentaOtro) manualCuentaOtro.style.display = 'none';
+          document.getElementById('manualFechaProg').value = '<?= date('Y-m-d') ?>';
+          document.getElementById('manualDistribuir').value = 'todos';
+          modalManual.show();
+        });
+      }
+
+      var btnConfirmarManual = document.getElementById('btnConfirmarManual');
+      if (btnConfirmarManual) {
+        btnConfirmarManual.addEventListener('click', function () {
+          var btn = this;
+          var nombre = document.getElementById('manualNombre').value.trim();
+          if (!nombre) { showToast('El nombre es requerido', 'warning'); return; }
+
+          var cuentaSel = document.getElementById('manualCuenta').value;
+          var cuenta = (cuentaSel === 'otro')
+            ? document.getElementById('manualCuentaOtro').value.trim()
+            : cuentaSel;
+
+          var payload = {
+            nombre: nombre,
+            apellidos: document.getElementById('manualApellidos').value.trim(),
+            cedula: document.getElementById('manualCedula').value.trim(),
+            correo: document.getElementById('manualCorreo').value.trim(),
+            cuenta: cuenta,
+            monto_credito: document.getElementById('manualMonto').value,
+            fecha_vencimiento: document.getElementById('manualFechaDebe').value,
+            meses_mora: document.getElementById('manualMeses').value,
+            fecha_programada: document.getElementById('manualFechaProg').value,
+            mensaje: document.getElementById('manualMensaje').value.trim()
+          };
+
+          var dist = document.getElementById('manualDistribuir').value;
+          if (dist === 'todos') { payload.distribuir_equipo = true; }
+          else { payload.asesor_id = dist.replace('asesor_', ''); }
+
+          btn.disabled = true;
+          fetch('crear_recuperacion_manual.php', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+            .then(r => r.json()).then(j => {
+              btn.disabled = false;
+              if (j.status === 'success') {
+                modalManual.hide();
+                showToast('✅ ' + j.message, 'success');
+              } else {
+                showToast('❌ ' + (j.message || 'Error al crear'), 'danger');
+              }
+            }).catch(() => { btn.disabled = false; showToast('❌ Error de red', 'danger'); });
+        });
+      }
 
       // Checkbox lógica
       var chkAll = document.getElementById('chkAll');
