@@ -28,6 +28,7 @@
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 require_once 'db_admin.php';
+require_once 'funciones_validacion.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -100,8 +101,19 @@ $validDate = function (string $d): bool {
     return $dt instanceof DateTime && $dt->format('Y-m-d') === $d;
 };
 
-if ($nombre === '' || mb_strlen($nombre) < 2) {
-    echo json_encode(['status' => 'error', 'message' => 'El nombre es requerido (mínimo 2 caracteres)']); exit;
+if ($nombre === '') {
+    echo json_encode(['status' => 'error', 'message' => 'El nombre es requerido']); exit;
+}
+$rNombre = validarNombre($nombre, 'El nombre');
+if (!$rNombre['ok']) {
+    echo json_encode(['status' => 'error', 'message' => $rNombre['msg']]); exit;
+}
+
+if ($apellidos !== '') {
+    $rApellidos = validarNombre($apellidos, 'Los apellidos');
+    if (!$rApellidos['ok']) {
+        echo json_encode(['status' => 'error', 'message' => $rApellidos['msg']]); exit;
+    }
 }
 
 if ($cedula !== '' && !preg_match('/^\d{10}$/', $cedula)) {

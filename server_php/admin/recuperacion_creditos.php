@@ -1071,10 +1071,12 @@ $currentPage = 'recuperacion_creditos';
           <div class="mb-3">
             <label class="form-label fw-bold">Meses en mora</label>
             <input type="number" id="modalMeses" class="form-control" min="0" max="999">
+            <div class="invalid-feedback" id="modalMesesError"></div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">Fecha programada</label>
             <input type="date" id="modalFecha" class="form-control" value="<?= date('Y-m-d') ?>">
+            <div class="invalid-feedback" id="modalFechaError"></div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">Asignar a</label>
@@ -1119,20 +1121,24 @@ $currentPage = 'recuperacion_creditos';
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Nombres *</label>
               <input type="text" id="manualNombre" class="form-control" placeholder="Nombres">
+              <div class="invalid-feedback" id="manualNombreError"></div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Apellidos</label>
               <input type="text" id="manualApellidos" class="form-control" placeholder="Apellidos">
+              <div class="invalid-feedback" id="manualApellidosError"></div>
             </div>
           </div>
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Cédula</label>
               <input type="text" id="manualCedula" class="form-control" placeholder="0000000000" maxlength="10">
+              <div class="invalid-feedback" id="manualCedulaError"></div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Correo</label>
               <input type="email" id="manualCorreo" class="form-control" placeholder="correo@ejemplo.com">
+              <div class="invalid-feedback" id="manualCorreoError"></div>
             </div>
           </div>
           <div class="mb-3">
@@ -1158,19 +1164,23 @@ $currentPage = 'recuperacion_creditos';
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Monto del crédito</label>
               <input type="number" id="manualMonto" class="form-control" min="0" step="0.01" placeholder="0.00">
+              <div class="invalid-feedback" id="manualMontoError"></div>
             </div>
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Fecha en que se creó</label>
               <input type="date" id="manualFechaCreacion" class="form-control">
+              <div class="invalid-feedback" id="manualFechaCreacionError"></div>
             </div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">Meses en mora</label>
             <input type="number" id="manualMeses" class="form-control" min="0" max="999">
+            <div class="invalid-feedback" id="manualMesesError"></div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">Fecha programada (tarea)</label>
             <input type="date" id="manualFechaProg" class="form-control" value="<?= date('Y-m-d') ?>">
+            <div class="invalid-feedback" id="manualFechaProgError"></div>
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">Asignar a</label>
@@ -1196,6 +1206,7 @@ $currentPage = 'recuperacion_creditos';
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/validaciones.js"></script>
   <script>
     (function () {
       var modal = new bootstrap.Modal(document.getElementById('modalCrear'));
@@ -1208,6 +1219,8 @@ $currentPage = 'recuperacion_creditos';
         document.getElementById('modalAsesorId').value = btn.dataset.asesorId || '';
         document.getElementById('modalCreditoId').dataset.fuente = btn.dataset.fuente || 'proceso';
         document.getElementById('modalCliente').textContent = btn.dataset.cliente;
+        marcarInvalido(document.getElementById('modalMeses'), false);
+        marcarInvalido(document.getElementById('modalFecha'), false);
         // meses desde la fila
         var moraInput = document.querySelector('.mora-val[data-credito-id="' + btn.dataset.creditoId + '"]');
         document.getElementById('modalMeses').value = moraInput ? moraInput.value : (btn.dataset.meses || 0);
@@ -1217,31 +1230,27 @@ $currentPage = 'recuperacion_creditos';
       // Valida los campos del modal "Crear Tarea de Recuperación".
       // Devuelve null si todo está OK, o {field, msg} con el primer error encontrado.
       function validarModalCrear() {
-        ['modalMeses', 'modalFecha'].forEach(function (id) {
-          marcarInvalido(document.getElementById(id), false);
-        });
-
-        var meses = document.getElementById('modalMeses').value;
-        if (meses !== '' && (isNaN(meses) || Number(meses) < 0 || Number(meses) > 999)) {
-          return { field: 'modalMeses', msg: 'Los meses en mora deben ser un número entre 0 y 999' };
+        var campos = ['modalMeses', 'modalFecha'];
+        for (var i = 0; i < campos.length; i++) {
+          var msg = validarCampoEnVivo(campos[i]);
+          if (msg) return { field: campos[i], msg: msg };
         }
-
-        var fecha = document.getElementById('modalFecha').value;
-        if (!fecha) {
-          return { field: 'modalFecha', msg: 'La fecha programada es requerida' };
-        }
-
         return null;
       }
+
+      // Validación en vivo: al escribir en estos campos se valida solo ese campo
+      ['modalMeses', 'modalFecha'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', function () { validarCampoEnVivo(id); });
+      });
 
       // Confirmar modal individual
       document.getElementById('btnConfirmarModal').addEventListener('click', function () {
         var error = validarModalCrear();
         if (error) {
           var el = document.getElementById(error.field);
-          marcarInvalido(el, true);
+          marcarInvalido(el, true, error.msg);
           if (el) el.focus();
-          showToast(error.msg, 'warning');
           return;
         }
 
@@ -1292,8 +1301,8 @@ $currentPage = 'recuperacion_creditos';
         btnAbrirManual.addEventListener('click', function () {
           // Limpiar formulario
           ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualCuenta','manualMonto','manualFechaCreacion','manualMeses','manualMensaje']
-            .forEach(function (id) { var el = document.getElementById(id); if (el) { el.value = ''; el.classList.remove('is-invalid'); } });
-          document.getElementById('manualFechaProg').classList.remove('is-invalid');
+            .forEach(function (id) { var el = document.getElementById(id); if (el) { el.value = ''; marcarInvalido(el, false); } });
+          marcarInvalido(document.getElementById('manualFechaProg'), false);
           if (manualCuentaChips) manualCuentaChips.querySelectorAll('.cred-chip').forEach(c => c.classList.remove('selected'));
           document.getElementById('manualFechaProg').value = '<?= date('Y-m-d') ?>';
           document.getElementById('manualDistribuir').value = 'todos';
@@ -1301,56 +1310,93 @@ $currentPage = 'recuperacion_creditos';
         });
       }
 
-      // Marca/limpia el estado de error visual de un campo
-      function marcarInvalido(el, invalido) {
+      // Marca/limpia el estado de error visual de un campo y muestra el
+      // mensaje correspondiente justo debajo (elemento #<id>Error).
+      function marcarInvalido(el, invalido, msg) {
         if (!el) return;
         el.classList.toggle('is-invalid', !!invalido);
+        var errEl = document.getElementById(el.id + 'Error');
+        if (errEl) errEl.textContent = invalido ? (msg || '') : '';
+      }
+
+      // Reglas de validación por campo (id del input → mensaje de error o null).
+      function reglasCampo(id) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        var v = el.value;
+
+        switch (id) {
+          case 'manualNombre': {
+            var rN = validarNombre(v, 'El nombre');
+            if (!rN.ok) return rN.msg;
+            return null;
+          }
+
+          case 'manualApellidos': {
+            if (v.trim() === '') return null; // opcional
+            var rA = validarNombre(v, 'Los apellidos');
+            if (!rA.ok) return rA.msg;
+            return null;
+          }
+
+          case 'manualCedula':
+            v = v.trim();
+            if (v && !/^\d{10}$/.test(v)) return 'La cédula debe tener 10 dígitos numéricos';
+            return null;
+
+          case 'manualCorreo':
+            v = v.trim();
+            if (v && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return 'El correo electrónico no es válido';
+            return null;
+
+          case 'manualMonto':
+            if (v !== '' && (isNaN(v) || Number(v) < 0)) return 'El monto del crédito debe ser un número mayor o igual a 0';
+            return null;
+
+          case 'manualMeses':
+          case 'modalMeses':
+            if (v !== '' && (isNaN(v) || Number(v) < 0 || Number(v) > 999)) return 'Los meses en mora deben ser un número entre 0 y 999';
+            return null;
+
+          case 'manualFechaCreacion':
+            var hoy = new Date().toISOString().slice(0, 10);
+            if (v && v > hoy) return 'La fecha en que se creó la cuenta no puede ser futura';
+            return null;
+
+          case 'manualFechaProg':
+          case 'modalFecha':
+            if (!v) return 'La fecha programada es requerida';
+            return null;
+        }
+        return null;
+      }
+
+      // Valida un campo y refleja el resultado de inmediato (borde rojo + mensaje).
+      // Devuelve el mensaje de error, o null si el campo es válido.
+      function validarCampoEnVivo(id) {
+        var el = document.getElementById(id);
+        if (!el) return null;
+        var msg = reglasCampo(id);
+        marcarInvalido(el, !!msg, msg);
+        return msg;
       }
 
       // Valida los campos del formulario "Cliente nuevo (no en base)".
       // Devuelve null si todo está OK, o {field, msg} con el primer error encontrado.
       function validarManual() {
-        var campos = ['manualNombre','manualCedula','manualCorreo','manualMonto','manualMeses','manualFechaCreacion','manualFechaProg'];
-        campos.forEach(function (id) { marcarInvalido(document.getElementById(id), false); });
-
-        var nombre = document.getElementById('manualNombre').value.trim();
-        if (!nombre || nombre.length < 2) {
-          return { field: 'manualNombre', msg: 'El nombre es requerido (mínimo 2 caracteres)' };
+        var campos = ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualMonto','manualMeses','manualFechaCreacion','manualFechaProg'];
+        for (var i = 0; i < campos.length; i++) {
+          var msg = validarCampoEnVivo(campos[i]);
+          if (msg) return { field: campos[i], msg: msg };
         }
-
-        var cedula = document.getElementById('manualCedula').value.trim();
-        if (cedula && !/^\d{10}$/.test(cedula)) {
-          return { field: 'manualCedula', msg: 'La cédula debe tener 10 dígitos numéricos' };
-        }
-
-        var correo = document.getElementById('manualCorreo').value.trim();
-        if (correo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo)) {
-          return { field: 'manualCorreo', msg: 'El correo electrónico no es válido' };
-        }
-
-        var monto = document.getElementById('manualMonto').value;
-        if (monto !== '' && (isNaN(monto) || Number(monto) < 0)) {
-          return { field: 'manualMonto', msg: 'El monto del crédito debe ser un número mayor o igual a 0' };
-        }
-
-        var meses = document.getElementById('manualMeses').value;
-        if (meses !== '' && (isNaN(meses) || Number(meses) < 0 || Number(meses) > 999)) {
-          return { field: 'manualMeses', msg: 'Los meses en mora deben ser un número entre 0 y 999' };
-        }
-
-        var hoy = new Date().toISOString().slice(0, 10);
-        var fechaCreacion = document.getElementById('manualFechaCreacion').value;
-        if (fechaCreacion && fechaCreacion > hoy) {
-          return { field: 'manualFechaCreacion', msg: 'La fecha en que se creó la cuenta no puede ser futura' };
-        }
-
-        var fechaProg = document.getElementById('manualFechaProg').value;
-        if (!fechaProg) {
-          return { field: 'manualFechaProg', msg: 'La fecha programada es requerida' };
-        }
-
         return null;
       }
+
+      // Validación en vivo: al escribir en estos campos se valida solo ese campo
+      ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualMonto','manualMeses','manualFechaCreacion','manualFechaProg'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', function () { validarCampoEnVivo(id); });
+      });
 
       var btnConfirmarManual = document.getElementById('btnConfirmarManual');
       if (btnConfirmarManual) {
@@ -1360,9 +1406,8 @@ $currentPage = 'recuperacion_creditos';
           var error = validarManual();
           if (error) {
             var el = document.getElementById(error.field);
-            marcarInvalido(el, true);
+            marcarInvalido(el, true, error.msg);
             if (el) el.focus();
-            showToast(error.msg, 'warning');
             return;
           }
 

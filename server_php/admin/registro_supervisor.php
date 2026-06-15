@@ -1,6 +1,9 @@
 <?php
 require_once 'db_admin.php';
 
+// ── Detectar modo: gerente desde su panel, o registro público ──
+$modo_gerente = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+
 $success = isset($_GET['success']) ? $_GET['success'] : false;
 $error = isset($_GET['error']) ? $_GET['error'] : false;
 
@@ -37,8 +40,18 @@ try {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --brand-yellow:      #ffdd00;
+            --brand-yellow-deep: #f4c400;
+            --brand-navy:        #123a6d;
+            --brand-navy-deep:   #0a2748;
+            --brand-border:      #d7e0ea;
+            --brand-card:        #ffffff;
+            --brand-bg:          #f4f6f9;
+            --brand-shadow:      0 16px 34px rgba(18,58,109,.08);
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
+        body.public-mode {
             font-family: 'Inter', sans-serif;
             background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             min-height: 100vh;
@@ -48,6 +61,55 @@ try {
             color: #f8fafc;
             padding: 2rem;
         }
+
+        /* ── PANEL (modo gerente) ── */
+        body.panel-mode {
+            font-family:'Inter','Segoe UI',sans-serif;
+            background:linear-gradient(180deg,#f8fafc 0%,var(--brand-bg) 100%);
+            display:flex; height:100vh; color:var(--brand-navy-deep);
+            padding: 0;
+        }
+        .btn-back-link { padding:8px 18px; background:rgba(18,58,109,.08); color:var(--brand-navy-deep); border:1.5px solid var(--brand-border); border-radius:10px; cursor:pointer; text-decoration:none; font-weight:600; margin-bottom:14px; display:inline-flex; align-items:center; gap:8px; font-size:13.5px; transition:background .2s; }
+        .btn-back-link:hover { background:rgba(18,58,109,.15); color:var(--brand-navy-deep); }
+        .form-container-centered { max-width:100%; margin:0 auto; padding-bottom:40px; }
+        .page-header { margin-bottom:20px; }
+        .page-header h1 { font-size:26px; font-weight:800; color:var(--brand-navy-deep); }
+        .form-card { background:var(--brand-card); border-radius:18px; box-shadow:var(--brand-shadow); padding:30px; max-width:100%; border:1px solid var(--brand-border); }
+
+        /* Overrides claros para el formulario dentro del panel (tema oscuro -> claro) */
+        body.panel-mode .form-card .form-group label { color:#374151; }
+        body.panel-mode .form-card .form-control {
+            background:#fff; border:1.5px solid #e5e7eb; color:#1e293b;
+            box-shadow:none;
+        }
+        body.panel-mode .form-card .form-control:focus {
+            background:#fff; border-color:var(--brand-navy); color:#1e293b;
+            box-shadow:0 0 0 3px rgba(18,58,109,.10);
+        }
+        body.panel-mode .form-card .form-control::placeholder { color:#b0bac5; }
+        body.panel-mode .form-card .form-control option { background:#fff; color:#1e293b; }
+        body.panel-mode .form-card select.form-control {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23123a6d' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        }
+        body.panel-mode .form-card .btn-submit {
+            background: linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));
+        }
+        body.panel-mode .form-card .btn-submit:hover {
+            box-shadow: 0 10px 20px rgba(18,58,109,.25);
+        }
+        body.panel-mode .form-card .info-box {
+            background: rgba(18,58,109,.06); border:1px solid rgba(18,58,109,.18); color: var(--brand-navy-deep);
+        }
+        body.panel-mode .form-card .alert-success { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; }
+        body.panel-mode .form-card .alert-danger  { background:#fef2f2; border:1px solid #fecaca; color:#991b1b; }
+        body.panel-mode .form-card .file-input-label {
+            background: rgba(18,58,109,.03); border:2px dashed rgba(18,58,109,.25); color:#6b7280;
+        }
+        body.panel-mode .form-card .file-input-label:hover {
+            background: rgba(18,58,109,.07); border-color: var(--brand-navy); color:#374151;
+        }
+        body.panel-mode .form-card .file-input-label i { color: var(--brand-navy); }
+        body.panel-mode .form-card .eye-btn-color { color:#9ca3af; }
         .container-custom {
             max-width: 650px;
             width: 100%;
@@ -233,7 +295,24 @@ try {
         }
     </style>
 </head>
-<body>
+<body class="<?= $modo_gerente ? 'panel-mode' : 'public-mode' ?>">
+
+<?php if ($modo_gerente): ?>
+<!-- ════════════════ MODO GERENTE (panel) ════════════════ -->
+<?php
+$alertas_pendientes = 0;
+$currentPage = 'nuevo_supervisor';
+require_once '_sidebar_gerente.php';
+?>
+    <div class="form-container-centered">
+        <div class="page-header">
+            <a href="mis_supervisores.php" class="btn-back-link"><i class="fas fa-arrow-left"></i> Volver a Mis Supervisores</a>
+            <h1><i class="fas fa-user-tie me-2"></i>Crear Cuenta de Supervisor</h1>
+            <p class="text-muted mt-1" style="font-size:14px;">Completa los datos para registrar un nuevo supervisor.</p>
+        </div>
+        <div class="form-card">
+<?php else: ?>
+<!-- ════════════════ MODO PÚBLICO (standalone) ════════════════ -->
     <div class="container-custom">
         <div class="card-custom">
             <div class="header-custom">
@@ -243,6 +322,7 @@ try {
                 <h1>Crear Cuenta de Supervisor</h1>
                 <p>Crea una cuenta de supervisor</p>
             </div>
+<?php endif; ?>
 
             <?php if ($success): ?>
             <div class="alert-success">
@@ -348,10 +428,20 @@ try {
                 </div>
 
                 <button type="submit" class="btn-submit"><i class="fas fa-paper-plane me-2"></i>Enviar Solicitud</button>
+                <?php if (!$modo_gerente): ?>
                 <a href="login.php?role=supervisor" class="btn-back"><i class="fas fa-arrow-left me-2"></i>Volver a Login</a>
+                <?php endif; ?>
             </form>
-        </div>
-    </div>
+
+<?php if ($modo_gerente): ?>
+        </div><!-- /.form-card -->
+    </div><!-- /.form-container-centered -->
+</div><!-- /.content-area -->
+</div><!-- /.main-content -->
+<?php else: ?>
+        </div><!-- /.card-custom -->
+    </div><!-- /.container-custom -->
+<?php endif; ?>
 
 <script src="js/validaciones.js"></script>
 <script>
