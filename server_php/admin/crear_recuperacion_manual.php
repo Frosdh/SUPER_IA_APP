@@ -2,6 +2,12 @@
 // admin/crear_recuperacion_manual.php
 // Crea un cliente NUEVO (que no está en la base) a partir de una encuesta
 // básica de recuperación, y le genera de inmediato una tarea de recuperación.
+// La tarea se crea con estado='programada', igual que cualquier otra tarea
+// de recuperación: aparece en la Lista de Recuperaciones del supervisor como
+// "Programada" / "—" y en la lista de tareas pendientes del asesor en la app
+// móvil, para que el asesor la seleccione y la gestione cuando le toque. La
+// revisión (Pendiente/Aprobada/Rechazada) se genera más adelante, cuando el
+// asesor la marque como completada y el supervisor la revise.
 //
 // Parámetros JSON:
 //   nombre            — nombres (requerido)
@@ -13,7 +19,10 @@
 //   fecha_creacion    — fecha en que se creó la cuenta/crédito (YYYY-MM-DD, opcional)
 //   meses_mora        — int, meses en mora (opcional)
 //   asesor_id         — asesor destino (opcional)
-//   distribuir_equipo — true → crea la tarea para TODOS los asesores del supervisor
+//   distribuir_equipo — true → si no se indicó asesor_id, usa el primer asesor del
+//                        equipo del supervisor. IMPORTANTE: esta encuesta es de UN
+//                        solo cliente, así que SIEMPRE se crea UNA sola tarea
+//                        (nunca una por cada asesor del equipo).
 //   fecha_programada  — YYYY-MM-DD (default hoy)
 //   mensaje           — observaciones adicionales
 
@@ -103,47 +112,38 @@ $resolverAsesorId = function (string $rawId) use ($pdo): ?string {
     return $found2 ? (string)$found2 : null;
 };
 
-// ── Determinar asesores destino ─────────────────────────────────
-// IMPORTANTE: la app móvil (obtener_tareas_recuperacion_asesor.php) solo
-// muestra tareas de recuperación con asesor_id asignado (no soporta "pool"),
-// así que siempre intentamos resolver al menos un asesor real.
-$asesores_equipo = [];
-if ($distribuir && $supervisor_table_id) {
+// ── Determinar UN único asesor destino ──────────────────────────
+// IMPORTANTE: esta encuesta registra UN solo cliente nuevo, así que se crea
+// UNA sola tarea de recuperación (nunca una copia por cada asesor del
+// equipo). Además, la app móvil (obtener_tareas_recuperacion_asesor.php)
+// solo muestra tareas con asesor_id asignado (no soporta "pool"), así que
+// siempre intentamos resolver al menos un asesor real.
+$asesorResuelto = null;
+
+if ($asesor_override) {
+    $asesorResuelto = $resolverAsesorId($asesor_override) ?: $asesor_override;
+}
+
+if (!$asesorResuelto && $distribuir && $supervisor_table_id) {
     try {
-        $st = $pdo->prepare('SELECT id FROM asesor WHERE supervisor_id = ?');
+        $st = $pdo->prepare('SELECT id FROM asesor WHERE supervisor_id = ? LIMIT 1');
         $st->execute([$supervisor_table_id]);
-        $asesores_equipo = $st->fetchAll(PDO::FETCH_COLUMN);
-    } catch (Throwable $_) {}
-}
-// Gerente sin equipo propio (o supervisor sin asesores): distribuir entre
-// todos los asesores del sistema para que la tarea sea visible en móvil.
-if ($distribuir && empty($asesores_equipo)) {
-    try {
-        $asesores_equipo = $pdo->query('SELECT id FROM asesor')->fetchAll(PDO::FETCH_COLUMN);
+        $asesorResuelto = $st->fetchColumn() ?: null;
     } catch (Throwable $_) {}
 }
 
-$asesores_destino = [];
-if ($distribuir && !empty($asesores_equipo)) {
-    $asesores_destino = $asesores_equipo;
-} elseif ($asesor_override) {
-    $resolved = $resolverAsesorId($asesor_override);
-    $asesores_destino = [$resolved ?: $asesor_override];
-} else {
-    // Último recurso: asignar al primer asesor disponible para que la tarea
-    // no quede "huérfana" sin asesor_id (no sería visible en móvil).
-    $fallbackAsesor = null;
+// Último recurso: asignar al primer asesor disponible para que la tarea
+// no quede "huérfana" sin asesor_id (no sería visible en móvil).
+if (!$asesorResuelto) {
     try {
-        $fallbackAsesor = $pdo->query('SELECT id FROM asesor LIMIT 1')->fetchColumn() ?: null;
+        $asesorResuelto = $pdo->query('SELECT id FROM asesor LIMIT 1')->fetchColumn() ?: null;
     } catch (Throwable $_) {}
-    $asesores_destino = [$fallbackAsesor];
 }
 
-// Asesor "principal" para el registro del cliente/crédito (primero no nulo, si hay)
-$asesor_principal = null;
-foreach ($asesores_destino as $a) {
-    if ($a) { $asesor_principal = $a; break; }
-}
+$asesores_destino = [$asesorResuelto];
+
+// Asesor "principal" para el registro del cliente/crédito
+$asesor_principal = $asesorResuelto;
 
 try {
     $pdo->beginTransaction();
@@ -265,14 +265,20 @@ try {
     if ($mensaje_extra !== '') $obsParts[] = $mensaje_extra;
     $obs = implode(' ', $obsParts);
 
+    // La tarea se crea como "Programada": queda en la Lista de Recuperaciones
+    // del supervisor (Estado: Programada, Revisión: —) y en la lista de
+    // tareas pendientes del asesor en la app móvil, igual que cualquier otra
+    // tarea de recuperación, para que el asesor la seleccione y la gestione.
     $created = [];
     foreach ($asesores_destino as $aid) {
         $tareaId = uuid4();
-        $pdo->prepare(
-            'INSERT INTO tarea
-             (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado, fecha_programada, observaciones, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, NOW())'
-        )->execute([$tareaId, $aid, $cliente_id, 'recuperacion', 'programada', $fecha_prog, $obs]);
+
+        $colsT = ['id', 'asesor_id', 'cliente_prospecto_id', 'tipo_tarea', 'estado', 'fecha_programada', 'observaciones', 'created_at'];
+        $valsT = [$tareaId, $aid, $cliente_id, 'recuperacion', 'programada', $fecha_prog, $obs, date('Y-m-d H:i:s')];
+
+        $ph      = implode(',', array_fill(0, count($colsT), '?'));
+        $colList = implode(', ', array_map(fn($c) => "`$c`", $colsT));
+        $pdo->prepare("INSERT INTO tarea ($colList) VALUES ($ph)")->execute($valsT);
         $created[] = $tareaId;
     }
 
@@ -283,7 +289,7 @@ try {
         'cliente_id' => $cliente_id,
         'total'      => count($created),
         'created'    => $created,
-        'message'    => 'Cliente registrado y ' . count($created) . ' tarea(s) de recuperación creada(s)',
+        'message'    => 'Cliente registrado y tarea de recuperación creada (Programada para el asesor)',
     ]);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

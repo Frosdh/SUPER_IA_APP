@@ -247,7 +247,7 @@ $currentPage = 'recuperacion_creditos';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Créditos para Recuperación — Supervisor</title>
+  <title>Asignar Recuperación — Supervisor</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
@@ -690,7 +690,7 @@ $currentPage = 'recuperacion_creditos';
         <div class="ma-page-icon"><i class="fas fa-hand-holding-dollar"></i></div>
         <div class="d-flex align-items-center justify-content-between flex-wrap gap-3" style="flex:1;">
           <div>
-            <h1 class="ma-page-title">Créditos Aprobados / Desembolsados</h1>
+            <h1 class="ma-page-title">Asignar Recuperación de Cartera</h1>
             <p class="ma-page-sub">Selecciona créditos y crea nuevas tareas de recuperación para tu equipo</p>
           </div>
           <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -932,7 +932,7 @@ $currentPage = 'recuperacion_creditos';
       <div class="section-card" id="cardCreditos">
         <div class="section-header" style="background: #fff; border-bottom: 1px solid #edf2f7; padding: 18px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <h5 style="font-size: 16px; font-weight: 800; margin: 0; color: #0a2748; display: flex; align-items: center; gap: 10px;">
-            <i class="fa-solid fa-list-ul" style="color: #dc2626;"></i> Créditos Aprobados / Desembolsados
+            <i class="fa-solid fa-list-ul" style="color: #dc2626;"></i> Créditos en Mora
           </h5>
           <div class="d-flex align-items-center gap-3 flex-wrap">
             <?php if (!empty($creditos)): ?>

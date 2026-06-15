@@ -99,7 +99,7 @@ try {
         </a>
         <a href="recuperacion_creditos.php"
            class="sidebar-link <?= ($currentPage === 'recuperacion_creditos') ? 'active' : '' ?>">
-            <i class="fas fa-hand-holding-dollar"></i> <span>Créditos</span>
+            <i class="fas fa-hand-holding-dollar"></i> <span>Asignar Recuperación</span>
         </a>
         <a href="metas.php"
            class="sidebar-link <?= ($currentPage === 'metas') ? 'active' : '' ?>">
