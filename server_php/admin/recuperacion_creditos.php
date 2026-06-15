@@ -1137,28 +1137,31 @@ $currentPage = 'recuperacion_creditos';
           </div>
           <div class="mb-3">
             <label class="form-label fw-bold">¿Qué cuenta/producto tenía?</label>
-            <select id="manualCuenta" class="form-select">
-              <option value="">— Seleccione —</option>
-              <option value="Cuenta de Ahorro">Cuenta de Ahorro</option>
-              <option value="Cuenta Corriente">Cuenta Corriente</option>
-              <option value="Depósito a Plazo Fijo (CDP)">Depósito a Plazo Fijo (CDP)</option>
-              <option value="Crédito de Consumo">Crédito de Consumo</option>
-              <option value="Microcrédito">Microcrédito</option>
-              <option value="Crédito Comercial">Crédito Comercial</option>
-              <option value="Crédito de Vivienda">Crédito de Vivienda</option>
-              <option value="Tarjeta de Crédito">Tarjeta de Crédito</option>
-              <option value="otro">Otro</option>
-            </select>
-            <input type="text" id="manualCuentaOtro" class="form-control mt-2" placeholder="Especifique el producto…" style="display:none;">
+            <div class="text-muted mb-1" style="font-size:12px;">Puede seleccionar una o varias opciones</div>
+            <div class="cred-chip-grid" id="manualCuentaChips">
+              <div class="cred-chip" data-val="Cuenta de Ahorro"><i class="fas fa-check cred-chip-icon"></i><span>Cuenta de Ahorro</span></div>
+              <div class="cred-chip" data-val="Cuenta Corriente"><i class="fas fa-check cred-chip-icon"></i><span>Cuenta Corriente</span></div>
+              <div class="cred-chip" data-val="Crédito"><i class="fas fa-check cred-chip-icon"></i><span>Crédito</span></div>
+              <div class="cred-chip" data-val="Inversiones"><i class="fas fa-check cred-chip-icon"></i><span>Inversiones</span></div>
+            </div>
+            <input type="hidden" id="manualCuenta" value="">
           </div>
+          <style>
+          .cred-chip-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px;}
+          .cred-chip{display:inline-flex;align-items:center;gap:6px;padding:10px 18px;border:1.5px solid #e5e7eb;border-radius:30px;cursor:pointer;font-size:13px;font-weight:700;color:#374151;background:#fff;transition:.15s ease;}
+          .cred-chip:hover{border-color:var(--brand-navy);color:var(--brand-navy);transform:translateY(-1px);}
+          .cred-chip-icon{display:none;font-size:11px;}
+          .cred-chip.selected{background:linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));color:#fff;border-color:transparent;box-shadow:0 4px 12px rgba(15,40,80,.30);transform:translateY(-1px);}
+          .cred-chip.selected .cred-chip-icon{display:inline-block;}
+          </style>
           <div class="row">
             <div class="col-md-6 mb-3">
               <label class="form-label fw-bold">Monto del crédito</label>
               <input type="number" id="manualMonto" class="form-control" min="0" step="0.01" placeholder="0.00">
             </div>
             <div class="col-md-6 mb-3">
-              <label class="form-label fw-bold">Fecha en que debe</label>
-              <input type="date" id="manualFechaDebe" class="form-control">
+              <label class="form-label fw-bold">Fecha en que se creó</label>
+              <input type="date" id="manualFechaCreacion" class="form-control">
             </div>
           </div>
           <div class="mb-3">
@@ -1243,22 +1246,25 @@ $currentPage = 'recuperacion_creditos';
       var modalManualEl = document.getElementById('modalManual');
       var modalManual = modalManualEl ? new bootstrap.Modal(modalManualEl) : null;
       var btnAbrirManual = document.getElementById('btnAbrirManual');
-      // Mostrar/ocultar campo "Otro" producto
-      var manualCuentaSel = document.getElementById('manualCuenta');
-      var manualCuentaOtro = document.getElementById('manualCuentaOtro');
-      if (manualCuentaSel && manualCuentaOtro) {
-        manualCuentaSel.addEventListener('change', function () {
-          manualCuentaOtro.style.display = (this.value === 'otro') ? 'block' : 'none';
-          if (this.value !== 'otro') manualCuentaOtro.value = '';
+      // Selector de producto (chips de selección múltiple)
+      var manualCuentaChips = document.getElementById('manualCuentaChips');
+      if (manualCuentaChips) {
+        manualCuentaChips.addEventListener('click', function (e) {
+          var chip = e.target.closest('.cred-chip');
+          if (!chip) return;
+          chip.classList.toggle('selected');
+          var seleccionados = Array.from(manualCuentaChips.querySelectorAll('.cred-chip.selected'))
+            .map(c => c.dataset.val);
+          document.getElementById('manualCuenta').value = seleccionados.join(', ');
         });
       }
 
       if (btnAbrirManual && modalManual) {
         btnAbrirManual.addEventListener('click', function () {
           // Limpiar formulario
-          ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualCuenta','manualCuentaOtro','manualMonto','manualFechaDebe','manualMeses','manualMensaje']
+          ['manualNombre','manualApellidos','manualCedula','manualCorreo','manualCuenta','manualMonto','manualFechaCreacion','manualMeses','manualMensaje']
             .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
-          if (manualCuentaOtro) manualCuentaOtro.style.display = 'none';
+          if (manualCuentaChips) manualCuentaChips.querySelectorAll('.cred-chip').forEach(c => c.classList.remove('selected'));
           document.getElementById('manualFechaProg').value = '<?= date('Y-m-d') ?>';
           document.getElementById('manualDistribuir').value = 'todos';
           modalManual.show();
@@ -1272,19 +1278,14 @@ $currentPage = 'recuperacion_creditos';
           var nombre = document.getElementById('manualNombre').value.trim();
           if (!nombre) { showToast('El nombre es requerido', 'warning'); return; }
 
-          var cuentaSel = document.getElementById('manualCuenta').value;
-          var cuenta = (cuentaSel === 'otro')
-            ? document.getElementById('manualCuentaOtro').value.trim()
-            : cuentaSel;
-
           var payload = {
             nombre: nombre,
             apellidos: document.getElementById('manualApellidos').value.trim(),
             cedula: document.getElementById('manualCedula').value.trim(),
             correo: document.getElementById('manualCorreo').value.trim(),
-            cuenta: cuenta,
+            cuenta: document.getElementById('manualCuenta').value,
             monto_credito: document.getElementById('manualMonto').value,
-            fecha_vencimiento: document.getElementById('manualFechaDebe').value,
+            fecha_creacion: document.getElementById('manualFechaCreacion').value,
             meses_mora: document.getElementById('manualMeses').value,
             fecha_programada: document.getElementById('manualFechaProg').value,
             mensaje: document.getElementById('manualMensaje').value.trim()

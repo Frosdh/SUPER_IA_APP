@@ -10,7 +10,7 @@
 //   correo / email    — correo electrónico (opcional)
 //   cuenta            — cuenta/producto que tenía (texto libre, opcional)
 //   monto_credito     — monto del crédito (numérico, opcional)
-//   fecha_vencimiento — fecha en que debe / venció (YYYY-MM-DD, opcional)
+//   fecha_creacion    — fecha en que se creó la cuenta/crédito (YYYY-MM-DD, opcional)
 //   meses_mora        — int, meses en mora (opcional)
 //   asesor_id         — asesor destino (opcional)
 //   distribuir_equipo — true → crea la tarea para TODOS los asesores del supervisor
@@ -76,7 +76,7 @@ $correo    = trim((string)($payload['correo'] ?? $payload['email'] ?? ''));
 $cuenta    = trim((string)($payload['cuenta'] ?? ''));
 $montoRaw  = $payload['monto_credito'] ?? null;
 $monto     = ($montoRaw !== null && $montoRaw !== '') ? (float)$montoRaw : null;
-$fechaVence = trim((string)($payload['fecha_vencimiento'] ?? ''));
+$fechaCreacion = trim((string)($payload['fecha_creacion'] ?? ''));
 $meses_mora = isset($payload['meses_mora']) && $payload['meses_mora'] !== '' ? (int)$payload['meses_mora'] : null;
 
 $distribuir       = !empty($payload['distribuir_equipo']) && $payload['distribuir_equipo'];
@@ -104,12 +104,22 @@ $resolverAsesorId = function (string $rawId) use ($pdo): ?string {
 };
 
 // ── Determinar asesores destino ─────────────────────────────────
+// IMPORTANTE: la app móvil (obtener_tareas_recuperacion_asesor.php) solo
+// muestra tareas de recuperación con asesor_id asignado (no soporta "pool"),
+// así que siempre intentamos resolver al menos un asesor real.
 $asesores_equipo = [];
 if ($distribuir && $supervisor_table_id) {
     try {
         $st = $pdo->prepare('SELECT id FROM asesor WHERE supervisor_id = ?');
         $st->execute([$supervisor_table_id]);
         $asesores_equipo = $st->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $_) {}
+}
+// Gerente sin equipo propio (o supervisor sin asesores): distribuir entre
+// todos los asesores del sistema para que la tarea sea visible en móvil.
+if ($distribuir && empty($asesores_equipo)) {
+    try {
+        $asesores_equipo = $pdo->query('SELECT id FROM asesor')->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $_) {}
 }
 
@@ -120,8 +130,13 @@ if ($distribuir && !empty($asesores_equipo)) {
     $resolved = $resolverAsesorId($asesor_override);
     $asesores_destino = [$resolved ?: $asesor_override];
 } else {
-    // Sin asesor → tarea de pool (asesor_id NULL)
-    $asesores_destino = [null];
+    // Último recurso: asignar al primer asesor disponible para que la tarea
+    // no quede "huérfana" sin asesor_id (no sería visible en móvil).
+    $fallbackAsesor = null;
+    try {
+        $fallbackAsesor = $pdo->query('SELECT id FROM asesor LIMIT 1')->fetchColumn() ?: null;
+    } catch (Throwable $_) {}
+    $asesores_destino = [$fallbackAsesor];
 }
 
 // Asesor "principal" para el registro del cliente/crédito (primero no nulo, si hay)
@@ -227,7 +242,8 @@ try {
         }
         if (isset($cols_crp['created_at']) && !in_array('created_at', $cols, true)) {
             $cols[] = 'created_at';
-            $vals[] = date('Y-m-d H:i:s');
+            // Si el usuario indicó cuándo se creó originalmente la cuenta/crédito, usar esa fecha
+            $vals[] = $fechaCreacion !== '' ? ($fechaCreacion . ' 00:00:00') : date('Y-m-d H:i:s');
         }
 
         $ph = implode(',', array_fill(0, count($cols), '?'));
@@ -243,7 +259,7 @@ try {
     $obsParts = ['Recuperación de cliente nuevo (no estaba en la base).'];
     if ($cuenta !== '')        $obsParts[] = "Cuenta/Producto: $cuenta.";
     if ($monto !== null)       $obsParts[] = 'Monto del crédito: $' . number_format($monto, 2) . '.';
-    if ($fechaVence !== '')    $obsParts[] = "Fecha en que debe: $fechaVence.";
+    if ($fechaCreacion !== '') $obsParts[] = "Fecha en que se creó: $fechaCreacion.";
     if ($meses_mora !== null)  $obsParts[] = "Meses en mora: $meses_mora.";
     if ($correo !== '')        $obsParts[] = "Correo: $correo.";
     if ($mensaje_extra !== '') $obsParts[] = $mensaje_extra;
