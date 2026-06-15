@@ -171,8 +171,8 @@ $qb_debito   = isset($_POST['busca_tarjeta_debito']) ? 1 : 0;
 $qb_cred_t   = isset($_POST['busca_tarjeta_credito']) ? 1 : 0;
 
 // Validación básica
-if (!$cedula && !$cliente_id_post) {
-    redirect('error', 'La cédula o ID del cliente es obligatoria.');
+if (!$cedula && !$cliente_id_post && !$nombre_full) {
+    redirect('error', 'Debes ingresar al menos el nombre o la cédula del prospecto.');
 }
 
 // ═══════════════════════════════════════════════════════════

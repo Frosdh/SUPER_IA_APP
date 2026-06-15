@@ -135,6 +135,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .btn-search{background:var(--brand-yellow);color:var(--brand-navy-deep);border:none;border-radius:12px;padding:12px 22px;font-weight:800;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap;}
 .btn-search:hover{background:var(--brand-yellow-deep);}
 .btn-search:disabled{opacity:.5;cursor:not-allowed;}
+.skip-row{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;}
+.btn-skip{background:#fff;color:var(--brand-navy);border:1.5px dashed var(--brand-border);border-radius:12px;padding:10px 18px;font-weight:700;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;white-space:nowrap;transition:.2s;}
+.btn-skip:hover{background:#f3f4f6;border-color:var(--brand-navy);color:var(--brand-navy-deep);}
+.skip-hint{font-size:12px;color:var(--brand-gray);}
 .found-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:30px;font-size:13px;font-weight:700;margin-top:12px;}
 .found-chip.found{background:#d1fae5;color:#065f46;}
 .found-chip.new-prosp{background:#fef3c7;color:#92400e;}
@@ -388,6 +392,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                 <button class="btn-search" id="btn-buscar" type="button">
                     <i class="fas fa-search"></i> Buscar
                 </button>
+            </div>
+            <div class="skip-row">
+                <button class="btn-skip" id="btn-omitir" type="button" onclick="omitirBusqueda()">
+                    <i class="fas fa-forward"></i> Continuar sin buscar / cédula
+                </button>
+                <span class="skip-hint">Inicia la encuesta como prospecto nuevo sin necesidad de cédula.</span>
             </div>
             <div id="search-result" style="display:none;"></div>
         </div>
