@@ -211,7 +211,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $obs       = trim((string)($_POST['observaciones'] ?? ''));
 
         if ($origen === 'ficha' && is_string($idFicha) && $idFicha !== '' && ($accion === 'aprobar' || $accion === 'rechazar')) {
-            if (!in_array($user_role, ['super_admin', 'admin', 'supervisor'], true)) {
+            if (!in_array($user_role, ['super_admin', 'supervisor'], true)) {
                 $mensaje_error = 'No autorizado.';
             } else {
                 try {
@@ -1183,7 +1183,7 @@ if ($user_role === 'supervisor') {
                             </td>
                             <?php if (in_array($user_role, ['super_admin','admin','supervisor'])): ?>
                             <td>
-                                <?php if ($origen === 'ficha' && $estado === 'solicitud_ficha'): ?>
+                                <?php if ($origen === 'ficha' && $estado === 'solicitud_ficha' && $user_role !== 'admin'): ?>
                                 <form method="POST" class="d-flex gap-1" style="flex-wrap:nowrap">
                                     <input type="hidden" name="csrf_token"  value="<?= htmlspecialchars($csrf_token) ?>">
                                     <input type="hidden" name="tipo"       value="<?= htmlspecialchars($tipo) ?>">
