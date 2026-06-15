@@ -4,6 +4,36 @@ require_once 'db_admin.php';
 // ── Detectar modo: gerente desde su panel, o registro público ──
 $modo_gerente = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
 
+// ── Datos fijos del gerente (cooperativa y administrador responsable) ──
+$gerente_admin_id           = null;
+$gerente_admin_nombre       = '—';
+$gerente_cooperativa_id     = null;
+$gerente_cooperativa_nombre = '—';
+if ($modo_gerente) {
+    $gerente_admin_id     = $_SESSION['admin_id']     ?? null;
+    $gerente_admin_nombre = $_SESSION['admin_nombre'] ?? 'Gerente';
+    try {
+        // Vía 1: jefe_agencia propio → agencia → unidad_bancaria
+        $st = $pdo->prepare("SELECT ag.unidad_bancaria_id FROM jefe_agencia ja JOIN agencia ag ON ag.id = ja.agencia_id WHERE ja.usuario_id = ? LIMIT 1");
+        $st->execute([$gerente_admin_id]);
+        $ub_id = $st->fetchColumn() ?: null;
+
+        // Vía 2: gerente_general → unidad_bancaria
+        if (!$ub_id) {
+            $st = $pdo->prepare("SELECT unidad_bancaria_id FROM gerente_general WHERE usuario_id = ? LIMIT 1");
+            $st->execute([$gerente_admin_id]);
+            $ub_id = $st->fetchColumn() ?: null;
+        }
+
+        if ($ub_id) {
+            $gerente_cooperativa_id = $ub_id;
+            $st = $pdo->prepare("SELECT nombre FROM unidad_bancaria WHERE id = ? LIMIT 1");
+            $st->execute([$ub_id]);
+            $gerente_cooperativa_nombre = $st->fetchColumn() ?: '—';
+        }
+    } catch (\Throwable $e) {}
+}
+
 $success = isset($_GET['success']) ? $_GET['success'] : false;
 $error = isset($_GET['error']) ? $_GET['error'] : false;
 
@@ -87,9 +117,18 @@ try {
             box-shadow:0 0 0 3px rgba(18,58,109,.10);
         }
         body.panel-mode .form-card .form-control::placeholder { color:#b0bac5; }
+        body.panel-mode .form-card .field-readonly {
+            display:flex; align-items:center;
+            background:#f1f5f9; border:1.5px solid #e5e7eb; color:#64748b;
+            cursor:not-allowed; font-weight:600;
+        }
         body.panel-mode .form-card .form-control option { background:#fff; color:#1e293b; }
         body.panel-mode .form-card select.form-control {
+            background-color: #fff;
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23123a6d' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 32px;
         }
         body.panel-mode .form-card .btn-submit {
             background: linear-gradient(135deg,var(--brand-navy-deep),var(--brand-navy));
@@ -339,12 +378,27 @@ require_once '_sidebar_gerente.php';
             </div>
             <?php endif; ?>
 
+            <?php if (!$modo_gerente): ?>
             <div class="info-box">
                 <i class="fas fa-info-circle me-2"></i>
                 <strong>Selección Requerida:</strong> Escoge la cooperativa y el administrador filtrará automáticamente.
             </div>
+            <?php endif; ?>
 
             <form method="POST" action="procesar_registro_supervisor.php" enctype="multipart/form-data" novalidate>
+                <?php if ($modo_gerente): ?>
+                <div class="form-group">
+                    <label><i class="fas fa-building me-2"></i>Cooperativa</label>
+                    <div class="form-control field-readonly"><?= htmlspecialchars($gerente_cooperativa_nombre) ?></div>
+                    <input type="hidden" name="cooperativa" value="<?= htmlspecialchars((string)$gerente_cooperativa_id) ?>">
+                </div>
+
+                <div class="form-group">
+                    <label><i class="fas fa-user-cog me-2"></i>Gerente Responsable</label>
+                    <div class="form-control field-readonly"><?= htmlspecialchars($gerente_admin_nombre) ?></div>
+                    <input type="hidden" name="administrador" value="<?= htmlspecialchars((string)$gerente_admin_id) ?>">
+                </div>
+                <?php else: ?>
                 <div class="form-group">
                     <label for="cooperativa"><i class="fas fa-building me-2"></i>Cooperativa</label>
                     <select name="cooperativa" id="cooperativa" class="form-control" required>
@@ -363,6 +417,7 @@ require_once '_sidebar_gerente.php';
                         <option value="">-- Primero selecciona una cooperativa --</option>
                     </select>
                 </div>
+                <?php endif; ?>
 
                 <div class="row-cols">
                     <div class="form-group">
@@ -512,6 +567,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
     }
 });
 
+<?php if (!$modo_gerente): ?>
 // Manejo del file upload
 document.getElementById('cooperativa').addEventListener('change', function() {
     const coopId = this.value;
@@ -544,6 +600,7 @@ document.getElementById('cooperativa').addEventListener('change', function() {
             adminSelect.innerHTML = '<option value="">Error al cargar administradores</option>';
         });
 });
+<?php endif; ?>
 
 // Manejo del file input
 const fileInput = document.getElementById('credencial');
