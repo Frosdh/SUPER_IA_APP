@@ -15,11 +15,13 @@ require_once 'db_admin.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-if (!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in'] !== true) {
+// ── Auth: supervisor o gerente ─────────────────────────────────────
+$is_admin_gerente = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
+if ((!isset($_SESSION['supervisor_logged_in']) || $_SESSION['supervisor_logged_in'] !== true) && !$is_admin_gerente) {
     echo json_encode(['status'=>'error','message'=>'Acceso denegado']); exit;
 }
 
-$supervisor_usuario_id = $_SESSION['supervisor_id'];
+$supervisor_usuario_id = $_SESSION['supervisor_id'] ?? null;
 // Resolver supervisor.id de forma robusta: la sesión puede contener usuario_id o supervisor.id
 $supervisor_table_id = null;
 try {
@@ -80,19 +82,24 @@ if (!$validDate($fecha_prog)) {
     echo json_encode(['status' => 'error', 'message' => 'La fecha programada no es válida']); exit;
 }
 
-// Si distribuir_equipo: obtener todos los asesores del supervisor
+// Si distribuir_equipo: obtener todos los asesores del equipo (o todos, si es gerente)
 $asesores_equipo = [];
-if ($distribuir && $supervisor_table_id) {
+if ($distribuir) {
     try {
-        $st = $pdo->prepare('SELECT id FROM asesor WHERE supervisor_id = ?');
-        $st->execute([$supervisor_table_id]);
-        $asesores_equipo = $st->fetchAll(PDO::FETCH_COLUMN);
+        if ($is_admin_gerente) {
+            $st = $pdo->query('SELECT id FROM asesor');
+            $asesores_equipo = $st->fetchAll(PDO::FETCH_COLUMN);
+        } elseif ($supervisor_table_id) {
+            $st = $pdo->prepare('SELECT id FROM asesor WHERE supervisor_id = ?');
+            $st->execute([$supervisor_table_id]);
+            $asesores_equipo = $st->fetchAll(PDO::FETCH_COLUMN);
+        }
     } catch (Throwable $_) {}
 }
 
-// Si pidieron distribuir pero no encontramos supervisores/asesores, devolver error claro
+// Si pidieron distribuir pero no encontramos asesores, devolver error claro
 if ($distribuir && empty($asesores_equipo)) {
-    echo json_encode(['status'=>'error','message'=>'No se encontraron asesores del equipo para distribuir (verifique sesión de supervisor)']);
+    echo json_encode(['status'=>'error','message'=>'No se encontraron asesores para distribuir']);
     exit;
 }
 

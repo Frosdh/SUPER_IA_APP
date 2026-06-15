@@ -386,11 +386,13 @@ $currentPage = 'recuperacion';
             <h1 class="ma-page-title">Recuperación de Cartera</h1>
             <p class="ma-page-sub">Revisa, crea y da seguimiento a las recuperaciones de tu equipo</p>
           </div>
+          <?php if (!$is_admin_gerente): ?>
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <a href="recuperacion_creditos.php" class="btn-navy">
               <i class="fas fa-plus"></i> Nueva Recuperación
             </a>
           </div>
+          <?php endif; ?>
         </div>
       </div>
 
@@ -595,6 +597,7 @@ $currentPage = 'recuperacion';
 
   <!-- ===== REVISIÓN DE RECUPERACIONES (pendientes de aprobación) ===== -->
   <script>
+    var IS_ADMIN_GERENTE = <?= $is_admin_gerente ? 'true' : 'false' ?>;
     (function () {
       function escapeHtml(s) {
         return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
@@ -649,8 +652,9 @@ $currentPage = 'recuperacion';
                 '<td class="py-3" style="font-size:13px;max-width:320px;">' + escapeHtml(it.observaciones || '—') + '</td>' +
                 '<td class="py-3 text-secondary" style="font-size:13px;">' + escapeHtml(fecha) + '</td>' +
                 '<td class="text-end pe-3 py-3" style="white-space:nowrap;">' +
+                  (IS_ADMIN_GERENTE ? '<span class="text-muted" style="font-size:12.5px;">Pendiente</span>' :
                   '<button class="btn btn-sm btn-success btn-revisar" data-id="' + escapeHtml(it.id) + '" data-accion="aprobar" style="font-weight:700;margin-right:6px;"><i class="fas fa-check"></i> Aprobar</button>' +
-                  '<button class="btn btn-sm btn-outline-danger btn-revisar" data-id="' + escapeHtml(it.id) + '" data-accion="rechazar" style="font-weight:700;"><i class="fas fa-times"></i> Rechazar</button>' +
+                  '<button class="btn btn-sm btn-outline-danger btn-revisar" data-id="' + escapeHtml(it.id) + '" data-accion="rechazar" style="font-weight:700;"><i class="fas fa-times"></i> Rechazar</button>') +
                 '</td>';
               tbody.appendChild(tr);
             });
