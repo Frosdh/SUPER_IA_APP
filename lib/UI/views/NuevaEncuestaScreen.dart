@@ -366,6 +366,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _buscaCreditoR = false;
   bool _buscaTD = false;
   bool _buscaTC = false;
+  bool _buscaTasas = false;
+  bool _buscaOtro = false;
+  final _buscaOtroCtrl = TextEditingController();
   DateTime? _fechaVencCDP;
   String _acuerdo = '';
   DateTime? _fechaAcuerdo;
@@ -874,11 +877,14 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _buscaCreditoR  = _i(e['que_busca_credito_rapido']) == 1;
       _buscaTD        = _i(e['que_busca_tarjeta_debito']) == 1;
       _buscaTC        = _i(e['que_busca_tarjeta_credito']) == 1;
+      _buscaTasas     = _i(e['que_busca_tasas_competitivas']) == 1;
+      _buscaOtro      = _i(e['que_busca_otro']) == 1;
+      _buscaOtroCtrl.text = _s(e['que_busca_otro_texto']);
       _interesTrabajar = _ib(e['interes_trabajar_institucion']);
       _fechaVencCDP   = _fecha(_s(e['fecha_vencimiento_cdp']));
 
       final ac = _s(e['acuerdo_logrado']);
-      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas'];
+      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
       if (ac.isNotEmpty && _validAcuerdos.contains(ac)) _acuerdo = ac;
       _fechaAcuerdo = _fecha(_s(e['fecha_acuerdo']));
       _horaAcuerdo  = _hora (_s(e['hora_acuerdo']));
@@ -1064,6 +1070,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     _bancoAhorroCtrl.dispose();
     _bancoCorrienteCtrl.dispose();
     _razonOtrosCtrl.dispose();
+    _buscaOtroCtrl.dispose();
     _obsCtrl.dispose();
     _flujoVersion.dispose();
     _creditosPagarCtrl.dispose();
@@ -1663,6 +1670,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         'que_busca_credito_rapido': _buscaCreditoR ? '1' : '0',
         'que_busca_tarjeta_debito': _buscaTD ? '1' : '0',
         'que_busca_tarjeta_credito': _buscaTC ? '1' : '0',
+        'que_busca_tasas_competitivas': _buscaTasas ? '1' : '0',
+        'que_busca_otro': _buscaOtro ? '1' : '0',
+        'que_busca_otro_texto': _buscaOtroCtrl.text.trim(),
         'fecha_vencimiento_cdp': _fechaVencCDP != null
             ? '${_fechaVencCDP!.year}-${_fechaVencCDP!.month.toString().padLeft(2, '0')}-${_fechaVencCDP!.day.toString().padLeft(2, '0')}'
             : '',
@@ -5760,6 +5770,41 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Tarjeta crédito',
             value: _buscaTC,
             onChanged: (v) => setState(() => _buscaTC = v ?? false)),
+        _checkboxItem(
+            label: 'Tasas competitivas',
+            value: _buscaTasas,
+            onChanged: (v) => setState(() => _buscaTasas = v ?? false)),
+        _checkboxItem(
+            label: 'Otro',
+            value: _buscaOtro,
+            onChanged: (v) => setState(() {
+              _buscaOtro = v ?? false;
+              if (!_buscaOtro) _buscaOtroCtrl.clear();
+            })),
+        if (_buscaOtro) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: TextField(
+              controller: _buscaOtroCtrl,
+              decoration: InputDecoration(
+                hintText: 'Especifique qué busca…',
+                filled: true,
+                fillColor: const Color(0xFFF5F5F5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                ),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         _seccionTitulo('Acuerdo Logrado'),
         _dropdownAcuerdo(),
@@ -6368,7 +6413,6 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       ('nueva_cita_oficina', 'Nueva cita en oficina'),
       ('reprogramacion',     'Reprogramación'),
       ('seguimiento',        'Recolectar documentación'),
-      ('tasas_competitivas', 'Tasas competitivas'),
       ('otro',               'Levantamiento / Otro'),
     ];
     return DropdownButtonFormField<String>(

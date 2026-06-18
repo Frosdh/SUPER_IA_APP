@@ -130,8 +130,11 @@ $cols_ec = [
     'que_busca_agencias'           => "TINYINT(1) NOT NULL DEFAULT 0",
     'que_busca_credito_rapido'     => "TINYINT(1) NOT NULL DEFAULT 0",
     'que_busca_tarjeta_debito'     => "TINYINT(1) NOT NULL DEFAULT 0",
-    'que_busca_tarjeta_credito'    => "TINYINT(1) NOT NULL DEFAULT 0",
-    'interes_trabajar_institucion' => "TINYINT(1) DEFAULT NULL",
+    'que_busca_tarjeta_credito'      => "TINYINT(1) NOT NULL DEFAULT 0",
+    'que_busca_tasas_competitivas'   => "TINYINT(1) NOT NULL DEFAULT 0",
+    'que_busca_otro'                 => "TINYINT(1) NOT NULL DEFAULT 0",
+    'que_busca_otro_texto'           => "TEXT DEFAULT NULL",
+    'interes_trabajar_institucion'   => "TINYINT(1) DEFAULT NULL",
     'interes_conocer_servicios'    => "TINYINT(1) DEFAULT NULL",
     'banco_ahorro'                 => "VARCHAR(200) DEFAULT NULL",
     'banco_corriente'              => "VARCHAR(200) DEFAULT NULL",
@@ -239,11 +242,14 @@ $busca_banca        = (int)($_POST['que_busca_banca_linea']     ?? 0);
 $busca_agencias     = (int)($_POST['que_busca_agencias']        ?? 0);
 $busca_credito      = (int)($_POST['que_busca_credito_rapido']  ?? 0);
 $busca_td           = (int)($_POST['que_busca_tarjeta_debito']  ?? 0);
-$busca_tc           = (int)($_POST['que_busca_tarjeta_credito'] ?? 0);
-$fecha_venc_cdp     = strOrNull($_POST['fecha_vencimiento_cdp'] ?? '');
+$busca_tc           = (int)($_POST['que_busca_tarjeta_credito']    ?? 0);
+$busca_tasas        = (int)($_POST['que_busca_tasas_competitivas'] ?? 0);
+$busca_otro         = (int)($_POST['que_busca_otro']               ?? 0);
+$busca_otro_texto   = strOrNull($_POST['que_busca_otro_texto']     ?? '');
+$fecha_venc_cdp     = strOrNull($_POST['fecha_vencimiento_cdp']    ?? '');
 $interes_trabajar   = intOrNull($_POST['interes_trabajar_institucion'] ?? null);
 $_acuerdo_raw       = strOrNull($_POST['acuerdo_logrado'] ?? '');
-$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas']) ? $_acuerdo_raw : null;
+$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro']) ? $_acuerdo_raw : null;
 $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
@@ -1136,7 +1142,8 @@ try {
               acuerdo_logrado, fecha_acuerdo, hora_acuerdo, observaciones,
               que_busca_agilidad, que_busca_cajeros, que_busca_banca_linea,
               que_busca_agencias, que_busca_credito_rapido, que_busca_tarjeta_debito,
-              que_busca_tarjeta_credito, interes_trabajar_institucion, fecha_vencimiento_cdp,
+              que_busca_tarjeta_credito, que_busca_tasas_competitivas, que_busca_otro, que_busca_otro_texto,
+              interes_trabajar_institucion, fecha_vencimiento_cdp,
               banco_ahorro, banco_corriente)
              VALUES (?,?, ?,?, ?,?,?, ?,?, ?,?, ?,?, ?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)"
         );
@@ -1155,10 +1162,11 @@ try {
             $acuerdo, $fecha_acuerdo, $hora_acuerdo, $obs_final, // s s s s
             $busca_agilidad, $busca_cajeros, $busca_banca,   // i i i
             $busca_agencias, $busca_credito, $busca_td,      // i i i
-            $busca_tc, $interes_trabajar, $fecha_venc_cdp,   // i i s
+            $busca_tc, $busca_tasas, $busca_otro, $busca_otro_texto, // i i i s
+            $interes_trabajar, $fecha_venc_cdp,              // i s
             $banco_ahorro, $banco_corriente,                 // s s
         ];
-        $ec_types = 'ss' . 'ii' . 'isd' . 'ss' . 'is' . 'is' . 'is' . 'iiii' . 'iiii' . 's' . 'ssss' . 'iii' . 'iii' . 'iis' . 'ss';
+        $ec_types = 'ss' . 'ii' . 'isd' . 'ss' . 'is' . 'is' . 'is' . 'iiii' . 'iiii' . 's' . 'ssss' . 'iii' . 'iii' . 'iiis' . 'is' . 'ss';
         $st->bind_param($ec_types, ...$ec_vals);
         $st->execute();
         $st->close();

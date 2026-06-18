@@ -199,6 +199,7 @@ $currentPage = 'solicitudes_supervisor';
     <title>Super_IA - Solicitudes de Supervisores</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
         :root {
             --brand-yellow: #ffdd00; --brand-navy: #123a6d; --brand-navy-deep: #0a2748;
             --brand-border: #d7e0ea; --brand-bg: #f4f6f9; --brand-shadow: 0 16px 34px rgba(18,58,109,.08);
@@ -247,6 +248,9 @@ require_once '_sidebar_gerente.php';
 
     <div style="padding: 30px; padding-bottom: 40px;">
 
+        <a href="mis_supervisores.php" style="display:inline-flex;align-items:center;gap:8px;padding:8px 18px;background:rgba(18,58,109,.08);color:#0a2748;border:1.5px solid #d7e0ea;border-radius:10px;text-decoration:none;font-weight:600;font-size:13.5px;margin-bottom:14px;transition:background .2s;" onmouseover="this.style.background='rgba(18,58,109,.15)'" onmouseout="this.style.background='rgba(18,58,109,.08)'">
+            <i class="fas fa-arrow-left"></i> Volver a Mis Supervisores
+        </a>
         <div class="page-title"><i class="fas fa-clipboard-list me-2"></i>Solicitudes de Supervisores</div>
         <p class="page-sub">Revisa y gestiona las solicitudes de registro de supervisores.</p>
 
