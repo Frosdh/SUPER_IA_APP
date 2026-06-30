@@ -5655,6 +5655,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             fichaLlena: _fichaCC,
             onChanged: (v) {
               if (_fichaCC) return;
+              if ((v ?? false) && !_validarCedulaParaProducto()) return;
               setState(() => _interesCC = v ?? false);
             },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.cuentaCorriente),
@@ -5667,6 +5668,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             fichaLlena: _fichaAhorro,
             onChanged: (v) {
               if (_fichaAhorro) return;
+              if ((v ?? false) && !_validarCedulaParaProducto()) return;
               setState(() => _interesAhorro = v ?? false);
             },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.cuentaAhorros),
@@ -5679,6 +5681,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             fichaLlena: _fichaInv,
             onChanged: (v) {
               if (_fichaInv) return;
+              if ((v ?? false) && !_validarCedulaParaProducto()) return;
               setState(() => _interesInv = v ?? false);
             },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.inversiones),
@@ -5691,6 +5694,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             fichaLlena: _fichaCred,
             onChanged: (v) {
               if (_fichaCred) return;
+              if ((v ?? false) && !_validarCedulaParaProducto()) return;
               setState(() => _interesCred = v ?? false);
             },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.credito),
@@ -5787,8 +5791,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: TextField(
               controller: _buscaOtroCtrl,
+              style: TextStyle(color: ConstantColors.textDark, fontSize: 14),
               decoration: InputDecoration(
                 hintText: 'Especifique qué busca…',
+                hintStyle: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
                 filled: true,
                 fillColor: const Color(0xFFF5F5F5),
                 border: OutlineInputBorder(
@@ -5944,7 +5950,120 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Navegación a ficha de producto ───────────────────────────
 
+  /// Valida que la cédula esté completa antes de permitir seleccionar un producto.
+  /// Muestra un bottomSheet explicativo con opción de ir al paso de datos.
+  /// Retorna true si puede continuar, false si debe completar la cédula.
+  bool _validarCedulaParaProducto() {
+    final cedula = _cedulaCtrl.text.trim();
+    if (cedula.isNotEmpty) return true;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: ConstantColors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: ConstantColors.borderLight,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundAmber.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.badge_rounded,
+                color: ConstantColors.backgroundAmber,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Se necesita la cédula',
+              style: TextStyle(
+                color: ConstantColors.textDark,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Para registrar interés en un producto, primero debes ingresar la cédula del cliente en el paso de datos personales.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: ConstantColors.textDarkGrey,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  // Ir al paso de datos del cliente
+                  setState(() => _paso = _Paso.datosCliente);
+                  // Enfocar el campo cédula con un pequeño delay
+                  Future.delayed(const Duration(milliseconds: 350), () {
+                    if (mounted) {
+                      FocusScope.of(context).requestFocus(FocusNode());
+                    }
+                  });
+                },
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text(
+                  'Ir a datos del cliente',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ConstantColors.backgroundAmber,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Cancelar',
+                  style: TextStyle(
+                    color: ConstantColors.textDarkGrey,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return false;
+  }
+
   Future<void> _abrirFichaProducto(ProductoTipo tipo) async {
+    // Bloquear si no hay cédula
+    if (!_validarCedulaParaProducto()) return;
     final cedula = _cedulaCtrl.text.trim();
     final nombre = '${_nombreCtrl.text.trim()} ${_apellidosCtrl.text.trim()}'.trim();
     final result = await Navigator.push<bool>(

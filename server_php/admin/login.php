@@ -17,10 +17,15 @@ if (isset($_SESSION['asesor_logged_in']) && $_SESSION['asesor_logged_in'] === tr
     header('Location: asesor_index.php');
     exit;
 }
+if (isset($_SESSION['administrador_logged_in']) && $_SESSION['administrador_logged_in'] === true) {
+    header('Location: administrador_index.php');
+    exit;
+}
 
 $role = $_GET['role'] ?? 'admin'; // 'super_admin', 'admin', 'supervisor', 'asesor'
 $role_labels = [
     'super_admin' => ['title' => 'Super Administrador', 'subtitle' => 'Ingresa credenciales de super administrador'],
+    'administrador' => ['title' => 'Panel Administrador', 'subtitle' => 'Acceso total: supervisor + gerente'],
     'admin'       => ['title' => 'Panel Gerente',        'subtitle' => 'Ingresa credenciales de gerente'],
     'supervisor'  => ['title' => 'Panel Supervisor',     'subtitle' => 'Ingresa credenciales de supervisor'],
     'asesor'      => ['title' => 'Panel Asesor',         'subtitle' => 'Ingresa credenciales de asesor'],
@@ -60,6 +65,22 @@ $role_theme = [
             ['icon'=>'fa-chart-line','style'=>'fi-b','text'=>'Dashboard con métricas de agencia'],
             ['icon'=>'fa-users-gear','style'=>'fi-b','text'=>'Gestión de supervisores y asesores'],
             ['icon'=>'fa-file-contract','style'=>'fi-b','text'=>'Reportes y configuración del sistema'],
+        ],
+    ],
+    'administrador' => [
+        'accent'      => '#818cf8',
+        'accent_dk'   => '#6366f1',
+        'accent_rgb'  => '129,140,248',
+        'left_grad'   => 'linear-gradient(155deg,#0a0b1a 0%,#13102d 60%,#1a1540 100%)',
+        'icon'        => 'fa-user-shield',
+        'label'       => 'Administrador',
+        'badge_bg'    => 'rgba(129,140,248,.12)',
+        'badge_border'=> 'rgba(129,140,248,.35)',
+        'badge_color' => '#6366f1',
+        'feat' => [
+            ['icon'=>'fa-crown','style'=>'fi-p','text'=>'Acceso total: supervisor y gerente'],
+            ['icon'=>'fa-users-gear','style'=>'fi-p','text'=>'Gestión de todos los equipos'],
+            ['icon'=>'fa-chart-pie','style'=>'fi-p','text'=>'Reportes, alertas y operaciones'],
         ],
     ],
     'supervisor' => [
@@ -183,6 +204,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } else {
             $error = 'Credenciales de asesor incorrectas.';
+        }
+    } elseif ($login_role === 'administrador') {
+        // Administrador Total (rol = 'administrador' en tabla usuario)
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion
+                               FROM usuario
+                               WHERE email = ? AND rol = 'administrador' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+        $stmt->execute([$email]);
+        $adm = $stmt->fetch();
+
+        if ($adm && password_verify($pass, $adm['password_hash'])) {
+            $_SESSION['administrador_logged_in'] = true;
+            $_SESSION['administrador_id']        = $adm['id'];
+            $_SESSION['administrador_email']     = $adm['email'];
+            $_SESSION['administrador_nombre']    = $adm['nombre'];
+            $_SESSION['administrador_rol']       = 'administrador';
+            // Compatibilidad: también setear admin_logged_in para sidebars existentes
+            $_SESSION['admin_logged_in']         = true;
+            $_SESSION['admin_id']                = $adm['id'];
+            $_SESSION['admin_nombre']            = $adm['nombre'];
+            $_SESSION['admin_rol']               = 'administrador';
+            session_write_close();
+            header('Location: administrador_index.php');
+            exit;
+        } else {
+            $error = 'Credenciales de administrador incorrectas.';
         }
     }
 }
