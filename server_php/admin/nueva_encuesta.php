@@ -10,31 +10,28 @@ $asesor_usuario_id = $_SESSION['asesor_id'];
 $asesor_nombre     = $_SESSION['asesor_nombre'] ?? 'Asesor';
 $asesor_table_id   = $_SESSION['asesor_table_id'] ?? null;
 
-// Obtener lista de cooperativas/bancos desde la base de datos
+// Obtener lista de cooperativas/bancos: unidad_bancaria + seps_cooperativas (siempre combinadas)
 $unidades_bancarias = [];
 try {
-    // Sin filtro activo=1 para que aparezcan aunque estén marcadas inactivas
     $stmt = $pdo->query("SELECT nombre FROM unidad_bancaria ORDER BY nombre ASC");
     $unidades_bancarias = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 } catch (Exception $e) {
     error_log("Error cargando unidades bancarias: " . $e->getMessage());
 }
-// Si la tabla está vacía, intentar con seps_cooperativas
-if (empty($unidades_bancarias)) {
-    try {
-        $stmt2 = $pdo->query("SELECT razon_social AS nombre FROM seps_cooperativas WHERE activo = 1 ORDER BY razon_social ASC LIMIT 300");
-        $unidades_bancarias = $stmt2->fetchAll(PDO::FETCH_COLUMN) ?: [];
-    } catch (Exception $e2) { /* tabla no existe aún */ }
-}
-if (empty($unidades_bancarias)) {
-    $unidades_bancarias = [
-        'Banco Pichincha', 'Banco Guayaquil', 'Banco del Austro',
-        'Produbanco', 'Banco Bolivariano', 'Banco Internacional',
-        'Cooperativa JEP', 'Cooperativa 29 de Octubre',
-        'Cooperativa Policía Nacional', 'Cooperativa San Francisco',
-        'Cooperativa Jardín Azuayo', 'Cooperativa Mushuc Runa',
-    ];
-}
+// Siempre agregar SEPS encima (no solo como fallback)
+try {
+    $stmt2 = $pdo->query("SELECT razon_social AS nombre FROM seps_cooperativas WHERE activo = 1 ORDER BY razon_social ASC LIMIT 500");
+    $seps = $stmt2->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    // Combinar sin duplicados (insensible a mayúsculas)
+    $existentes = array_map('mb_strtolower', $unidades_bancarias);
+    foreach ($seps as $s) {
+        if (!in_array(mb_strtolower($s), $existentes, true)) {
+            $unidades_bancarias[] = $s;
+        }
+    }
+} catch (Exception $e2) { /* tabla aún no existe */ }
+// Ordenar alfabéticamente
+usort($unidades_bancarias, fn($a, $b) => mb_strtolower($a) <=> mb_strtolower($b));
 
 if (!$asesor_table_id) {
     try {

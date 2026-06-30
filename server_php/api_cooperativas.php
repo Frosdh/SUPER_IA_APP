@@ -114,8 +114,10 @@ try {
 
     // ── Ordenar: internas primero, luego alfabético ───────────
     usort($cooperativas, function($a, $b) {
-        if ($a['_fuente'] === 'interna' && $b['_fuente'] !== 'interna') return -1;
-        if ($a['_fuente'] !== 'interna' && $b['_fuente'] === 'interna') return 1;
+        $orden = ['interna' => 0, 'seps' => 1, 'fallback' => 2];
+        $oa = $orden[$a['_fuente']] ?? 9;
+        $ob = $orden[$b['_fuente']] ?? 9;
+        if ($oa !== $ob) return $oa <=> $ob;
         return mb_strtolower($a['nombre']) <=> mb_strtolower($b['nombre']);
     });
 
