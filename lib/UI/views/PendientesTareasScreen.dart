@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/UI/views/LevantarEmpresaScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 
 class PendientesTareasScreen extends StatefulWidget {
@@ -224,6 +225,57 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
       );
       await _cargar();
     }
+  }
+
+  // ── Navegar directo a la actividad según el tipo ─────────────
+  String _labelActividad(String tipo) {
+    switch (tipo) {
+      case 'levantamiento':         return 'Ir al levantamiento';
+      case 'evaluacion':            return 'Ir a evaluación';
+      case 'prospecto_nuevo':       return 'Llenar encuesta';
+      case 'visita_frio':           return 'Iniciar visita';
+      case 'nueva_cita_inversion':  return 'Ir a cita de inversión';
+      case 'nueva_cita_campo':      return 'Ir a cita en campo';
+      case 'nueva_cita_oficina':    return 'Ir a cita en oficina';
+      case 'post_venta':            return 'Ir a post venta';
+      case 'represtamo':            return 'Ir a représ tamo';
+      case 'seguimiento':           return 'Ir a seguimiento';
+      case 'documentos_pendientes': return 'Ver documentación';
+      default:                      return 'Ir a la actividad';
+    }
+  }
+
+  IconData _iconActividad(String tipo) {
+    switch (tipo) {
+      case 'levantamiento':         return Icons.business_rounded;
+      case 'evaluacion':            return Icons.assessment_rounded;
+      case 'prospecto_nuevo':       return Icons.person_add_rounded;
+      case 'visita_frio':           return Icons.door_front_door_rounded;
+      case 'nueva_cita_inversion':  return Icons.savings_rounded;
+      case 'documentos_pendientes': return Icons.folder_open_rounded;
+      default:                      return Icons.play_arrow_rounded;
+    }
+  }
+
+  Future<void> _irAActividad(Map<String, dynamic> tarea) async {
+    final tipo    = tarea['tipo_tarea']?.toString() ?? 'prospecto_nuevo';
+    final tareaId = tarea['id']?.toString() ?? '';
+    if (tareaId.isEmpty) return;
+
+    // Para levantamiento sin tarea específica → pantalla de búsqueda de empresa
+    // Con tarea específica → encuesta directa con sección de empresa
+    final bool conEmpresa = tipo == 'levantamiento' || tipo == 'evaluacion';
+
+    final result = await Navigator.of(context).push<bool?>(
+      MaterialPageRoute(
+        builder: (_) => NuevaEncuestaScreen(
+          tipoTarea:      tipo,
+          tareaIdEdicion: tareaId,
+          incluirEmpresa: conEmpresa,
+        ),
+      ),
+    );
+    if (result == true && mounted) await _cargar();
   }
 
   Future<void> _finalizarTarea(String tareaId) async {
@@ -773,6 +825,33 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                 ),
               ],
 
+              // ── Botón "Ir a actividad" para tareas no terminadas ──────
+              if (!isDone && !isCancel) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: tareaId.isEmpty ? null : () => _irAActividad(t),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isProc
+                          ? ConstantColors.primaryBlue
+                          : const Color(0xFF3B5BDB),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: Icon(_iconActividad(tipo), size: 18),
+                    label: Text(
+                      _labelActividad(tipo),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 13),
+                    ),
+                  ),
+                ),
+              ],
+
               if (isProc) ...[
                 const SizedBox(height: 10),
                 Row(
@@ -845,36 +924,21 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                     ),
-                    if (tipo == 'nueva_cita_inversion' || tipo == 'prospecto_nuevo' || tipo == 'visita_frio' || tipo == 'levantamiento') ...[
-                      const SizedBox(width: 10),
-                      ElevatedButton.icon(
-                        onPressed: tareaId.isEmpty
-                            ? null
-                            : () async {
-                                final result = await Navigator.of(context).push<bool?>(
-                                  MaterialPageRoute(
-                                    builder: (_) => NuevaEncuestaScreen(
-                                      tipoTarea: tipo,
-                                      tareaIdEdicion: tareaId,
-                                      incluirEmpresa: (tipo == 'levantamiento'),
-                                    ),
-                                  ),
-                                );
-                                if (result == true) await _cargar();
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: ConstantColors.primaryBlue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        icon: const Icon(Icons.assignment_rounded, size: 16),
-                        label: const Text(
-                          'Realizar',
-                          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                        ),
+                    const SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      onPressed: tareaId.isEmpty ? null : () => _irAActividad(t),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ConstantColors.primaryBlue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                    ],
+                      icon: Icon(_iconActividad(tipo), size: 16),
+                      label: const Text(
+                        'Realizar',
+                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
+                      ),
+                    ),
                     const SizedBox(width: 10),
                     ElevatedButton.icon(
                       onPressed: (tareaId.isEmpty || !buenVisto) ? null : () => _finalizarTarea(tareaId),

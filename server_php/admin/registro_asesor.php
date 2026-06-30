@@ -60,7 +60,7 @@ function fi(string $key): string {
 $cooperativas = [];
 if (!$modo_supervisor) {
     try {
-        $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria WHERE activo = 1 ORDER BY nombre ASC");
+        $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria ORDER BY nombre ASC");
         $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $e) {
         $cooperativas = [];

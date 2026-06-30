@@ -5963,7 +5963,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       isScrollControlled: true,
       builder: (ctx) => Container(
         decoration: BoxDecoration(
-          color: ConstantColors.white,
+          color: Colors.white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),

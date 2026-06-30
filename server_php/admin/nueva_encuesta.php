@@ -13,17 +13,26 @@ $asesor_table_id   = $_SESSION['asesor_table_id'] ?? null;
 // Obtener lista de cooperativas/bancos desde la base de datos
 $unidades_bancarias = [];
 try {
-    $stmt = $pdo->query("SELECT nombre FROM unidad_bancaria WHERE activo = 1 ORDER BY nombre ASC");
+    // Sin filtro activo=1 para que aparezcan aunque estén marcadas inactivas
+    $stmt = $pdo->query("SELECT nombre FROM unidad_bancaria ORDER BY nombre ASC");
     $unidades_bancarias = $stmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
 } catch (Exception $e) {
     error_log("Error cargando unidades bancarias: " . $e->getMessage());
 }
+// Si la tabla está vacía, intentar con seps_cooperativas
+if (empty($unidades_bancarias)) {
+    try {
+        $stmt2 = $pdo->query("SELECT razon_social AS nombre FROM seps_cooperativas WHERE activo = 1 ORDER BY razon_social ASC LIMIT 300");
+        $unidades_bancarias = $stmt2->fetchAll(PDO::FETCH_COLUMN) ?: [];
+    } catch (Exception $e2) { /* tabla no existe aún */ }
+}
 if (empty($unidades_bancarias)) {
     $unidades_bancarias = [
-        'Banco Pichincha', 'Banco Guayaquil', 'Banco del Austro', 
-        'Produbanco', 'Banco Bolivariano', 'Banco Internacional', 
-        'Cooperativa JEP', 'Cooperativa COAC', 'Cooperativa San José', 
-        'Cooperativa Policía Nacional', 'Cooperativa 29 de Octubre'
+        'Banco Pichincha', 'Banco Guayaquil', 'Banco del Austro',
+        'Produbanco', 'Banco Bolivariano', 'Banco Internacional',
+        'Cooperativa JEP', 'Cooperativa 29 de Octubre',
+        'Cooperativa Policía Nacional', 'Cooperativa San Francisco',
+        'Cooperativa Jardín Azuayo', 'Cooperativa Mushuc Runa',
     ];
 }
 
