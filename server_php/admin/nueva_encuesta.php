@@ -797,7 +797,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle cuenta ahorro</h6>
                                 <div class="fld-grid">
                                     <div class="fld full" style="width: 100%;"><label>Institución</label>
-                                        <select name="ec_institucion_ahorro" style="width: 100%;">
+                                        <select name="ec_institucion_ahorro" style="width: 100%;" data-searchable="true" data-placeholder="Buscar institución (ahorro)...">
                                             <option value="">— Seleccione —</option>
                                             <?php foreach ($unidades_bancarias as $ub): ?>
                                                 <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
@@ -820,7 +820,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle cuenta corriente</h6>
                                 <div class="fld-grid">
                                     <div class="fld"><label>Institución</label>
-                                        <select name="ec_institucion_corriente">
+                                        <select name="ec_institucion_corriente" data-searchable="true" data-placeholder="Buscar institución (corriente)...">
                                             <option value="">— Seleccione —</option>
                                             <?php foreach ($unidades_bancarias as $ub): ?>
                                                 <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
@@ -843,7 +843,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle inversión</h6>
                                 <div class="fld-grid">
                                     <div class="fld"><label>Institución</label>
-                                        <select name="ec_institucion_inversiones">
+                                        <select name="ec_institucion_inversiones" data-searchable="true" data-placeholder="Buscar institución (inversiones)...">
                                             <option value="">— Seleccione —</option>
                                             <?php foreach ($unidades_bancarias as $ub): ?>
                                                 <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
@@ -901,7 +901,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <h6>Detalle crédito activo</h6>
                                 <div class="fld-grid">
                                     <div class="fld full" style="width: 100%;"><label>Institución</label>
-                                        <select name="ec_institucion_credito" style="width: 100%;">
+                                        <select name="ec_institucion_credito" style="width: 100%;" data-searchable="true" data-placeholder="Buscar institución (crédito)...">
                                             <option value="">— Seleccione —</option>
                                             <?php foreach ($unidades_bancarias as $ub): ?>
                                                 <option value="<?= htmlspecialchars($ub) ?>"><?= htmlspecialchars($ub) ?></option>
@@ -3388,6 +3388,105 @@ function mostrarDialogoFinalizadoOk() {
     document.body.appendChild(div);
 }
 
+/* ── Searchable select ──────────────────────────────────────────────────── */
+function initSearchableSelects() {
+    document.querySelectorAll('select[data-searchable="true"]').forEach(function(sel) {
+        if (sel.parentElement && sel.parentElement.classList.contains('srch-wrap')) return;
+
+        var placeholder = sel.getAttribute('data-placeholder') || 'Buscar...';
+
+        var wrap = document.createElement('div');
+        wrap.className = 'srch-wrap';
+        wrap.style.cssText = 'position:relative;width:100%;';
+
+        var inp = document.createElement('input');
+        inp.type        = 'text';
+        inp.placeholder = placeholder;
+        inp.autocomplete = 'off';
+        inp.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 30px 7px 10px;' +
+            'border:1px solid #d1d5db;border-radius:6px 6px 0 0;font-size:13px;';
+
+        sel.style.cssText = (sel.getAttribute('style') || '') +
+            ';width:100%;box-sizing:border-box;border-radius:0 0 6px 6px;' +
+            'border-top:none;margin-top:0;font-size:13px;';
+
+        sel.parentNode.insertBefore(wrap, sel);
+        wrap.appendChild(inp);
+        wrap.appendChild(sel);
+
+        var allOptions = Array.from(sel.options);
+
+        inp.addEventListener('input', function() {
+            var q = inp.value.trim().toLowerCase();
+            allOptions.forEach(function(opt) {
+                opt.style.display = (opt.value === '' || opt.text.toLowerCase().indexOf(q) > -1) ? '' : 'none';
+            });
+        });
+
+        sel.addEventListener('change', function() {
+            var chosen = sel.options[sel.selectedIndex];
+            if (chosen && chosen.value) {
+                inp.value = chosen.text;
+                allOptions.forEach(function(o) { o.style.display = ''; });
+            }
+        });
+
+        inp.addEventListener('focus', function() {
+            allOptions.forEach(function(o) { o.style.display = ''; });
+            if (sel.value) { inp.value = ''; sel.value = ''; }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initSearchableSelects();
+    document.addEventListener('click', function(e) {
+        if (e.target.closest && e.target.closest('.yn-opt')) {
+            setTimeout(initSearchableSelects, 150);
+        }
+    });
+});
+</script>
+</body>
+</html>
+ion(o) {
+                    return o.value !== '' && o.style.display !== 'none';
+                });
+                if (first) sel.value = first.value;
+            } else {
+                sel.value = '';
+            }
+        });
+
+        // When user picks from select, update input label
+        sel.addEventListener('change', function() {
+            var chosen = sel.options[sel.selectedIndex];
+            if (chosen && chosen.value) {
+                inp.value = chosen.text;
+                // Restore all options visibility
+                allOptions.forEach(function(o) { o.style.display = ''; });
+            }
+        });
+
+        // Clear filter on focus
+        inp.addEventListener('focus', function() {
+            allOptions.forEach(function(o) { o.style.display = ''; });
+            inp.value = '';
+            sel.value = '';
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initSearchableSelects();
+    // Re-init after any dynamic show (extras panels use class toggle)
+    document.addEventListener('click', function(e) {
+        // yn-opt buttons reveal extras sections that contain the selects
+        if (e.target.closest && e.target.closest('.yn-opt')) {
+            setTimeout(initSearchableSelects, 100);
+        }
+    });
+});
 </script>
 </body>
 </html>

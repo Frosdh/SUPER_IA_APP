@@ -884,7 +884,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _fechaVencCDP   = _fecha(_s(e['fecha_vencimiento_cdp']));
 
       final ac = _s(e['acuerdo_logrado']);
-      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro'];
+      const _validAcuerdos = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro'];
       if (ac.isNotEmpty && _validAcuerdos.contains(ac)) _acuerdo = ac;
       _fechaAcuerdo = _fecha(_s(e['fecha_acuerdo']));
       _horaAcuerdo  = _hora (_s(e['hora_acuerdo']));
@@ -5463,38 +5463,46 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ]),
             ),
           ] else ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-              decoration: BoxDecoration(
-                color: ConstantColors.grey100,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ConstantColors.borderLight),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _instAhorroSeleccionada,
-                  isExpanded: true,
-                  dropdownColor: Colors.white,
-                  style: TextStyle(color: ConstantColors.textDark, fontSize: 13),
-                  hint: Text('Seleccionar institución (ahorro)', style: TextStyle(fontSize: 13, color: ConstantColors.textGrey)),
-                  items: [
-                    ..._instituciones.map((nombre) => DropdownMenuItem<String>(value: nombre, child: Text(nombre, style: TextStyle(color: ConstantColors.textDark)))),
-                    DropdownMenuItem<String>(value: 'otra', child: Text('Otra', style: TextStyle(color: ConstantColors.textDark))),
-                  ],
-                  onChanged: (v) {
-                    setState(() {
-                      _instAhorroSeleccionada = v;
-                      if (v == null) {
-                        _bancoAhorroCtrl.text = '';
-                      } else if (v == 'otra') {
-                        _bancoAhorroCtrl.text = '';
-                      } else {
-                        _bancoAhorroCtrl.text = v;
-                      }
-                    });
-                  },
+            GestureDetector(
+              onTap: () async {
+                final picked = await _searchableInstPicker(
+                  hint: 'Institución (ahorro)',
+                  currentValue: _instAhorroSeleccionada,
+                );
+                if (picked != null) {
+                  setState(() {
+                    _instAhorroSeleccionada = picked;
+                    _bancoAhorroCtrl.text = (picked == 'otra') ? '' : picked;
+                  });
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: ConstantColors.grey100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ConstantColors.borderLight),
                 ),
+                child: Row(children: [
+                  Icon(Icons.account_balance_rounded, size: 18,
+                      color: ConstantColors.primaryViolet),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (_instAhorroSeleccionada == null || _instAhorroSeleccionada == 'otra')
+                          ? 'Seleccionar institución (ahorro)'
+                          : _instAhorroSeleccionada!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: (_instAhorroSeleccionada == null || _instAhorroSeleccionada == 'otra')
+                            ? ConstantColors.textGrey
+                            : ConstantColors.textDark,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.search, size: 18, color: ConstantColors.textGrey),
+                ]),
               ),
             ),
             if (_instAhorroSeleccionada == 'otra' || _instituciones.isEmpty) ...[
@@ -5523,38 +5531,46 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               ]),
             ),
           ] else ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-              decoration: BoxDecoration(
-                color: ConstantColors.grey100,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: ConstantColors.borderLight),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: _instCorrSeleccionada,
-                  isExpanded: true,
-                  dropdownColor: Colors.white,
-                  style: TextStyle(color: ConstantColors.textDark, fontSize: 13),
-                  hint: Text('Seleccionar institución (corriente)', style: TextStyle(fontSize: 13, color: ConstantColors.textGrey)),
-                  items: [
-                    ..._instituciones.map((nombre) => DropdownMenuItem<String>(value: nombre, child: Text(nombre, style: TextStyle(color: ConstantColors.textDark)))),
-                    DropdownMenuItem<String>(value: 'otra', child: Text('Otra', style: TextStyle(color: ConstantColors.textDark))),
-                  ],
-                  onChanged: (v) {
-                    setState(() {
-                      _instCorrSeleccionada = v;
-                      if (v == null) {
-                        _bancoCorrienteCtrl.text = '';
-                      } else if (v == 'otra') {
-                        _bancoCorrienteCtrl.text = '';
-                      } else {
-                        _bancoCorrienteCtrl.text = v;
-                      }
-                    });
-                  },
+            GestureDetector(
+              onTap: () async {
+                final picked = await _searchableInstPicker(
+                  hint: 'Institución (corriente)',
+                  currentValue: _instCorrSeleccionada,
+                );
+                if (picked != null) {
+                  setState(() {
+                    _instCorrSeleccionada = picked;
+                    _bancoCorrienteCtrl.text = (picked == 'otra') ? '' : picked;
+                  });
+                }
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: ConstantColors.grey100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: ConstantColors.borderLight),
                 ),
+                child: Row(children: [
+                  Icon(Icons.account_balance_rounded, size: 18,
+                      color: ConstantColors.primaryViolet),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      (_instCorrSeleccionada == null || _instCorrSeleccionada == 'otra')
+                          ? 'Seleccionar institución (corriente)'
+                          : _instCorrSeleccionada!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: (_instCorrSeleccionada == null || _instCorrSeleccionada == 'otra')
+                            ? ConstantColors.textGrey
+                            : ConstantColors.textDark,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.search, size: 18, color: ConstantColors.textGrey),
+                ]),
               ),
             ),
             if (_instCorrSeleccionada == 'otra' || _instituciones.isEmpty) ...[
@@ -6102,6 +6118,117 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── Widget helpers ───────────────────────────────────────────
 
+  // ── Buscador de institución bancaria (bottom sheet) ──────────────────────
+  /// Muestra un modal con barra de búsqueda y lista de instituciones.
+  /// Devuelve el nombre seleccionado o null si el usuario cancela.
+  Future<String?> _searchableInstPicker({
+    required String hint,
+    String? currentValue,
+  }) async {
+    final TextEditingController _srchCtrl = TextEditingController();
+    List<String> _filtered = List.from(_instituciones);
+
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx2, setModal) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx2).viewInsets.bottom,
+            ),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 10),
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Text(hint,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+              ),
+              // Search field
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _srchCtrl,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'Buscar institución...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: _srchCtrl.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              _srchCtrl.clear();
+                              setModal(() => _filtered = List.from(_instituciones));
+                            },
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    isDense: true,
+                  ),
+                  onChanged: (q) {
+                    final ql = q.toLowerCase();
+                    setModal(() {
+                      _filtered = _instituciones
+                          .where((n) => n.toLowerCase().contains(ql))
+                          .toList();
+                    });
+                  },
+                ),
+              ),
+              // List
+              SizedBox(
+                height: MediaQuery.of(ctx2).size.height * 0.42,
+                child: _filtered.isEmpty
+                    ? Center(
+                        child: Text('Sin resultados',
+                            style: TextStyle(color: Colors.grey.shade500)))
+                    : ListView.builder(
+                        itemCount: _filtered.length + 1, // +1 for "Otra"
+                        itemBuilder: (_, i) {
+                          if (i == _filtered.length) {
+                            // "Otra" option at bottom
+                            return ListTile(
+                              leading: const Icon(Icons.edit, size: 18),
+                              title: const Text('Otra (escribir manualmente)'),
+                              onTap: () => Navigator.pop(ctx2, 'otra'),
+                            );
+                          }
+                          final nombre = _filtered[i];
+                          final selected = nombre == currentValue;
+                          return ListTile(
+                            dense: true,
+                            selected: selected,
+                            selectedColor: ConstantColors.primaryViolet,
+                            title: Text(nombre, style: const TextStyle(fontSize: 13)),
+                            trailing: selected
+                                ? Icon(Icons.check, color: ConstantColors.primaryViolet, size: 18)
+                                : null,
+                            onTap: () => Navigator.pop(ctx2, nombre),
+                          );
+                        },
+                      ),
+              ),
+              const SizedBox(height: 8),
+            ]),
+          );
+        });
+      },
+    );
+  }
+
   Widget _seccionTitulo(String titulo) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -6532,7 +6659,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       ('nueva_cita_oficina', 'Nueva cita en oficina'),
       ('reprogramacion',     'Reprogramación'),
       ('seguimiento',        'Recolectar documentación'),
-      ('otro',               'Levantamiento / Otro'),
+      ('levantamiento',      'Levantamiento Empresa'),
+      ('otro',               'Otro'),
     ];
     return DropdownButtonFormField<String>(
       value: _acuerdo,

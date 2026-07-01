@@ -45,7 +45,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
       case 'nueva_cita_oficina':    return 'Nueva cita en oficina';
       case 'nueva_cita_inversion':  return '💰 Nueva cita de inversión';
       case 'documentos_pendientes': return 'Recolectar documentación';
-      case 'levantamiento':         return 'Levantamiento de empresa';
+      case 'levantamiento':         return 'Levantamiento Empresa';
       case 'seguimiento':           return 'Seguimiento';
       default:                      return tipo.replaceAll('_', ' ');
     }

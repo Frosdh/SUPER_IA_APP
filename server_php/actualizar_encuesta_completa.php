@@ -177,7 +177,7 @@ $busca_otro_texto   = strOrNull($_POST['que_busca_otro_texto']     ?? '');
 $fecha_venc_cdp     = strOrNull($_POST['fecha_vencimiento_cdp']    ?? '');
 $interes_trabajar   = intOrNull($_POST['interes_trabajar_institucion'] ?? null);
 $_acuerdo_raw       = strOrNull($_POST['acuerdo_logrado'] ?? '');
-$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro']) ? $_acuerdo_raw : null;
+$acuerdo            = in_array($_acuerdo_raw, ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro']) ? $_acuerdo_raw : null;
 $fecha_acuerdo      = strOrNull($_POST['fecha_acuerdo']   ?? '');
 $hora_acuerdo       = strOrNull($_POST['hora_acuerdo']    ?? '');
 $observaciones      = strOrNull($_POST['observaciones']   ?? '');
@@ -284,8 +284,9 @@ $acuerdo_map = [
     'recolectar_documentacion' => 'otro',
     'recoleccion_documentacion' => 'otro',
     'recoleccionar_documentacion' => 'otro',
-    'levantamiento' => 'otro',
-    'levantamiento_campo' => 'otro',
+    'levantamiento' => 'levantamiento',
+    'levantamiento_empresa' => 'levantamiento',
+    'levantamiento_campo' => 'levantamiento',
     'nueva_cita_campo' => 'nueva_cita_campo',
     'nueva_cita_oficina' => 'nueva_cita_oficina',
     'reprogramacion' => 'reprogramacion',
@@ -293,7 +294,7 @@ $acuerdo_map = [
     'tasas_competitivas' => 'tasas_competitivas',
     'otro' => 'otro',
 ];
-$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro', 'tasas_competitivas'];
+$db_acuerdos_allowed = ['nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro', 'tasas_competitivas'];
 $mapped = null;
 $incoming_tok = null;
 if ($incoming_acuerdo !== null) {
@@ -908,12 +909,12 @@ try {
             // $acuerdo is not present in the column definition (prevents Data truncated errors).
             try {
                 $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
-                if ($col && strpos($col['Type'], "'tasas_competitivas'") === false) {
-                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NULL");
+                if ($col && (strpos($col['Type'], "'tasas_competitivas'") === false || strpos($col['Type'], "'levantamiento'") === false)) {
+                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro','tasas_competitivas') NULL");
                 }
                 $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
-                if ($col2 && strpos($col2['Type'], "'tasas_competitivas'") === false) {
-                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NOT NULL");
+                if ($col2 && (strpos($col2['Type'], "'tasas_competitivas'") === false || strpos($col2['Type'], "'levantamiento'") === false)) {
+                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro','tasas_competitivas') NOT NULL");
                 }
 
                 // Defensive: if the $acuerdo token is not present in the encuesta_comercial enum,
@@ -989,12 +990,12 @@ try {
             // $acuerdo is not present in the column definition (prevents Data truncated errors).
             try {
                 $col = $conn->query("SHOW COLUMNS FROM encuesta_comercial LIKE 'acuerdo_logrado'")->fetch_assoc();
-                if ($col && strpos($col['Type'], "'tasas_competitivas'") === false) {
-                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NULL");
+                if ($col && (strpos($col['Type'], "'tasas_competitivas'") === false || strpos($col['Type'], "'levantamiento'") === false)) {
+                    $conn->query("ALTER TABLE encuesta_comercial MODIFY COLUMN acuerdo_logrado ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro','tasas_competitivas') NULL");
                 }
                 $col2 = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tipo_acuerdo'")->fetch_assoc();
-                if ($col2 && strpos($col2['Type'], "'tasas_competitivas'") === false) {
-                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','otro','tasas_competitivas') NOT NULL");
+                if ($col2 && (strpos($col2['Type'], "'tasas_competitivas'") === false || strpos($col2['Type'], "'levantamiento'") === false)) {
+                    $conn->query("ALTER TABLE acuerdo_visita MODIFY COLUMN tipo_acuerdo ENUM('nueva_cita_campo','nueva_cita_oficina','reprogramacion','seguimiento','levantamiento','otro','tasas_competitivas') NOT NULL");
                 }
 
                 // Defensive: if the $acuerdo token is not present in the encuesta_comercial enum,

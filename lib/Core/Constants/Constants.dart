@@ -15,7 +15,7 @@ class Constants {
   ///   flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080/SUPER_IA/server_php  (USB)
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://corporativoqbank.com/SUPER_IA/server_php',
+    defaultValue: 'https://corporativoqbank.com/SUPER_IA/server_php',
   );
 
   // ─── PayPhone ────────────────────────────────────────────────────────────
