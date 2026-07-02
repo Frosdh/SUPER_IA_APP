@@ -19,7 +19,7 @@ header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$API_BUILD = '2026-05-06c';
+$API_BUILD = '2026-07-02-autofin2';
 $GLOBALS['phase'] = 'BOOT';
 
 function respond_json($code, $payload) {

@@ -28,6 +28,12 @@
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+// Se detectó en producción que el hosting/CDN cacheaba la respuesta de la
+// URL exacta (sin query string) devolviendo un cuerpo vacío guardado de una
+// versión anterior de este script, aunque el archivo ya estuviera corregido.
+// Estas cabeceras evitan que vuelva a pasar.
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
 // Red de seguridad: si ocurre un error fatal más adelante (p.ej. columna

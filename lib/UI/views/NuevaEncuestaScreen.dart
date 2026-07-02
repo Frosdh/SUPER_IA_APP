@@ -97,6 +97,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Modo edición ─────────────────────────────────────────────
   bool _cargandoEdicion = false;
   String? _errorEdicion;
+
+  /// true solo cuando la tarea YA estaba `completada` antes de abrir esta
+  /// pantalla (edición real vía "Modificar datos"). false cuando la tarea
+  /// todavía está pendiente/en_proceso y esta es la primera vez que se
+  /// completa la actividad (banner y mensajes deben ser distintos en cada
+  /// caso: "estás modificando algo ya finalizado" vs "vas a finalizar esto").
+  bool _tareaYaCompletada = false;
   
   // Transición entre pasos pesados
   bool _cargandoTransicion = false;
@@ -408,9 +415,23 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   Future<void> _cargarInstituciones() async {
     try {
+      // NOTA: se detectó que el hosting cachea (a nivel de servidor/CDN) la
+      // respuesta de esta URL exacta. Cuando esa caché queda vieja (p.ej.
+      // guardó una respuesta en blanco de una versión anterior del script),
+      // Flutter la recibía siempre vacía aunque el .php ya estuviera
+      // corregido — probado en producción: la misma URL con un parámetro
+      // (?cualquier=cosa) sí devolvía los datos correctos, sin parámetro
+      // devolvía vacío. Se agrega un parámetro de "cache-busting" (timestamp)
+      // + encabezados no-cache para que esta llamada nunca golpee una copia
+      // cacheada de la respuesta.
+      final cacheBuster = DateTime.now().millisecondsSinceEpoch;
       final resp = await http.get(
-        Uri.parse('${Constants.apiBaseUrl}/api_cooperativas.php'),
-        headers: {'ngrok-skip-browser-warning': 'true'},
+        Uri.parse('${Constants.apiBaseUrl}/api_cooperativas.php?_ts=$cacheBuster'),
+        headers: {
+          'ngrok-skip-browser-warning': 'true',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
       ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
@@ -635,6 +656,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         : <String, dynamic>{};
     final obsTarea = _s(tarea['observaciones']);
     if (obsTarea.isNotEmpty) _obsCtrl.text = obsTarea;
+    _tareaYaCompletada = _s(tarea['estado']) == 'completada';
 
     // ── Encuesta negocio ───────────────────────────────────────
     final neg = data['encuesta_negocio'];
@@ -2383,9 +2405,21 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     );
   }
 
-  /// Banner visible en modo edición para que el asesor sepa que está
-  /// modificando una encuesta ya finalizada.
+  /// Banner visible en modo edición. `widget.modoEdicion` se activa siempre
+  /// que la pantalla está ligada a una tarea existente (tareaIdEdicion no
+  /// vacío) — eso incluye tanto "Modificar datos" de una tarea YA finalizada
+  /// como "Ir a la actividad" de una tarea que todavía está pendiente. Antes
+  /// se mostraba el mismo texto ("encuesta finalizada") en ambos casos, lo
+  /// cual era confuso: el asesor veía "ya finalizada" mientras completaba
+  /// una tarea que en realidad seguía pendiente. Ahora se distingue con
+  /// `_tareaYaCompletada` (llega de obtener_encuesta_completa.php).
   Widget _buildBannerEdicion() {
+    final texto = _tareaYaCompletada
+        ? 'Estás modificando una encuesta finalizada. '
+          'Se pueden cambiar todos los datos excepto la cédula.'
+        : 'Estás completando esta actividad. Al guardar, la tarea quedará '
+          'finalizada automáticamente (no hace falta marcarla aparte como '
+          'Completado/Finalizar en la lista de tareas).';
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -2396,12 +2430,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.edit_note_rounded, color: ConstantColors.warning, size: 20),
+          Icon(
+            _tareaYaCompletada ? Icons.edit_note_rounded : Icons.task_alt_rounded,
+            color: ConstantColors.warning,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Estás modificando una encuesta finalizada. '
-              'Se pueden cambiar todos los datos excepto la cédula.',
+              texto,
               style: TextStyle(
                 color: ConstantColors.textDark,
                 fontSize: 12.5,
@@ -5890,10 +5927,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
         const SizedBox(height: 20),
         _botonFinalizar(
-          label: widget.modoEdicion ? 'Guardar cambios' : 'Finalizar y Guardar',
-          sublabel: widget.modoEdicion
+          // widget.modoEdicion es true tanto si la tarea ya estaba completada
+          // (edición real) como si todavía está pendiente (primera vez que se
+          // completa la actividad) — se distingue con _tareaYaCompletada para
+          // no decirle "Guardar cambios" a alguien que en realidad va a
+          // FINALIZAR la tarea recién ahora.
+          label: (widget.modoEdicion && _tareaYaCompletada) ? 'Guardar cambios' : 'Finalizar y Guardar',
+          sublabel: (widget.modoEdicion && _tareaYaCompletada)
               ? 'Se actualizarán todos los datos de la encuesta'
-              : 'Se guardarán todos los datos de la encuesta',
+              : 'La tarea quedará finalizada y se guardarán todos los datos',
           onTap: () => _guardarEncuesta(fueEncuestado: true),
         ),
       ],
@@ -6259,8 +6301,16 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                     return ListTile(
                       dense: true,
                       selected: selected,
-                      selectedColor: ConstantColors.primaryViolet,
-                      title: Text(nombre, style: const TextStyle(fontSize: 13)),
+                      // Antes se dejaba que ListTile pintara el título con
+                      // `selectedColor` (violeta claro) cuando el item estaba
+                      // seleccionado, dejando el texto casi ilegible sobre
+                      // fondo blanco. Ahora el texto siempre es negro/oscuro;
+                      // solo el check a la derecha indica la selección.
+                      selectedColor: Colors.black87,
+                      title: Text(
+                        nombre,
+                        style: const TextStyle(fontSize: 13, color: Colors.black87),
+                      ),
                       trailing: selected
                           ? Icon(Icons.check, color: ConstantColors.primaryViolet, size: 18)
                           : null,
