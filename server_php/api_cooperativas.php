@@ -10,13 +10,50 @@
 //
 // Respuesta compatible con CooperativaModel.fromJson:
 //   { id: String, nombre: String, codigo: String, ciudad: String? }
+//
+// NOTA (2026): este endpoint estaba devolviendo respuesta VACÍA (sin JSON,
+// sin error) en producción. Causa: la query de `unidad_bancaria` pedía las
+// columnas codigo/ciudad/activo, que en esa tabla podrían no existir con
+// esos nombres exactos; al fallar `prepare()` devolvía `false` y la
+// siguiente línea (`$st->execute()`/`bind_param()`) tronaba con un Fatal
+// Error de PHP. Con `display_errors=0` (ver db_config.php) eso produce una
+// respuesta 100% en blanco: el navegador (nueva_encuesta.php) no se veía
+// afectado porque consulta la BD directamente con una query más simple
+// (solo `nombre`), pero la app Flutter, que sí depende de este endpoint,
+// se quedaba sin datos y silenciosamente mostraba la lista vacía.
+// Se blindó el endpoint: nunca debe salir sin imprimir un JSON válido, y
+// cada query "opcional" (columnas que podrían no existir) tiene un
+// fallback a una versión mínima que si funciona.
 // ============================================================
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 
+// Red de seguridad: si ocurre un error fatal más adelante (p.ej. columna
+// inexistente que ni siquiera este archivo previó), igual se responde JSON
+// en vez de dejar el body completamente vacío.
+register_shutdown_function(function () {
+    $err = error_get_last();
+    if (!$err) return;
+    if (!in_array((int)($err['type'] ?? 0), [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) return;
+    if (!headers_sent()) {
+        http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode([
+        'status'  => 'error',
+        'message' => 'Error interno al listar instituciones: ' . substr($err['message'] ?? '', 0, 200),
+        'data'    => [],
+    ], JSON_UNESCAPED_UNICODE);
+});
+
 require_once __DIR__ . '/db_config.php';
+
+// Modo de reporte predecible: prepare()/query() devuelven false en error
+// (en vez de lanzar excepción, cuyo comportamiento varía según versión de
+// PHP) para poder detectarlo y aplicar los fallbacks de abajo.
+mysqli_report(MYSQLI_REPORT_OFF);
 
 try {
     $q         = trim($_GET['q']         ?? '');
@@ -47,20 +84,58 @@ try {
                 FROM unidad_bancaria
                 WHERE $where
                 ORDER BY nombre ASC";
-        $st  = $conn->prepare($sql);
-        if ($vals) { $st->bind_param($types, ...$vals); }
-        $st->execute();
-        $res = $st->get_result();
-        while ($r = $res->fetch_assoc()) {
-            $cooperativas[] = [
-                'id'     => (string)$r['id'],
-                'nombre' => $r['nombre'],
-                'codigo' => $r['codigo'] ?? '',
-                'ciudad' => $r['ciudad'] ?: null,
-                '_fuente'=> 'interna',
-            ];
+        $st = @$conn->prepare($sql);
+
+        if (!$st) {
+            // La tabla no tiene columnas codigo/ciudad (u otro problema de
+            // esquema): reintentar con la misma query mínima que usa la
+            // versión web (server_php/admin/nueva_encuesta.php), que sí
+            // funciona: solo id + nombre, sin filtro por texto en esas
+            // columnas ausentes.
+            error_log('[api_cooperativas] prepare() falló para unidad_bancaria (codigo/ciudad): ' . $conn->error . ' — usando fallback mínimo');
+            $whereMin = '1=1';
+            $valsMin  = [];
+            $typesMin = '';
+            if ($q !== '') {
+                $whereMin .= ' AND nombre LIKE ?';
+                $valsMin   = ["%$q%"];
+                $typesMin  = 's';
+            }
+            $st = @$conn->prepare("SELECT id, nombre FROM unidad_bancaria WHERE $whereMin ORDER BY nombre ASC");
+            if ($st) {
+                if ($valsMin) { $st->bind_param($typesMin, ...$valsMin); }
+                if ($st->execute()) {
+                    $res = $st->get_result();
+                    while ($r = $res->fetch_assoc()) {
+                        $cooperativas[] = [
+                            'id'     => (string)$r['id'],
+                            'nombre' => $r['nombre'],
+                            'codigo' => '',
+                            'ciudad' => null,
+                            '_fuente'=> 'interna',
+                        ];
+                    }
+                }
+                $st->close();
+            } else {
+                error_log('[api_cooperativas] fallback mínimo de unidad_bancaria también falló: ' . $conn->error);
+            }
+        } else {
+            if ($vals) { $st->bind_param($types, ...$vals); }
+            if ($st->execute()) {
+                $res = $st->get_result();
+                while ($r = $res->fetch_assoc()) {
+                    $cooperativas[] = [
+                        'id'     => (string)$r['id'],
+                        'nombre' => $r['nombre'],
+                        'codigo' => $r['codigo'] ?? '',
+                        'ciudad' => $r['ciudad'] ?: null,
+                        '_fuente'=> 'interna',
+                    ];
+                }
+            }
+            $st->close();
         }
-        $st->close();
     }
 
     // ── 2. Catastro SEPS ──────────────────────────────────────
@@ -91,25 +166,30 @@ try {
                 ORDER BY razon_social ASC
                 $limit_clause";
 
-        $st = $conn->prepare($sql);
-        if ($limit_clause !== '') {
-            $vals[]  = $limit;
-            $vals[]  = $offset;
-            $types  .= 'ii';
+        $st = @$conn->prepare($sql);
+        if ($st) {
+            if ($limit_clause !== '') {
+                $vals[]  = $limit;
+                $vals[]  = $offset;
+                $types  .= 'ii';
+            }
+            if ($vals) { $st->bind_param($types, ...$vals); }
+            if ($st->execute()) {
+                $res = $st->get_result();
+                while ($r = $res->fetch_assoc()) {
+                    $cooperativas[] = [
+                        'id'     => 'seps_' . $r['id'],          // siempre String
+                        'nombre' => $r['razon_social'],
+                        'codigo' => $r['ruc'],
+                        'ciudad' => $r['ciudad_val'] ?: null,
+                        '_fuente'=> 'seps',
+                    ];
+                }
+            }
+            $st->close();
+        } else {
+            error_log('[api_cooperativas] prepare() falló para seps_cooperativas: ' . $conn->error);
         }
-        if ($vals) { $st->bind_param($types, ...$vals); }
-        $st->execute();
-        $res = $st->get_result();
-        while ($r = $res->fetch_assoc()) {
-            $cooperativas[] = [
-                'id'     => 'seps_' . $r['id'],          // siempre String
-                'nombre' => $r['razon_social'],
-                'codigo' => $r['ruc'],
-                'ciudad' => $r['ciudad_val'] ?: null,
-                '_fuente'=> 'seps',
-            ];
-        }
-        $st->close();
     }
 
     // ── Ordenar: internas primero, luego alfabético ───────────
@@ -130,7 +210,7 @@ try {
     // ── Provincias disponibles ────────────────────────────────
     $provincias = [];
     if ($tiene_seps) {
-        $res_p = $conn->query(
+        $res_p = @$conn->query(
             "SELECT DISTINCT provincia FROM seps_cooperativas
              WHERE provincia IS NOT NULL AND provincia != '' AND activo = 1
              ORDER BY provincia"
@@ -140,13 +220,19 @@ try {
         }
     }
 
-    // ── Conteos ───────────────────────────────────────────────
+    // ── Conteos (con fallback si `activo` no existe en unidad_bancaria) ──
     $cnt_ub   = 0;
     $cnt_seps = 0;
-    $r_ub = $conn->query("SELECT COUNT(*) AS c FROM unidad_bancaria WHERE activo=1");
+    $r_ub = @$conn->query("SELECT COUNT(*) AS c FROM unidad_bancaria WHERE activo=1");
+    if (!$r_ub) {
+        $r_ub = @$conn->query("SELECT COUNT(*) AS c FROM unidad_bancaria");
+    }
     if ($r_ub) $cnt_ub = (int)$r_ub->fetch_assoc()['c'];
     if ($tiene_seps) {
-        $r_sp = $conn->query("SELECT COUNT(*) AS c FROM seps_cooperativas WHERE activo=1");
+        $r_sp = @$conn->query("SELECT COUNT(*) AS c FROM seps_cooperativas WHERE activo=1");
+        if (!$r_sp) {
+            $r_sp = @$conn->query("SELECT COUNT(*) AS c FROM seps_cooperativas");
+        }
         if ($r_sp) $cnt_seps = (int)$r_sp->fetch_assoc()['c'];
     }
 
@@ -162,7 +248,11 @@ try {
         'data'      => $data,
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-} catch (Exception $e) {
-    http_response_code(500);
-    echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);
+} catch (\Throwable $e) {
+    error_log('[api_cooperativas] ' . $e);
+    if (!headers_sent()) {
+        http_response_code(200);
+        header('Content-Type: application/json; charset=utf-8');
+    }
+    echo json_encode(['status' => 'error', 'message' => $e->getMessage(), 'data' => []], JSON_UNESCAPED_UNICODE);
 }

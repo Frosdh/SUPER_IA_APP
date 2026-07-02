@@ -1767,7 +1767,10 @@ async function cargarEncuestaParaEditar() {
         }
         function svByName(name, val) {
             const el = document.querySelector(`[name="${name}"]`);
-            if (el) el.value = val ?? '';
+            if (el) {
+                el.value = val ?? '';
+                if (el.tagName === 'SELECT' && typeof syncSearchableDisplay === 'function') syncSearchableDisplay(el);
+            }
         }
         function setRadioByName(name, val) {
             document.querySelectorAll(`input[name="${name}"]`).forEach(r => {
@@ -2518,6 +2521,7 @@ async function buscarCedula() {
                             }
                         }
                         el.value = val ?? '';
+                        if (el.tagName === 'SELECT' && typeof syncSearchableDisplay === 'function') syncSearchableDisplay(el);
                     }
                 }
                 
@@ -3389,6 +3393,15 @@ function mostrarDialogoFinalizadoOk() {
 }
 
 /* ── Searchable select ──────────────────────────────────────────────────── */
+// Antes esto solo escondía las <option> que no calzaban con lo escrito
+// DENTRO del <select> nativo, que seguía cerrado (una sola línea, "—
+// Seleccione —") hasta que el usuario lo abría con un clic aparte: por eso
+// se veían "dos controles" (la caja de texto arriba + el select cerrado
+// abajo) en lugar de un solo autocompletado que muestra la lista al tipear.
+// Ahora el <select> original se mantiene oculto (solo para que el formulario
+// siga enviando su .value tal cual) y la lista visible/filtrada es un <div>
+// desplegable propio que aparece debajo del input al escribir o al hacer
+// focus, y se cierra al elegir una opción o al hacer clic afuera.
 function initSearchableSelects() {
     document.querySelectorAll('select[data-searchable="true"]').forEach(function(sel) {
         if (sel.parentElement && sel.parentElement.classList.contains('srch-wrap')) return;
@@ -3404,38 +3417,106 @@ function initSearchableSelects() {
         inp.placeholder = placeholder;
         inp.autocomplete = 'off';
         inp.style.cssText = 'width:100%;box-sizing:border-box;padding:7px 30px 7px 10px;' +
-            'border:1px solid #d1d5db;border-radius:6px 6px 0 0;font-size:13px;';
+            'border:1px solid #d1d5db;border-radius:6px;font-size:13px;';
 
-        sel.style.cssText = (sel.getAttribute('style') || '') +
-            ';width:100%;box-sizing:border-box;border-radius:0 0 6px 6px;' +
-            'border-top:none;margin-top:0;font-size:13px;';
+        // El <select> original queda oculto: sigue siendo la "fuente de
+        // verdad" para el envío del formulario (name + value), pero ya no
+        // se muestra como control aparte.
+        sel.style.cssText = (sel.getAttribute('style') || '') + ';display:none;';
+
+        var list = document.createElement('div');
+        list.className = 'srch-list';
+        list.style.cssText = 'position:absolute;left:0;right:0;top:100%;z-index:60;' +
+            'max-height:220px;overflow-y:auto;background:#fff;border:1px solid #d1d5db;' +
+            'border-radius:0 0 8px 8px;box-shadow:0 8px 18px rgba(15,23,42,.12);display:none;';
 
         sel.parentNode.insertBefore(wrap, sel);
         wrap.appendChild(inp);
         wrap.appendChild(sel);
+        wrap.appendChild(list);
 
-        var allOptions = Array.from(sel.options);
+        function currentOptions() {
+            return Array.from(sel.options).filter(function(o) { return o.value !== ''; });
+        }
+
+        function selectOption(opt) {
+            sel.value = opt ? opt.value : '';
+            inp.value = opt ? opt.text : '';
+            list.style.display = 'none';
+            // Notificar a cualquier listener que dependa del 'change' nativo
+            // del <select> (código legado de esta misma página).
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        // Igual que selectOption(null) pero SIN tocar el texto del input:
+        // se usa mientras el usuario está escribiendo, para invalidar la
+        // selección previa sin borrarle lo que acaba de tipear.
+        function clearSelectionKeepText() {
+            if (!sel.value) return;
+            sel.value = '';
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function renderList(filterText) {
+            var q = (filterText || '').trim().toLowerCase();
+            var matches = currentOptions().filter(function(o) {
+                return q === '' || o.text.toLowerCase().indexOf(q) > -1;
+            });
+            list.innerHTML = '';
+            if (matches.length === 0) {
+                var empty = document.createElement('div');
+                empty.textContent = 'Sin resultados';
+                empty.style.cssText = 'padding:10px 12px;color:#9ca3af;font-size:13px;text-align:center;';
+                list.appendChild(empty);
+            } else {
+                matches.slice(0, 300).forEach(function(o) {
+                    var item = document.createElement('div');
+                    item.textContent = o.text;
+                    item.style.cssText = 'padding:8px 12px;font-size:13px;cursor:pointer;';
+                    item.addEventListener('mouseenter', function() { item.style.background = '#f3f4f6'; });
+                    item.addEventListener('mouseleave', function() { item.style.background = ''; });
+                    // mousedown (no click) para que dispare ANTES del blur del input
+                    item.addEventListener('mousedown', function(ev) {
+                        ev.preventDefault();
+                        selectOption(o);
+                    });
+                    list.appendChild(item);
+                });
+            }
+            list.style.display = 'block';
+        }
 
         inp.addEventListener('input', function() {
-            var q = inp.value.trim().toLowerCase();
-            allOptions.forEach(function(opt) {
-                opt.style.display = (opt.value === '' || opt.text.toLowerCase().indexOf(q) > -1) ? '' : 'none';
-            });
-        });
-
-        sel.addEventListener('change', function() {
-            var chosen = sel.options[sel.selectedIndex];
-            if (chosen && chosen.value) {
-                inp.value = chosen.text;
-                allOptions.forEach(function(o) { o.style.display = ''; });
-            }
+            clearSelectionKeepText(); // el usuario vuelve a escribir: se invalida la selección previa
+            renderList(inp.value);
         });
 
         inp.addEventListener('focus', function() {
-            allOptions.forEach(function(o) { o.style.display = ''; });
-            if (sel.value) { inp.value = ''; sel.value = ''; }
+            renderList(inp.value);
         });
+
+        inp.addEventListener('blur', function() {
+            // Pequeño delay para que el mousedown de un item alcance a procesarse
+            setTimeout(function() { list.style.display = 'none'; }, 150);
+        });
+
+        // Si el <select> ya trae un valor precargado (modo edición / datos
+        // cargados por cédula), reflejarlo en el input visible.
+        syncSearchableDisplay(sel);
     });
+}
+
+/// Mantiene sincronizado el input visible de un select buscable con su
+/// valor real. Se usa tanto al inicializar (arriba) como cada vez que
+/// algún código de la página asigna `.value` directamente al <select>
+/// (por ejemplo svByName/localSvByName al cargar datos de un cliente).
+function syncSearchableDisplay(sel) {
+    if (!sel || sel.tagName !== 'SELECT') return;
+    if (!sel.parentElement || !sel.parentElement.classList.contains('srch-wrap')) return;
+    var inp = sel.parentElement.querySelector('input[type="text"]');
+    if (!inp) return;
+    var opt = sel.options[sel.selectedIndex];
+    inp.value = (opt && opt.value) ? opt.text : '';
 }
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -3443,47 +3524,6 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         if (e.target.closest && e.target.closest('.yn-opt')) {
             setTimeout(initSearchableSelects, 150);
-        }
-    });
-});
-</script>
-</body>
-</html>
-ion(o) {
-                    return o.value !== '' && o.style.display !== 'none';
-                });
-                if (first) sel.value = first.value;
-            } else {
-                sel.value = '';
-            }
-        });
-
-        // When user picks from select, update input label
-        sel.addEventListener('change', function() {
-            var chosen = sel.options[sel.selectedIndex];
-            if (chosen && chosen.value) {
-                inp.value = chosen.text;
-                // Restore all options visibility
-                allOptions.forEach(function(o) { o.style.display = ''; });
-            }
-        });
-
-        // Clear filter on focus
-        inp.addEventListener('focus', function() {
-            allOptions.forEach(function(o) { o.style.display = ''; });
-            inp.value = '';
-            sel.value = '';
-        });
-    });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    initSearchableSelects();
-    // Re-init after any dynamic show (extras panels use class toggle)
-    document.addEventListener('click', function(e) {
-        // yn-opt buttons reveal extras sections that contain the selects
-        if (e.target.closest && e.target.closest('.yn-opt')) {
-            setTimeout(initSearchableSelects, 100);
         }
     });
 });

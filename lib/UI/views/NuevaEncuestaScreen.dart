@@ -5464,6 +5464,104 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   // ── PASO 2: Productos actuales ───────────────────────────────
 
+  /// Selector de institución financiera (ahorro/corriente).
+  /// Evita mostrar simultáneamente el picker buscable Y el campo de texto
+  /// manual: si la lista aún no cargó muestra un spinner; si terminó de
+  /// cargar pero vino vacía (falla de red/API) muestra SOLO el campo de
+  /// texto manual con un botón de "Reintentar" (antes se mostraba también
+  /// el picker, que siempre resultaba en "Sin resultados"); si la lista sí
+  /// tiene datos, muestra el picker y el campo de texto manual únicamente
+  /// cuando el usuario elige "Otra".
+  Widget _selectorInstitucion({
+    required String label,
+    required String placeholder,
+    required String? seleccionada,
+    required TextEditingController controller,
+    required void Function(String picked) onSeleccionar,
+  }) {
+    if (!_institucionesCargadas) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(children: [
+          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: ConstantColors.primaryViolet)),
+          const SizedBox(width: 10),
+          Text('Cargando instituciones…', style: TextStyle(fontSize: 12, color: ConstantColors.textGrey)),
+        ]),
+      );
+    }
+
+    if (_instituciones.isEmpty) {
+      // No se pudo obtener la lista de instituciones desde el servidor:
+      // no tiene sentido mostrar el picker (siempre diría "Sin resultados").
+      // Se deja solo el campo manual + opción de reintentar la carga.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _campo(controller: controller, label: label, icon: Icons.account_balance_rounded),
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 6),
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _institucionesCargadas = false);
+                _cargarInstituciones();
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh_rounded, size: 14, color: ConstantColors.primaryViolet),
+                  const SizedBox(width: 4),
+                  Text(
+                    'No se pudo cargar la lista de instituciones. Reintentar',
+                    style: TextStyle(fontSize: 11, color: ConstantColors.primaryViolet),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () async {
+            final picked = await _searchableInstPicker(hint: label, currentValue: seleccionada);
+            if (picked != null) onSeleccionar(picked);
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: ConstantColors.grey100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ConstantColors.borderLight),
+            ),
+            child: Row(children: [
+              Icon(Icons.account_balance_rounded, size: 18, color: ConstantColors.primaryViolet),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  (seleccionada == null || seleccionada == 'otra') ? placeholder : seleccionada,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: (seleccionada == null || seleccionada == 'otra')
+                        ? ConstantColors.textGrey
+                        : ConstantColors.textDark,
+                  ),
+                ),
+              ),
+              Icon(Icons.search, size: 18, color: ConstantColors.textGrey),
+            ]),
+          ),
+        ),
+        if (seleccionada == 'otra')
+          _campo(controller: controller, label: label, icon: Icons.account_balance_rounded),
+      ],
+    );
+  }
+
   Widget _buildPasoProductosActuales() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -5479,62 +5577,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         // Mostrar picker/entrada de institución inmediatamente debajo
         if (_mantieneAhorro) ...[
           const SizedBox(height: 8),
-          if (!_institucionesCargadas) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: ConstantColors.primaryViolet)),
-                const SizedBox(width: 10),
-                Text('Cargando instituciones…', style: TextStyle(fontSize: 12, color: ConstantColors.textGrey)),
-              ]),
-            ),
-          ] else ...[
-            GestureDetector(
-              onTap: () async {
-                final picked = await _searchableInstPicker(
-                  hint: 'Institución (ahorro)',
-                  currentValue: _instAhorroSeleccionada,
-                );
-                if (picked != null) {
-                  setState(() {
-                    _instAhorroSeleccionada = picked;
-                    _bancoAhorroCtrl.text = (picked == 'otra') ? '' : picked;
-                  });
-                }
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: ConstantColors.grey100,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: ConstantColors.borderLight),
-                ),
-                child: Row(children: [
-                  Icon(Icons.account_balance_rounded, size: 18,
-                      color: ConstantColors.primaryViolet),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      (_instAhorroSeleccionada == null || _instAhorroSeleccionada == 'otra')
-                          ? 'Seleccionar institución (ahorro)'
-                          : _instAhorroSeleccionada!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: (_instAhorroSeleccionada == null || _instAhorroSeleccionada == 'otra')
-                            ? ConstantColors.textGrey
-                            : ConstantColors.textDark,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.search, size: 18, color: ConstantColors.textGrey),
-                ]),
-              ),
-            ),
-            if (_instAhorroSeleccionada == 'otra' || _instituciones.isEmpty) ...[
-              _campo(controller: _bancoAhorroCtrl, label: 'Institución (ahorro)', icon: Icons.account_balance_rounded),
-            ],
-          ],
+          _selectorInstitucion(
+            label: 'Institución (ahorro)',
+            placeholder: 'Seleccionar institución (ahorro)',
+            seleccionada: _instAhorroSeleccionada,
+            controller: _bancoAhorroCtrl,
+            onSeleccionar: (picked) {
+              setState(() {
+                _instAhorroSeleccionada = picked;
+                _bancoAhorroCtrl.text = (picked == 'otra') ? '' : picked;
+              });
+            },
+          ),
         ],
 
         _largeChoiceCard(
@@ -5547,62 +5601,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         // Mostrar picker/entrada de institución inmediatamente debajo
         if (_mantieneCorriente) ...[
           const SizedBox(height: 8),
-          if (!_institucionesCargadas) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(children: [
-                SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: ConstantColors.primaryViolet)),
-                const SizedBox(width: 10),
-                Text('Cargando instituciones…', style: TextStyle(fontSize: 12, color: ConstantColors.textGrey)),
-              ]),
-            ),
-          ] else ...[
-            GestureDetector(
-              onTap: () async {
-                final picked = await _searchableInstPicker(
-                  hint: 'Institución (corriente)',
-                  currentValue: _instCorrSeleccionada,
-                );
-                if (picked != null) {
-                  setState(() {
-                    _instCorrSeleccionada = picked;
-                    _bancoCorrienteCtrl.text = (picked == 'otra') ? '' : picked;
-                  });
-                }
-              },
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: ConstantColors.grey100,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: ConstantColors.borderLight),
-                ),
-                child: Row(children: [
-                  Icon(Icons.account_balance_rounded, size: 18,
-                      color: ConstantColors.primaryViolet),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      (_instCorrSeleccionada == null || _instCorrSeleccionada == 'otra')
-                          ? 'Seleccionar institución (corriente)'
-                          : _instCorrSeleccionada!,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: (_instCorrSeleccionada == null || _instCorrSeleccionada == 'otra')
-                            ? ConstantColors.textGrey
-                            : ConstantColors.textDark,
-                      ),
-                    ),
-                  ),
-                  Icon(Icons.search, size: 18, color: ConstantColors.textGrey),
-                ]),
-              ),
-            ),
-            if (_instCorrSeleccionada == 'otra' || _instituciones.isEmpty) ...[
-              _campo(controller: _bancoCorrienteCtrl, label: 'Institución (corriente)', icon: Icons.account_balance_rounded),
-            ],
-          ],
+          _selectorInstitucion(
+            label: 'Institución (corriente)',
+            placeholder: 'Seleccionar institución (corriente)',
+            seleccionada: _instCorrSeleccionada,
+            controller: _bancoCorrienteCtrl,
+            onSeleccionar: (picked) {
+              setState(() {
+                _instCorrSeleccionada = picked;
+                _bancoCorrienteCtrl.text = (picked == 'otra') ? '' : picked;
+              });
+            },
+          ),
         ],
 
 
@@ -6217,35 +6227,47 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
               // List
               SizedBox(
                 height: MediaQuery.of(ctx2).size.height * 0.42,
-                child: _filtered.isEmpty
-                    ? Center(
-                        child: Text('Sin resultados',
-                            style: TextStyle(color: Colors.grey.shade500)))
-                    : ListView.builder(
-                        itemCount: _filtered.length + 1, // +1 for "Otra"
-                        itemBuilder: (_, i) {
-                          if (i == _filtered.length) {
-                            // "Otra" option at bottom
-                            return ListTile(
-                              leading: const Icon(Icons.edit, size: 18),
-                              title: const Text('Otra (escribir manualmente)'),
-                              onTap: () => Navigator.pop(ctx2, 'otra'),
-                            );
-                          }
-                          final nombre = _filtered[i];
-                          final selected = nombre == currentValue;
-                          return ListTile(
-                            dense: true,
-                            selected: selected,
-                            selectedColor: ConstantColors.primaryViolet,
-                            title: Text(nombre, style: const TextStyle(fontSize: 13)),
-                            trailing: selected
-                                ? Icon(Icons.check, color: ConstantColors.primaryViolet, size: 18)
-                                : null,
-                            onTap: () => Navigator.pop(ctx2, nombre),
-                          );
-                        },
-                      ),
+                // Siempre se puede elegir "Otra (escribir manualmente)" al
+                // final, incluso si la búsqueda no encontró coincidencias
+                // (antes, si _filtered quedaba vacío, la hoja quedaba en un
+                // callejón sin salida con solo el texto "Sin resultados").
+                child: ListView.builder(
+                  // +1 extra fila siempre para "Otra"; si no hay resultados
+                  // se agrega una fila más con el aviso "Sin resultados".
+                  itemCount: _filtered.length + (_filtered.isEmpty ? 2 : 1),
+                  itemBuilder: (_, i) {
+                    if (_filtered.isEmpty && i == 0) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Center(
+                          child: Text('Sin resultados',
+                              style: TextStyle(color: Colors.grey.shade500)),
+                        ),
+                      );
+                    }
+                    final otraIndex = _filtered.isEmpty ? 1 : _filtered.length;
+                    if (i == otraIndex) {
+                      // "Otra" option al final, siempre disponible.
+                      return ListTile(
+                        leading: const Icon(Icons.edit, size: 18),
+                        title: const Text('Otra (escribir manualmente)'),
+                        onTap: () => Navigator.pop(ctx2, 'otra'),
+                      );
+                    }
+                    final nombre = _filtered[i];
+                    final selected = nombre == currentValue;
+                    return ListTile(
+                      dense: true,
+                      selected: selected,
+                      selectedColor: ConstantColors.primaryViolet,
+                      title: Text(nombre, style: const TextStyle(fontSize: 13)),
+                      trailing: selected
+                          ? Icon(Icons.check, color: ConstantColors.primaryViolet, size: 18)
+                          : null,
+                      onTap: () => Navigator.pop(ctx2, nombre),
+                    );
+                  },
+                ),
               ),
               const SizedBox(height: 8),
             ]),
