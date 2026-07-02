@@ -515,11 +515,15 @@ try {
     $GLOBALS['phase'] = 'UPDATE_TAREA';
     $obs_tarea = $observaciones ?? '';
 
-    // Solo actualiza GPS si vienen explícitamente
-    // Para levantamiento: también marca como completada
-    $es_levantamiento = ($tipo_tarea_db === 'levantamiento');
+    // Solo actualiza GPS si vienen explícitamente.
+    // Si la tarea AÚN NO estaba completada, esta llamada es la actividad
+    // (encuesta / levantamiento / recolección de documentos / etc.) que el
+    // asesor acaba de realizar → se finaliza automáticamente sin importar
+    // el tipo_tarea. Si ya estaba 'completada', esto es una edición
+    // posterior de datos (botón "Modificar datos") y NO se toca el estado.
+    $debe_finalizar = !in_array($estadoPrev, ['completada', 'cancelada'], true);
     if ($lat_ini !== null || $lng_ini !== null || $lat_fin !== null || $lng_fin !== null) {
-        if ($es_levantamiento) {
+        if ($debe_finalizar) {
             $fecha_hoy = date('Y-m-d');
             $hora_hoy  = date('H:i:s');
             $st = $conn->prepare(
@@ -547,7 +551,7 @@ try {
         $st->execute();
         $st->close();
     } else {
-        if ($es_levantamiento) {
+        if ($debe_finalizar) {
             $fecha_hoy = date('Y-m-d');
             $hora_hoy  = date('H:i:s');
             $st = $conn->prepare("UPDATE tarea SET observaciones=?, estado='completada', fecha_realizada=?, hora_realizada=? WHERE id=?");
@@ -1181,10 +1185,12 @@ try {
     $GLOBALS['phase'] = 'DONE';
 
     respond_json(200, [
-        'status'    => 'success',
-        'message'   => 'Encuesta actualizada correctamente',
-        'tarea_id'  => $tarea_id,
-        'cliente_id'=> $cliente_id,
+        'status'          => 'success',
+        'message'         => $debe_finalizar ? 'Tarea finalizada correctamente' : 'Encuesta actualizada correctamente',
+        'tarea_id'        => $tarea_id,
+        'cliente_id'      => $cliente_id,
+        'finalizada_ahora'=> $debe_finalizar,
+        'estado_previo'   => $estadoPrev,
     ]);
 
 } catch (\Throwable $e) {

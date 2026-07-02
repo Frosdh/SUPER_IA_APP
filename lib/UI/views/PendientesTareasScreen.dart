@@ -825,8 +825,10 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                 ),
               ],
 
-              // ── Botón "Ir a actividad" para tareas no terminadas ──────
-              if (!isDone && !isCancel) ...[
+              // ── Botón "Ir a actividad": solo cuando la tarea ya fue
+              // seleccionada para hoy (en_proceso). Antes de seleccionarla
+              // (programada) no debe aparecer, solo "Seleccionar hoy".
+              if (isProc) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,
@@ -921,21 +923,6 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                       icon: const Icon(Icons.event_repeat_rounded, size: 16),
                       label: const Text(
                         'Posponer',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ElevatedButton.icon(
-                      onPressed: tareaId.isEmpty ? null : () => _irAActividad(t),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: ConstantColors.primaryBlue,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      icon: Icon(_iconActividad(tipo), size: 16),
-                      label: const Text(
-                        'Realizar',
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 12),
                       ),
                     ),

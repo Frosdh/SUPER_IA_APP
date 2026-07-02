@@ -587,12 +587,15 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _actividad = act.isEmpty ? null : act;
 
       final ne = _s(cliente['nombre_empresa']);
-      if (ne.isNotEmpty) {
-        _empresaCtrl.text = ne;
+      _empresaCtrl.text = ne;
+      if (widget.tipoTarea == 'levantamiento') {
+        // El levantamiento de empresa existe justamente para capturar estos
+        // datos: aunque el prospecto aún no tenga nombre_empresa guardado
+        // (p. ej. viene de una encuesta "Prospecto nuevo" donde no se llenó),
+        // debe mostrarse la sección de empresa para poder completarla ahora.
         _tieneEmpresa = true;
       } else {
-        _empresaCtrl.text = '';
-        _tieneEmpresa = false;
+        _tieneEmpresa = ne.isNotEmpty;
       }
 
       // Tipo de empresa viene de cliente_prospecto.tipo_empresa
@@ -1820,9 +1823,32 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
       if (data['status'] == 'success') {
         if (widget.modoEdicion) {
-          // En modo edición NO se cierran/abren segmentos ni se crean nuevas
-          // tareas: solo se informa el éxito y se vuelve a la lista.
-          _mostrarDialogoModificacionOk();
+          // `widget.modoEdicion` cubre dos casos distintos:
+          //  1) El asesor acaba de IR A LA ACTIVIDAD (encuesta, levantamiento,
+          //     recolección de documentos, etc.) de una tarea que todavía
+          //     NO estaba completada → el backend la finaliza automáticamente
+          //     y responde 'finalizada_ahora' = true. Aquí mostramos el mismo
+          //     diálogo de "Tarea Finalizada" que en el flujo de creación,
+          //     para que quede claro que ya no hace falta volver a marcarla
+          //     como Completado/Finalizar manualmente.
+          //  2) El asesor abrió "Modificar datos" de una tarea que YA estaba
+          //     completada → 'finalizada_ahora' = false, solo se editaron
+          //     datos, se mantiene el diálogo "Cambios guardados".
+          final finalizadaAhora = data['finalizada_ahora'] == true ||
+              data['finalizada_ahora']?.toString() == '1';
+
+          if (finalizadaAhora) {
+            final tareaId = widget.tareaIdEdicion ?? '';
+            if (tareaId.isNotEmpty) _cerrarYNuevoSegmento(tareaId: tareaId);
+
+            if (widget.tipoTarea == 'levantamiento') {
+              _mostrarDialogoLevantamientoOk(clienteId: _clienteId ?? '');
+            } else {
+              _mostrarDialogoFinalizado(fueEncuestado: fueEncuestado);
+            }
+          } else {
+            _mostrarDialogoModificacionOk();
+          }
         } else {
           // ── Cerrar segmento de ruta actual e iniciar el siguiente ──
           final tareaId   = data['tarea_id']?.toString() ?? '';
