@@ -37,6 +37,7 @@ try {
         $db_password,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]
     );
+    $pdo->exec("SET time_zone = '-05:00'");
     // Crear tabla de OTPs si no existe
     $pdo->exec("CREATE TABLE IF NOT EXISTS email_otp_codes (
         id         INT AUTO_INCREMENT PRIMARY KEY,

@@ -9,6 +9,10 @@ $error_reporting_level = E_ALL;
 error_reporting($error_reporting_level);
 ini_set('display_errors', '0');
 
+// Zona horaria de Ecuador (evita que las horas guardadas/mostradas
+// salgan adelantadas si el servidor corre en UTC por defecto)
+date_default_timezone_set('America/Guayaquil');
+
 if (!defined('JSON_UNESCAPED_UNICODE')) {
     define('JSON_UNESCAPED_UNICODE', 0);
 }
@@ -58,4 +62,10 @@ if ($conn->connect_error) {
 }
 
 $conn->set_charset('utf8mb4');
+
+// Forzar la sesión de MySQL a hora de Ecuador (-05:00, sin horario de verano).
+// Sin esto, NOW()/CURDATE()/CURTIME()/CURRENT_TIMESTAMP() usan la zona horaria
+// del servidor de base de datos (con frecuencia UTC en hosting compartido),
+// lo que hacía que las tareas se guardaran ~5 horas adelantadas.
+$conn->query("SET time_zone = '-05:00'");
 ?>

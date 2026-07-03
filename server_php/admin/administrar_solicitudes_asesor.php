@@ -8,6 +8,7 @@ if (!isset($pdo)) {
     try {
         $pdo = new PDO("mysql:host={$db_host};dbname={$db_name};charset=utf8mb4", $db_user, $db_password);
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+        $pdo->exec("SET time_zone = '-05:00'");
     } catch (Exception $e) {
         $mensaje_error = "Error de conexión PDO: " . $e->getMessage();
         // seguir sin detener la página; las secciones que requieren BD fallarán con mensaje
@@ -246,6 +247,7 @@ try {
 try {
     $pdo2 = new PDO("mysql:host=$db_host;dbname=$db_name;charset=utf8mb4", $db_user, $db_password);
     $pdo2->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo2->exec("SET time_zone = '-05:00'");
 
     $sql_app = "SELECT 
                     u.id AS usuario_id,

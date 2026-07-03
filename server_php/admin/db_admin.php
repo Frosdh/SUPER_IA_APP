@@ -9,6 +9,10 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+// Zona horaria de Ecuador (el servidor suele correr en UTC por defecto,
+// lo que adelantaba ~5 horas las fechas/horas mostradas en el panel)
+date_default_timezone_set('America/Guayaquil');
+
 $configPath = __DIR__ . '/../db_config.php';
 if (!file_exists($configPath)) {
     die("Error: no se encontró db_config.php");
@@ -29,6 +33,10 @@ try {
     );
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+
+    // Forzar la sesión de MySQL a hora de Ecuador (-05:00) para que
+    // NOW()/CURDATE()/CURTIME()/CURRENT_TIMESTAMP() coincidan con la hora real.
+    $pdo->exec("SET time_zone = '-05:00'");
 
     // Crear tabla de OTPs si no existe (requerida para recuperación de contraseña)
     $pdo->exec("CREATE TABLE IF NOT EXISTS email_otp_codes (
