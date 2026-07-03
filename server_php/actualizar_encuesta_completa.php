@@ -19,7 +19,7 @@ header('Access-Control-Allow-Methods: POST, OPTIONS, GET');
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
 
-$API_BUILD = '2026-07-02-autofin2';
+$API_BUILD = '2026-07-02-followup3';
 $GLOBALS['phase'] = 'BOOT';
 
 function respond_json($code, $payload) {
@@ -1029,15 +1029,55 @@ try {
             $st->close();
         }
 
-        // ── 6. Acuerdo de visita (upsert) ──────────────────────
+        // ── 6. Acuerdo de visita (upsert) + tarea de seguimiento ────
+        // NOTA: esta sección faltaba por completo en este archivo (solo
+        // existía en guardar_cliente_encuesta.php, usado para prospectos
+        // totalmente nuevos). Por eso, al completar una tarea YA EXISTENTE
+        // desde la lista de tareas (que es lo que usa este endpoint) y
+        // elegir "Acuerdo Logrado" = Nueva cita / Reprogramación / etc.,
+        // nunca se creaba la tarea de seguimiento para la fecha elegida.
+        // Se replica aquí la misma lógica: 1 tarea nueva por acuerdo,
+        // evitando duplicados si el asesor guarda/edita varias veces (se
+        // guarda el id de la tarea generada en acuerdo_visita.tarea_generada_id
+        // y, si ya existe, se actualiza esa misma tarea en vez de crear otra).
+        $GLOBALS['phase'] = 'ENSURE_COL_TAREA_GENERADA';
+        try {
+            $colTG = $conn->query("SHOW COLUMNS FROM acuerdo_visita LIKE 'tarea_generada_id'");
+            if ($colTG && $colTG->num_rows === 0) {
+                $conn->query("ALTER TABLE acuerdo_visita ADD COLUMN tarea_generada_id CHAR(36) DEFAULT NULL AFTER hora");
+            }
+        } catch (\Throwable $_) {}
+
+        // Mapa acuerdo → tipo_tarea de seguimiento (igual que guardar_cliente_encuesta.php)
+        $tipo_followup_map = [
+            'nueva_cita_campo'   => 'nueva_cita_campo',
+            'nueva_cita_oficina' => 'nueva_cita_oficina',
+            'reprogramacion'     => 'evaluacion',
+            'seguimiento'        => 'documentos_pendientes',
+            'tasas_competitivas' => 'evaluacion',
+            'levantamiento'      => 'levantamiento',
+            'otro'               => 'evaluacion',
+        ];
+        $acuerdo_labels = [
+            'nueva_cita_campo'    => 'Nueva cita en campo',
+            'nueva_cita_oficina'  => 'Nueva cita en oficina',
+            'reprogramacion'      => 'Reprogramación',
+            'seguimiento'         => 'Recolectar documentación',
+            'tasas_competitivas'  => 'Tasas competitivas',
+            'levantamiento'       => 'Levantamiento Empresa',
+            'otro'                => 'Seguimiento',
+        ];
+
         if ($acuerdo !== null && $fecha_acuerdo !== null) {
             $GLOBALS['phase'] = 'UPSERT_ACUERDO';
 
-            $st = $conn->prepare('SELECT id FROM acuerdo_visita WHERE tarea_id = ? LIMIT 1');
+            $st = $conn->prepare('SELECT id, tarea_generada_id FROM acuerdo_visita WHERE tarea_id = ? LIMIT 1');
             $st->bind_param('s', $tarea_id);
             $st->execute();
             $rowA = $st->get_result()->fetch_assoc();
             $st->close();
+
+            $tareaGeneradaId = $rowA['tarea_generada_id'] ?? null;
 
             if ($rowA) {
                 $st = $conn->prepare(
@@ -1056,8 +1096,74 @@ try {
                 $st->execute();
                 $st->close();
             }
+
+            // ── Crear o actualizar la tarea de seguimiento ──────────
+            $tipo_followup = $tipo_followup_map[$acuerdo] ?? 'evaluacion';
+            $obs_follow = $acuerdo_labels[$acuerdo] ?? ucfirst(str_replace('_', ' ', $acuerdo));
+
+            $followupExiste = false;
+            if ($tareaGeneradaId) {
+                $stF = $conn->prepare("SELECT id, estado FROM tarea WHERE id = ? LIMIT 1");
+                $stF->bind_param('s', $tareaGeneradaId);
+                $stF->execute();
+                $rowF = $stF->get_result()->fetch_assoc();
+                $stF->close();
+                // Solo la reutilizamos si sigue programada/pendiente; si el
+                // asesor ya la trabajó (completada) o se canceló, se crea una
+                // tarea de seguimiento nueva en vez de tocar esa.
+                if ($rowF && in_array($rowF['estado'], ['programada', 'pendiente'], true)) {
+                    $followupExiste = true;
+                }
+            }
+
+            if ($followupExiste) {
+                $stU = $conn->prepare(
+                    "UPDATE tarea SET tipo_tarea=?, fecha_programada=?, hora_programada=?, observaciones=?
+                     WHERE id=?"
+                );
+                $stU->bind_param('sssss', $tipo_followup, $fecha_acuerdo, $hora_acuerdo, $obs_follow, $tareaGeneradaId);
+                $stU->execute();
+                $stU->close();
+            } else {
+                $followupId = genUUID();
+                $stI = $conn->prepare(
+                    "INSERT INTO tarea
+                     (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado,
+                      fecha_programada, hora_programada, observaciones)
+                     VALUES (?, ?, ?, ?, 'programada', ?, ?, ?)"
+                );
+                $stI->bind_param('sssssss',
+                    $followupId, $asesor_id, $cliente_id, $tipo_followup,
+                    $fecha_acuerdo, $hora_acuerdo, $obs_follow
+                );
+                if ($stI->execute()) {
+                    $stLink = $conn->prepare('UPDATE acuerdo_visita SET tarea_generada_id = ? WHERE tarea_id = ?');
+                    $stLink->bind_param('ss', $followupId, $tarea_id);
+                    $stLink->execute();
+                    $stLink->close();
+                }
+                $stI->close();
+            }
         } else {
-            // Si no hay acuerdo (null/vacío), borrar cualquier acuerdo previo
+            // "Ninguno": si antes había un acuerdo con una tarea de
+            // seguimiento ya generada y esa tarea sigue sin trabajarse,
+            // se cancela (para no dejar una cita "fantasma" programada
+            // cuando el asesor decidió que ya no hace falta).
+            $st = $conn->prepare('SELECT tarea_generada_id FROM acuerdo_visita WHERE tarea_id = ? LIMIT 1');
+            $st->bind_param('s', $tarea_id);
+            $st->execute();
+            $rowPrevA = $st->get_result()->fetch_assoc();
+            $st->close();
+
+            if (!empty($rowPrevA['tarea_generada_id'])) {
+                $stCanc = $conn->prepare(
+                    "UPDATE tarea SET estado='cancelada' WHERE id = ? AND estado IN ('programada','pendiente')"
+                );
+                $stCanc->bind_param('s', $rowPrevA['tarea_generada_id']);
+                $stCanc->execute();
+                $stCanc->close();
+            }
+
             $st = $conn->prepare('DELETE FROM acuerdo_visita WHERE tarea_id = ?');
             $st->bind_param('s', $tarea_id);
             $st->execute();

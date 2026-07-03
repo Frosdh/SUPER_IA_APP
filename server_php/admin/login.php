@@ -126,18 +126,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($login_role === 'super_admin') {
         // Super Administrador
-        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion
                                FROM usuario
-                               WHERE email = ? AND rol = 'gerente_general' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+                               WHERE email = ? AND (rol = 'gerente_general' OR rol = 'administrador') AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
         $stmt->execute([$email]);
         $super_admin = $stmt->fetch();
-        
+
         if ($super_admin && password_verify($pass, $super_admin['password_hash'])) {
             $_SESSION['super_admin_logged_in'] = true;
             $_SESSION['super_admin_id'] = $super_admin['id'];
             $_SESSION['super_admin_email'] = $super_admin['email'];
             $_SESSION['super_admin_nombre'] = $super_admin['nombre'];
-            $_SESSION['super_admin_rol'] = 'gerente_general';
+            $_SESSION['super_admin_rol'] = $super_admin['rol'];
             session_write_close();
             header('Location: super_admin_index.php');
             exit;

@@ -67,9 +67,37 @@ $currentPage = 'mapa_vivo';
         .btn-logout { background: rgba(255,221,0,0.14); color: white; border: 1px solid rgba(255,221,0,0.24); padding: 8px 15px; border-radius: 10px; text-decoration: none; font-weight: 600; }
         .btn-logout:hover { background: rgba(255,221,0,0.24); color: white; }
         .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        #map { width: 100%; height: 80vh; border-radius: 18px; box-shadow: 0 18px 36px rgba(18, 58, 109, 0.12); }
+        #map { width: 100%; height: 72vh; border-radius: 18px; box-shadow: 0 18px 36px rgba(18, 58, 109, 0.12); }
         .page-header { margin-bottom: 20px; }
         .page-header h1 { margin: 0; font-size: 28px; font-weight: 800; color: var(--brand-navy-deep); }
+
+        .map-toolbar {
+            display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px;
+            background: #fff; border-radius: 14px; padding: 14px 18px; margin-bottom: 16px;
+            box-shadow: 0 8px 20px rgba(18, 58, 109, 0.08);
+        }
+        .map-toolbar .field { display: flex; flex-direction: column; gap: 5px; min-width: 200px; }
+        .map-toolbar label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--brand-navy-deep); }
+        .map-toolbar select {
+            padding: 9px 12px; border-radius: 9px; border: 1.5px solid #E2E8F0;
+            font-size: 13.5px; font-family: 'Inter', sans-serif; color: #0D1929; background: #fff;
+        }
+        .map-toolbar .status { margin-left: auto; font-size: 12.5px; color: #64748B; display: flex; align-items: center; gap: 8px; }
+        .map-toolbar .dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+        .map-legend {
+            display: flex; flex-wrap: wrap; gap: 10px 18px; background: #fff; border-radius: 14px;
+            padding: 12px 18px; margin-top: 14px; box-shadow: 0 8px 20px rgba(18, 58, 109, 0.08);
+            font-size: 12.5px; color: #334155;
+        }
+        .map-legend .item { display: flex; align-items: center; gap: 7px; }
+        .map-legend .swatch { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+        .map-empty {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255,255,255,.95); padding: 14px 22px; border-radius: 12px;
+            font-size: 13.5px; color: #64748B; box-shadow: 0 8px 20px rgba(0,0,0,.1); z-index: 500;
+            pointer-events: none;
+        }
+        .map-wrap { position: relative; }
     </style>
 </head>
 <body>
@@ -132,24 +160,168 @@ $currentPage = 'mapa_vivo';
     <div class="content-area">
         <div class="page-header">
             <h1><i class="fas fa-map me-2"></i>Mapa en Vivo</h1>
-            <p class="text-muted mt-2">Monitoreo en tiempo real de puntos de interes</p>
+            <p class="text-muted mt-2">Ubicación en tiempo real de los asesores en campo, agrupados por equipo</p>
         </div>
-        <div id="map"></div>
+
+        <div class="map-toolbar">
+            <div class="field">
+                <label>Gerente</label>
+                <select id="filtro-gerente">
+                    <option value="">Todos los gerentes</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Supervisor</label>
+                <select id="filtro-supervisor">
+                    <option value="">Todos los supervisores</option>
+                </select>
+            </div>
+            <div class="status">
+                <span class="dot" id="status-dot"></span>
+                <span id="status-text">Cargando…</span>
+            </div>
+        </div>
+
+        <div class="map-wrap">
+            <div id="map"></div>
+        </div>
+        <div class="map-legend" id="map-legend"></div>
     </div>
 </div>
 <script>
-const map = L.map('map').setView([-16.3895, -63.1666], 13);
+const map = L.map('map').setView([-16.3895, -63.1666], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     maxZoom: 19
 }).addTo(map);
-[
-    { lat: -16.3895, lng: -63.1666, titulo: 'Super_IA Central' },
-    { lat: -16.3900, lng: -63.1670, titulo: 'Oficina Norte' },
-    { lat: -16.3890, lng: -63.1660, titulo: 'Agencia Sur' }
-].forEach((m) => {
-    L.marker([m.lat, m.lng]).bindPopup(`<strong>${m.titulo}</strong>`).addTo(map);
+
+let markers = [];
+let emptyMsgEl = null;
+let allSupervisores = []; // [{id, nombre, jefe_agencia_id}]
+let firstLoad = true;
+
+const selGerente = document.getElementById('filtro-gerente');
+const selSupervisor = document.getElementById('filtro-supervisor');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const legendEl = document.getElementById('map-legend');
+
+function poblarSupervisores(gerenteId) {
+    const actual = selSupervisor.value;
+    selSupervisor.innerHTML = '<option value="">Todos los supervisores</option>';
+    allSupervisores
+        .filter(s => !gerenteId || String(s.jefe_agencia_id) === String(gerenteId))
+        .forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.nombre;
+            selSupervisor.appendChild(opt);
+        });
+    // Conserva la selección previa si sigue siendo válida
+    if ([...selSupervisor.options].some(o => o.value === actual)) {
+        selSupervisor.value = actual;
+    }
+}
+
+function limpiarMarcadores() {
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+    if (emptyMsgEl) { emptyMsgEl.remove(); emptyMsgEl = null; }
+}
+
+function mostrarVacio() {
+    if (emptyMsgEl) return;
+    emptyMsgEl = document.createElement('div');
+    emptyMsgEl.className = 'map-empty';
+    emptyMsgEl.textContent = 'No hay asesores en línea con este filtro en este momento.';
+    document.querySelector('.map-wrap').appendChild(emptyMsgEl);
+}
+
+function actualizarLeyenda(ubicaciones) {
+    const equipos = new Map();
+    ubicaciones.forEach(u => {
+        if (!equipos.has(u.supervisor_id)) {
+            equipos.set(u.supervisor_id, { nombre: u.supervisor_nombre, color: u.color });
+        }
+    });
+    legendEl.innerHTML = '';
+    if (equipos.size === 0) {
+        legendEl.innerHTML = '<span style="color:#94a3b8;">Sin asesores conectados para mostrar leyenda.</span>';
+        return;
+    }
+    equipos.forEach(eq => {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `<span class="swatch" style="background:${eq.color}"></span> Equipo de ${eq.nombre}`;
+        legendEl.appendChild(item);
+    });
+}
+
+async function cargarUbicaciones() {
+    const params = new URLSearchParams();
+    if (selGerente.value) params.set('gerente_id', selGerente.value);
+    if (selSupervisor.value) params.set('supervisor_id', selSupervisor.value);
+
+    try {
+        const resp = await fetch('api_mapa_vivo_admin.php?' + params.toString(), { credentials: 'same-origin' });
+        const data = await resp.json();
+
+        if (data.status !== 'ok') {
+            statusDot.style.background = '#ef4444';
+            statusText.textContent = 'Error al actualizar: ' + (data.error || 'desconocido');
+            return;
+        }
+
+        if (firstLoad) {
+            allSupervisores = data.supervisores || [];
+            selGerente.innerHTML = '<option value="">Todos los gerentes</option>' +
+                (data.gerentes || []).map(g => `<option value="${g.id}">${g.nombre}</option>`).join('');
+            poblarSupervisores('');
+            firstLoad = false;
+        }
+
+        limpiarMarcadores();
+        const ubicaciones = data.ubicaciones || [];
+
+        if (ubicaciones.length === 0) {
+            mostrarVacio();
+        } else {
+            ubicaciones.forEach(u => {
+                const marker = L.circleMarker([parseFloat(u.latitud), parseFloat(u.longitud)], {
+                    radius: 9,
+                    color: '#fff',
+                    weight: 2,
+                    fillColor: u.color,
+                    fillOpacity: 0.95
+                }).addTo(map);
+                marker.bindPopup(
+                    `<strong>${u.asesor_nombre}</strong><br>` +
+                    `Supervisor: ${u.supervisor_nombre}<br>` +
+                    `Gerente: ${u.gerente_nombre}<br>` +
+                    `<small>Última actualización: ${u.timestamp}</small>`
+                );
+                markers.push(marker);
+            });
+        }
+
+        actualizarLeyenda(ubicaciones);
+        statusDot.style.background = '#22c55e';
+        statusText.textContent = `Actualizado ${data.ts} · ${data.total} asesor(es) en línea`;
+    } catch (err) {
+        statusDot.style.background = '#ef4444';
+        statusText.textContent = 'Sin conexión con el servidor';
+    }
+}
+
+selGerente.addEventListener('change', () => {
+    poblarSupervisores(selGerente.value);
+    cargarUbicaciones();
 });
+selSupervisor.addEventListener('change', cargarUbicaciones);
+
+cargarUbicaciones();
+setInterval(cargarUbicaciones, 15000);
+
 map.whenReady(() => {
     setTimeout(() => map.invalidateSize(), 300);
 });

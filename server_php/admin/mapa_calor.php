@@ -55,9 +55,17 @@ $currentPage = 'mapa_calor';
         .btn-logout { background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; }
         .btn-logout:hover { background: rgba(255, 255, 255, 0.3); }
         .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        #map { width: 100%; height: 80vh; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+        #map { width: 100%; height: 74vh; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
         .page-header { margin-bottom: 20px; }
         .page-header h1 { margin: 0; font-size: 28px; font-weight: 700; color: #1f2937; }
+        .heat-toolbar {
+            display: flex; flex-wrap: wrap; align-items: center; gap: 18px;
+            background: #fff; border-radius: 12px; padding: 14px 18px; margin-bottom: 16px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.06);
+        }
+        .heat-toolbar .chk { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: #374151; }
+        .heat-toolbar .chk input { width: 15px; height: 15px; }
+        .heat-toolbar .total { margin-left: auto; font-size: 13px; color: #6b7280; font-weight: 600; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
@@ -152,7 +160,14 @@ $currentPage = 'mapa_calor';
     <div class="content-area">
         <div class="page-header">
             <h1><i class="fas fa-fire me-2"></i>Mapa de Calor</h1>
-            <p class="text-muted mt-2">Visualización de concentración de actividad comercial</p>
+            <p class="text-muted mt-2">Concentración real de encuestas realizadas (comercial, crediticia y de negocio), georeferenciadas por cliente</p>
+        </div>
+
+        <div class="heat-toolbar">
+            <label class="chk"><input type="checkbox" value="comercial" checked> Encuesta comercial</label>
+            <label class="chk"><input type="checkbox" value="crediticia" checked> Encuesta crediticia</label>
+            <label class="chk"><input type="checkbox" value="negocio" checked> Encuesta de negocio</label>
+            <span class="total" id="heat-total">Cargando…</span>
         </div>
 
         <div id="map"></div>
@@ -162,27 +177,60 @@ $currentPage = 'mapa_calor';
 <script>
     // Inicializar mapa
     const map = L.map('map').setView([-16.3895, -63.1666], 13);
-    
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     }).addTo(map);
 
-    // Datos de calor
-    const calorData = [
-        [-16.3895, -63.1666, 0.8],
-        [-16.3900, -63.1670, 0.5],
-        [-16.3890, -63.1660, 0.7],
-        [-16.3885, -63.1675, 0.4],
-        [-16.3910, -63.1650, 0.6],
-    ];
+    let heatLayer = null;
+    const checks = document.querySelectorAll('.heat-toolbar input[type="checkbox"]');
+    const totalEl = document.getElementById('heat-total');
 
-    // Crear capa de calor
-    L.heatLayer(calorData, {
-        radius: 25,
-        blur: 15,
-        maxZoom: 17
-    }).addTo(map);
+    function tiposSeleccionados() {
+        return [...checks].filter(c => c.checked).map(c => c.value);
+    }
+
+    async function cargarCalor() {
+        const tipos = tiposSeleccionados();
+        totalEl.textContent = 'Cargando…';
+
+        if (tipos.length === 0) {
+            if (heatLayer) { map.removeLayer(heatLayer); heatLayer = null; }
+            totalEl.textContent = 'Selecciona al menos un tipo de encuesta';
+            return;
+        }
+
+        try {
+            const resp = await fetch('api_mapa_calor_encuestas.php?tipos=' + tipos.join(','), { credentials: 'same-origin' });
+            const data = await resp.json();
+
+            if (data.status !== 'ok') {
+                totalEl.textContent = 'Error: ' + (data.error || 'desconocido');
+                return;
+            }
+
+            if (heatLayer) map.removeLayer(heatLayer);
+            heatLayer = L.heatLayer(data.puntos, {
+                radius: 22,
+                blur: 18,
+                maxZoom: 17
+            }).addTo(map);
+
+            const c = data.conteo || {};
+            totalEl.textContent = `${data.total} encuesta(s) georeferenciada(s) ` +
+                `(comercial: ${c.comercial || 0}, crediticia: ${c.crediticia || 0}, negocio: ${c.negocio || 0})`;
+
+            if (data.puntos.length > 0) {
+                map.fitBounds(data.puntos.map(p => [p[0], p[1]]), { maxZoom: 14, padding: [20, 20] });
+            }
+        } catch (err) {
+            totalEl.textContent = 'Sin conexión con el servidor';
+        }
+    }
+
+    checks.forEach(c => c.addEventListener('change', cargarCalor));
+    cargarCalor();
 </script>
 
 </body>

@@ -1856,11 +1856,26 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           //  2) El asesor abrió "Modificar datos" de una tarea que YA estaba
           //     completada → 'finalizada_ahora' = false, solo se editaron
           //     datos, se mantiene el diálogo "Cambios guardados".
-          final finalizadaAhora = data['finalizada_ahora'] == true ||
+          var finalizadaAhora = data['finalizada_ahora'] == true ||
               data['finalizada_ahora']?.toString() == '1';
 
+          final tareaId = widget.tareaIdEdicion ?? '';
+
+          // Red de seguridad: si el servidor todavía corre una versión vieja
+          // de actualizar_encuesta_completa.php (sin el flag
+          // 'finalizada_ahora'), la tarea NO se marca sola aunque la
+          // actividad ya se completó. En ese caso, si sabemos que la tarea
+          // estaba pendiente antes de abrir esta pantalla (_tareaYaCompletada
+          // == false), la finalizamos explícitamente llamando al endpoint
+          // que ya usa el botón manual "Finalizar" de la lista de tareas
+          // (finalizar_tarea.php), que es independiente de este y ya está
+          // probado. Así la tarea queda finalizada sin depender de que se
+          // suba una versión más nueva de ese otro archivo al servidor.
+          if (!finalizadaAhora && !_tareaYaCompletada && tareaId.isNotEmpty) {
+            finalizadaAhora = await _finalizarTareaFallback(tareaId);
+          }
+
           if (finalizadaAhora) {
-            final tareaId = widget.tareaIdEdicion ?? '';
             if (tareaId.isNotEmpty) _cerrarYNuevoSegmento(tareaId: tareaId);
 
             if (widget.tipoTarea == 'levantamiento') {
@@ -1933,6 +1948,36 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       _mostrarError('No se pudo guardar en el servidor. ($e)');
     } finally {
       if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  /// Red de seguridad para finalizar la tarea desde el cliente cuando el
+  /// servidor todavía no tiene desplegada la versión de
+  /// actualizar_encuesta_completa.php que auto-finaliza (flag
+  /// 'finalizada_ahora'). Llama al mismo endpoint que ya usa el botón manual
+  /// "Finalizar" en la lista de tareas (PendientesTareasScreen), que es
+  /// independiente y ya está funcionando en producción. Devuelve true si la
+  /// tarea quedó (o ya estaba) finalizada.
+  Future<bool> _finalizarTareaFallback(String tareaId) async {
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final asesorId = await AuthPrefs.getAsesorId();
+      if (usuarioId.isEmpty || tareaId.isEmpty) return false;
+
+      final resp = await http.post(
+        Uri.parse('${Constants.apiBaseUrl}/finalizar_tarea.php'),
+        body: {
+          'usuario_id': usuarioId,
+          if (asesorId.isNotEmpty) 'asesor_id': asesorId,
+          'tarea_id': tareaId,
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      final decoded = _tryDecodeJsonMap(resp.body);
+      return decoded != null && decoded['status']?.toString() == 'success';
+    } catch (e) {
+      debugPrint('⚠️ _finalizarTareaFallback falló: $e');
+      return false;
     }
   }
 
