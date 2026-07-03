@@ -63,72 +63,131 @@ try {
         ]);
     }
 
-    // Cargar meta del día (con fallback si la vista no existe)
+    // Cargar meta del día directamente de meta_asesor_diaria.
+    // NOTA: ya NO dependemos de la vista v_meta_asesor_avance: si esa vista
+    // fallaba por cualquier motivo (columna renombrada, colación, etc.), todo
+    // el bloque de avances se devolvía en 0 sin avisar — por eso "se veía vacío"
+    // aunque el asesor sí hubiera hecho encuestas. Ahora cada avance se calcula
+    // con su propia consulta directa, así un problema en una métrica no apaga
+    // las demás.
     $meta = null;
-    $sql = "SELECT m.id AS meta_id, m.asesor_id, m.fecha, m.estado, m.observaciones,
-                   m.meta_encuestas, m.meta_clientes_nuevos, m.meta_creditos,
-                   m.meta_cuenta_ahorros, m.meta_cuenta_corriente, m.meta_inversiones,
-                   m.meta_visitas,
-                   m.meta_monto_creditos_aprobados, m.meta_cuentas_ahorro_abiertas,
-                   m.meta_inversiones_aprobadas,
-                   v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
-                   v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
-                   v.avance_visitas,
-                   v.avance_monto_creditos_aprobados, v.avance_cuentas_ahorro_abiertas,
-                   v.avance_inversiones_aprobadas
-            FROM meta_asesor_diaria m
-            LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
-            WHERE m.asesor_id = ? AND m.fecha = ?
-            LIMIT 1";
-    $st = null;
-    try {
-        $st = $conn->prepare($sql);
-    } catch (Throwable $e) {
-        $st = false;
+    $sql2 = "SELECT *, id AS meta_id FROM meta_asesor_diaria WHERE asesor_id = ? AND fecha = ? LIMIT 1";
+    $st2 = $conn->prepare($sql2);
+    if (!$st2) {
+        resp(true, [
+            'tiene_meta' => false,
+            'meta'       => null,
+            'fecha'      => $fecha,
+            'mensaje_ui' => 'Ocurrió un error leyendo las metas. Pide al administrador que revise la tabla meta_asesor_diaria.'
+        ]);
     }
-    
-    if ($st) {
-        $st->bind_param('ss', $asesor_id, $fecha);
-        $st->execute();
-        $res = $st->get_result();
-        $meta = $res ? $res->fetch_assoc() : null;
-        $st->close();
-    } else {
-        // Fallback: sin avances (avances se devuelven como 0) o si faltan columnas específicas
-        $sql2 = "SELECT *, id AS meta_id FROM meta_asesor_diaria WHERE asesor_id = ? AND fecha = ? LIMIT 1";
-        $st2 = null;
-        try {
-            $st2 = $conn->prepare($sql2);
-        } catch (Throwable $e) {
-            $st2 = false;
-        }
-        
-        if (!$st2) {
-            // Si incluso el fallback falla, retornar que no hay meta
-            resp(true, [
-                'tiene_meta' => false,
-                'meta'       => null,
-                'fecha'      => $fecha,
-                'mensaje_ui' => 'Ocurrió un error leyendo las metas (columnas faltantes). Pide al administrador que asigne la meta nuevamente.'
-            ]);
-        }
-        $st2->bind_param('ss', $asesor_id, $fecha);
-        $st2->execute();
-        $res2 = $st2->get_result();
-        $meta = $res2 ? $res2->fetch_assoc() : null;
-        $st2->close();
-        if ($meta) {
-            $meta['avance_encuestas'] = 0;
-            $meta['avance_clientes_nuevos'] = 0;
-            $meta['avance_creditos'] = 0;
-            $meta['avance_cuenta_ahorros'] = 0;
-            $meta['avance_cuenta_corriente'] = 0;
-            $meta['avance_inversiones'] = 0;
-            $meta['avance_visitas'] = 0;
-            $meta['avance_monto_creditos_aprobados'] = 0;
-            $meta['avance_cuentas_ahorro_abiertas'] = 0;
-            $meta['avance_inversiones_aprobadas'] = 0;
-        }
+    $st2->bind_param('ss', $asesor_id, $fecha);
+    $st2->execute();
+    $res2 = $st2->get_result();
+    $meta = $res2 ? $res2->fetch_assoc() : null;
+    $st2->close();
+
+    if ($meta) {
+        // Helper: ejecuta una consulta de avance de forma aislada, con sus
+        // propios parámetros. Si falla, SOLO esa métrica queda en 0 (y se
+        // loguea el error real) — así un problema puntual no apaga las demás.
+        $avance = function (string $sql, array $params, string $etiqueta) use ($conn) {
+            try {
+                $st = $conn->prepare($sql);
+                if (!$st) throw new Exception($conn->error);
+                $st->bind_param(str_repeat('s', count($params)), ...$params);
+                $st->execute();
+                $row = $st->get_result()->fetch_assoc();
+                $st->close();
+                return (int)($row['n'] ?? 0);
+            } catch (Throwable $e) {
+                error_log("[obtener_metas_asesor][avance_$etiqueta] " . $e->getMessage());
+                return 0;
+            }
+        };
+
+        $meta['avance_encuestas'] = $avance(
+            "SELECT
+                (SELECT COUNT(*) FROM encuesta_comercial ec
+                    INNER JOIN tarea t ON t.id = ec.tarea_id
+                    WHERE t.asesor_id = ? AND IFNULL(t.fecha_realizada, t.fecha_programada) = ?)
+              + (SELECT COUNT(*) FROM encuesta_crediticia ecr
+                    INNER JOIN tarea t2 ON t2.id = ecr.tarea_id
+                    WHERE t2.asesor_id = ? AND IFNULL(t2.fecha_realizada, t2.fecha_programada) = ?) AS n",
+            [$asesor_id, $fecha, $asesor_id, $fecha],
+            'encuestas'
+        );
+
+        $meta['avance_clientes_nuevos'] = $avance(
+            "SELECT COUNT(*) AS n FROM cliente_prospecto cp
+             WHERE cp.asesor_id = ? AND cp.estado IN ('prospecto','cliente','pendiente')
+               AND CAST(cp.created_at AS DATE) = ?",
+            [$asesor_id, $fecha],
+            'clientes_nuevos'
+        );
+
+        $meta['avance_creditos'] = $avance(
+            "SELECT COUNT(*) AS n FROM credito_proceso cr
+             WHERE cr.asesor_id = ? AND CAST(cr.created_at AS DATE) = ?",
+            [$asesor_id, $fecha],
+            'creditos'
+        );
+
+        $meta['avance_visitas'] = $avance(
+            "SELECT COUNT(*) AS n FROM tarea t
+             WHERE t.asesor_id = ? AND t.estado = 'completada'
+               AND IFNULL(t.fecha_realizada, t.fecha_programada) = ?",
+            [$asesor_id, $fecha],
+            'visitas'
+        );
+
+        $meta['avance_monto_creditos_aprobados'] = $avance(
+            "SELECT COALESCE(SUM(cr.monto_aprobado),0) AS n FROM credito_proceso cr
+             WHERE cr.asesor_id = ? AND cr.estado_credito IN ('aprobado','desembolsado')
+               AND cr.updated_at IS NOT NULL AND CAST(cr.updated_at AS DATE) = ?",
+            [$asesor_id, $fecha],
+            'monto_creditos_aprobados'
+        );
+
+        // Interés en cuenta de ahorro / corriente / inversión detectado en las encuestas del día
+        $meta['avance_cuenta_ahorros'] = $avance(
+            "SELECT COUNT(*) AS n FROM encuesta_comercial ec INNER JOIN tarea t ON t.id = ec.tarea_id
+             WHERE t.asesor_id = ? AND IFNULL(t.fecha_realizada, t.fecha_programada) = ? AND ec.interes_ahorro = 1",
+            [$asesor_id, $fecha],
+            'cuenta_ahorros'
+        );
+        $meta['avance_cuenta_corriente'] = $avance(
+            "SELECT COUNT(*) AS n FROM encuesta_comercial ec INNER JOIN tarea t ON t.id = ec.tarea_id
+             WHERE t.asesor_id = ? AND IFNULL(t.fecha_realizada, t.fecha_programada) = ? AND ec.interes_cc = 1",
+            [$asesor_id, $fecha],
+            'cuenta_corriente'
+        );
+        $meta['avance_inversiones'] = $avance(
+            "SELECT COUNT(*) AS n FROM encuesta_comercial ec INNER JOIN tarea t ON t.id = ec.tarea_id
+             WHERE t.asesor_id = ? AND IFNULL(t.fecha_realizada, t.fecha_programada) = ? AND ec.interes_inversion = 1",
+            [$asesor_id, $fecha],
+            'inversiones'
+        );
+
+        // Productos realmente aprobados (ficha_producto), si la tabla existe
+        $meta['avance_cuentas_ahorro_abiertas'] = $avance(
+            "SELECT COUNT(*) AS n FROM ficha_producto fp
+             WHERE fp.producto_tipo = 'cuenta_ahorros' AND fp.estado_revision = 'aprobada'
+               AND fp.revision_at IS NOT NULL
+               AND (fp.asesor_id = ? OR fp.usuario_id = (SELECT usuario_id FROM asesor WHERE id = ?))
+               AND CAST(fp.revision_at AS DATE) = ?",
+            [$asesor_id, $asesor_id, $fecha],
+            'cuentas_ahorro_abiertas'
+        );
+        $meta['avance_inversiones_aprobadas'] = $avance(
+            "SELECT COUNT(*) AS n FROM ficha_producto fp
+             WHERE fp.producto_tipo = 'inversiones' AND fp.estado_revision = 'aprobada'
+               AND fp.revision_at IS NOT NULL
+               AND (fp.asesor_id = ? OR fp.usuario_id = (SELECT usuario_id FROM asesor WHERE id = ?))
+               AND CAST(fp.revision_at AS DATE) = ?",
+            [$asesor_id, $asesor_id, $fecha],
+            'inversiones_aprobadas'
+        );
     }
 
     if (!$meta) {
