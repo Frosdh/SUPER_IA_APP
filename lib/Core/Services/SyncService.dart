@@ -19,6 +19,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Services/EmpresaCacheService.dart';
+import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
 
 class SyncService {
@@ -53,6 +54,7 @@ class SyncService {
       if (result != ConnectivityResult.none && !_syncing) {
         syncPending();
         _refreshEmpresaCacheSilently();
+        _refreshInstitucionesCacheSilently();
       }
     });
 
@@ -70,6 +72,7 @@ class SyncService {
     // Intento inicial por si ya hay pendientes de una sesión anterior.
     syncPending();
     _refreshEmpresaCacheSilently();
+    _refreshInstitucionesCacheSilently();
   }
 
   /// Aprovecha que acaba de confirmarse conexión para refrescar en segundo
@@ -79,6 +82,15 @@ class SyncService {
   /// solo un refresco oportunista.
   static void _refreshEmpresaCacheSilently() {
     EmpresaCacheService.refreshCache().catchError((_) => -1);
+  }
+
+  /// Igual que arriba, pero para la lista de bancos/cooperativas (ver
+  /// InstitucionesCacheService), que NuevaEncuestaScreen y
+  /// EncuestaProductoScreen usan para el selector de "Institución" en
+  /// cuenta de ahorros/corriente. Así la lista queda lista en el celular
+  /// antes de que el asesor la necesite sin conexión.
+  static void _refreshInstitucionesCacheSilently() {
+    InstitucionesCacheService.refreshCache().catchError((_) => null);
   }
 
   static void stopAutoSync() {

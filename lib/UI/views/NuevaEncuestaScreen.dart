@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
 import 'package:super_ia/Core/Services/SyncService.dart';
 import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
@@ -471,6 +472,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           inst.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         }
 
+        if (inst.isNotEmpty) {
+          // Guardar copia local: así, si la próxima vez que el asesor abre
+          // esta encuesta no hay internet, igual puede elegir el banco en
+          // vez de encontrarse la lista vacía (ver InstitucionesCacheService).
+          InstitucionesCacheService.saveList(inst);
+        }
+
         setState(() {
           _instituciones = inst;
           _institucionesCargadas = true;
@@ -484,14 +492,30 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             _instCorrSeleccionada = _instituciones.contains(t) ? t : 'otra';
           }
         });
-        return;
+        if (inst.isNotEmpty) return;
       }
+    } catch (_) {}
+
+    // No se pudo obtener la lista del servidor (sin internet u otro error):
+    // usar la copia guardada en el celular la última vez que sí hubo
+    // conexión, en vez de dejar al asesor solo con el campo de texto manual.
+    List<String> cache = [];
+    try {
+      cache = await InstitucionesCacheService.getCached();
     } catch (_) {}
 
     if (mounted) {
       setState(() {
-        _instituciones = [];
+        _instituciones = cache;
         _institucionesCargadas = true;
+        if (_bancoAhorroCtrl.text.trim().isNotEmpty) {
+          final t = _bancoAhorroCtrl.text.trim();
+          _instAhorroSeleccionada = _instituciones.contains(t) ? t : 'otra';
+        }
+        if (_bancoCorrienteCtrl.text.trim().isNotEmpty) {
+          final t = _bancoCorrienteCtrl.text.trim();
+          _instCorrSeleccionada = _instituciones.contains(t) ? t : 'otra';
+        }
       });
     }
   }

@@ -26,10 +26,11 @@ class OfflineQueueService {
   }
 
   // NOTA: 'super_ia_offline.db' es compartida con EmpresaCacheService (tabla
-  // 'empresas_cache'). Todo el esquema (creación y migraciones) vive en un
-  // solo lugar (aquí) para evitar que dos servicios abran el mismo archivo
-  // con versiones distintas, lo que puede romper la apertura de la BD.
-  static const int _dbVersion = 2;
+  // 'empresas_cache') e InstitucionesCacheService (tabla
+  // 'instituciones_cache'). Todo el esquema (creación y migraciones) vive en
+  // un solo lugar (aquí) para evitar que varios servicios abran el mismo
+  // archivo con versiones distintas, lo que puede romper la apertura de la BD.
+  static const int _dbVersion = 3;
 
   static Future<Database> _initDB() async {
     final dbPath = await getDatabasesPath();
@@ -41,10 +42,14 @@ class OfflineQueueService {
       onCreate: (db, version) async {
         await _crearTablaEncuestas(db);
         await _crearTablaEmpresas(db);
+        await _crearTablaInstituciones(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _crearTablaEmpresas(db);
+        }
+        if (oldVersion < 3) {
+          await _crearTablaInstituciones(db);
         }
       },
     );
@@ -78,6 +83,15 @@ class OfflineQueueService {
         nombre_empresa TEXT,
         ciudad TEXT,
         data_json TEXT NOT NULL,
+        actualizado_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  static Future<void> _crearTablaInstituciones(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS instituciones_cache (
+        nombre TEXT PRIMARY KEY,
         actualizado_at TEXT NOT NULL
       )
     ''');

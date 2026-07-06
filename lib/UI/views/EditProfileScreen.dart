@@ -58,11 +58,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     bool exito = false;
 
-    // Intentar actualizar en el servidor (hosting)
+    // Intentar actualizar en el servidor (hosting). Se identifica la cuenta
+    // por usuario_id (clave primaria real de la tabla `usuario`) en vez de
+    // telefono, para que el cambio sí quede guardado del lado del servidor
+    // y no solo en este celular (ver actualizar_perfil.php).
     try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
       final response = await http.post(
         Uri.parse('${Constants.apiBaseUrl}/actualizar_perfil.php'),
         body: {
+          'usuario_id': usuarioId,
           'telefono': _telefono,
           'nombre': nombre,
           'email': email,

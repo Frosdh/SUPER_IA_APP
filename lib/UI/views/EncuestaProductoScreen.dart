@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
 import 'package:super_ia/Core/Services/SyncService.dart';
 
@@ -313,20 +314,34 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
           inst.sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
         }
 
-        setState(() {
-          _instituciones = inst;
-          _institucionesCargadas = true;
-        });
-        return;
+        if (inst.isNotEmpty) {
+          // Guardar copia local para poder ofrecer la lista de bancos aunque
+          // la próxima vez no haya internet (ver InstitucionesCacheService).
+          InstitucionesCacheService.saveList(inst);
+          setState(() {
+            _instituciones = inst;
+            _institucionesCargadas = true;
+          });
+          return;
+        }
       }
     } catch (_) {
       // Ignorar
     }
 
-    // No dejar el loader infinito.
+    // Sin internet (o el servidor no devolvió nada usable): usar la copia
+    // guardada en el celular la última vez que sí hubo conexión, en vez de
+    // dejar al asesor solo con el campo de texto manual.
+    List<String> cache = [];
+    try {
+      cache = await InstitucionesCacheService.getCached();
+    } catch (_) {
+      // Ignorar
+    }
+
     if (mounted) {
       setState(() {
-        _instituciones = [];
+        _instituciones = cache;
         _institucionesCargadas = true;
       });
     }

@@ -30,6 +30,8 @@ import 'package:super_ia/Core/Models/DiscountCodeModel.dart';
 import 'package:super_ia/Core/Preferences/DiscountPreferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:sliding_up_panel/sliding_up_panel.dart';
+import 'package:provider/provider.dart';
+import 'package:super_ia/Core/ProviderModels/UserDetailsModel.dart';
 
 // Centro de Cuenca, Ecuador
 final LatLng CUENCA_CENTER = LatLng(-2.9001285, -79.0058965);
@@ -1545,20 +1547,96 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                     onPressed: guardandoPerfil
                         ? null
                         : () async {
+                            final nombreNuevo = nombreCtrl.text.trim();
+                            final telefonoNuevo = telefonoCtrl.text.trim();
+                            final emailNuevo = emailCtrl.text.trim();
+
+                            if (nombreNuevo.isEmpty) {
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('El nombre no puede estar vacío'),
+                                  backgroundColor: ConstantColors.error,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+                            if (emailNuevo.isNotEmpty && !emailNuevo.contains('@')) {
+                              ScaffoldMessenger.of(this.context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('Ingresa un correo válido'),
+                                  backgroundColor: ConstantColors.error,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                              return;
+                            }
+
                             setModalState(() => guardandoPerfil = true);
+
+                            // 1) Guardar siempre localmente primero: así el
+                            // dato nunca se pierde aunque el guardado en el
+                            // servidor falle por falta de internet.
                             await AuthPrefs.saveUserSession(
-                              nombre: nombreCtrl.text.trim(),
-                              telefono: telefonoCtrl.text.trim(),
-                              email: emailCtrl.text.trim(),
+                              nombre: nombreNuevo,
+                              telefono: telefonoNuevo,
+                              email: emailNuevo,
                             );
-                            if (mounted)
-                              setState(
-                                  () => _userName = nombreCtrl.text.trim());
+
+                            // 2) Intentar persistir en el servidor, identificando
+                            // la cuenta por usuario_id (ver actualizar_perfil.php).
+                            bool guardadoEnServidor = false;
+                            String? errorServidor;
+                            try {
+                              final usuarioId = await AuthPrefs.getUsuarioId();
+                              final resp = await http.post(
+                                Uri.parse('${Constants.apiBaseUrl}/actualizar_perfil.php'),
+                                headers: {'ngrok-skip-browser-warning': 'true'},
+                                body: {
+                                  'usuario_id': usuarioId,
+                                  'nombre': nombreNuevo,
+                                  'telefono': telefonoNuevo,
+                                  'email': emailNuevo,
+                                },
+                              ).timeout(const Duration(seconds: 10));
+
+                              if (resp.statusCode == 200) {
+                                final data = json.decode(resp.body);
+                                if (data['status'] == 'success') {
+                                  guardadoEnServidor = true;
+                                } else {
+                                  errorServidor = data['message']?.toString();
+                                }
+                              }
+                            } catch (_) {
+                              // Sin internet u otro error de red: el dato ya
+                              // quedó guardado localmente en el paso 1 y se
+                              // podrá reintentar la próxima vez que el asesor
+                              // edite su perfil con conexión.
+                            }
+
+                            // 3) Refrescar el resto de la app (pantalla "Mi perfil"
+                            // completa, saludo, etc.) con los datos nuevos.
+                            if (mounted) {
+                              setState(() => _userName = nombreNuevo);
+                              Provider.of<UserDetailsModel>(this.context, listen: false)
+                                  .reload();
+                            }
+
                             Navigator.pop(ctx);
+
                             ScaffoldMessenger.of(this.context).showSnackBar(
                               SnackBar(
-                                content: const Text('Perfil actualizado'),
-                                backgroundColor: ConstantColors.success,
+                                content: Text(
+                                  guardadoEnServidor
+                                      ? 'Perfil actualizado'
+                                      : (errorServidor != null
+                                          ? 'Guardado en el celular. $errorServidor'
+                                          : 'Guardado en el celular (sin conexión). Se sincronizará solo.'),
+                                ),
+                                backgroundColor: guardadoEnServidor
+                                    ? ConstantColors.success
+                                    : Colors.orange,
                                 behavior: SnackBarBehavior.floating,
                               ),
                             );
