@@ -74,6 +74,7 @@ $f_hasta  = trim($_GET['hasta'] ?? '');
 $f_estado = trim($_GET['estado'] ?? '');   // '' | completada | programada | incompleta
 $f_tipo   = trim($_GET['tipo'] ?? '');     // '' | encuesta | levantamiento
 $f_asesor = trim($_GET['asesor'] ?? '');
+$f_busca  = trim($_GET['busca'] ?? '');    // nombre o cédula del cliente
 
 if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_desde)) {
     $f_desde = date('Y-m-d', strtotime('-30 days'));
@@ -158,6 +159,13 @@ if (!empty($asesor_ids_equipo)) {
             $asesor_params = [$f_asesor];
         }
 
+        $busca_where = '';
+        $busca_params = [];
+        if ($f_busca !== '') {
+            $busca_where = 'AND (cp.nombre LIKE ? OR cp.cedula LIKE ?)';
+            $busca_params = ['%' . $f_busca . '%', '%' . $f_busca . '%'];
+        }
+
         $sql = "SELECT t.id, t.tipo_tarea, t.estado,
                        t.fecha_programada, t.hora_programada,
                        t.fecha_realizada, t.hora_realizada,
@@ -178,6 +186,7 @@ if (!empty($asesor_ids_equipo)) {
                   $asesor_where
                   AND t.tipo_tarea NOT LIKE 'ficha_producto_%'
                   $tipo_where
+                  $busca_where
                   AND (
                         (t.fecha_realizada IS NOT NULL AND t.fecha_realizada BETWEEN ? AND ?)
                      OR (t.fecha_realizada IS NULL AND t.fecha_programada BETWEEN ? AND ?)
@@ -186,7 +195,7 @@ if (!empty($asesor_ids_equipo)) {
                          COALESCE(t.hora_realizada, t.hora_programada) DESC
                 LIMIT 500";
 
-        $params = array_merge($asesor_ids_equipo, $sup_params, $asesor_params, [$f_desde, $f_hasta, $f_desde, $f_hasta]);
+        $params = array_merge($asesor_ids_equipo, $sup_params, $asesor_params, $busca_params, [$f_desde, $f_hasta, $f_desde, $f_hasta]);
         $st = $pdo->prepare($sql);
         $st->execute($params);
         $filas = $st->fetchAll();
@@ -297,6 +306,10 @@ if ($is_admin_gerente) {
                 <h5><i class="fas fa-clipboard-list text-purple"></i> Listado de Encuestas</h5>
                 <form method="get" class="row g-2 align-items-end">
                     <div class="col-auto">
+                        <label class="small fw-bold text-muted mb-1 d-block">Cliente (nombre o cédula)</label>
+                        <input type="text" name="busca" value="<?= htmlspecialchars($f_busca) ?>" placeholder="Buscar…" class="form-control form-control-sm shadow-sm" style="border-radius:8px; min-width:180px;">
+                    </div>
+                    <div class="col-auto">
                         <label class="small fw-bold text-muted mb-1 d-block">Asesor</label>
                         <select name="asesor" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
                             <option value="">— Todos —</option>
@@ -332,7 +345,12 @@ if ($is_admin_gerente) {
                         <label class="small fw-bold text-muted mb-1 d-block">Hasta</label>
                         <input type="date" name="hasta" value="<?= htmlspecialchars($f_hasta) ?>" class="form-control form-control-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
                     </div>
-                    <?php if ($f_estado !== '' || $f_tipo !== '' || $f_asesor !== ''): ?>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-sm shadow-sm" style="border-radius:8px; background:var(--brand-navy,#123a6d); color:#fff; font-weight:700;">
+                            <i class="fas fa-search"></i> Buscar
+                        </button>
+                    </div>
+                    <?php if ($f_estado !== '' || $f_tipo !== '' || $f_asesor !== '' || $f_busca !== ''): ?>
                     <div class="col-auto">
                         <a href="encuestas.php" class="btn btn-sm btn-outline-secondary" style="border-radius:8px;"><i class="fas fa-rotate-left"></i> Limpiar</a>
                     </div>
