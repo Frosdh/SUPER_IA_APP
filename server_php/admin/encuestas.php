@@ -377,8 +377,8 @@ if ($is_admin_gerente) {
                                 ?>
                                 <tr>
                                     <td class="enc-cliente-cell">
-                                        <div class="nombre"><?= htmlspecialchars($t['asesor_nombre'] ?: '—') ?></div>
-                                        <div class="sub"><?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente asignado') ?><?= $t['cliente_ciudad'] ? ' · ' . htmlspecialchars($t['cliente_ciudad']) : '' ?></div>
+                                        <div class="nombre"><?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente asignado') ?></div>
+                                        <div class="sub"><?= htmlspecialchars($t['asesor_nombre'] ?: '—') ?><?= $t['cliente_ciudad'] ? ' · ' . htmlspecialchars($t['cliente_ciudad']) : '' ?></div>
                                     </td>
                                     <td><span class="badge-premium <?= $tipoBadgeClass ?>"><?= htmlspecialchars($tipoTxt) ?></span></td>
                                     <td>
@@ -392,13 +392,9 @@ if ($is_admin_gerente) {
                                     <td class="text-center"><?= $subidaHtml ?></td>
                                     <td class="text-center"><span class="badge-premium <?= $estClass ?>"><?= $estLabel ?></span></td>
                                     <td class="text-end">
-                                        <?php if ($t['cliente_id']): ?>
-                                            <a class="btn-ver-detalle" href="ver_cliente.php?id=<?= urlencode($t['cliente_id']) ?>" target="_blank" rel="noopener">
-                                                <i class="fas fa-eye"></i> Ver pregunta por pregunta
-                                            </a>
-                                        <?php else: ?>
-                                            <span class="text-muted small">Sin cliente</span>
-                                        <?php endif; ?>
+                                        <a class="btn-ver-detalle" href="ver_encuesta.php?tarea_id=<?= urlencode($t['id']) ?>">
+                                            <i class="fas fa-eye"></i> Ver encuesta
+                                        </a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
