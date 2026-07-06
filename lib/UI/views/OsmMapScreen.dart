@@ -1468,6 +1468,39 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     final emailCtrl = TextEditingController(text: email);
     bool guardandoPerfil = false;
 
+    // Datos de solo lectura que ya existen en la base (tablas usuario/
+    // asesor/supervisor/agencia) pero que antes la app nunca mostraba:
+    // supervisor asignado, agencia y metas fijas puestas por el supervisor.
+    // Se cargan una vez al abrir el modal (ver StatefulBuilder más abajo);
+    // si no hay internet quedan en null y simplemente no se muestra esa
+    // sección — no bloquea el resto del modal.
+    Map<String, dynamic>? datosAsesor;
+    bool cargandoDatosAsesor = true;
+    bool fetchDatosAsesorIniciado = false;
+
+    Future<void> cargarDatosAsesor(void Function(void Function()) setModalState) async {
+      try {
+        final usuarioId = await AuthPrefs.getUsuarioId();
+        if (usuarioId.isNotEmpty) {
+          final resp = await http.get(
+            Uri.parse('${Constants.apiBaseUrl}/obtener_perfil_asesor.php?usuario_id=$usuarioId'),
+            headers: {'ngrok-skip-browser-warning': 'true'},
+          ).timeout(const Duration(seconds: 10));
+          if (resp.statusCode == 200) {
+            final data = json.decode(resp.body);
+            if (data is Map && data['status'] == 'success') {
+              datosAsesor = Map<String, dynamic>.from(data);
+            }
+          }
+        }
+      } catch (_) {
+        // Sin internet: se deja la sección oculta, no es bloqueante.
+      } finally {
+        cargandoDatosAsesor = false;
+        setModalState(() {});
+      }
+    }
+
     await showModalBottomSheet(
       context: context,
       backgroundColor: ConstantColors.backgroundCard,
@@ -1476,7 +1509,12 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
+        builder: (context, setModalState) {
+          if (!fetchDatosAsesorIniciado) {
+            fetchDatosAsesorIniciado = true;
+            cargarDatosAsesor(setModalState);
+          }
+          return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom,
           ),
@@ -1521,6 +1559,72 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                   style: TextStyle(
                       color: ConstantColors.primaryViolet, fontSize: 13),
                 ),
+
+                // ── Datos de asesor (solo lectura, vienen de la base) ──
+                // Supervisor, agencia y metas asignadas: ya existían en la
+                // BD (tablas usuario/asesor/supervisor/agencia) pero esta
+                // pantalla nunca los mostraba. No son editables aquí porque
+                // los asigna el supervisor, no el propio asesor.
+                if (cargandoDatosAsesor) ...[
+                  const SizedBox(height: 16),
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ] else if (datosAsesor != null) ...[
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: ConstantColors.backgroundLight,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: ConstantColors.borderColor),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'DATOS DE ASESOR',
+                          style: TextStyle(
+                            color: ConstantColors.textSubtle,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        _datoAsesorFila(
+                          Icons.supervisor_account_rounded,
+                          'Supervisor',
+                          datosAsesor!['supervisor_nombre']?.toString(),
+                        ),
+                        _datoAsesorFila(
+                          Icons.apartment_rounded,
+                          'Agencia',
+                          datosAsesor!['agencia_nombre']?.toString(),
+                        ),
+                        _datoAsesorFila(
+                          Icons.assignment_turned_in_rounded,
+                          'Meta diaria (tareas)',
+                          datosAsesor!['meta_tareas_diarias'] != null
+                              ? datosAsesor!['meta_tareas_diarias'].toString()
+                              : null,
+                        ),
+                        _datoAsesorFila(
+                          Icons.flag_rounded,
+                          'Meta mensual (visitas)',
+                          datosAsesor!['meta_visitas_mes'] != null
+                              ? datosAsesor!['meta_visitas_mes'].toString()
+                              : null,
+                          esUltima: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 24),
                 // Campo nombre
                 _perfilCampo(
@@ -1662,7 +1766,8 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
               ],
             ),
           ),
-        ),
+        );
+        },
       ),
     );
     nombreCtrl.dispose();
@@ -1701,6 +1806,37 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         labelStyle: TextStyle(color: ConstantColors.textSubtle, fontSize: 13),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    );
+  }
+
+  /// Fila de solo lectura para la sección "Datos de asesor" del modal de
+  /// perfil (supervisor, agencia, metas). Si el valor viene vacío/null
+  /// (p. ej. el supervisor todavía no le asignó agencia) muestra
+  /// "No asignado" en vez de dejar el espacio en blanco sin explicación.
+  Widget _datoAsesorFila(IconData icon, String label, String? valor, {bool esUltima = false}) {
+    final texto = (valor == null || valor.trim().isEmpty) ? 'No asignado' : valor.trim();
+    return Padding(
+      padding: EdgeInsets.only(bottom: esUltima ? 0 : 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: ConstantColors.primaryViolet),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
+            ),
+          ),
+          Text(
+            texto,
+            style: TextStyle(
+              color: ConstantColors.textWhite,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
     );
   }
