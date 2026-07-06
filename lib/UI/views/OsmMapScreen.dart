@@ -175,7 +175,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         },
       ).timeout(const Duration(seconds: 8));
 
-      debugPrint('>>> [ASESOR_STATUS] desconectado HTTP ${response.statusCode}');
+      debugPrint('>>> [ASESOR_STATUS] desconectado HTTP ${respaonse.statusCode}');
     } catch (_) {
       // No bloqueamos el logout si falla la notificación.
     }
@@ -1456,6 +1456,16 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
   }
 
   // ── Modal de perfil del asesor ───────────────────────────────
+  // El contenido en sí vive en _PerfilAsesorModalSheet (StatefulWidget
+  // propio, definido al final de este archivo). Se usa un widget con ciclo
+  // de vida real en vez de TextEditingControllers "a mano" + StatefulBuilder
+  // porque, con el modal, Flutter llama a dispose() en el momento
+  // correcto SIEMPRE; disponer los controllers manualmente apenas se
+  // resolvía el Future de showModalBottomSheet (antes de que la animación
+  // de cierre del bottom sheet terminara) causaba que un rebuild disparado
+  // por, por ejemplo, el teclado cerrándose, tratara de usar un
+  // TextEditingController ya destruido y tumbara la app con
+  // "_dependents.isEmpty" / "TextEditingController usado tras dispose".
   Future<void> _mostrarPerfilModal() async {
     final nombre = await AuthPrefs.getUserName();
     final telefono = await AuthPrefs.getUserPhone();
@@ -1463,380 +1473,46 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
 
     if (!mounted) return;
 
-    final nombreCtrl = TextEditingController(text: nombre);
-    final telefonoCtrl = TextEditingController(text: telefono);
-    final emailCtrl = TextEditingController(text: email);
-    bool guardandoPerfil = false;
-
-    // Datos de solo lectura que ya existen en la base (tablas usuario/
-    // asesor/supervisor/agencia) pero que antes la app nunca mostraba:
-    // supervisor asignado, agencia y metas fijas puestas por el supervisor.
-    // Se cargan una vez al abrir el modal (ver StatefulBuilder más abajo);
-    // si no hay internet quedan en null y simplemente no se muestra esa
-    // sección — no bloquea el resto del modal.
-    Map<String, dynamic>? datosAsesor;
-    bool cargandoDatosAsesor = true;
-    bool fetchDatosAsesorIniciado = false;
-
-    Future<void> cargarDatosAsesor(void Function(void Function()) setModalState) async {
-      try {
-        final usuarioId = await AuthPrefs.getUsuarioId();
-        if (usuarioId.isNotEmpty) {
-          final resp = await http.get(
-            Uri.parse('${Constants.apiBaseUrl}/obtener_perfil_asesor.php?usuario_id=$usuarioId'),
-            headers: {'ngrok-skip-browser-warning': 'true'},
-          ).timeout(const Duration(seconds: 10));
-          if (resp.statusCode == 200) {
-            final data = json.decode(resp.body);
-            if (data is Map && data['status'] == 'success') {
-              datosAsesor = Map<String, dynamic>.from(data);
-            }
-          }
-        }
-      } catch (_) {
-        // Sin internet: se deja la sección oculta, no es bloqueante.
-      } finally {
-        cargandoDatosAsesor = false;
-        setModalState(() {});
-      }
-    }
-
-    await showModalBottomSheet(
+    final resultado = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       backgroundColor: ConstantColors.backgroundCard,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          if (!fetchDatosAsesorIniciado) {
-            fetchDatosAsesorIniciado = true;
-            cargarDatosAsesor(setModalState);
-          }
-          return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Handle
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                // Ícono
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: ConstantColors.primaryGradient,
-                  ),
-                  child: const Icon(Icons.person_rounded,
-                      color: Colors.white, size: 36),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Mi Perfil',
-                  style: TextStyle(
-                    color: ConstantColors.textWhite,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Asesor Comercial',
-                  style: TextStyle(
-                      color: ConstantColors.primaryViolet, fontSize: 13),
-                ),
-
-                // ── Datos de asesor (solo lectura, vienen de la base) ──
-                // Supervisor, agencia y metas asignadas: ya existían en la
-                // BD (tablas usuario/asesor/supervisor/agencia) pero esta
-                // pantalla nunca los mostraba. No son editables aquí porque
-                // los asigna el supervisor, no el propio asesor.
-                if (cargandoDatosAsesor) ...[
-                  const SizedBox(height: 16),
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ] else if (datosAsesor != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: ConstantColors.backgroundLight,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: ConstantColors.borderColor),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'DATOS DE ASESOR',
-                          style: TextStyle(
-                            color: ConstantColors.textSubtle,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        _datoAsesorFila(
-                          Icons.supervisor_account_rounded,
-                          'Supervisor',
-                          datosAsesor!['supervisor_nombre']?.toString(),
-                        ),
-                        _datoAsesorFila(
-                          Icons.apartment_rounded,
-                          'Agencia',
-                          datosAsesor!['agencia_nombre']?.toString(),
-                        ),
-                        _datoAsesorFila(
-                          Icons.assignment_turned_in_rounded,
-                          'Meta diaria (tareas)',
-                          datosAsesor!['meta_tareas_diarias'] != null
-                              ? datosAsesor!['meta_tareas_diarias'].toString()
-                              : null,
-                        ),
-                        _datoAsesorFila(
-                          Icons.flag_rounded,
-                          'Meta mensual (visitas)',
-                          datosAsesor!['meta_visitas_mes'] != null
-                              ? datosAsesor!['meta_visitas_mes'].toString()
-                              : null,
-                          esUltima: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-                // Campo nombre
-                _perfilCampo(
-                    ctrl: nombreCtrl,
-                    label: 'Nombre completo',
-                    icon: Icons.person_rounded),
-                const SizedBox(height: 12),
-                _perfilCampo(
-                    ctrl: telefonoCtrl,
-                    label: 'Teléfono',
-                    icon: Icons.phone_rounded,
-                    tipo: TextInputType.phone),
-                const SizedBox(height: 12),
-                _perfilCampo(
-                    ctrl: emailCtrl,
-                    label: 'Email',
-                    icon: Icons.email_rounded,
-                    tipo: TextInputType.emailAddress),
-                const SizedBox(height: 24),
-                // Botón guardar
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: guardandoPerfil
-                        ? null
-                        : () async {
-                            final nombreNuevo = nombreCtrl.text.trim();
-                            final telefonoNuevo = telefonoCtrl.text.trim();
-                            final emailNuevo = emailCtrl.text.trim();
-
-                            if (nombreNuevo.isEmpty) {
-                              ScaffoldMessenger.of(this.context).showSnackBar(
-                                SnackBar(
-                                  content: const Text('El nombre no puede estar vacío'),
-                                  backgroundColor: ConstantColors.error,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                              return;
-                            }
-                            if (emailNuevo.isNotEmpty && !emailNuevo.contains('@')) {
-                              ScaffoldMessenger.of(this.context).showSnackBar(
-                                SnackBar(
-                                  content: const Text('Ingresa un correo válido'),
-                                  backgroundColor: ConstantColors.error,
-                                  behavior: SnackBarBehavior.floating,
-                                ),
-                              );
-                              return;
-                            }
-
-                            setModalState(() => guardandoPerfil = true);
-
-                            // 1) Guardar siempre localmente primero: así el
-                            // dato nunca se pierde aunque el guardado en el
-                            // servidor falle por falta de internet.
-                            await AuthPrefs.saveUserSession(
-                              nombre: nombreNuevo,
-                              telefono: telefonoNuevo,
-                              email: emailNuevo,
-                            );
-
-                            // 2) Intentar persistir en el servidor, identificando
-                            // la cuenta por usuario_id (ver actualizar_perfil.php).
-                            bool guardadoEnServidor = false;
-                            String? errorServidor;
-                            try {
-                              final usuarioId = await AuthPrefs.getUsuarioId();
-                              final resp = await http.post(
-                                Uri.parse('${Constants.apiBaseUrl}/actualizar_perfil.php'),
-                                headers: {'ngrok-skip-browser-warning': 'true'},
-                                body: {
-                                  'usuario_id': usuarioId,
-                                  'nombre': nombreNuevo,
-                                  'telefono': telefonoNuevo,
-                                  'email': emailNuevo,
-                                },
-                              ).timeout(const Duration(seconds: 10));
-
-                              if (resp.statusCode == 200) {
-                                final data = json.decode(resp.body);
-                                if (data['status'] == 'success') {
-                                  guardadoEnServidor = true;
-                                } else {
-                                  errorServidor = data['message']?.toString();
-                                }
-                              }
-                            } catch (_) {
-                              // Sin internet u otro error de red: el dato ya
-                              // quedó guardado localmente en el paso 1 y se
-                              // podrá reintentar la próxima vez que el asesor
-                              // edite su perfil con conexión.
-                            }
-
-                            // 3) Refrescar el resto de la app (pantalla "Mi perfil"
-                            // completa, saludo, etc.) con los datos nuevos.
-                            if (mounted) {
-                              setState(() => _userName = nombreNuevo);
-                              Provider.of<UserDetailsModel>(this.context, listen: false)
-                                  .reload();
-                            }
-
-                            Navigator.pop(ctx);
-
-                            ScaffoldMessenger.of(this.context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  guardadoEnServidor
-                                      ? 'Perfil actualizado'
-                                      : (errorServidor != null
-                                          ? 'Guardado en el celular. $errorServidor'
-                                          : 'Guardado en el celular (sin conexión). Se sincronizará solo.'),
-                                ),
-                                backgroundColor: guardadoEnServidor
-                                    ? ConstantColors.success
-                                    : Colors.orange,
-                                behavior: SnackBarBehavior.floating,
-                              ),
-                            );
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: ConstantColors.primaryViolet,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: guardandoPerfil
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Text('Guardar cambios',
-                            style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 15)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-        },
+      builder: (ctx) => _PerfilAsesorModalSheet(
+        nombreInicial: nombre,
+        telefonoInicial: telefono,
+        emailInicial: email,
       ),
     );
-    nombreCtrl.dispose();
-    telefonoCtrl.dispose();
-    emailCtrl.dispose();
-  }
 
-  Widget _perfilCampo({
-    required TextEditingController ctrl,
-    required String label,
-    required IconData icon,
-    TextInputType tipo = TextInputType.text,
-  }) {
-    return TextField(
-      controller: ctrl,
-      keyboardType: tipo,
-      style: TextStyle(color: ConstantColors.textWhite, fontSize: 14),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: ConstantColors.primaryViolet, size: 20),
-        filled: true,
-        fillColor: ConstantColors.backgroundLight,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: ConstantColors.borderColor),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: ConstantColors.borderColor),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-          borderSide:
-              BorderSide(color: ConstantColors.primaryViolet, width: 1.5),
-        ),
-        labelStyle: TextStyle(color: ConstantColors.textSubtle, fontSize: 13),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      ),
-    );
-  }
+    // Recién ahora que el modal terminó de cerrarse del todo es seguro
+    // tocar el contexto de esta pantalla: actualizar el saludo, avisar a
+    // UserDetailsModel para que "Mi perfil" y demás pantallas se
+    // refresquen, y mostrar el resultado.
+    if (resultado == null || !mounted) return;
 
-  /// Fila de solo lectura para la sección "Datos de asesor" del modal de
-  /// perfil (supervisor, agencia, metas). Si el valor viene vacío/null
-  /// (p. ej. el supervisor todavía no le asignó agencia) muestra
-  /// "No asignado" en vez de dejar el espacio en blanco sin explicación.
-  Widget _datoAsesorFila(IconData icon, String label, String? valor, {bool esUltima = false}) {
-    final texto = (valor == null || valor.trim().isEmpty) ? 'No asignado' : valor.trim();
-    return Padding(
-      padding: EdgeInsets.only(bottom: esUltima ? 0 : 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 15, color: ConstantColors.primaryViolet),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
-            ),
-          ),
-          Text(
-            texto,
-            style: TextStyle(
-              color: ConstantColors.textWhite,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+    final nombreNuevo = resultado['nombre']?.toString() ?? '';
+    final guardadoEnServidor = resultado['guardadoEnServidor'] == true;
+    final errorServidor = resultado['errorServidor']?.toString();
+
+    if (nombreNuevo.isNotEmpty) {
+      setState(() => _userName = nombreNuevo);
+    }
+    Provider.of<UserDetailsModel>(context, listen: false).reload();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          guardadoEnServidor
+              ? 'Perfil actualizado'
+              : (errorServidor != null
+                  ? 'Guardado en el celular. $errorServidor'
+                  : 'Guardado en el celular (sin conexión). Se sincronizará solo.'),
+        ),
+        backgroundColor: guardadoEnServidor ? ConstantColors.success : Colors.orange,
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -4656,6 +4332,398 @@ class _ConfirmacionSheetState extends State<_ConfirmacionSheet> {
           ),
         ),
       ]),
+    );
+  }
+}
+
+// ============================================================
+// _PerfilAsesorModalSheet
+// ------------------------------------------------------------
+// Contenido del modal "Mi Perfil" que abre OsmMapScreen. Es un
+// StatefulWidget con ciclo de vida propio (en vez de manejar
+// TextEditingControllers "a mano" junto a un StatefulBuilder) para que
+// sea Flutter, y no nosotros, quien decida el momento exacto de llamar a
+// dispose() sobre los controllers: siempre después de que el Element
+// realmente se desmonte, sin importar si eso ocurre apenas se cierra el
+// modal o un instante después mientras termina su animación de salida.
+//
+// Antes, al hacer nombreCtrl.dispose() manualmente justo cuando se
+// resolvía el Future de showModalBottomSheet, cualquier rebuild disparado
+// mientras el bottom sheet SEGUÍA animando su cierre (por ejemplo, el
+// teclado ocultándose, que dispara un cambio de MediaQuery y por lo tanto
+// un rebuild global) terminaba usando un TextEditingController ya
+// destruido, y tumbaba la app con "TextEditingController usado tras
+// dispose" / "_dependents.isEmpty".
+// ============================================================
+class _PerfilAsesorModalSheet extends StatefulWidget {
+  final String nombreInicial;
+  final String telefonoInicial;
+  final String emailInicial;
+
+  const _PerfilAsesorModalSheet({
+    required this.nombreInicial,
+    required this.telefonoInicial,
+    required this.emailInicial,
+  });
+
+  @override
+  State<_PerfilAsesorModalSheet> createState() => _PerfilAsesorModalSheetState();
+}
+
+class _PerfilAsesorModalSheetState extends State<_PerfilAsesorModalSheet> {
+  late final TextEditingController _nombreCtrl;
+  late final TextEditingController _telefonoCtrl;
+  late final TextEditingController _emailCtrl;
+
+  bool _guardando = false;
+
+  // Datos de solo lectura que ya existen en la base (tablas usuario/
+  // asesor/supervisor/agencia) pero que la app nunca mostraba: supervisor
+  // asignado, agencia y metas fijas puestas por el supervisor. Si no hay
+  // internet quedan en null y simplemente no se muestra esa sección.
+  Map<String, dynamic>? _datosAsesor;
+  bool _cargandoDatosAsesor = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _nombreCtrl = TextEditingController(text: widget.nombreInicial);
+    _telefonoCtrl = TextEditingController(text: widget.telefonoInicial);
+    _emailCtrl = TextEditingController(text: widget.emailInicial);
+    _cargarDatosAsesor();
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _telefonoCtrl.dispose();
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _cargarDatosAsesor() async {
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      if (usuarioId.isNotEmpty) {
+        final resp = await http.get(
+          Uri.parse('${Constants.apiBaseUrl}/obtener_perfil_asesor.php?usuario_id=$usuarioId'),
+          headers: {'ngrok-skip-browser-warning': 'true'},
+        ).timeout(const Duration(seconds: 10));
+        if (resp.statusCode == 200) {
+          final data = json.decode(resp.body);
+          if (data is Map && data['status'] == 'success') {
+            _datosAsesor = Map<String, dynamic>.from(data);
+          }
+        }
+      }
+    } catch (_) {
+      // Sin internet: se deja la sección oculta, no es bloqueante.
+    } finally {
+      // El `mounted` de State es la señal real y confiable de que este
+      // widget sigue vivo — a diferencia de una bandera manual, Flutter la
+      // mantiene correcta automáticamente durante todo el ciclo de vida.
+      if (mounted) {
+        setState(() => _cargandoDatosAsesor = false);
+      }
+    }
+  }
+
+  Future<void> _guardar() async {
+    final nombreNuevo = _nombreCtrl.text.trim();
+    final telefonoNuevo = _telefonoCtrl.text.trim();
+    final emailNuevo = _emailCtrl.text.trim();
+
+    if (nombreNuevo.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('El nombre no puede estar vacío'),
+          backgroundColor: ConstantColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (emailNuevo.isNotEmpty && !emailNuevo.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Ingresa un correo válido'),
+          backgroundColor: ConstantColors.error,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _guardando = true);
+
+    // 1) Guardar siempre localmente primero: así el dato nunca se pierde
+    // aunque el guardado en el servidor falle por falta de internet.
+    await AuthPrefs.saveUserSession(
+      nombre: nombreNuevo,
+      telefono: telefonoNuevo,
+      email: emailNuevo,
+    );
+
+    // 2) Intentar persistir en el servidor, identificando la cuenta por
+    // usuario_id (ver actualizar_perfil.php).
+    bool guardadoEnServidor = false;
+    String? errorServidor;
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final resp = await http.post(
+        Uri.parse('${Constants.apiBaseUrl}/actualizar_perfil.php'),
+        headers: {'ngrok-skip-browser-warning': 'true'},
+        body: {
+          'usuario_id': usuarioId,
+          'nombre': nombreNuevo,
+          'telefono': telefonoNuevo,
+          'email': emailNuevo,
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (resp.statusCode == 200) {
+        final data = json.decode(resp.body);
+        if (data['status'] == 'success') {
+          guardadoEnServidor = true;
+        } else {
+          errorServidor = data['message']?.toString();
+        }
+      }
+    } catch (_) {
+      // Sin internet u otro error de red: el dato ya quedó guardado
+      // localmente en el paso 1 y se podrá reintentar la próxima vez que
+      // el asesor edite su perfil con conexión.
+    }
+
+    if (!mounted) return;
+
+    // 3) Cerrar el modal devolviendo el resultado. Todo lo que toque el
+    // contexto de la pantalla de afuera (Provider, SnackBar, saludo) lo
+    // hace OsmMapScreen DESPUÉS de que este modal termine de cerrarse.
+    Navigator.of(context).pop({
+      'nombre': nombreNuevo,
+      'guardadoEnServidor': guardadoEnServidor,
+      'errorServidor': errorServidor,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Handle
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // Ícono
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: ConstantColors.primaryGradient,
+              ),
+              child: const Icon(Icons.person_rounded, color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Mi Perfil',
+              style: TextStyle(
+                color: ConstantColors.textWhite,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Asesor Comercial',
+              style: TextStyle(color: ConstantColors.primaryViolet, fontSize: 13),
+            ),
+
+            // ── Datos de asesor (solo lectura, vienen de la base) ──
+            // Supervisor, agencia y metas asignadas: ya existían en la BD
+            // (tablas usuario/asesor/supervisor/agencia) pero esta pantalla
+            // nunca los mostraba. No son editables aquí porque los asigna
+            // el supervisor, no el propio asesor.
+            if (_cargandoDatosAsesor) ...[
+              const SizedBox(height: 16),
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ] else if (_datosAsesor != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: ConstantColors.backgroundLight,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: ConstantColors.borderColor),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'DATOS DE ASESOR',
+                      style: TextStyle(
+                        color: ConstantColors.textSubtle,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    _datoAsesorFila(
+                      Icons.supervisor_account_rounded,
+                      'Supervisor',
+                      _datosAsesor!['supervisor_nombre']?.toString(),
+                    ),
+                    _datoAsesorFila(
+                      Icons.apartment_rounded,
+                      'Agencia',
+                      _datosAsesor!['agencia_nombre']?.toString(),
+                    ),
+                    _datoAsesorFila(
+                      Icons.assignment_turned_in_rounded,
+                      'Meta diaria (tareas)',
+                      _datosAsesor!['meta_tareas_diarias'] != null
+                          ? _datosAsesor!['meta_tareas_diarias'].toString()
+                          : null,
+                    ),
+                    _datoAsesorFila(
+                      Icons.flag_rounded,
+                      'Meta mensual (visitas)',
+                      _datosAsesor!['meta_visitas_mes'] != null
+                          ? _datosAsesor!['meta_visitas_mes'].toString()
+                          : null,
+                      esUltima: true,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 24),
+            // Campo nombre
+            _perfilCampo(ctrl: _nombreCtrl, label: 'Nombre completo', icon: Icons.person_rounded),
+            const SizedBox(height: 12),
+            _perfilCampo(
+              ctrl: _telefonoCtrl,
+              label: 'Teléfono',
+              icon: Icons.phone_rounded,
+              tipo: TextInputType.phone,
+            ),
+            const SizedBox(height: 12),
+            _perfilCampo(
+              ctrl: _emailCtrl,
+              label: 'Email',
+              icon: Icons.email_rounded,
+              tipo: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 24),
+            // Botón guardar
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _guardando ? null : _guardar,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ConstantColors.primaryViolet,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: _guardando
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text(
+                        'Guardar cambios',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _perfilCampo({
+    required TextEditingController ctrl,
+    required String label,
+    required IconData icon,
+    TextInputType tipo = TextInputType.text,
+  }) {
+    return TextField(
+      controller: ctrl,
+      keyboardType: tipo,
+      style: TextStyle(color: ConstantColors.textWhite, fontSize: 14),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: ConstantColors.primaryViolet, size: 20),
+        filled: true,
+        fillColor: ConstantColors.backgroundLight,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: ConstantColors.borderColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: ConstantColors.borderColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: ConstantColors.primaryViolet, width: 1.5),
+        ),
+        labelStyle: TextStyle(color: ConstantColors.textSubtle, fontSize: 13),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      ),
+    );
+  }
+
+  /// Fila de solo lectura para la sección "Datos de asesor" (supervisor,
+  /// agencia, metas). Si el valor viene vacío/null (p. ej. el supervisor
+  /// todavía no le asignó agencia) muestra "No asignado" en vez de dejar
+  /// el espacio en blanco sin explicación.
+  Widget _datoAsesorFila(IconData icon, String label, String? valor, {bool esUltima = false}) {
+    final texto = (valor == null || valor.trim().isEmpty) ? 'No asignado' : valor.trim();
+    return Padding(
+      padding: EdgeInsets.only(bottom: esUltima ? 0 : 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: ConstantColors.primaryViolet),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: ConstantColors.textGrey, fontSize: 12),
+            ),
+          ),
+          Text(
+            texto,
+            style: TextStyle(
+              color: ConstantColors.textWhite,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -99,7 +99,7 @@ try {
             <i class="fas fa-handshake"></i> <span>Operaciones</span>
         </a>
         <a href="metas.php"
-           class="sidebar-link <?= ($currentPage === 'metas') ? 'active' : '' ?>">
+           class="sidebar-link <?= (in_array($currentPage, ['metas','encuestas'], true)) ? 'active' : '' ?>">
             <i class="fas fa-bullseye"></i> <span>Metas / Tareas</span>
         </a>
     </div>

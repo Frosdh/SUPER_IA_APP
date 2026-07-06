@@ -796,20 +796,25 @@ if ($is_admin_gerente) {
 <?php endif; ?>
 
         <!-- WELCOME BANNER -->
-        <div class="welcome-card mb-4">
+        <div class="welcome-card mb-4" style="flex-wrap:wrap; row-gap:18px;">
             <div>
                 <h1>Metas y Seguimiento</h1>
                 <p>Gestiona los objetivos diarios de tu equipo y monitorea su progreso en tiempo real.</p>
             </div>
-            <div class="welcome-meta">
-                <div class="welcome-meta-item">
-                    <div class="wm-num"><?= count($metas_hoy) ?></div>
-                    <div class="wm-lbl">Metas Hoy</div>
+            <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+                <div class="welcome-meta">
+                    <div class="welcome-meta-item">
+                        <div class="wm-num"><?= count($metas_hoy) ?></div>
+                        <div class="wm-lbl">Metas Hoy</div>
+                    </div>
+                    <div class="welcome-meta-item">
+                        <div class="wm-num"><?= count($tareas_incompletas) ?></div>
+                        <div class="wm-lbl">Pendientes</div>
+                    </div>
                 </div>
-                <div class="welcome-meta-item">
-                    <div class="wm-num"><?= count($tareas_incompletas) ?></div>
-                    <div class="wm-lbl">Pendientes</div>
-                </div>
+                <a href="encuestas.php" class="btn-save px-4" style="color:var(--brand-navy-deep) !important; text-decoration:none;">
+                    <i class="fas fa-clipboard-list"></i> Ver todas las Encuestas
+                </a>
             </div>
         </div>
 
@@ -1021,159 +1026,41 @@ if ($is_admin_gerente) {
         </div>
 
         <!-- ── TAREAS DEL EQUIPO ── -->
+        <!-- Nota (2026-07): el detalle actividad-por-actividad (tabla plana +
+             cajas Programadas/Completadas) se movió a encuestas.php, que
+             además permite ver cada encuesta pregunta por pregunta tal cual
+             se llenó en el celular y confirma si ya se subió al servidor.
+             Aquí solo queda un resumen rápido con acceso directo. -->
         <div class="section-card">
             <div class="section-header">
-                <h5><i class="fas fa-tasks text-purple"></i> Gestión de Tareas del Equipo</h5>
-                <form method="get" class="row g-2 align-items-end">
-                    <input type="hidden" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>">
-                    <div class="col-auto">
-                        <label class="small fw-bold text-muted mb-1 d-block">Filtrar Asesor</label>
-                        <select name="t_asesor" class="form-select form-select-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
-                            <option value="">— Todos —</option>
-                            <?php foreach ($asesores as $a): ?>
-                                <option value="<?= htmlspecialchars($a['id']) ?>" <?= $tareas_asesor_filtro === (string)$a['id'] ? 'selected' : '' ?>>
-                                    <?= htmlspecialchars($a['nombre']) ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="col-auto">
-                        <label class="small fw-bold text-muted mb-1 d-block">Desde</label>
-                        <input type="date" name="t_desde" value="<?= htmlspecialchars($tareas_desde) ?>" class="form-control form-control-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
-                    </div>
-                    <div class="col-auto">
-                        <label class="small fw-bold text-muted mb-1 d-block">Hasta</label>
-                        <input type="date" name="t_hasta" value="<?= htmlspecialchars($tareas_hasta) ?>" class="form-control form-control-sm shadow-sm" onchange="this.form.submit()" style="border-radius:8px;">
-                    </div>
-                </form>
+                <h5><i class="fas fa-tasks text-purple"></i> Actividad del Equipo (últimos <?= (new DateTime($tareas_hasta))->diff(new DateTime($tareas_desde))->days + 1 ?> días)</h5>
             </div>
             <div class="section-body">
-
-            <!-- Tareas Incompletas / Pospuestas -->
-            <div class="mt-4">
-                <h5 class="fw-800 text-navy mb-3 d-flex align-items-center gap-2">
-                    <i class="fas fa-hourglass-half text-warning"></i> 
-                    Incompletas / Pospuestas
-                    <span class="badge-premium badge-warning-soft ms-2"><?= count($tareas_incompletas) ?></span>
-                </h5>
-                
-                <?php if (empty($tareas_incompletas)): ?>
-                    <div class="p-4 text-center border rounded-4 bg-light opacity-50">
-                        <i class="fas fa-check-double mb-2 d-block"></i> No hay pendientes en este rango
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="p-4 border rounded-4 bg-light text-center">
+                            <div class="fw-800" style="font-size:26px; color:#059669;"><?= count($tareas_completadas) ?></div>
+                            <div class="small text-muted fw-bold text-uppercase">Completadas</div>
+                        </div>
                     </div>
-                <?php else: ?>
-                    <div class="table-premium-container">
-                        <table class="table-premium">
-                            <thead>
-                                <tr>
-                                    <th>Asesor / Cliente</th>
-                                    <th>Tarea</th>
-                                    <th>Día Original</th>
-                                    <th>Nueva Fecha</th>
-                                    <th class="text-end">Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                            <?php foreach ($tareas_incompletas as $t): ?>
-                                <?php
-                                [$estLabel, $estClass] = metas_estado_tarea_badge(
-                                    $t['estado'] ?? '', $t['seleccionada_dia'] ?? '',
-                                    $t['fecha_programada'] ?? '', $t['pospuesta_de_dia'] ?? null
-                                );
-                                $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea'] ?? '');
-                                $diaOriginal = $t['pospuesta_de_dia'] ?: ($t['seleccionada_dia'] ?: ($t['fecha_programada'] ?? ''));
-                                
-                                $reprog = '';
-                                if ($t['pospuesta_de_dia']) {
-                                    $reprog = $t['fecha_programada'] ?: $t['seleccionada_dia'];
-                                }
-                                ?>
-                                <tr>
-                                    <td>
-                                        <div class="fw-bold"><?= htmlspecialchars($t['asesor_nombre']) ?></div>
-                                        <div class="small text-muted"><?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente') ?></div>
-                                    </td>
-                                    <td><span class="badge-premium badge-info-soft"><?= htmlspecialchars($tipoTxt) ?></span></td>
-                                    <td><?= date('d M', strtotime($diaOriginal)) ?></td>
-                                    <td>
-                                        <?php if ($reprog): ?>
-                                            <span class="text-warning fw-bold">
-                                                <i class="fas fa-arrow-right small"></i> <?= date('d M', strtotime($reprog)) ?>
-                                            </span>
-                                        <?php else: ?>
-                                            <span class="text-muted">—</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td class="text-end">
-                                        <span class="badge-premium badge-danger-soft"><?= $estLabel ?></span>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                    <div class="col-md-4">
+                        <div class="p-4 border rounded-4 bg-light text-center">
+                            <div class="fw-800" style="font-size:26px; color:#3b82f6;"><?= count($tareas_programadas) ?></div>
+                            <div class="small text-muted fw-bold text-uppercase">Programadas</div>
+                        </div>
                     </div>
-                <?php endif; ?>
-            </div>
-
-            <!-- Tareas Programadas / Completadas Grid -->
-            <div class="row g-4 mt-4">
-                <div class="col-lg-6">
-                    <h5 class="fw-800 text-navy mb-3 d-flex align-items-center gap-2">
-                        <i class="fas fa-calendar-alt text-primary"></i> 
-                        Programadas
-                        <span class="badge-premium badge-info-soft ms-2"><?= count($tareas_programadas) ?></span>
-                    </h5>
-                    <div class="p-0 border rounded-4 bg-white overflow-hidden shadow-sm" style="max-height: 500px; overflow-y: auto;">
-                        <?php if (empty($tareas_programadas)): ?>
-                            <div class="p-5 text-center text-muted opacity-50 small">No hay tareas programadas</div>
-                        <?php else: ?>
-                            <?php foreach ($tareas_programadas as $t): 
-                                $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea']);
-                            ?>
-                            <div class="act-item">
-                                <div class="act-dot dot-blue"><i class="fas fa-clock"></i></div>
-                                <div class="act-body">
-                                    <div class="act-title"><?= htmlspecialchars($t['asesor_nombre']) ?></div>
-                                    <div class="act-meta"><?= htmlspecialchars($tipoTxt) ?> · <?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente') ?></div>
-                                </div>
-                                <div class="act-date text-end">
-                                    <div class="fw-bold"><?= date('d/m', strtotime($t['fecha_programada'])) ?></div>
-                                    <div class="small opacity-75"><?= $t['hora_programada'] ?: '--:--' ?></div>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
+                    <div class="col-md-4">
+                        <div class="p-4 border rounded-4 bg-light text-center">
+                            <div class="fw-800" style="font-size:26px; color:#dc2626;"><?= count($tareas_incompletas) ?></div>
+                            <div class="small text-muted fw-bold text-uppercase">Incompletas / Pospuestas</div>
+                        </div>
                     </div>
                 </div>
-
-                <div class="col-lg-6">
-                    <h5 class="fw-800 text-navy mb-3 d-flex align-items-center gap-2">
-                        <i class="fas fa-check-circle text-success"></i> 
-                        Completadas
-                        <span class="badge-premium badge-success-soft ms-2"><?= count($tareas_completadas) ?></span>
-                    </h5>
-                    <div class="p-0 border rounded-4 bg-white overflow-hidden shadow-sm" style="max-height: 500px; overflow-y: auto;">
-                        <?php if (empty($tareas_completadas)): ?>
-                            <div class="p-5 text-center text-muted opacity-50 small">No hay tareas completadas</div>
-                        <?php else: ?>
-                            <?php foreach ($tareas_completadas as $t): 
-                                $tipoTxt = metas_tipo_tarea_label($t['tipo_tarea']);
-                            ?>
-                            <div class="act-item">
-                                <div class="act-dot dot-ok"><i class="fas fa-check"></i></div>
-                                <div class="act-body">
-                                    <div class="act-title"><?= htmlspecialchars($t['asesor_nombre']) ?></div>
-                                    <div class="act-meta"><?= htmlspecialchars($tipoTxt) ?> · <?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente') ?></div>
-                                </div>
-                                <div class="act-date text-end">
-                                    <div class="fw-bold text-success"><?= date('d/m', strtotime($t['fecha_realizada'])) ?></div>
-                                    <div class="small opacity-75"><?= $t['hora_realizada'] ?: '--:--' ?></div>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
+                <p class="text-muted small mt-3 mb-0">
+                    <i class="fas fa-circle-info"></i>
+                    Para ver cada encuesta y levantamiento de empresa en detalle (pregunta por pregunta, con filtro de fecha, asesor, tipo y estado), entra a
+                    <a href="encuestas.php">Encuestas del Equipo</a>.
+                </p>
             </div>
         </div>
     </div>

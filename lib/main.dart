@@ -7,6 +7,7 @@ import 'package:super_ia/Core/Services/SyncService.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:super_ia/Core/ProviderModels/VerificationModel.dart';
 import 'package:super_ia/Core/ProviderModels/PermissionHandlerModel.dart';
+import 'package:super_ia/Core/ProviderModels/UserDetailsModel.dart';
 import 'package:super_ia/UI/views/SplashScreen.dart';
 import 'package:super_ia/UI/views/OnboardingScreen.dart';
 import 'package:super_ia/UI/views/WelcomeScreen.dart';
@@ -75,6 +76,16 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<PermissionHandlerModel>(
           create: (_) => PermissionHandlerModel(),
+        ),
+        // NOTA (fix 2026-07): faltaba registrar este provider. ProfileScreen,
+        // EditProfileScreen y el modal "Mi Perfil" de OsmMapScreen leen
+        // Provider.of<UserDetailsModel>(context) para reflejar de inmediato
+        // los cambios de nombre/teléfono/correo en toda la app; sin
+        // registrarlo aquí (arriba del Navigator/MaterialApp), esa llamada
+        // lanzaba "Could not find the correct Provider<UserDetailsModel>"
+        // y tumbaba la pantalla apenas se guardaba el perfil.
+        ChangeNotifierProvider<UserDetailsModel>(
+          create: (_) => UserDetailsModel(),
         ),
       ],
       child: MaterialApp(
