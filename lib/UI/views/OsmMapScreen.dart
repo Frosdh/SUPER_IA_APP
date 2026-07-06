@@ -175,7 +175,7 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         },
       ).timeout(const Duration(seconds: 8));
 
-      debugPrint('>>> [ASESOR_STATUS] desconectado HTTP ${respaonse.statusCode}');
+      debugPrint('>>> [ASESOR_STATUS] desconectado HTTP ${response.statusCode}');
     } catch (_) {
       // No bloqueamos el logout si falla la notificación.
     }

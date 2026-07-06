@@ -140,6 +140,23 @@ function venc_acuerdo_label(?string $acuerdo): array {
     elseif (str_starts_with($acuerdo, 'levantamiento')) $class = 'acuerdo-levantamiento';
     return [ucfirst(str_replace('_', ' ', $acuerdo)), $class];
 }
+function venc_origen_prospecto(?string $origen): array {
+    switch ($origen) {
+        case 'frio':           return ['Frío', 'No conoce / no nos sigue', 'acuerdo-ninguno'];
+        case 'seguidor':       return ['Seguidor', 'Sí conoce / sí nos sigue', 'acuerdo-nueva_cita'];
+        case 'cliente':        return ['Cliente', 'Ya es cliente nuestro', 'acuerdo-levantamiento'];
+        case 'leads_llamadas': return ['Leads / Llamadas', 'Links o llamadas', 'acuerdo-documentos'];
+        default:                return ['—', '', 'acuerdo-ninguno'];
+    }
+}
+function venc_regimen_label(?string $r): string {
+    switch ($r) {
+        case 'ruc':           return 'RUC (Régimen general)';
+        case 'rise':          return 'RISE (Régimen simplificado)';
+        case 'no_registrado': return 'No está registrado';
+        default:              return '';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -243,8 +260,78 @@ function venc_acuerdo_label(?string $acuerdo): array {
                 <i class="fas <?= $subida ? 'fa-check-circle' : 'fa-cloud-upload-alt' ?>"></i>
                 <?= $subida ? 'Subida al servidor' : 'Pendiente de sincronizar' ?>
             </span>
+            <?php if ($cliente && !empty($cliente['origen_prospecto'])): ?>
+                <?php [$origenLabel, $origenSub] = venc_origen_prospecto($cliente['origen_prospecto']); ?>
+                <span class="hero-badge"><i class="fas fa-user-tag"></i> Tipo de prospecto: <?= htmlspecialchars($origenLabel) ?></span>
+            <?php endif; ?>
         </div>
     </div>
+
+    <?php if ($encuesta): ?>
+    <!-- ── PREGUNTAS DE IDENTIFICACIÓN (Paso 1 en mobile) ── -->
+    <div class="section-card">
+        <div class="section-header">
+            <div class="sec-icon sec-blue"><i class="fas fa-comments"></i></div>
+            <h5>Preguntas de Identificación</h5>
+        </div>
+        <div class="section-body">
+
+            <div class="ficha-subsection">
+                <div class="ficha-subtitle">1. ¿Usted conoce o ha escuchado sobre nuestra institución?</div>
+                <div class="dato-grid">
+                    <div class="dato-row"><span class="dato-label">Respuesta</span><span class="dato-val"><?= yn($encuesta['p1_conoce_institucion'] ?? null) ?></span></div>
+                </div>
+                <?php if (!empty($encuesta['p1_obs'])): ?>
+                    <div class="mt-2 p-2 rounded" style="background:#f8fafc;font-size:12px;border-left:3px solid #cbd5e1;"><strong>Observación:</strong> <?= htmlspecialchars($encuesta['p1_obs']) ?></div>
+                <?php endif; ?>
+            </div>
+
+            <div class="ficha-subsection">
+                <div class="ficha-subtitle">2. ¿Es usted cliente de nuestra institución?</div>
+                <div class="dato-grid">
+                    <div class="dato-row"><span class="dato-label">Respuesta</span><span class="dato-val"><?= yn($encuesta['p2_es_cliente'] ?? null) ?></span></div>
+                </div>
+                <?php if (!empty($encuesta['p2_es_cliente'])):
+                    $p2str = strtolower((string)($encuesta['p2_producto'] ?? ''));
+                    $p2prods = [];
+                    if (str_contains($p2str, 'ahorro'))    $p2prods[] = 'Cuenta de Ahorro';
+                    if (str_contains($p2str, 'corriente')) $p2prods[] = 'Cuenta Corriente';
+                    if (str_contains($p2str, 'inversion')) $p2prods[] = 'Inversión / Depósito';
+                    if (str_contains($p2str, 'credito'))   $p2prods[] = 'Crédito';
+                ?>
+                    <div style="margin-top:10px;">
+                        <span class="dato-label" style="display:block;margin-bottom:6px;">Productos que mantiene o mantuvo</span>
+                        <?php if (empty($p2prods)): ?>
+                            <span class="dato-vacio">No especificado</span>
+                        <?php else: ?>
+                            <?php foreach ($p2prods as $p): ?><span class="chip-prod"><?= htmlspecialchars($p) ?></span><?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+                <?php if (!empty($encuesta['p2_obs'])): ?>
+                    <div class="mt-2 p-2 rounded" style="background:#f8fafc;font-size:12px;border-left:3px solid #cbd5e1;"><strong>Observación:</strong> <?= htmlspecialchars($encuesta['p2_obs']) ?></div>
+                <?php endif; ?>
+            </div>
+
+            <?php if (!empty($encuesta['p2_es_cliente'])): ?>
+            <div class="ficha-subsection">
+                <div class="ficha-subtitle">3. ¿Qué tan a gusto está con nuestros servicios?</div>
+                <?php
+                $satisMap = ['muy_a_gusto' => 'Muy a gusto', 'medianamente' => 'Medianamente a gusto', 'no_a_gusto' => 'No estoy a gusto'];
+                $satisVal = (string)($encuesta['p3_satisfaccion'] ?? '');
+                ?>
+                <div class="dato-grid">
+                    <div class="dato-row"><span class="dato-label">Respuesta</span><span class="dato-val"><?= dato($satisMap[$satisVal] ?? $satisVal) ?></span></div>
+                </div>
+                <?php if (!empty($encuesta['p3_obs'])): ?>
+                    <div class="mt-2 p-2 rounded" style="background:#f8fafc;font-size:12px;border-left:3px solid #cbd5e1;"><strong>Observación:</strong> <?= htmlspecialchars($encuesta['p3_obs']) ?></div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- ── DATOS DEL PROSPECTO ── -->
     <div class="section-card">
@@ -277,6 +364,54 @@ function venc_acuerdo_label(?string $acuerdo): array {
                         <?= etiq('Dependientes', $cliente['num_dependientes'] ?? '') ?>
                     <?php endif; ?>
                 </div>
+
+                <?php if (!empty($cliente['origen_prospecto'])): ?>
+                    <?php [$origenLabel, $origenSub] = venc_origen_prospecto($cliente['origen_prospecto']); ?>
+                    <div class="ficha-subsection" style="margin-top:14px;">
+                        <div class="ficha-subtitle"><i class="fas fa-user-tag"></i> Tipo de Prospecto</div>
+                        <div class="dato-grid">
+                            <?= etiq('Clasificación', $origenLabel . ($origenSub ? " ($origenSub)" : '')) ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                $tipoEmpresaStr = (string)($cliente['tipo_empresa'] ?? '');
+                $esServProd = str_contains($tipoEmpresaStr, 'servicio_produccion');
+                $esComercio = str_contains($tipoEmpresaStr, 'comercio');
+                if ($esServProd || $esComercio):
+                ?>
+                    <div class="ficha-subsection" style="margin-top:14px;">
+                        <div class="ficha-subtitle"><i class="fas fa-industry"></i> Tipo de Empresa</div>
+                        <?php
+                        $tiposChips = [];
+                        if ($esServProd) $tiposChips[] = '<span class="chip-prod teal"><i class="fas fa-cogs me-1"></i>Servicio / Producción</span>';
+                        if ($esComercio) $tiposChips[] = '<span class="chip-prod amber"><i class="fas fa-shopping-cart me-1"></i>Comercio</span>';
+                        echo implode(' ', $tiposChips);
+                        ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if (!empty($cliente['regimen_tributario'])): ?>
+                <div class="ficha-subsection" style="margin-top:14px;">
+                    <div class="ficha-subtitle"><i class="fas fa-file-invoice"></i> Régimen Tributario</div>
+                    <div class="dato-grid">
+                        <?= etiq('Régimen', venc_regimen_label($cliente['regimen_tributario'])) ?>
+                        <?php if ($cliente['regimen_tributario'] === 'ruc'): ?>
+                            <?= etiq('Número de RUC', $cliente['numero_ruc'] ?? '') ?>
+                            <?= etiqYN('¿Declara IVA mensualmente?', $cliente['declara_iva'] ?? null) ?>
+                            <?= etiqYN('¿Emite facturas electrónicas?', $cliente['emite_facturas'] ?? null) ?>
+                            <?= etiqYN('¿Lleva contabilidad?', $cliente['lleva_contabilidad'] ?? null) ?>
+                            <?= etiq('Valor RUC', $cliente['ruc_val'] ?? '') ?>
+                        <?php elseif ($cliente['regimen_tributario'] === 'rise'): ?>
+                            <?= etiqYN('¿Paga su cuota mensual del RISE?', $cliente['paga_cuota_rise'] ?? null) ?>
+                            <?= etiqYN('¿Emite notas de venta?', $cliente['emite_notas_venta'] ?? null) ?>
+                            <?= etiqYN('¿Conoce el límite de ingresos del RISE?', $cliente['conoce_limite_rise'] ?? null) ?>
+                            <?= etiq('Valor RISE', $cliente['rise_val'] ?? '') ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
     </div>
@@ -291,28 +426,47 @@ function venc_acuerdo_label(?string $acuerdo): array {
         <div class="section-body">
 
             <div class="ficha-subsection">
-                <div class="ficha-subtitle"><i class="fas fa-wallet"></i> Productos que maneja actualmente</div>
-                <?php
-                $prods_actuales = [];
-                if (!empty($encuesta['mantiene_cuenta_ahorro']))    $prods_actuales[] = '<span class="chip-prod green"><i class="fas fa-piggy-bank me-1"></i>Cuenta de Ahorros</span>';
-                if (!empty($encuesta['mantiene_cuenta_corriente'])) $prods_actuales[] = '<span class="chip-prod teal"><i class="fas fa-exchange-alt me-1"></i>Cuenta Corriente</span>';
-                if (!empty($encuesta['tiene_inversiones']))         $prods_actuales[] = '<span class="chip-prod purple"><i class="fas fa-chart-line me-1"></i>Inversiones</span>';
-                if (!empty($encuesta['tiene_operaciones_crediticias'])) $prods_actuales[] = '<span class="chip-prod amber"><i class="fas fa-hand-holding-usd me-1"></i>Crédito activo</span>';
-                echo empty($prods_actuales) ? '<span class="dato-vacio">No reporta productos activos</span>' : implode(' ', $prods_actuales);
-                ?>
+                <div class="ficha-subtitle">¿Qué cuentas mantiene?</div>
+                <div class="dato-grid">
+                    <div class="dato-row">
+                        <span class="dato-label">Cuenta de Ahorros</span>
+                        <span class="dato-val">
+                            <?= yn($encuesta['mantiene_cuenta_ahorro'] ?? null) ?>
+                            <?php if (!empty($encuesta['mantiene_cuenta_ahorro']) && !empty($encuesta['banco_ahorro'])): ?>
+                                — Institución: <strong><?= htmlspecialchars($encuesta['banco_ahorro']) ?></strong>
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                    <div class="dato-row">
+                        <span class="dato-label">Cuenta Corriente</span>
+                        <span class="dato-val">
+                            <?= yn($encuesta['mantiene_cuenta_corriente'] ?? null) ?>
+                            <?php if (!empty($encuesta['mantiene_cuenta_corriente']) && !empty($encuesta['banco_corriente'])): ?>
+                                — Institución: <strong><?= htmlspecialchars($encuesta['banco_corriente']) ?></strong>
+                            <?php endif; ?>
+                        </span>
+                    </div>
+                </div>
             </div>
 
-            <?php if (!empty($encuesta['institucion_inversiones']) || !empty($encuesta['valor_inversion'])): ?>
             <div class="ficha-subsection">
-                <div class="ficha-subtitle"><i class="fas fa-chart-line"></i> Detalle de inversión actual</div>
+                <div class="ficha-subtitle">¿Tiene inversiones?</div>
                 <div class="dato-grid">
+                    <div class="dato-row"><span class="dato-label">Respuesta</span><span class="dato-val"><?= yn($encuesta['tiene_inversiones'] ?? null) ?></span></div>
+                </div>
+                <?php if (!empty($encuesta['tiene_inversiones'])): ?>
+                <div class="dato-grid" style="margin-top:6px;">
                     <?= etiq('Institución',       $encuesta['institucion_inversiones'] ?? '') ?>
                     <?= etiq('Valor inversión',   $encuesta['valor_inversion']         ?? '', 'USD') ?>
                     <?= etiq('Plazo',             $encuesta['plazo_inversion']          ?? '') ?>
                     <?= etiq('Fecha vencimiento', $encuesta['fecha_vencimiento_inversion'] ?? '') ?>
+                    <?= etiqYN('¿Le interesaría una propuesta previa al vencimiento?', $encuesta['propuesta_prev_vencimiento'] ?? null) ?>
                 </div>
+                <?php if (!empty($encuesta['propuesta_inversion'])): ?>
+                    <div class="mt-2 p-2 rounded" style="background:#f8fafc;font-size:12px;border-left:3px solid #cbd5e1;"><strong>Propuesta de inversión:</strong> <?= htmlspecialchars($encuesta['propuesta_inversion']) ?></div>
+                <?php endif; ?>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
 
             <?php if (!empty($encuesta['institucion_credito'])): ?>
             <div class="ficha-subsection">
@@ -325,79 +479,58 @@ function venc_acuerdo_label(?string $acuerdo): array {
             <?php endif; ?>
 
             <div class="ficha-subsection">
-                <div class="ficha-subtitle"><i class="fas fa-star"></i> Interés en nuestros productos</div>
-                <?php
-                $interes = [];
-                if (!empty($encuesta['interes_cc']))        $interes[] = '<span class="chip-prod teal"><i class="fas fa-exchange-alt me-1"></i>Cuenta Corriente</span>';
-                if (!empty($encuesta['interes_ahorro']))    $interes[] = '<span class="chip-prod green"><i class="fas fa-piggy-bank me-1"></i>Cuenta de Ahorros</span>';
-                if (!empty($encuesta['interes_inversion'])) $interes[] = '<span class="chip-prod purple"><i class="fas fa-chart-line me-1"></i>Inversiones</span>';
-                if (!empty($encuesta['interes_credito']))   $interes[] = '<span class="chip-prod amber"><i class="fas fa-hand-holding-usd me-1"></i>Crédito</span>';
-                echo empty($interes) ? '<span class="dato-vacio">Ninguno registrado</span>' : implode(' ', $interes);
+                <div class="ficha-subtitle">¿Le interesaría conocer nuestros productos o servicios?</div>
+                <div class="dato-grid">
+                    <div class="dato-row"><span class="dato-label">Respuesta</span><span class="dato-val"><?= yn($encuesta['interes_conocer_productos'] ?? null) ?></span></div>
+                </div>
+
+                <?php if (!empty($encuesta['interes_conocer_productos'])):
+                    $interes = [];
+                    if (!empty($encuesta['interes_cc']))        $interes[] = '<span class="chip-prod teal"><i class="fas fa-exchange-alt me-1"></i>Cuenta Corriente</span>';
+                    if (!empty($encuesta['interes_ahorro']))    $interes[] = '<span class="chip-prod green"><i class="fas fa-piggy-bank me-1"></i>Cuenta de Ahorros</span>';
+                    if (!empty($encuesta['interes_inversion'])) $interes[] = '<span class="chip-prod purple"><i class="fas fa-chart-line me-1"></i>Inversiones</span>';
+                    if (!empty($encuesta['interes_credito']))   $interes[] = '<span class="chip-prod amber"><i class="fas fa-hand-holding-usd me-1"></i>Crédito</span>';
                 ?>
-                <?php if (!empty($encuesta['nivel_interes']) && $encuesta['nivel_interes'] !== 'ninguno'): ?>
-                <div style="margin-top:8px;"><?= etiq('Nivel de interés', ucfirst($encuesta['nivel_interes'])) ?></div>
+                    <div style="margin-top:10px;">
+                        <span class="dato-label" style="display:block;margin-bottom:6px;">¿Cuáles productos le interesan?</span>
+                        <?= empty($interes) ? '<span class="dato-vacio">Ninguno seleccionado</span>' : implode(' ', $interes) ?>
+                    </div>
+                <?php elseif ($encuesta['interes_conocer_productos'] !== null && $encuesta['interes_conocer_productos'] !== ''):
+                    // Respondió que NO le interesa: mostrar la razón (mapea a los campos
+                    // razon_ya_trabaja_institucion / razon_desconfia_servicios / razon_agusto_actual /
+                    // razon_mala_experiencia guardados por guardar_cliente_encuesta.php).
+                    $razones = [];
+                    if (!empty($encuesta['razon_ya_trabaja_institucion'])) $razones[] = 'Ya trabaja con otra institución por muchos años';
+                    if (!empty($encuesta['razon_desconfia_servicios']))    $razones[] = 'Desconfía en los servicios a ofrecer';
+                    if (!empty($encuesta['razon_agusto_actual']))          $razones[] = 'Está a gusto con la institución actual';
+                    if (!empty($encuesta['razon_mala_experiencia']))       $razones[] = 'Mala experiencia con nuestra institución';
+                    if (!empty($encuesta['razon_otros']))                  $razones[] = htmlspecialchars($encuesta['razon_otros']);
+                ?>
+                    <div style="margin-top:10px;">
+                        <span class="dato-label" style="display:block;margin-bottom:6px;">¿Cuál es la razón?</span>
+                        <?php if (empty($razones)): ?>
+                            <span class="dato-vacio">No especificada</span>
+                        <?php else: ?>
+                            <div class="doc-chips"><?php foreach ($razones as $r): ?><span class="doc-chip no"><?= $r ?></span><?php endforeach; ?></div>
+                        <?php endif; ?>
+                    </div>
                 <?php endif; ?>
             </div>
 
             <?php
-            $razones = [];
-            if (!empty($encuesta['razon_ya_trabaja']))  $razones[] = 'Ya trabaja con otra institución';
-            if (!empty($encuesta['razon_desconfia']))   $razones[] = 'Desconfía de servicios financieros';
-            if (!empty($encuesta['razon_agusto']))      $razones[] = 'Agusto con institución actual';
-            if (!empty($encuesta['razon_mala_exp']))    $razones[] = 'Mala experiencia previa';
-            if (!empty($encuesta['razon_otros']))       $razones[] = htmlspecialchars($encuesta['razon_otros']);
-            if (!empty($razones)):
-            ?>
-            <div class="ficha-subsection">
-                <div class="ficha-subtitle"><i class="fas fa-times-circle"></i> Razones de no interés</div>
-                <div class="doc-chips">
-                    <?php foreach ($razones as $r): ?><span class="doc-chip no"><?= $r ?></span><?php endforeach; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-
-            <?php
             $busca = [];
-            if (!empty($encuesta['busca_agilidad']))  $busca[] = 'Agilidad';
-            if (!empty($encuesta['busca_cajeros']))   $busca[] = 'Cajeros';
-            if (!empty($encuesta['busca_banca']))     $busca[] = 'Banca en línea';
-            if (!empty($encuesta['busca_agencias']))  $busca[] = 'Agencias cerca';
-            if (!empty($encuesta['busca_credito']))   $busca[] = 'Crédito rápido';
-            if (!empty($encuesta['busca_td']))        $busca[] = 'Tarjeta débito';
-            if (!empty($encuesta['busca_tc']))        $busca[] = 'Tarjeta crédito';
-            if (!empty($encuesta['que_busca_agilidad']))        $busca[] = 'Agilidad (Detalle)';
-            if (!empty($encuesta['que_busca_cajeros']))         $busca[] = 'Cajeros (Detalle)';
-            if (!empty($encuesta['que_busca_banca_linea']))     $busca[] = 'Banca en línea (Detalle)';
-            if (!empty($encuesta['que_busca_agencias']))        $busca[] = 'Agencias (Detalle)';
-            if (!empty($encuesta['que_busca_credito_rapido']))  $busca[] = 'Crédito rápido (Detalle)';
-            if (!empty($busca)):
+            if (!empty($encuesta['que_busca_agilidad']))        $busca[] = 'Agilidad';
+            if (!empty($encuesta['que_busca_cajeros']))         $busca[] = 'Cajeros';
+            if (!empty($encuesta['que_busca_banca_linea']))     $busca[] = 'Banca en línea';
+            if (!empty($encuesta['que_busca_agencias']))        $busca[] = 'Agencias cerca';
+            if (!empty($encuesta['que_busca_credito_rapido']))  $busca[] = 'Crédito rápido';
             ?>
             <div class="ficha-subsection">
-                <div class="ficha-subtitle"><i class="fas fa-search"></i> Qué busca en un producto financiero</div>
-                <div class="doc-chips">
-                    <?php foreach ($busca as $b): ?><span class="doc-chip ok"><?= htmlspecialchars($b) ?></span><?php endforeach; ?>
-                </div>
-            </div>
-            <?php endif; ?>
-
-            <div class="ficha-subsection">
-                <div class="ficha-subtitle"><i class="fas fa-university"></i> Relación Bancaria e Institucional</div>
-                <?php $inst = $encuesta_negocio ?: $encuesta; ?>
-                <div class="dato-grid">
-                    <?= etiq('Banco Ahorro (Actual)', $encuesta['banco_ahorro'] ?? '') ?>
-                    <?= etiq('Banco Corriente (Actual)', $encuesta['banco_corriente'] ?? '') ?>
-                    <?= etiqYN('¿Conoce la institución?', $inst['p1_conoce_institucion'] ?? null) ?>
-                    <?= etiqYN('¿Es cliente actualmente?', $inst['p2_es_cliente'] ?? null) ?>
-                    <?= etiq('Satisfacción General', $inst['p3_satisfaccion'] ?? '') ?>
-                    <?php if (!empty($inst['p2_producto'])): ?>
-                        <?= etiq('Producto que posee', $inst['p2_producto']) ?>
-                    <?php endif; ?>
-                </div>
-                <?php if (!empty($inst['p1_obs']) || !empty($inst['p2_obs']) || !empty($inst['p3_obs'])): ?>
-                    <div class="mt-2 p-2 rounded" style="background: #f8fafc; font-size: 12px; border-left: 3px solid #cbd5e1;">
-                        <strong>Observaciones Institucionales:</strong><br>
-                        <?= htmlspecialchars(trim(implode(' / ', array_filter([$inst['p1_obs'] ?? '', $inst['p2_obs'] ?? '', $inst['p3_obs'] ?? ''])), ' /')) ?>
-                    </div>
+                <div class="ficha-subtitle">¿Qué busca de una institución financiera?</div>
+                <?php if (empty($busca)): ?>
+                    <span class="dato-vacio">No especificado</span>
+                <?php else: ?>
+                    <div class="doc-chips"><?php foreach ($busca as $b): ?><span class="doc-chip ok"><?= htmlspecialchars($b) ?></span><?php endforeach; ?></div>
                 <?php endif; ?>
             </div>
 

@@ -599,11 +599,11 @@ if ($user_role === 'supervisor') {
                 <!-- Razones de no interés -->
                 <?php
                 $razones = [];
-                if (!empty($encuesta['razon_ya_trabaja']))  $razones[] = 'Ya trabaja con otra institución';
-                if (!empty($encuesta['razon_desconfia']))   $razones[] = 'Desconfía de servicios financieros';
-                if (!empty($encuesta['razon_agusto']))      $razones[] = 'Agusto con institución actual';
-                if (!empty($encuesta['razon_mala_exp']))    $razones[] = 'Mala experiencia previa';
-                if (!empty($encuesta['razon_otros']))       $razones[] = htmlspecialchars($encuesta['razon_otros']);
+                if (!empty($encuesta['razon_ya_trabaja_institucion'])) $razones[] = 'Ya trabaja con otra institución';
+                if (!empty($encuesta['razon_desconfia_servicios']))    $razones[] = 'Desconfía de servicios financieros';
+                if (!empty($encuesta['razon_agusto_actual']))          $razones[] = 'Agusto con institución actual';
+                if (!empty($encuesta['razon_mala_experiencia']))       $razones[] = 'Mala experiencia previa';
+                if (!empty($encuesta['razon_otros']))                  $razones[] = htmlspecialchars($encuesta['razon_otros']);
                 if (!empty($razones)):
                 ?>
                 <div class="ficha-subsection">

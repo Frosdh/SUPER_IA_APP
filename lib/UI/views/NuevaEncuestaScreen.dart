@@ -351,6 +351,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   bool _institucionesCargadas = false;
   String? _instAhorroSeleccionada;
   String? _instCorrSeleccionada;
+  String? _instInvSeleccionada;
 
   // Si el cliente quiere conocer servicios desde este paso
   bool? _interesConocerServicios;
@@ -491,6 +492,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             final t = _bancoCorrienteCtrl.text.trim();
             _instCorrSeleccionada = _instituciones.contains(t) ? t : 'otra';
           }
+          if (_instInvCtrl.text.trim().isNotEmpty) {
+            final t = _instInvCtrl.text.trim();
+            _instInvSeleccionada = _instituciones.contains(t) ? t : 'otra';
+          }
         });
         if (inst.isNotEmpty) return;
       }
@@ -515,6 +520,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         if (_bancoCorrienteCtrl.text.trim().isNotEmpty) {
           final t = _bancoCorrienteCtrl.text.trim();
           _instCorrSeleccionada = _instituciones.contains(t) ? t : 'otra';
+        }
+        if (_instInvCtrl.text.trim().isNotEmpty) {
+          final t = _instInvCtrl.text.trim();
+          _instInvSeleccionada = _instituciones.contains(t) ? t : 'otra';
         }
       });
     }
@@ -900,6 +909,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         _instAhorroSeleccionada = ah.isEmpty ? null : (_instituciones.contains(ah) ? ah : 'otra');
         final cc = _bancoCorrienteCtrl.text.trim();
         _instCorrSeleccionada = cc.isEmpty ? null : (_instituciones.contains(cc) ? cc : 'otra');
+        final inv = _instInvCtrl.text.trim();
+        _instInvSeleccionada = inv.isEmpty ? null : (_instituciones.contains(inv) ? inv : 'otra');
       }
       _interesConocerServicios = _ib(e['interes_conocer_servicios']);
       _interesConocer    = _ib(e['interes_conocer_productos']);
@@ -5877,10 +5888,18 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
         if (_tieneInversiones == true) ...[
           const SizedBox(height: 10),
-          _campo(
-              controller: _instInvCtrl,
-              label: 'Institución donde invierte',
-              icon: Icons.account_balance_rounded),
+          _selectorInstitucion(
+            label: 'Institución donde invierte',
+            placeholder: 'Seleccionar institución (inversión)',
+            seleccionada: _instInvSeleccionada,
+            controller: _instInvCtrl,
+            onSeleccionar: (picked) {
+              setState(() {
+                _instInvSeleccionada = picked;
+                _instInvCtrl.text = (picked == 'otra') ? '' : picked;
+              });
+            },
+          ),
           _campo(
               controller: _valorInvCtrl,
               label: 'Valor de la inversión (\$)',
@@ -6004,7 +6023,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             },
             onLlenarFicha: () => _abrirFichaProducto(ProductoTipo.credito),
           ),
-        ] else ...[
+        ] else if (_interesConocer == false) ...[
           const SizedBox(height: 16),
           _seccionTitulo('¿Cuál es la razón?'),
           _checkboxItem(
