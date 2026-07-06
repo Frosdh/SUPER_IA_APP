@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Services/EmpresaCacheService.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 
 class LevantarEmpresaScreen extends StatefulWidget {
@@ -31,6 +32,10 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
   List<Map<String, dynamic>> _resultados = [];
   bool _buscado = false;
   Timer? _debounce;
+
+  // true cuando los resultados que se ven vienen de la copia guardada en el
+  // celular (EmpresaCacheService) porque no hay internet en este momento.
+  bool _resultadosOffline = false;
 
   // ── Filtros ──────────────────────────────────────────────────
   /// 'todos' | 'pendiente' | 'completado'
@@ -67,16 +72,29 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
     super.dispose();
   }
 
+  bool _esErrorDeConexion(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('socketexception') ||
+        s.contains('failed host lookup') ||
+        s.contains('clientexception') ||
+        s.contains('connection refused') ||
+        s.contains('no address associated') ||
+        s.contains('timeoutexception') ||
+        s.contains('timed out') ||
+        s.contains('network is unreachable');
+  }
+
   // ── Buscar por nombre de empresa ─────────────────────────────
   Future<void> _buscar() async {
     final texto = _buscarCtrl.text.trim();
     if (texto.isEmpty) return;
     setState(() {
-      _cargando     = true;
-      _error        = null;
-      _resultados   = [];
-      _buscado      = false;
-      _filtroCiudad = null;
+      _cargando          = true;
+      _error             = null;
+      _resultados        = [];
+      _buscado           = false;
+      _filtroCiudad      = null;
+      _resultadosOffline = false;
     });
 
     try {
@@ -99,12 +117,52 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _error   = 'No se pudo conectar al servidor. ($e)';
-        _buscado = true;
-      });
+      if (_esErrorDeConexion(e)) {
+        // Sin internet: buscamos en la copia guardada en el celular
+        // (se llena sola cuando hay conexión, ver EmpresaCacheService).
+        await _buscarEnCacheLocal(texto);
+      } else {
+        setState(() {
+          _error   = 'No se pudo conectar al servidor. ($e)';
+          _buscado = true;
+        });
+      }
     } finally {
       setState(() => _cargando = false);
+    }
+  }
+
+  /// Respaldo sin conexión: busca en la lista de empresas/prospectos que se
+  /// guardó localmente la última vez que hubo internet. Si el celular nunca
+  /// llegó a descargar esa copia (por ejemplo, primer uso sin conexión), se
+  /// avisa que no hay nada guardado todavía en vez de mostrar un error.
+  Future<void> _buscarEnCacheLocal(String texto) async {
+    try {
+      final items = await EmpresaCacheService.searchLocal(texto);
+      final totalEnCache = await EmpresaCacheService.getCachedCount();
+      if (!mounted) return;
+      if (totalEnCache == 0) {
+        setState(() {
+          _error =
+              'Sin internet y todavía no hay ninguna empresa guardada en '
+              'este celular. Conéctate al menos una vez para poder buscar '
+              'sin conexión.';
+          _buscado = true;
+        });
+        return;
+      }
+      setState(() {
+        _resultados        = items;
+        _resultadosOffline = true;
+        _buscado           = true;
+        _error             = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error   = 'Sin internet y no se pudo leer la copia guardada. ($e)';
+        _buscado = true;
+      });
     }
   }
 
@@ -275,6 +333,9 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
             ),
           ),
 
+          // ── Aviso: resultados guardados sin internet ───────────
+          if (_resultadosOffline) _buildBannerOffline(),
+
           // ── Filtros (solo si hay resultados) ──────────────────
           if (_buscado && _resultados.isNotEmpty) _buildFiltros(),
 
@@ -289,6 +350,33 @@ class _LevantarEmpresaScreenState extends State<LevantarEmpresaScreen> {
             const Center(
               child: CircularProgressIndicator(color: Colors.white),
             ),
+        ],
+      ),
+    );
+  }
+
+  // ── Aviso de resultados sin conexión ──────────────────────────
+  Widget _buildBannerOffline() {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: ConstantColors.warning.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ConstantColors.warning.withOpacity(0.5)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.cloud_off_rounded, color: ConstantColors.warning, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Sin internet: mostrando la copia guardada en el celular. '
+              'Puede no incluir los cambios más recientes.',
+              style: TextStyle(color: ConstantColors.warning, fontSize: 12),
+            ),
+          ),
         ],
       ),
     );

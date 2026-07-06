@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/OfflineQueueService.dart';
+import 'package:super_ia/Core/Services/SyncService.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  Tipos de producto
@@ -75,6 +77,12 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   // GPS auto
   double? _lat, _lng;
   String _horaGps = '';
+
+  // Identificador de idempotencia para reintentos offline (ver
+  // OfflineQueueService/SyncService). Se genera una sola vez por ficha para
+  // que, si el guardado se reintenta tras recuperar conexión, el backend
+  // pueda reconocer que ya se procesó y no la duplique.
+  String? _clientUuid;
 
   // ── CRÉDITO ─────────────────────────────────────────────────
   bool? _requiereCredito;
@@ -202,6 +210,7 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
   @override
   void initState() {
     super.initState();
+    _clientUuid = OfflineQueueService.generateUuid();
     _obtenerGPS();
     _cargarInstituciones();
   }
@@ -330,6 +339,8 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     final usuarioId = await AuthPrefs.getUsuarioId();
     final asesorId  = await AuthPrefs.getAsesorId();
 
+    _clientUuid ??= OfflineQueueService.generateUuid();
+
     final body = <String, String>{
       'usuario_id':      usuarioId,
       if (asesorId.isNotEmpty) 'asesor_id': asesorId,
@@ -339,6 +350,8 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
       'latitud':         (_lat ?? 0).toString(),
       'longitud':        (_lng ?? 0).toString(),
       'hora_gps':        _horaGps,
+      // Idempotencia offline (ver OfflineQueueService/SyncService)
+      'client_uuid':     _clientUuid ?? '',
     };
 
     switch (widget.tipo) {
@@ -378,10 +391,111 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _mostrarError('Sin conexión. ($e)');
+      if (_esErrorDeConexion(e)) {
+        // Sin internet: no perder las preguntas ya respondidas. Se guardan
+        // completas en el celular (SQLite) y SyncService las sube solas en
+        // cuanto vuelva la conexión (mismo mecanismo que NuevaEncuestaScreen).
+        await _guardarOfflineYSalir(body);
+      } else {
+        _mostrarError('No se pudo guardar en el servidor. ($e)');
+      }
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  /// Reconoce errores típicos de "no hay internet / servidor inalcanzable"
+  /// (a diferencia de un error de negocio que el servidor sí devuelve).
+  bool _esErrorDeConexion(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('socketexception') ||
+        s.contains('failed host lookup') ||
+        s.contains('clientexception') ||
+        s.contains('connection refused') ||
+        s.contains('connection reset') ||
+        s.contains('no address associated') ||
+        s.contains('timeoutexception') ||
+        s.contains('timed out') ||
+        s.contains('network is unreachable') ||
+        s.contains('handshakeexception');
+  }
+
+  /// Guarda la ficha completa (todas las preguntas respondidas) en el
+  /// celular (SQLite, vía OfflineQueueService) cuando no hay internet. Usa
+  /// la misma cola que "Levantar Empresa"/NuevaEncuestaScreen: SyncService
+  /// la reintenta sola apenas vuelva la conexión, sin que el asesor tenga
+  /// que volver a llenar nada.
+  Future<void> _guardarOfflineYSalir(Map<String, String> body) async {
+    try {
+      await OfflineQueueService.saveEncuesta(
+        clientUuid: _clientUuid!,
+        endpoint: 'guardar_ficha_producto.php',
+        body: body,
+        tipoTarea: 'ficha_producto_${widget.tipo.key}',
+        latitud: _lat,
+        longitud: _lng,
+      );
+      await SyncService.notifyPendingCountNow();
+    } catch (e) {
+      debugPrint('⚠️ No se pudo guardar la ficha sin conexión: $e');
+      if (mounted) {
+        _mostrarError(
+          'Sin conexión y no se pudo guardar en el celular. Verifica el '
+          'almacenamiento disponible e inténtalo de nuevo.',
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final pendientes = await OfflineQueueService.getPendingCount();
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ConstantColors.grey100,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.cloud_off_rounded, color: Colors.orange),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Guardado sin conexión',
+                style: TextStyle(
+                  color: ConstantColors.textDark,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'No hay internet en este momento. Todas las preguntas de esta '
+          'ficha (${widget.tipo.titulo.replaceFirst('Ficha: ', '')}) quedaron '
+          'guardadas en el celular.\n\n'
+          'Se subirán solas al servidor apenas vuelva la conexión '
+          '($pendientes pendiente${pendientes == 1 ? '' : 's'} por sincronizar).',
+          style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: widget.tipo.color,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    Navigator.of(context).pop(true);
   }
 
   Map<String, String> _bodyCredito() => {

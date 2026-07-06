@@ -35,6 +35,69 @@ function table_exists(mysqli $conn, string $table): bool {
     return $rs && $rs->num_rows > 0;
 }
 
+// ── Idempotencia offline (client_uuid) ──────────────────────────
+// La app móvil guarda la ficha completa en el celular cuando no hay
+// internet y reintenta el envío automáticamente en cuanto vuelve la
+// conexión (ver lib/UI/views/EncuestaProductoScreen.dart y
+// Core/Services/SyncService.dart). Si ese reintento llega dos veces
+// (por ejemplo, la primera respuesta se perdió en el camino aunque el
+// servidor sí la procesó), este bloque evita duplicar la ficha:
+// devuelve exactamente la misma respuesta que se generó la primera vez
+// para ese client_uuid, sin volver a insertar nada. Reutiliza la misma
+// tabla 'encuesta_offline_sync' que usa guardar_cliente_encuesta.php.
+$client_uuid = trim($_POST['client_uuid'] ?? '');
+if ($client_uuid !== '') {
+    try {
+        $conn->query("CREATE TABLE IF NOT EXISTS encuesta_offline_sync (
+            client_uuid VARCHAR(64) NOT NULL PRIMARY KEY,
+            endpoint VARCHAR(120) NOT NULL,
+            response_json LONGTEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stmtDup = $conn->prepare("SELECT response_json FROM encuesta_offline_sync WHERE client_uuid = ? LIMIT 1");
+        if ($stmtDup) {
+            $stmtDup->bind_param('s', $client_uuid);
+            $stmtDup->execute();
+            $rowDup = $stmtDup->get_result()->fetch_assoc();
+            $stmtDup->close();
+            if ($rowDup) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo $rowDup['response_json'];
+                exit;
+            }
+        }
+    } catch (\Throwable $eDup) {
+        // Si la verificación de duplicados falla, continuamos con el
+        // guardado normal: es preferible el riesgo de un duplicado
+        // ocasional a bloquear el guardado de la ficha.
+        error_log('[IDEMPOTENCIA][ficha_producto] Falló chequeo de client_uuid: ' . $eDup->getMessage());
+    }
+
+    // A partir de aquí se captura toda la salida del script para guardarla
+    // asociada a este client_uuid, sin tener que tocar cada respond().
+    ob_start();
+    register_shutdown_function(function () use ($conn, $client_uuid) {
+        $out = ob_get_level() > 0 ? ob_get_clean() : '';
+        echo $out;
+        $decoded = json_decode($out, true);
+        if (is_array($decoded) && ($decoded['status'] ?? '') === 'success') {
+            try {
+                $stmtSave = $conn->prepare(
+                    "INSERT IGNORE INTO encuesta_offline_sync (client_uuid, endpoint, response_json) VALUES (?, ?, ?)"
+                );
+                if ($stmtSave) {
+                    $endpointName = basename($_SERVER['SCRIPT_NAME'] ?? 'guardar_ficha_producto.php');
+                    $stmtSave->bind_param('sss', $client_uuid, $endpointName, $out);
+                    $stmtSave->execute();
+                    $stmtSave->close();
+                }
+            } catch (\Throwable $eSave) {
+                error_log('[IDEMPOTENCIA][ficha_producto] Falló guardar respuesta de client_uuid: ' . $eSave->getMessage());
+            }
+        }
+    });
+}
+
 function column_exists(mysqli $conn, string $table, string $col): bool {
     $t = $conn->real_escape_string($table);
     $c = $conn->real_escape_string($col);

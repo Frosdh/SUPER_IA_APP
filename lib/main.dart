@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
+import 'package:super_ia/Core/Services/SyncService.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:super_ia/Core/ProviderModels/VerificationModel.dart';
 import 'package:super_ia/Core/ProviderModels/PermissionHandlerModel.dart';
@@ -37,6 +38,11 @@ void main() async {
 
   // Inicializar el servicio de rastreo en segundo plano (obligatorio antes de startService).
   BackgroundLocationService.initialize();
+
+  // Auto-sincronización de encuestas/tareas guardadas sin internet: revisa
+  // la cola local (OfflineQueueService) cada vez que vuelve la conexión y
+  // también cada minuto como respaldo, durante toda la vida de la app.
+  SyncService.startAutoSync();
 
   SystemChrome.setSystemUIOverlayStyle(
     SystemUiOverlayStyle(

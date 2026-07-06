@@ -816,6 +816,7 @@ foreach($gkpis as $g):
       <a href="kpi_penetracion.php"  class="qk qk-p"><i class="fas fa-chart-line"></i>KPI Report</a>
       <a href="mis_asesores.php"     class="qk qk-t"><i class="fas fa-users-cog"></i>Mi Equipo</a>
       <a href="metas.php"            class="qk qk-o"><i class="fas fa-bullseye"></i>Metas</a>
+      <a href="tareas_descartadas.php" class="qk qk-r"><i class="fas fa-ban"></i>Tareas Descartadas</a>
     </div>
   </div>
 

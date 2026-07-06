@@ -8,6 +8,7 @@ import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
 import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
 import 'package:super_ia/Core/ProviderModels/UserDetailsModel.dart';
+import 'package:super_ia/UI/shared/PendingSyncBadge.dart';
 import 'package:super_ia/UI/views/EditProfileScreen.dart';
 import 'package:super_ia/UI/views/EmergencyContactsScreen.dart';
 import 'package:super_ia/UI/views/FavoritePlacesScreen.dart';
@@ -332,7 +333,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
 
-            SizedBox(height: 24),
+            SizedBox(height: 20),
+
+            // ── Encuestas/tareas guardadas sin internet, por sincronizar ──
+            const PendingSyncBadge(alwaysVisible: true),
+
+            SizedBox(height: 4),
 
             // ── Tarjeta de datos ─────────────────────────────────────────
             Padding(

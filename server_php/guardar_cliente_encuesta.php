@@ -63,6 +63,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 
 require_once __DIR__ . '/db_config.php';
 
+// ── Idempotencia offline (client_uuid) ────────────────────────────────
+// El app móvil guarda la encuesta en el celular cuando no hay internet y
+// reintenta el envío automáticamente en cuanto vuelve la conexión
+// (ver lib/Core/Services/SyncService.dart). Si ese reintento llega dos
+// veces (por ejemplo, la primera respuesta se perdió en el camino aunque
+// el servidor sí la procesó), este bloque evita duplicar cliente/tarea:
+// devuelve exactamente la misma respuesta que se generó la primera vez
+// para ese client_uuid, sin volver a ejecutar nada.
+$client_uuid = trim($_POST['client_uuid'] ?? '');
+if ($client_uuid !== '') {
+    try {
+        $conn->query("CREATE TABLE IF NOT EXISTS encuesta_offline_sync (
+            client_uuid VARCHAR(64) NOT NULL PRIMARY KEY,
+            endpoint VARCHAR(120) NOT NULL,
+            response_json LONGTEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stmtDup = $conn->prepare("SELECT response_json FROM encuesta_offline_sync WHERE client_uuid = ? LIMIT 1");
+        if ($stmtDup) {
+            $stmtDup->bind_param('s', $client_uuid);
+            $stmtDup->execute();
+            $rowDup = $stmtDup->get_result()->fetch_assoc();
+            $stmtDup->close();
+            if ($rowDup) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo $rowDup['response_json'];
+                exit;
+            }
+        }
+    } catch (\Throwable $eDup) {
+        // Si la verificación de duplicados falla, continuamos con el
+        // guardado normal: es preferible el riesgo de un duplicado
+        // ocasional a bloquear el guardado de la encuesta.
+        error_log('[IDEMPOTENCIA] Falló chequeo de client_uuid: ' . $eDup->getMessage());
+    }
+
+    // A partir de aquí se captura toda la salida del script para guardarla
+    // asociada a este client_uuid (solo si termina en éxito), sin tener que
+    // tocar cada punto del código donde se llama a respond_json().
+    ob_start();
+    register_shutdown_function(function () use ($conn, $client_uuid) {
+        $out = ob_get_level() > 0 ? ob_get_clean() : '';
+        echo $out;
+        $decoded = json_decode($out, true);
+        if (is_array($decoded) && ($decoded['status'] ?? '') === 'success') {
+            try {
+                $stmtSave = $conn->prepare(
+                    "INSERT IGNORE INTO encuesta_offline_sync (client_uuid, endpoint, response_json) VALUES (?, ?, ?)"
+                );
+                if ($stmtSave) {
+                    $endpointName = basename($_SERVER['SCRIPT_NAME'] ?? 'guardar_cliente_encuesta.php');
+                    $stmtSave->bind_param('sss', $client_uuid, $endpointName, $out);
+                    $stmtSave->execute();
+                    $stmtSave->close();
+                }
+            } catch (\Throwable $eSave) {
+                error_log('[IDEMPOTENCIA] Falló guardar respuesta de client_uuid: ' . $eSave->getMessage());
+            }
+        }
+    });
+}
+
 // ── Migración de ENUMs ────────────────────────────────────────────────────────
 // Corre ANTES de begin_transaction(). PHP 8.1+ activa mysqli_report STRICT por
 // defecto, así que usamos try/catch (@ no suprime excepciones de mysqli).

@@ -394,6 +394,121 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
     }
   }
 
+  // ── Descartar tarea: el cliente/prospecto ya no quiere continuar ──
+  // (ej. el asesor va al domicilio y le dicen que ya no les interesa).
+  // La tarea pasa a estado 'cancelada': desaparece de las listas activas
+  // y nunca cuenta como completada.
+  Future<void> _confirmarYDescartarTarea(String tareaId) async {
+    if (tareaId.isEmpty) return;
+    final motivoCtrl = TextEditingController();
+
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ConstantColors.backgroundCard,
+        title: const Text(
+          '¿Descartar esta tarea?',
+          style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w800),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Se marcará como descartada y ya no aparecerá en tus tareas activas. '
+              'Esta acción no se puede deshacer desde la app.',
+              style: TextStyle(color: ConstantColors.textGrey, fontSize: 13),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: motivoCtrl,
+              maxLines: 2,
+              style: const TextStyle(color: ConstantColors.textWhite),
+              decoration: InputDecoration(
+                hintText: 'Motivo (opcional): ej. "Cliente ya no quiere nada"',
+                hintStyle: TextStyle(color: ConstantColors.textGrey.withOpacity(0.7), fontSize: 12),
+                filled: true,
+                fillColor: Colors.white.withOpacity(0.06),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmado != true) return;
+    await _descartarTarea(tareaId, motivoCtrl.text.trim());
+  }
+
+  Future<void> _descartarTarea(String tareaId, String motivo) async {
+    try {
+      final usuarioId = await AuthPrefs.getUsuarioId();
+      final asesorId = await AuthPrefs.getAsesorId();
+
+      if (usuarioId.isEmpty) {
+        throw Exception('Sesión no encontrada');
+      }
+
+      final url = Uri.parse('${Constants.apiBaseUrl}/descartar_tarea.php');
+      final resp = await http.post(url, body: {
+        'usuario_id': usuarioId,
+        if (asesorId.isNotEmpty) 'asesor_id': asesorId,
+        'tarea_id': tareaId,
+        if (motivo.isNotEmpty) 'motivo': motivo,
+      }).timeout(const Duration(seconds: 20));
+
+      final decoded = json.decode(resp.body);
+      if (decoded is! Map) {
+        throw Exception('Respuesta invalida');
+      }
+
+      final status = decoded['status']?.toString() ?? '';
+      if (status != 'success') {
+        final msg = decoded['message']?.toString() ?? 'No se pudo descartar';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: ConstantColors.warning,
+          ),
+        );
+        return;
+      }
+
+      _buenVisto.remove(tareaId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tarea descartada'), backgroundColor: Colors.redAccent),
+      );
+      await _cargar();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: ConstantColors.warning,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final hoy = DateTime.now().toIso8601String().substring(0, 10);
@@ -942,6 +1057,32 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
                       ),
                     ),
                   ],
+                ),
+              ],
+
+              // ── Descartar: el cliente/prospecto ya no quiere continuar.
+              // Disponible en cualquier tarea que aún no llegó a un estado
+              // final (ni completada ni ya descartada).
+              if (!isDone && !isCancel) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: tareaId.isEmpty
+                        ? null
+                        : () => _confirmarYDescartarTarea(tareaId),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red.shade300,
+                      side: BorderSide(color: Colors.red.shade300.withOpacity(0.6)),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.block_rounded, size: 16),
+                    label: const Text(
+                      'Descartado',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
+                    ),
+                  ),
                 ),
               ],
             ],

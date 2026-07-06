@@ -1,0 +1,203 @@
+// ============================================================
+// OfflineQueueService.dart
+// ------------------------------------------------------------
+// Cola local (SQLite) para las encuestas de "Levantar Empresa" y
+// las tareas agendadas (paso "Acuerdo Logrado") de
+// NuevaEncuestaScreen. Cuando el asesor guarda una encuesta sin
+// conexión a internet, el envío completo (endpoint + body + GPS)
+// se guarda en el celular y queda "pendiente". SyncService se
+// encarga de reintentar el envío automáticamente en cuanto vuelve
+// la conexión, sin que el asesor tenga que hacer nada más.
+// ============================================================
+
+import 'dart:convert';
+import 'dart:math';
+
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
+
+class OfflineQueueService {
+  static Database? _db;
+
+  static Future<Database> get database async {
+    if (_db != null) return _db!;
+    _db = await _initDB();
+    return _db!;
+  }
+
+  // NOTA: 'super_ia_offline.db' es compartida con EmpresaCacheService (tabla
+  // 'empresas_cache'). Todo el esquema (creación y migraciones) vive en un
+  // solo lugar (aquí) para evitar que dos servicios abran el mismo archivo
+  // con versiones distintas, lo que puede romper la apertura de la BD.
+  static const int _dbVersion = 2;
+
+  static Future<Database> _initDB() async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'super_ia_offline.db');
+
+    return await openDatabase(
+      path,
+      version: _dbVersion,
+      onCreate: (db, version) async {
+        await _crearTablaEncuestas(db);
+        await _crearTablaEmpresas(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _crearTablaEmpresas(db);
+        }
+      },
+    );
+  }
+
+  static Future<void> _crearTablaEncuestas(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS encuestas_pendientes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_uuid TEXT UNIQUE NOT NULL,
+        endpoint TEXT NOT NULL,
+        tipo_tarea TEXT,
+        body_json TEXT NOT NULL,
+        latitud REAL,
+        longitud REAL,
+        estado TEXT NOT NULL DEFAULT 'pendiente',
+        intentos INTEGER NOT NULL DEFAULT 0,
+        ultimo_error TEXT,
+        creado_at TEXT NOT NULL,
+        sincronizado_at TEXT
+      )
+    ''');
+  }
+
+  static Future<void> _crearTablaEmpresas(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS empresas_cache (
+        cliente_id TEXT PRIMARY KEY,
+        nombre TEXT,
+        cedula TEXT,
+        nombre_empresa TEXT,
+        ciudad TEXT,
+        data_json TEXT NOT NULL,
+        actualizado_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// Genera un UUID v4 sin depender de paquetes externos.
+  static String generateUuid() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0F) | 0x40;
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-'
+        '${hex.substring(16, 20)}-${hex.substring(20, 32)}';
+  }
+
+  /// Guarda una encuesta/tarea pendiente de subir. [body] debe incluir ya
+  /// la clave 'client_uuid' (para que el backend pueda deduplicar cuando
+  /// se reintente el envío).
+  static Future<int> saveEncuesta({
+    required String clientUuid,
+    required String endpoint,
+    required Map<String, String> body,
+    String? tipoTarea,
+    double? latitud,
+    double? longitud,
+  }) async {
+    final db = await database;
+    return await db.insert(
+      'encuestas_pendientes',
+      {
+        'client_uuid': clientUuid,
+        'endpoint': endpoint,
+        'tipo_tarea': tipoTarea ?? '',
+        'body_json': json.encode(body),
+        'latitud': latitud,
+        'longitud': longitud,
+        'estado': 'pendiente',
+        'intentos': 0,
+        'creado_at': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getPendientes() async {
+    final db = await database;
+    final rows = await db.query(
+      'encuestas_pendientes',
+      where: "estado = 'pendiente'",
+      orderBy: 'creado_at ASC',
+    );
+    return rows.map(_withDecodedBody).toList();
+  }
+
+  static Future<int> getPendingCount() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      "SELECT COUNT(*) as cnt FROM encuestas_pendientes WHERE estado = 'pendiente'",
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  static Future<void> markSynced(String clientUuid) async {
+    final db = await database;
+    await db.update(
+      'encuestas_pendientes',
+      {
+        'estado': 'sincronizado',
+        'sincronizado_at': DateTime.now().toIso8601String(),
+      },
+      where: 'client_uuid = ?',
+      whereArgs: [clientUuid],
+    );
+  }
+
+  static Future<void> incrementIntentos(String clientUuid, {String? error}) async {
+    final db = await database;
+    await db.rawUpdate(
+      'UPDATE encuestas_pendientes SET intentos = intentos + 1, ultimo_error = ? WHERE client_uuid = ?',
+      [error ?? '', clientUuid],
+    );
+  }
+
+  static Future<void> markError(String clientUuid, String mensaje) async {
+    final db = await database;
+    await db.update(
+      'encuestas_pendientes',
+      {'estado': 'error', 'ultimo_error': mensaje},
+      where: 'client_uuid = ?',
+      whereArgs: [clientUuid],
+    );
+  }
+
+  static Future<List<Map<String, dynamic>>> getAll() async {
+    final db = await database;
+    final rows = await db.query('encuestas_pendientes', orderBy: 'creado_at DESC');
+    return rows.map(_withDecodedBody).toList();
+  }
+
+  static Future<void> deleteById(int id) async {
+    final db = await database;
+    await db.delete('encuestas_pendientes', where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<void> clearSynced() async {
+    final db = await database;
+    await db.delete('encuestas_pendientes', where: "estado = 'sincronizado'");
+  }
+
+  static Map<String, dynamic> _withDecodedBody(Map<String, dynamic> row) {
+    final copy = Map<String, dynamic>.from(row);
+    try {
+      copy['body'] = Map<String, String>.from(
+        (json.decode(copy['body_json'] as String) as Map)
+            .map((k, v) => MapEntry(k.toString(), v?.toString() ?? '')),
+      );
+    } catch (_) {
+      copy['body'] = <String, String>{};
+    }
+    return copy;
+  }
+}

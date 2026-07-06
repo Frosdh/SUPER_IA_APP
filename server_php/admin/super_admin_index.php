@@ -132,6 +132,9 @@ $currentPage = 'super_admin_dashboard';
         <a href="alertas.php" class="sidebar-link">
             <i class="fas fa-bell"></i> Alertas
         </a>
+        <a href="tareas_descartadas.php" class="sidebar-link">
+            <i class="fas fa-ban"></i> Tareas Descartadas
+        </a>
     </div>
 
     <div class="sidebar-section">

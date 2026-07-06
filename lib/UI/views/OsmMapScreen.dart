@@ -22,6 +22,7 @@ import 'package:super_ia/UI/views/AgendaRecuperacionScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 import 'package:super_ia/UI/views/LevantarEmpresaScreen.dart';
 import 'package:super_ia/UI/views/PendientesTareasScreen.dart';
+import 'package:super_ia/UI/shared/PendingSyncBadge.dart';
 import 'package:super_ia/UI/views/WelcomeScreen.dart';
 import 'package:super_ia/Core/Services/BackgroundLocationService.dart';
 import 'package:super_ia/Core/Services/DiscountCodeService.dart';
@@ -2894,6 +2895,15 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
+                    // Encuestas/tareas guardadas sin internet, pendientes de subir.
+                    // alwaysVisible: true para que siempre se vea el estado
+                    // ("Todo sincronizado" en verde o "X sin subir" en amarillo),
+                    // en vez de desaparecer y generar dudas de si existe o no.
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: const PendingSyncBadge(alwaysVisible: true),
+                    ),
+
                     // Metas por cumplir
                     GestureDetector(
                       onTap: () => Navigator.push(

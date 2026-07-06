@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/OfflineQueueService.dart';
+import 'package:super_ia/Core/Services/SyncService.dart';
 import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -118,6 +120,12 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // GPS
   double? _latInicio, _lngInicio;
   double? _latFin, _lngFin;
+
+  // Identificador único generado en el celular para esta encuesta/tarea.
+  // Viaja al servidor como 'client_uuid' para que, si se guarda sin
+  // conexión y se reintenta el envío más tarde (ver SyncService), el
+  // backend pueda reconocer que ya se procesó y no la duplique.
+  String? _clientUuid;
 
   // ── Paso 1: Datos del prospecto ──────────────────────────────
   final _nombreCtrl = TextEditingController();
@@ -1318,7 +1326,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         resultado = {'status': 'error', 'message': 'Respuesta inválida del servidor'};
       }
     } catch (e) {
-      resultado = {'status': 'error', 'message': e.toString()};
+      // Sin internet: no bloqueamos al asesor. Se sigue como si la cédula
+      // fuera nueva (mismo camino que 'not_found'); si el prospecto ya
+      // existía en el servidor, se detecta y se fusiona ahí cuando la
+      // encuesta se sincronice (ver client_uuid en guardar_cliente_encuesta.php).
+      resultado = _esErrorDeConexion(e)
+          ? {'status': 'offline'}
+          : {'status': 'error', 'message': e.toString()};
     }
 
     if (loaderCtx != null) {
@@ -1339,6 +1353,27 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           backgroundColor: ConstantColors.error,
         ),
       );
+      return;
+    }
+
+    if (status == 'offline') {
+      _cedulaCtrl.text = cedulaIngresada;
+      _esProspectoNuevo = true;
+      _origenProspecto = null;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            '📵 Sin internet: no se pudo verificar la cédula. Continúa como '
+            'prospecto nuevo; se revisará al sincronizar.',
+          ),
+          backgroundColor: ConstantColors.warning,
+          duration: const Duration(seconds: 5),
+        ),
+      );
+      if (!mounted) return;
+      final route3 = ModalRoute.of(context);
+      if (route3 == null || !route3.isCurrent) return;
+      setState(() => _paso = _Paso.preguntasIniciales);
       return;
     }
 
@@ -1433,6 +1468,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   Future<void> _guardarEncuesta({bool fueEncuestado = true}) async {
     if (_guardando) return;
     setState(() => _guardando = true);
+
+    // Se genera una sola vez por encuesta/tarea: si el primer intento falla
+    // por falta de internet y el usuario reintenta, se reutiliza el mismo
+    // client_uuid para no crear dos registros pendientes distintos.
+    _clientUuid ??= OfflineQueueService.generateUuid();
 
     await _capturarGPSFinal();
 
@@ -1639,6 +1679,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'longitud_inicio': (_lngInicio ?? 0).toString(),
       'latitud_fin': (_latFin ?? 0).toString(),
       'longitud_fin': (_lngFin ?? 0).toString(),
+      // Identificador de idempotencia para reintentos offline (ver SyncService)
+      'client_uuid': _clientUuid ?? '',
     };
 
     if (fueEncuestado) {
@@ -1796,10 +1838,11 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'valor_comercial':_actHogValorCtrl[i].text.trim(),
     }));
 
+    final endpoint = widget.modoEdicion
+        ? 'actualizar_encuesta_completa.php'
+        : 'guardar_cliente_encuesta.php';
+
     try {
-      final endpoint = widget.modoEdicion
-          ? 'actualizar_encuesta_completa.php'
-          : 'guardar_cliente_encuesta.php';
       final url = Uri.parse('${Constants.apiBaseUrl}/$endpoint');
       debugPrint(
         '>>> [ENC] POST $url usuario_id=$usuarioId asesor_id=${asesorId.isNotEmpty ? asesorId : '-'} fue_encuestado=${fueEncuestado ? 1 : 0} edicion=${widget.modoEdicion}',
@@ -1945,10 +1988,114 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      _mostrarError('No se pudo guardar en el servidor. ($e)');
+      if (_esErrorDeConexion(e)) {
+        await _guardarOfflineYSalir(endpoint: endpoint, body: body);
+      } else {
+        _mostrarError('No se pudo guardar en el servidor. ($e)');
+      }
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
+  }
+
+  /// Reconoce errores típicos de "no hay internet / servidor inalcanzable"
+  /// (a diferencia de un error de negocio que el servidor sí devuelve).
+  /// Se usa para decidir si la encuesta se guarda offline o si se muestra
+  /// un error normal al usuario.
+  bool _esErrorDeConexion(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('socketexception') ||
+        s.contains('failed host lookup') ||
+        s.contains('clientexception') ||
+        s.contains('connection refused') ||
+        s.contains('connection reset') ||
+        s.contains('no address associated') ||
+        s.contains('timeoutexception') ||
+        s.contains('timed out') ||
+        s.contains('network is unreachable') ||
+        s.contains('handshakeexception');
+  }
+
+  /// Guarda la encuesta/tarea completa en el celular (SQLite, vía
+  /// OfflineQueueService) cuando no hay internet, y avisa al asesor que se
+  /// subirá sola apenas vuelva la conexión (SyncService la reintenta
+  /// automáticamente). No se puede continuar con los diálogos que dependen
+  /// de datos generados por el servidor (tarea_id, cliente_id, aprobar
+  /// crédito, etc.), así que se cierra esta pantalla.
+  Future<void> _guardarOfflineYSalir({
+    required String endpoint,
+    required Map<String, String> body,
+  }) async {
+    try {
+      await OfflineQueueService.saveEncuesta(
+        clientUuid: _clientUuid!,
+        endpoint: endpoint,
+        body: body,
+        tipoTarea: widget.tipoTarea,
+        latitud: _latFin ?? _latInicio,
+        longitud: _lngFin ?? _lngInicio,
+      );
+      // Refresca de inmediato el contador que ven PendingSyncBadge en la
+      // pantalla principal y en el perfil, sin esperar al próximo ciclo.
+      await SyncService.notifyPendingCountNow();
+    } catch (e) {
+      debugPrint('⚠️ No se pudo guardar la encuesta sin conexión: $e');
+      if (mounted) {
+        _mostrarError(
+          'Sin conexión y no se pudo guardar en el celular. Verifica el '
+          'almacenamiento disponible e inténtalo de nuevo.',
+        );
+      }
+      return;
+    }
+
+    if (!mounted) return;
+    final pendientes = await OfflineQueueService.getPendingCount();
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ConstantColors.backgroundCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.cloud_off_rounded, color: ConstantColors.warning),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Guardado sin conexión',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'No hay internet en este momento. La encuesta/tarea quedó guardada '
+          'en el celular junto con la ubicación GPS del lugar.\n\n'
+          'Se subirá sola al servidor apenas vuelva la conexión '
+          '($pendientes pendiente${pendientes == 1 ? '' : 's'} por sincronizar).',
+          style: TextStyle(color: ConstantColors.textGrey, fontSize: 13.5, height: 1.4),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: ConstantColors.primaryViolet,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+    // Sin conexión no se puede continuar con los diálogos posteriores
+    // (aprobar crédito, mostrar citas agendadas, etc.) porque dependen de
+    // IDs que genera el servidor. Se regresa a la pantalla anterior.
+    Navigator.of(context).pop();
   }
 
   /// Red de seguridad para finalizar la tarea desde el cliente cuando el

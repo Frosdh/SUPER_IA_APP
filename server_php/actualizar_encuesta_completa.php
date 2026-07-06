@@ -86,6 +86,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(200); exit; }
 require_once __DIR__ . '/db_config.php';
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
+// ── Idempotencia offline (client_uuid) ────────────────────────────────
+// Igual que en guardar_cliente_encuesta.php: si el app reintenta el mismo
+// envío (guardado localmente sin internet y sincronizado después), se
+// devuelve la respuesta ya generada para ese client_uuid en vez de volver
+// a modificar la tarea/encuesta.
+$client_uuid = trim($_POST['client_uuid'] ?? '');
+if ($client_uuid !== '') {
+    try {
+        $conn->query("CREATE TABLE IF NOT EXISTS encuesta_offline_sync (
+            client_uuid VARCHAR(64) NOT NULL PRIMARY KEY,
+            endpoint VARCHAR(120) NOT NULL,
+            response_json LONGTEXT NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+        $stmtDup = $conn->prepare("SELECT response_json FROM encuesta_offline_sync WHERE client_uuid = ? LIMIT 1");
+        if ($stmtDup) {
+            $stmtDup->bind_param('s', $client_uuid);
+            $stmtDup->execute();
+            $rowDup = $stmtDup->get_result()->fetch_assoc();
+            $stmtDup->close();
+            if ($rowDup) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo $rowDup['response_json'];
+                exit;
+            }
+        }
+    } catch (\Throwable $eDup) {
+        error_log('[IDEMPOTENCIA] Falló chequeo de client_uuid: ' . $eDup->getMessage());
+    }
+
+    ob_start();
+    register_shutdown_function(function () use ($conn, $client_uuid) {
+        $out = ob_get_level() > 0 ? ob_get_clean() : '';
+        echo $out;
+        $decoded = json_decode($out, true);
+        if (is_array($decoded) && ($decoded['status'] ?? '') === 'success') {
+            try {
+                $stmtSave = $conn->prepare(
+                    "INSERT IGNORE INTO encuesta_offline_sync (client_uuid, endpoint, response_json) VALUES (?, ?, ?)"
+                );
+                if ($stmtSave) {
+                    $endpointName = basename($_SERVER['SCRIPT_NAME'] ?? 'actualizar_encuesta_completa.php');
+                    $stmtSave->bind_param('sss', $client_uuid, $endpointName, $out);
+                    $stmtSave->execute();
+                    $stmtSave->close();
+                }
+            } catch (\Throwable $eSave) {
+                error_log('[IDEMPOTENCIA] Falló guardar respuesta de client_uuid: ' . $eSave->getMessage());
+            }
+        }
+    });
+}
+
 // NOTA: para migrar los ENUMs de acuerdo en producción,
 // corre UNA sola vez: http://tu-servidor/SUPER_IA/server_php/fix_acuerdo_enum.php
 
