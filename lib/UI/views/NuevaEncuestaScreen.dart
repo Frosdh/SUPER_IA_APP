@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/CedulaIndexService.dart';
+import 'package:super_ia/Core/Services/ClienteCacheService.dart';
 import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
 import 'package:super_ia/Core/Services/SyncService.dart';
@@ -1392,19 +1394,91 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     }
 
     if (status == 'offline') {
-      _cedulaCtrl.text = cedulaIngresada;
-      _esProspectoNuevo = true;
-      _origenProspecto = null;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            '📵 Sin internet: no se pudo verificar la cédula. Continúa como '
-            'prospecto nuevo; se revisará al sincronizar.',
+      // Sin internet no se puede consultar al servidor, pero antes de
+      // rendirnos y asumir "prospecto nuevo" se revisa la copia local
+      // (ver ClienteCacheService: cartera del asesor, sincronizada la
+      // última vez que hubo conexión). Así el asesor puede enterarse en
+      // el momento si la cédula ya es cliente, si ya tiene empresa, etc.,
+      // aunque esté en una zona sin señal.
+      final cacheHit = await ClienteCacheService.searchByCedula(cedulaIngresada);
+
+      if (cacheHit != null) {
+        final data = Map<String, dynamic>.from(cacheHit['data'] as Map);
+        final tipo = (cacheHit['tipo'] ?? 'prospecto').toString();
+        final nombre = (data['nombre'] ?? '').toString();
+
+        _aplicarDatosProspectoEncontrado(data);
+        _esProspectoNuevo = false;
+        _origenProspecto = null;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '📵 Sin internet: datos cargados desde la copia guardada en el '
+              'celular. ${tipo == 'cliente' ? 'Cliente' : 'Prospecto'} existente: $nombre.',
+            ),
+            backgroundColor: tipo == 'cliente' ? Colors.green.shade700 : ConstantColors.primaryBlue,
+            duration: const Duration(seconds: 5),
           ),
-          backgroundColor: ConstantColors.warning,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+        );
+      } else {
+        // No está en la cartera propia. Antes de asumir "prospecto nuevo",
+        // se revisa el índice liviano de TODA la empresa (ver
+        // CedulaIndexService): cubre cédulas de otros asesores que
+        // ClienteCacheService no tiene, aunque solo alcanza para avisar
+        // que ya existe (no trae el detalle completo para prellenar).
+        final indexHit = await CedulaIndexService.searchByCedula(cedulaIngresada);
+
+        if (indexHit != null) {
+          final tipo = (indexHit['tipo'] ?? 'prospecto').toString();
+          final nombre = (indexHit['nombre'] ?? '').toString();
+          final esOtroAsesor = (indexHit['asesor_id'] ?? '').toString().isNotEmpty;
+
+          // Solo se conoce nombre/cédula (el índice liviano no trae el
+          // detalle completo); se reusa _aplicarDatosProspectoEncontrado
+          // para prellenar al menos eso con la misma lógica de siempre
+          // (separación nombre/apellidos incluida).
+          _aplicarDatosProspectoEncontrado({'nombre': nombre, 'cedula': cedulaIngresada});
+          _esProspectoNuevo = false;
+          _origenProspecto = null;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '📵 Sin internet: esta cédula ya existe en el sistema '
+                '(${tipo == 'cliente' ? 'CLIENTE' : 'prospecto'}${nombre.isNotEmpty ? ': $nombre' : ''})'
+                '${esOtroAsesor ? ', registrada por otro asesor' : ''}. '
+                'No se pudo cargar el detalle completo sin conexión: '
+                'complétalo con cuidado y revísalo al sincronizar para no duplicar.',
+              ),
+              backgroundColor: tipo == 'cliente' ? Colors.green.shade700 : ConstantColors.warning,
+              duration: const Duration(seconds: 7),
+            ),
+          );
+        } else {
+          // Tampoco está en el índice general: puede ser una cédula
+          // realmente nueva, o existir en el servidor pero no haberse
+          // sincronizado todavía a este celular (ambas cachés son
+          // incrementales). En cualquier caso se continúa como prospecto
+          // nuevo; si en realidad ya existía, se resuelve solo al
+          // sincronizar gracias a la deduplicación por cédula en
+          // guardar_cliente_encuesta.php.
+          _cedulaCtrl.text = cedulaIngresada;
+          _esProspectoNuevo = true;
+          _origenProspecto = null;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                '📵 Sin internet: no se pudo verificar la cédula. Continúa como '
+                'prospecto nuevo; se revisará al sincronizar.',
+              ),
+              backgroundColor: ConstantColors.warning,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+
       if (!mounted) return;
       final route3 = ModalRoute.of(context);
       if (route3 == null || !route3.isCurrent) return;

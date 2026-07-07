@@ -160,7 +160,7 @@ function venc_regimen_label(?string $r): string {
 ?>
 <!DOCTYPE html>
 <html lang="es">
-<head>
+<head> 
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detalle de Encuesta — Super_IA</title>

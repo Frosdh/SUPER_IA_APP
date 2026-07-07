@@ -18,6 +18,8 @@ import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Services/CedulaIndexService.dart';
+import 'package:super_ia/Core/Services/ClienteCacheService.dart';
 import 'package:super_ia/Core/Services/EmpresaCacheService.dart';
 import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
@@ -55,6 +57,8 @@ class SyncService {
         syncPending();
         _refreshEmpresaCacheSilently();
         _refreshInstitucionesCacheSilently();
+        _refreshClienteCacheSilently();
+        _refreshCedulaIndexSilently();
       }
     });
 
@@ -73,6 +77,8 @@ class SyncService {
     syncPending();
     _refreshEmpresaCacheSilently();
     _refreshInstitucionesCacheSilently();
+    _refreshClienteCacheSilently();
+    _refreshCedulaIndexSilently();
   }
 
   /// Aprovecha que acaba de confirmarse conexión para refrescar en segundo
@@ -91,6 +97,23 @@ class SyncService {
   /// antes de que el asesor la necesite sin conexión.
   static void _refreshInstitucionesCacheSilently() {
     InstitucionesCacheService.refreshCache().catchError((_) => null);
+  }
+
+  /// Igual que las dos anteriores, pero para la cartera de
+  /// clientes/prospectos del asesor (ver ClienteCacheService), que
+  /// NuevaEncuestaScreen usa para verificar una cédula (¿ya existe? ¿es
+  /// cliente? ¿tiene empresa?) cuando no hay internet. Es incremental: en
+  /// cada llamada solo trae lo que cambió desde el último refresco.
+  static void _refreshClienteCacheSilently() {
+    ClienteCacheService.refreshCache().catchError((_) => -1);
+  }
+
+  /// Refresca el índice liviano de TODA la empresa (ver CedulaIndexService),
+  /// que complementa a ClienteCacheService: esa solo cubre la cartera
+  /// propia del asesor, este índice permite avisar "ya existe" aunque la
+  /// cédula pertenezca a otro asesor.
+  static void _refreshCedulaIndexSilently() {
+    CedulaIndexService.refreshCache().catchError((_) => -1);
   }
 
   static void stopAutoSync() {

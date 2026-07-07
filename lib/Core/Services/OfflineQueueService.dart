@@ -26,11 +26,13 @@ class OfflineQueueService {
   }
 
   // NOTA: 'super_ia_offline.db' es compartida con EmpresaCacheService (tabla
-  // 'empresas_cache') e InstitucionesCacheService (tabla
-  // 'instituciones_cache'). Todo el esquema (creación y migraciones) vive en
-  // un solo lugar (aquí) para evitar que varios servicios abran el mismo
-  // archivo con versiones distintas, lo que puede romper la apertura de la BD.
-  static const int _dbVersion = 3;
+  // 'empresas_cache'), InstitucionesCacheService (tabla
+  // 'instituciones_cache'), ClienteCacheService (tabla 'clientes_cache') y
+  // CedulaIndexService (tabla 'cedulas_index'). Todo el esquema (creación y
+  // migraciones) vive en un solo lugar (aquí) para evitar que varios
+  // servicios abran el mismo archivo con versiones distintas, lo que puede
+  // romper la apertura de la BD.
+  static const int _dbVersion = 5;
 
   static Future<Database> _initDB() async {
     final dbPath = await getDatabasesPath();
@@ -43,6 +45,8 @@ class OfflineQueueService {
         await _crearTablaEncuestas(db);
         await _crearTablaEmpresas(db);
         await _crearTablaInstituciones(db);
+        await _crearTablaClientes(db);
+        await _crearTablaCedulasIndex(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -50,6 +54,12 @@ class OfflineQueueService {
         }
         if (oldVersion < 3) {
           await _crearTablaInstituciones(db);
+        }
+        if (oldVersion < 4) {
+          await _crearTablaClientes(db);
+        }
+        if (oldVersion < 5) {
+          await _crearTablaCedulasIndex(db);
         }
       },
     );
@@ -92,6 +102,61 @@ class OfflineQueueService {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS instituciones_cache (
         nombre TEXT PRIMARY KEY,
+        actualizado_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  // NOTA: tabla usada por ClienteCacheService para poder verificar una
+  // cédula (¿ya existe como prospecto/cliente? ¿tiene empresa?) sin
+  // internet, en NuevaEncuestaScreen. Solo guarda la cartera del asesor
+  // logueado (ver sync_clientes_cache.php), no toda la base, para que la
+  // tabla se mantenga chica y las búsquedas rápidas en el celular.
+  // 'cedula' tiene índice porque la búsqueda offline es por cédula exacta
+  // (no LIKE), a diferencia de 'empresas_cache' que busca por texto parcial.
+  static Future<void> _crearTablaClientes(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS clientes_cache (
+        cliente_id TEXT PRIMARY KEY,
+        cedula TEXT NOT NULL,
+        nombre TEXT,
+        estado TEXT,
+        es_cliente INTEGER NOT NULL DEFAULT 0,
+        tiene_empresa INTEGER NOT NULL DEFAULT 0,
+        nombre_empresa TEXT,
+        data_json TEXT NOT NULL,
+        updated_at TEXT,
+        actualizado_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_clientes_cache_cedula ON clientes_cache(cedula)',
+    );
+  }
+
+  // NOTA: a diferencia de 'clientes_cache' (que solo guarda la cartera del
+  // asesor logueado, con TODO el detalle), esta tabla cubre TODA la
+  // empresa (todos los asesores) pero solo con los campos mínimos para
+  // responder "¿esta cédula ya existe? ¿es cliente? ¿tiene empresa?".
+  // Existe porque, sin esto, un asesor que busca sin internet una cédula
+  // que no es "suya" (la levantó otro asesor, o ya es cliente de la
+  // empresa por otra vía) no tendría cómo saberlo: 'clientes_cache' solo
+  // conoce su propia cartera. Al no guardar el detalle pesado (RUC,
+  // régimen tributario, dirección, etc.) por fila, cubrir a toda la
+  // empresa sigue siendo liviano. cedula ya es PRIMARY KEY, así que SQLite
+  // ya la indexa automáticamente sin necesidad de un CREATE INDEX aparte.
+  static Future<void> _crearTablaCedulasIndex(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS cedulas_index (
+        cedula TEXT PRIMARY KEY,
+        cliente_id TEXT,
+        nombre TEXT,
+        estado TEXT,
+        es_cliente INTEGER NOT NULL DEFAULT 0,
+        tiene_empresa INTEGER NOT NULL DEFAULT 0,
+        nombre_empresa TEXT,
+        asesor_id TEXT,
+        updated_at TEXT,
         actualizado_at TEXT NOT NULL
       )
     ''');
