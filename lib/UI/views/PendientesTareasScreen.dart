@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
+import 'package:super_ia/Core/Services/TareasFijadasCacheService.dart';
 import 'package:super_ia/UI/views/LevantarEmpresaScreen.dart';
 import 'package:super_ia/UI/views/NuevaEncuestaScreen.dart';
 
@@ -20,6 +22,12 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
   String? _error;
   List<Map<String, dynamic>> _tareas = const [];
   final Map<String, bool> _buenVisto = {};
+
+  /// true cuando lo que se está mostrando NO vino del servidor (sin
+  /// internet) sino de la copia local de tareas ya fijadas (ver
+  /// TareasFijadasCacheService). Se usa para mostrar el aviso
+  /// correspondiente en vez del banner de error genérico.
+  bool _mostrandoCacheOffline = false;
 
   @override
   void initState() {
@@ -49,6 +57,20 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
       case 'seguimiento':           return 'Seguimiento';
       default:                      return tipo.replaceAll('_', ' ');
     }
+  }
+
+  /// Del total de tareas, el subconjunto que el asesor ya "fijó" para hoy
+  /// (mismo filtro que usa buildLista para la sección "Tareas fijadas de
+  /// hoy"). Es lo único que se guarda en la copia local: ver
+  /// TareasFijadasCacheService.
+  List<Map<String, dynamic>> _calcularFijadasHoy(List<Map<String, dynamic>> tareas) {
+    final hoy = DateTime.now().toIso8601String().substring(0, 10);
+    return tareas.where((t) {
+      final estado = t['estado']?.toString() ?? '';
+      final selDia = t['seleccionada_dia']?.toString() ?? '';
+      final fijada = (t['seleccion_fijada']?.toString() ?? '0') == '1';
+      return estado == 'en_proceso' && (selDia.isEmpty || selDia == hoy) && fijada;
+    }).toList();
   }
 
   Future<void> _cargar() async {
@@ -88,17 +110,44 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
         _tareas = [];
       }
 
+      // Se guarda una copia local de las tareas ya fijadas de hoy, para
+      // poder mostrarlas (y usar su ruta) si más tarde el asesor se queda
+      // sin internet en la calle. No bloquea la UI ni el resto de la
+      // carga si falla por algún motivo.
+      unawaited(TareasFijadasCacheService.saveFijadas(_calcularFijadasHoy(_tareas)));
+
       if (!mounted) return;
       setState(() {
         _loading = false;
         _error = null;
+        _mostrandoCacheOffline = false;
       });
     } catch (e) {
+      // Sin internet (u otro error): en vez de dejar la pantalla en blanco
+      // con un error, se muestran las tareas que el asesor ya había fijado
+      // para hoy la última vez que tuvo conexión (ver
+      // TareasFijadasCacheService). Así puede seguir viendo cliente,
+      // dirección y usar el botón "Ruta" aunque no haya señal.
+      List<Map<String, dynamic>> cache = [];
+      try {
+        cache = await TareasFijadasCacheService.getFijadas();
+      } catch (_) {}
+
       if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = e.toString();
-      });
+      if (cache.isNotEmpty) {
+        setState(() {
+          _tareas = cache;
+          _loading = false;
+          _error = null;
+          _mostrandoCacheOffline = true;
+        });
+      } else {
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+          _mostrandoCacheOffline = false;
+        });
+      }
     }
   }
 
@@ -1092,6 +1141,34 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
 
       final widgets = <Widget>[];
 
+      if (_mostrandoCacheOffline) {
+        widgets.add(
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: ConstantColors.warning.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: ConstantColors.warning.withOpacity(0.5)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.cloud_off_rounded, size: 18, color: ConstantColors.warning),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Sin internet: mostrando solo las tareas que ya fijaste para hoy '
+                    '(guardadas en el celular). El resto de la agenda se actualizará '
+                    'al recuperar conexión.',
+                    style: TextStyle(color: ConstantColors.warning, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
       if (soloHoy) {
         if (fijadasHoy.isNotEmpty) {
           widgets.add(
@@ -1226,7 +1303,34 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
           return f == null;
         }).toList();
 
+        // Caso especial sin internet: como la copia local solo tiene las
+        // tareas ya fijadas de hoy (ver TareasFijadasCacheService), acá
+        // caerían todas dentro de "tareasHoy" salvo que falte
+        // fecha_programada o esté vencida/futura por algún desfase de
+        // reloj — en cualquier caso, si no cayeron en ningún grupo no hay
+        // que mostrar "No hay tareas para mostrar" (sería engañoso, si
+        // tiene tareas fijadas): se listan igual bajo su propia sección.
         if (poolTareas.isEmpty && propiasTareas.isEmpty) {
+          if (_mostrandoCacheOffline && _tareas.isNotEmpty) {
+            widgets.add(
+              Padding(
+                padding: const EdgeInsets.only(top: 6, bottom: 10),
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_rounded, size: 16, color: ConstantColors.warning),
+                    const SizedBox(width: 6),
+                    Text('Tareas fijadas de hoy (sin conexión)',
+                        style: TextStyle(color: ConstantColors.warning, fontWeight: FontWeight.w800, fontSize: 14)),
+                  ],
+                ),
+              ),
+            );
+            for (final t in _tareas) {
+              widgets.add(card(t));
+              widgets.add(const SizedBox(height: 10));
+            }
+            return buildBaseList(children: widgets);
+          }
           return buildEmpty('No hay tareas para mostrar.');
         }
 

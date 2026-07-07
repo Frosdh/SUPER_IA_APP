@@ -27,12 +27,13 @@ class OfflineQueueService {
 
   // NOTA: 'super_ia_offline.db' es compartida con EmpresaCacheService (tabla
   // 'empresas_cache'), InstitucionesCacheService (tabla
-  // 'instituciones_cache'), ClienteCacheService (tabla 'clientes_cache') y
-  // CedulaIndexService (tabla 'cedulas_index'). Todo el esquema (creación y
-  // migraciones) vive en un solo lugar (aquí) para evitar que varios
-  // servicios abran el mismo archivo con versiones distintas, lo que puede
-  // romper la apertura de la BD.
-  static const int _dbVersion = 5;
+  // 'instituciones_cache'), ClienteCacheService (tabla 'clientes_cache'),
+  // CedulaIndexService (tabla 'cedulas_index') y
+  // TareasFijadasCacheService (tabla 'tareas_fijadas_cache'). Todo el
+  // esquema (creación y migraciones) vive en un solo lugar (aquí) para
+  // evitar que varios servicios abran el mismo archivo con versiones
+  // distintas, lo que puede romper la apertura de la BD.
+  static const int _dbVersion = 6;
 
   static Future<Database> _initDB() async {
     final dbPath = await getDatabasesPath();
@@ -47,6 +48,7 @@ class OfflineQueueService {
         await _crearTablaInstituciones(db);
         await _crearTablaClientes(db);
         await _crearTablaCedulasIndex(db);
+        await _crearTablaTareasFijadas(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -60,6 +62,9 @@ class OfflineQueueService {
         }
         if (oldVersion < 5) {
           await _crearTablaCedulasIndex(db);
+        }
+        if (oldVersion < 6) {
+          await _crearTablaTareasFijadas(db);
         }
       },
     );
@@ -157,6 +162,27 @@ class OfflineQueueService {
         nombre_empresa TEXT,
         asesor_id TEXT,
         updated_at TEXT,
+        actualizado_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  // NOTA: tabla usada por TareasFijadasCacheService. Cuando el asesor abre
+  // "Lista tareas" con internet, se guarda aquí una copia de las tareas que
+  // YA fijó para hoy (seleccion_fijada=1, estado en_proceso) — a propósito
+  // NO se guardan todas las tareas pendientes/futuras, solo las fijadas:
+  // esas son las que el asesor ya se comprometió a hacer hoy y para las que
+  // necesita poder trabajar aunque se quede sin señal en la calle. Guarda
+  // el registro completo (incluye cliente_latitud/longitud) para que tanto
+  // la lista de "Tareas fijadas de hoy" como el botón "Ruta" y el prellenado
+  // básico al abrir la actividad sigan funcionando sin conexión.
+  static Future<void> _crearTablaTareasFijadas(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS tareas_fijadas_cache (
+        tarea_id TEXT PRIMARY KEY,
+        tipo_tarea TEXT,
+        cliente_nombre TEXT,
+        data_json TEXT NOT NULL,
         actualizado_at TEXT NOT NULL
       )
     ''');

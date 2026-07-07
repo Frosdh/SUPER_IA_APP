@@ -13,6 +13,7 @@ import 'package:super_ia/Core/Services/ClienteCacheService.dart';
 import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
 import 'package:super_ia/Core/Services/SyncService.dart';
+import 'package:super_ia/Core/Services/TareasFijadasCacheService.dart';
 import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -102,6 +103,12 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   // ── Modo edición ─────────────────────────────────────────────
   bool _cargandoEdicion = false;
   String? _errorEdicion;
+
+  /// Aviso (no bloqueante, distinto del error rojo de _errorEdicion) que se
+  /// muestra cuando obtener_encuesta_completa.php falló por falta de
+  /// internet pero se pudo recuperar al menos lo básico desde la copia
+  /// local de tareas fijadas (ver TareasFijadasCacheService).
+  String? _avisoEdicionOffline;
 
   /// true solo cuando la tarea YA estaba `completada` antes de abrir esta
   /// pantalla (edición real vía "Modificar datos"). false cuando la tarea
@@ -540,6 +547,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     setState(() {
       _cargandoEdicion = true;
       _errorEdicion = null;
+      _avisoEdicionOffline = null;
     });
 
     try {
@@ -570,11 +578,42 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         _errorEdicion = null;
       });
     } catch (e) {
+      // Sin internet (u otro error): antes de rendirnos y dejar el
+      // formulario completamente vacío, se revisa si esta tarea es una de
+      // las que el asesor ya fijó para hoy (ver TareasFijadasCacheService,
+      // llenado por PendientesTareasScreen). Si está ahí, se precargan al
+      // menos los datos básicos del cliente (nombre, cédula, teléfono,
+      // dirección, ciudad) — el resto de respuestas de una encuesta previa
+      // (si la había) no se puede recuperar sin conexión.
+      Map<String, dynamic>? cacheada;
+      try {
+        cacheada = await TareasFijadasCacheService.getById(tid);
+      } catch (_) {}
+
       if (!mounted) return;
-      setState(() {
-        _cargandoEdicion = false;
-        _errorEdicion = e.toString().replaceFirst('Exception: ', '');
-      });
+
+      if (cacheada != null) {
+        _aplicarDatosProspectoEncontrado({
+          'nombre': cacheada['cliente_nombre'] ?? '',
+          'cedula': cacheada['cliente_cedula'] ?? '',
+          'telefono': cacheada['cliente_telefono'] ?? '',
+          'direccion': cacheada['cliente_direccion'] ?? '',
+          'ciudad': cacheada['cliente_ciudad'] ?? '',
+        });
+        setState(() {
+          _cargandoEdicion = false;
+          _errorEdicion = null;
+          _avisoEdicionOffline =
+              'Sin internet: se cargaron los datos básicos guardados en el '
+              'celular (nombre, cédula, dirección). El resto de esta encuesta '
+              'no se pudo traer; revísala al recuperar conexión.';
+        });
+      } else {
+        setState(() {
+          _cargandoEdicion = false;
+          _errorEdicion = e.toString().replaceFirst('Exception: ', '');
+        });
+      }
     }
   }
 
@@ -2691,6 +2730,40 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
                           TextButton(
                             onPressed: _cargarEncuestaEnEdicion,
                             child: const Text('Reintentar'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              // Aviso no bloqueante: sí se pudo precargar algo (desde la
+              // copia local de tareas fijadas) aunque no haya internet. Se
+              // distingue del error rojo de arriba porque acá SÍ hay datos
+              // en el formulario, solo que puede que estén incompletos.
+              if (_avisoEdicionOffline != null && !_cargandoEdicion)
+                Positioned(
+                  top: 10,
+                  left: 16,
+                  right: 16,
+                  child: Material(
+                    color: ConstantColors.warning.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(Icons.cloud_off_rounded,
+                              color: ConstantColors.warning, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _avisoEdicionOffline!,
+                              style: TextStyle(
+                                color: ConstantColors.warning,
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ],
                       ),
