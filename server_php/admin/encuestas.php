@@ -175,6 +175,7 @@ if (!empty($asesor_ids_equipo)) {
                        cp.nombre AS cliente_nombre,
                        cp.cedula AS cliente_cedula,
                        cp.ciudad AS cliente_ciudad,
+                       cp.nombre_empresa AS cliente_nombre_empresa,
                        (SELECT COUNT(*) FROM encuesta_comercial ec WHERE ec.tarea_id = t.id) AS tiene_encuesta,
                        (SELECT COUNT(*) FROM encuesta_negocio en2 WHERE en2.tarea_id = t.id) AS tiene_levantamiento
                 FROM tarea t
@@ -235,6 +236,9 @@ if (!empty($asesor_ids_equipo)) {
         .subida-chip.ok{background:#ecfdf5;color:#059669;}
         .subida-chip.pend{background:#fffbeb;color:#d97706;}
         .subida-chip.na{background:#f3f4f6;color:#9ca3af;}
+        .empresa-chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:20px;}
+        .empresa-chip.tiene{background:#eef2ff;color:#4338ca;}
+        .empresa-chip.sin{background:#f3f4f6;color:#9ca3af;font-weight:600;font-style:italic;}
         .enc-cliente-cell .nombre{font-weight:700;color:#0a2748;}
         .enc-cliente-cell .sub{font-size:11.5px;color:#6b7280;}
         .btn-ver-detalle{background:var(--brand-navy,#123a6d);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:.15s;}
@@ -369,6 +373,7 @@ if ($is_admin_gerente) {
                             <thead>
                                 <tr>
                                     <th>Asesor / Cliente</th>
+                                    <th>Empresa</th>
                                     <th>Tipo</th>
                                     <th>Fecha</th>
                                     <th class="text-center">Subida al servidor</th>
@@ -397,6 +402,13 @@ if ($is_admin_gerente) {
                                     <td class="enc-cliente-cell">
                                         <div class="nombre"><?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente asignado') ?></div>
                                         <div class="sub"><?= htmlspecialchars($t['asesor_nombre'] ?: '—') ?><?= $t['cliente_ciudad'] ? ' · ' . htmlspecialchars($t['cliente_ciudad']) : '' ?></div>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($t['cliente_nombre_empresa'])): ?>
+                                            <span class="empresa-chip tiene"><i class="fas fa-building"></i> <?= htmlspecialchars($t['cliente_nombre_empresa']) ?></span>
+                                        <?php else: ?>
+                                            <span class="empresa-chip sin">No tiene empresa</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td><span class="badge-premium <?= $tipoBadgeClass ?>"><?= htmlspecialchars($tipoTxt) ?></span></td>
                                     <td>

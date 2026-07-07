@@ -840,11 +840,35 @@ try {
     // ── 3. Crear o Actualizar tarea ──────────────────────────────
     $GLOBALS['phase'] = 'TAREA';
     $tarea_id_post = strOrNull($_POST['tarea_id'] ?? '');
-    $is_update_task = ($tarea_id_post !== null);
-    
+
+    // IMPORTANTE: 'tarea_id' puede venir de una copia local del celular
+    // (EmpresaCacheService, buscar_cliente_por_empresa.php) que no se
+    // haya refrescado desde hace tiempo. Si esa tarea ya no existe (se
+    // borró, o el id nunca llegó a crearse en el servidor porque el
+    // primer intento fue offline y falló), el UPDATE de abajo haría
+    // "WHERE id = ?" contra una fila inexistente: no lanza error, solo
+    // afecta 0 filas, y el levantamiento se perdería en silencio (la app
+    // igual recibe 'success' y lo marca como sincronizado). Por eso se
+    // verifica que el id realmente exista antes de decidir si es un
+    // UPDATE o un INSERT nuevo.
+    $is_update_task = false;
+    if ($tarea_id_post !== null) {
+        try {
+            $stChk = $conn->prepare('SELECT id FROM tarea WHERE id = ? LIMIT 1');
+            $stChk->bind_param('s', $tarea_id_post);
+            $stChk->execute();
+            $is_update_task = (bool)$stChk->get_result()->fetch_assoc();
+            $stChk->close();
+        } catch (Throwable $eChk) {
+            $is_update_task = false;
+        }
+    }
+
     if ($is_update_task) {
         $tarea_id = $tarea_id_post;
     } else {
+        // No había tarea_id, o el que mandó el celular ya no existe en el
+        // servidor: se crea una tarea nueva en vez de perder el registro.
         $tarea_id = genUUID();
     }
 
@@ -856,23 +880,28 @@ try {
     $hora_prog   = $hora_hoy;
 
     if ($is_update_task) {
-        // Actualizar tarea existente
+        // Actualizar tarea existente. Se actualiza también 'asesor_id':
+        // si el asesor que completa/reenvía el levantamiento ahora es
+        // distinto al que la creó originalmente, debe quedar atribuida a
+        // quien la está terminando, para que aparezca correctamente tanto
+        // en su agenda como en el panel del supervisor correcto.
         $st = $conn->prepare(
-            "UPDATE tarea 
-             SET estado = ?, 
-                 fecha_realizada = ?, 
-                 hora_realizada = ?, 
+            "UPDATE tarea
+             SET estado = ?,
+                 fecha_realizada = ?,
+                 hora_realizada = ?,
                  observaciones = COALESCE(?, observaciones),
                  latitud_inicio = COALESCE(?, latitud_inicio),
                  longitud_inicio = COALESCE(?, longitud_inicio),
                  latitud_fin = COALESCE(?, latitud_fin),
-                 longitud_fin = COALESCE(?, longitud_fin)
+                 longitud_fin = COALESCE(?, longitud_fin),
+                 asesor_id = COALESCE(?, asesor_id)
              WHERE id = ?"
         );
-        $st->bind_param('ssssdddds',
+        $st->bind_param('ssssddddss',
             $est_tarea, $fecha_hoy, $hora_hoy, $obs_tarea,
             $lat_ini, $lng_ini, $lat_fin, $lng_fin,
-            $tarea_id
+            $asesor_id, $tarea_id
         );
         $st->execute();
         $st->close();
