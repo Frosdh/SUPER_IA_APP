@@ -69,8 +69,13 @@ try {
     $offset    = (int)($_GET['offset'] ?? 0);
 
     // ── ¿Existe la tabla SEPS? ────────────────────────────────
-    $tbl_check  = $conn->query("SHOW TABLES LIKE 'seps_cooperativas'");
-    $tiene_seps = $tbl_check && $tbl_check->num_rows > 0;
+    // Se usa SELECT ... LIMIT 1 (con supresión de error) en vez de
+    // SHOW TABLES: en algunos hosts/permisos SHOW TABLES devolvía falso
+    // negativo y dejaba $tiene_seps en false aunque la tabla sí existiera
+    // y tuviera datos (esa es la causa original de que esta API mostrara
+    // solo las cooperativas internas y no las importadas de la SEPS).
+    $tbl_check  = @$conn->query("SELECT 1 FROM seps_cooperativas LIMIT 1");
+    $tiene_seps = $tbl_check !== false;
 
     $cooperativas = [];
 
@@ -145,7 +150,14 @@ try {
     }
 
     // ── 2. Catastro SEPS ──────────────────────────────────────
-    if ($tiene_seps && $fuente !== 'interna') {
+    // NOTA: ya NO se condiciona a $tiene_seps (el SHOW TABLES previo podía
+    // fallar silenciosamente en algunos hosts/permisos y dejaba esta sección
+    // completa sin ejecutarse, aunque la tabla sí existiera y sí tuviera
+    // datos — por eso "Encuestas" [que consulta la tabla directo, sin este
+    // chequeo] sí mostraba las cooperativas importadas y esta API no).
+    // Se intenta siempre y se deja que el propio prepare()/execute() decida.
+    if ($fuente !== 'interna') {
+        $seps_ok = false;
         $where = 'activo = 1';
         $vals  = [];
         $types = '';
@@ -174,27 +186,67 @@ try {
 
         $st = @$conn->prepare($sql);
         if ($st) {
+            $valsFull  = $vals;
+            $typesFull = $types;
             if ($limit_clause !== '') {
-                $vals[]  = $limit;
-                $vals[]  = $offset;
-                $types  .= 'ii';
+                $valsFull[]  = $limit;
+                $valsFull[]  = $offset;
+                $typesFull  .= 'ii';
             }
-            if ($vals) { $st->bind_param($types, ...$vals); }
+            if ($valsFull) { $st->bind_param($typesFull, ...$valsFull); }
             if ($st->execute()) {
                 $res = $st->get_result();
                 while ($r = $res->fetch_assoc()) {
                     $cooperativas[] = [
                         'id'     => 'seps_' . $r['id'],          // siempre String
-                        'nombre' => $r['razon_social'],
+                        'nombre' => $r['razon_social'] ?: 'SIN NOMBRE',
                         'codigo' => $r['ruc'],
                         'ciudad' => $r['ciudad_val'] ?: null,
                         '_fuente'=> 'seps',
                     ];
                 }
+                $seps_ok = true;
+            } else {
+                error_log('[api_cooperativas] execute() falló para seps_cooperativas: ' . $st->error);
             }
             $st->close();
         } else {
             error_log('[api_cooperativas] prepare() falló para seps_cooperativas: ' . $conn->error);
+        }
+
+        // ── Fallback: si la query completa falló (columna ausente, etc.),
+        // reintentar con la misma consulta mínima que usa nueva_encuesta.php
+        // (solo id + razon_social), que es la que sabemos que funciona.
+        if (!$seps_ok) {
+            $whereMin = 'activo = 1';
+            $valsMin  = [];
+            $typesMin = '';
+            if ($q !== '') {
+                $whereMin .= ' AND razon_social LIKE ?';
+                $valsMin   = ["%$q%"];
+                $typesMin  = 's';
+            }
+            $stMin = @$conn->prepare("SELECT id, razon_social FROM seps_cooperativas WHERE $whereMin ORDER BY razon_social ASC LIMIT 500");
+            if ($stMin) {
+                if ($valsMin) { $stMin->bind_param($typesMin, ...$valsMin); }
+                if ($stMin->execute()) {
+                    $resMin = $stMin->get_result();
+                    while ($r = $resMin->fetch_assoc()) {
+                        $cooperativas[] = [
+                            'id'     => 'seps_' . $r['id'],
+                            'nombre' => $r['razon_social'] ?: 'SIN NOMBRE',
+                            'codigo' => '',
+                            'ciudad' => null,
+                            '_fuente'=> 'seps',
+                        ];
+                    }
+                } else {
+                    error_log('[api_cooperativas] fallback mínimo de seps_cooperativas también falló al ejecutar: ' . $stMin->error);
+                }
+                $stMin->close();
+            } else {
+                error_log('[api_cooperativas] fallback mínimo de seps_cooperativas también falló al preparar: ' . $conn->error);
+            }
         }
     }
 

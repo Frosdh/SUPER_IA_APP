@@ -56,7 +56,14 @@ function fi(string $key): string {
     return !empty($formErrors[$key]) ? ' input-error' : '';
 }
 
-// ── Cargar cooperativas desde unidad_bancaria (modo público) ──
+// ── Cargar cooperativas: unidad_bancaria (internas) + seps_cooperativas
+// (catastro SEPS importado). Antes solo se leía unidad_bancaria, por eso
+// las cooperativas/bancos importados no aparecían aquí aunque sí se veían
+// en Encuestas (nueva_encuesta.php sí combina ambas tablas). Los ids de la
+// SEPS se prefijan "seps_" para no chocar con los ids internos; al no tener
+// agencia/supervisor propios, el selector de supervisor simplemente mostrará
+// "No hay supervisores registrados" para esos casos, igual que para
+// cualquier cooperativa interna sin supervisores todavía.
 $cooperativas = [];
 if (!$modo_supervisor) {
     try {
@@ -64,6 +71,21 @@ if (!$modo_supervisor) {
         $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $e) {
         $cooperativas = [];
+    }
+
+    try {
+        $stmtSeps = $pdo->query("
+            SELECT CONCAT('seps_', id) AS id_cooperativa, razon_social AS nombre
+            FROM seps_cooperativas
+            WHERE activo = 1
+            ORDER BY razon_social ASC
+        ");
+        foreach ($stmtSeps->fetchAll(PDO::FETCH_ASSOC) as $sc) {
+            $cooperativas[] = $sc;
+        }
+    } catch (\Throwable $e) {
+        // Tabla SEPS ausente o sin columna esperada: se ignora, quedan
+        // solo las internas (comportamiento anterior como fallback).
     }
 }
 
