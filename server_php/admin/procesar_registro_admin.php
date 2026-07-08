@@ -1,5 +1,6 @@
 <?php
 require_once 'db_admin.php';
+require_once __DIR__ . '/funciones_validacion.php';
 
 // Verificar que sea una solicitud POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -23,15 +24,16 @@ $errores = [];
 if (empty($cooperativa)) {
     $errores[] = "La cooperativa es requerida";
 }
-if (empty($nombres)) {
-    $errores[] = "El nombre es requerido";
-}
-if (empty($apellidos)) {
-    $errores[] = "Los apellidos son requeridos";
-}
-if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    $errores[] = "Email válido requerido";
-}
+
+$rNombres = validarNombre($nombres, 'El nombre');
+if (!$rNombres['ok']) $errores[] = $rNombres['msg'];
+
+$rApellidos = validarNombre($apellidos, 'Los apellidos');
+if (!$rApellidos['ok']) $errores[] = $rApellidos['msg'];
+
+$rEmail = validarEmail($email);
+if (!$rEmail['ok']) $errores[] = $rEmail['msg'];
+
 if (empty($usuario) || strlen($usuario) < 3) {
     $errores[] = "Usuario debe tener al menos 3 caracteres";
 }
@@ -41,9 +43,9 @@ if (empty($password) || strlen($password) < 8) {
 if (empty($region)) {
     $errores[] = "La región es requerida";
 }
-if (empty($telefono)) {
-    $errores[] = "El teléfono es requerido";
-}
+
+$rTelefono = validarTelefono($telefono);
+if (!$rTelefono['ok']) $errores[] = $rTelefono['msg'];
 
 // Validar archivo PDF
 $archivo_credencial = '';

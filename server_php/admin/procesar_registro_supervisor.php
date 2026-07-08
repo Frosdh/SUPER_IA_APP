@@ -25,12 +25,24 @@ $archivo_guardado = null;
 // Validaciones
 if (empty($cooperativa)) $errores[] = 'La cooperativa es requerida';
 if (empty($administrador)) $errores[] = 'El administrador es requerido';
-if (empty($nombres)) $errores[] = 'Los nombres son requeridos';
-if (empty($apellidos)) $errores[] = 'Los apellidos son requeridos';
+
+$rNombres = validarNombre($nombres, 'Los nombres');
+if (!$rNombres['ok']) $errores[] = $rNombres['msg'];
+
+$rApellidos = validarNombre($apellidos, 'Los apellidos');
+if (!$rApellidos['ok']) $errores[] = $rApellidos['msg'];
+
 if (empty($usuario) || strlen($usuario) < 4) $errores[] = 'Usuario debe tener al menos 4 caracteres';
+
 $rCedula = validarCedulaEc($cedula);
 if (!$rCedula['ok']) $errores[] = $rCedula['msg'];
-if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) $errores[] = 'Email inválido';
+
+$rEmail = validarEmail($email);
+if (!$rEmail['ok']) $errores[] = $rEmail['msg'];
+
+$rTelefono = validarTelefono($telefono);
+if (!$rTelefono['ok']) $errores[] = $rTelefono['msg'];
+
 if (empty($password) || strlen($password) < 6) $errores[] = 'Contraseña debe tener al menos 6 caracteres';
 if ($password !== $password_confirm) $errores[] = 'Las contraseñas no coinciden';
 

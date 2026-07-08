@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/UI/views/VehicleRegistrationScreen.dart';
 import 'package:super_ia/Core/Networking/ApiProvider.dart';
+import 'package:super_ia/Core/Utils/EcValidators.dart';
 
 class DriverRegistrationScreen extends StatefulWidget {
   static const String route = '/driver_registration';
@@ -352,9 +353,9 @@ class _DriverRegistrationScreenState
                                   label: 'Nombre completo',
                                   icon: Icons.badge_outlined,
                                   validator: (v) {
-                                    if ((v ?? '').trim().isEmpty) {
-                                      return 'Ingresa tu nombre completo';
-                                    }
+                                    final err = EcValidators.nombre(
+                                        v, 'El nombre completo');
+                                    if (err != null) return err;
                                     if (v!.trim().split(' ').length < 2) {
                                       return 'Ingresa nombre y apellido';
                                     }
@@ -365,23 +366,14 @@ class _DriverRegistrationScreenState
                                 // Teléfono
                                 _buildField(
                                   controller: _telefonoController,
-                                  label: 'Teléfono (10 dígitos)',
+                                  label: 'Teléfono celular (10 dígitos)',
                                   icon: Icons.phone_outlined,
                                   keyboardType: TextInputType.phone,
                                   inputFormatters: [
                                     FilteringTextInputFormatter.digitsOnly,
                                     LengthLimitingTextInputFormatter(10),
                                   ],
-                                  validator: (v) {
-                                    final val = (v ?? '').trim();
-                                    if (val.isEmpty) {
-                                      return 'Ingresa tu teléfono';
-                                    }
-                                    if (val.length != 10) {
-                                      return 'El teléfono debe tener 10 dígitos';
-                                    }
-                                    return null;
-                                  },
+                                  validator: (v) => EcValidators.celular(v),
                                 ),
 
                                 // Cédula
@@ -394,16 +386,7 @@ class _DriverRegistrationScreenState
                                     FilteringTextInputFormatter.digitsOnly,
                                     LengthLimitingTextInputFormatter(10),
                                   ],
-                                  validator: (v) {
-                                    final val = (v ?? '').trim();
-                                    if (val.isEmpty) {
-                                      return 'Ingresa tu cédula';
-                                    }
-                                    if (val.length != 10) {
-                                      return 'La cédula debe tener 10 dígitos';
-                                    }
-                                    return null;
-                                  },
+                                  validator: (v) => EcValidators.cedula(v),
                                 ),
 
                                 // Contraseña

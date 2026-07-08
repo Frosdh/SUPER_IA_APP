@@ -4,6 +4,7 @@ import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
 import 'package:super_ia/Core/ProviderModels/VerificationModel.dart';
 import 'package:super_ia/Core/Services/PushNotificationService.dart';
+import 'package:super_ia/Core/Utils/EcValidators.dart';
 import 'package:super_ia/UI/views/OsmMapScreen.dart';
 import 'package:provider/provider.dart';
 
@@ -328,12 +329,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           label: 'Nombre completo',
                           hintText: 'Como quieres que te llamen',
                           icon: Icons.person_outline,
-                          validator: (value) {
-                            if ((value?.trim() ?? '').isEmpty) {
-                              return 'Ingresa tu nombre';
-                            }
-                            return null;
-                          },
+                          validator: (value) =>
+                              EcValidators.nombre(value, 'El nombre'),
                         ),
                         SizedBox(height: 16),
                         _buildDarkField(
@@ -342,16 +339,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hintText: '09XXXXXXXX',
                           icon: Icons.phone_iphone_outlined,
                           keyboardType: TextInputType.phone,
-                          validator: (value) {
-                            final phone = value?.trim() ?? '';
-                            if (phone.isEmpty) {
-                              return 'Ingresa tu numero';
-                            }
-                            if (phone.length < 10) {
-                              return 'Ingresa un numero valido';
-                            }
-                            return null;
-                          },
+                          validator: (value) => EcValidators.telefono(value),
                         ),
                         SizedBox(height: 16),
                         Container(

@@ -32,8 +32,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    require_once __DIR__ . '/funciones_validacion.php';
+    $rNombre = validarNombre($nombre, 'El nombre');
+    $rEmail  = validarEmail($email);
+    $rUsuario = validarUsuario($usuario);
+
     if (empty($nombre) || empty($usuario) || empty($pass) || empty($email) || $coop_id <= 0 || empty($docBase64)) {
         $msg = "Todos los campos (incluyendo adjuntar la credencial) son estrictamente obligatorios.";
+        $msgType = "danger";
+    } elseif (!$rNombre['ok']) {
+        $msg = $rNombre['msg'];
+        $msgType = "danger";
+    } elseif (!$rEmail['ok']) {
+        $msg = $rEmail['msg'];
+        $msgType = "danger";
+    } elseif (!$rUsuario['ok']) {
+        $msg = $rUsuario['msg'];
         $msgType = "danger";
     } elseif (!$msg) {
         // Verificar si el usuario ya existe
@@ -199,20 +213,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         </div>
     <?php endif; ?>
 
-    <form method="POST" enctype="multipart/form-data">
+    <form method="POST" enctype="multipart/form-data" id="formSecretaria">
         <div class="mb-3">
             <label class="form-label">Nombre Completo</label>
-            <input type="text" name="nombre" class="form-control" placeholder="Ej: Maria Lopez" required>
+            <input type="text" name="nombre" id="nombre" class="form-control" placeholder="Ej: Maria Lopez" required>
+            <div id="nombre-hint" style="font-size:12px;margin-top:4px;font-weight:600;min-height:16px;"></div>
         </div>
 
         <div class="mb-3">
             <label class="form-label">Correo Electrónico</label>
-            <input type="email" name="email" class="form-control" placeholder="maria@cooperativa.com" required>
+            <input type="email" name="email" id="email" class="form-control" placeholder="maria@cooperativa.com" required>
         </div>
 
         <div class="mb-3">
             <label class="form-label">Usuario</label>
-            <input type="text" name="usuario" class="form-control" placeholder="usuario123" required>
+            <input type="text" name="usuario" id="usuario" class="form-control" placeholder="usuario123" required>
         </div>
 
         <div class="mb-3">
@@ -245,6 +260,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ¿Ya tienes cuenta? <strong>Inicia sesión aquí</strong>
     </a>
 </div>
+
+<script src="js/validaciones.js"></script>
+<script>
+// El campo se llama "nombre" (no "nombres"), así que se valida manualmente
+// con la misma función validarNombre() de validaciones.js.
+const nombreInputSecretaria = document.getElementById('nombre');
+nombreInputSecretaria.addEventListener('input', function () {
+    const r = validarNombre(this.value, 'El nombre');
+    setFieldState(this, this.value ? r.ok : null, r.msg);
+});
+
+document.getElementById('formSecretaria').addEventListener('submit', function (e) {
+    const r = validarNombre(nombreInputSecretaria.value, 'El nombre');
+    if (!setFieldState(nombreInputSecretaria, r.ok, r.msg)) {
+        e.preventDefault();
+        nombreInputSecretaria.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        nombreInputSecretaria.focus();
+    }
+});
+</script>
 
 </body>
 </html>

@@ -705,5 +705,12 @@ dropZone?.addEventListener('drop', e => {
     if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; handleFile(fileInput.files[0]); }
 });
 </script>
+<script src="js/validaciones.js"></script>
+<script>
+// ── Validación de formato en tiempo real: nombres/apellidos (solo letras)
+// y teléfono (formato ecuatoriano). La verificación de duplicados
+// (email/usuario/cédula) ya se hace arriba vía AJAX.
+bindValidaciones('form');
+</script>
 </body>
 </html>

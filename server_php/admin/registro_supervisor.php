@@ -500,6 +500,9 @@ require_once '_sidebar_gerente.php';
 
 <script src="js/validaciones.js"></script>
 <script>
+// ── Validación completa en tiempo real (nombres, apellidos, teléfono, email, usuario, password) ──
+bindValidaciones('form');
+
 // ── Validar cédula ecuatoriana en tiempo real ──────────────
 const cedulaInput = document.getElementById('cedula');
 cedulaInput.addEventListener('input', function() {

@@ -387,6 +387,8 @@ try {
                     <i class="fas fa-arrow-left me-2"></i>Volver al Selector de Rol
                 </a>
             </form>
+            <script src="js/validaciones.js"></script>
+            <script>bindValidaciones('form');</script>
 
             <div class="divider">
                 <i class="fas fa-lock me-2"></i>

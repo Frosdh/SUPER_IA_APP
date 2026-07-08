@@ -9,6 +9,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 
 require_once 'db_config.php';
+require_once __DIR__ . '/admin/funciones_validacion.php';
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -28,6 +29,22 @@ try {
     // Validar campos requeridos
     if (!$nombres || !$apellidos || !$email || !$contrasena || !$supervisor_id) {
         throw new Exception("Campos requeridos: nombres, apellidos, email, contrasena, supervisor_id");
+    }
+
+    // Validar nombres / apellidos (solo letras)
+    $rNombres = validarNombre($nombres, 'Los nombres');
+    if (!$rNombres['ok']) throw new Exception($rNombres['msg']);
+    $rApellidos = validarNombre($apellidos, 'Los apellidos');
+    if (!$rApellidos['ok']) throw new Exception($rApellidos['msg']);
+
+    // Validar email
+    $rEmail = validarEmail($email);
+    if (!$rEmail['ok']) throw new Exception($rEmail['msg']);
+
+    // Validar teléfono (formato ecuatoriano) si se proporcionó
+    if (!empty($telefono)) {
+        $rTelefono = validarTelefono($telefono);
+        if (!$rTelefono['ok']) throw new Exception($rTelefono['msg']);
     }
 
     $conexion = new mysqli($db_host, $db_user, $db_password, $db_name);

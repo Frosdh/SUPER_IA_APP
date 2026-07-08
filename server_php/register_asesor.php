@@ -9,6 +9,7 @@ header('Access-Control-Allow-Methods: POST');
 header('Access-Control-Allow-Headers: Content-Type');
 
 require 'db_config.php';
+require_once __DIR__ . '/admin/funciones_validacion.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -43,9 +44,32 @@ try {
     $cooperativa = trim($data['cooperativa']);
     $supervisor = trim($data['supervisor']);
 
+    // Validar nombres / apellidos (solo letras)
+    $rNombres = validarNombre($nombres, 'Los nombres');
+    if (!$rNombres['ok']) {
+        throw new Exception($rNombres['msg']);
+    }
+    $rApellidos = validarNombre($apellidos, 'Los apellidos');
+    if (!$rApellidos['ok']) {
+        throw new Exception($rApellidos['msg']);
+    }
+
     // Validar email
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        throw new Exception('Email inválido');
+    $rEmail = validarEmail($email);
+    if (!$rEmail['ok']) {
+        throw new Exception($rEmail['msg']);
+    }
+
+    // Validar teléfono (formato ecuatoriano)
+    $rTelefono = validarTelefono($telefono);
+    if (!$rTelefono['ok']) {
+        throw new Exception($rTelefono['msg']);
+    }
+
+    // Validar usuario
+    $rUsuario = validarUsuario($usuario);
+    if (!$rUsuario['ok']) {
+        throw new Exception($rUsuario['msg']);
     }
 
     // Validar longitud de contraseña

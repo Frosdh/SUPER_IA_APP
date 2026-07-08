@@ -10,6 +10,7 @@ header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST');
 
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/admin/funciones_validacion.php';
 
 // Solo aceptar POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -27,22 +28,33 @@ $agencia_id     = isset($_POST['agencia_id']) ? intval($_POST['agencia_id']) : n
 $rol            = isset($_POST['rol']) ? trim($_POST['rol']) : 'asesor';
 
 // Validaciones
-if (empty($nombre)) {
+$rNombre = validarNombre($nombre, 'El nombre');
+if (!$rNombre['ok']) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'El nombre es requerido']);
+    echo json_encode(['status' => 'error', 'message' => $rNombre['msg'], 'campo' => 'nombre']);
     exit;
 }
 
-if (empty($email) || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+$rEmail = validarEmail($email);
+if (!$rEmail['ok']) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'Email inválido']);
+    echo json_encode(['status' => 'error', 'message' => $rEmail['msg'], 'campo' => 'email']);
     exit;
 }
 
 if (empty($password) || strlen($password) < 6) {
     http_response_code(400);
-    echo json_encode(['status' => 'error', 'message' => 'La contraseña debe tener al menos 6 caracteres']);
+    echo json_encode(['status' => 'error', 'message' => 'La contraseña debe tener al menos 6 caracteres', 'campo' => 'password']);
     exit;
+}
+
+if (!empty($telefono)) {
+    $rTelefono = validarTelefono($telefono);
+    if (!$rTelefono['ok']) {
+        http_response_code(400);
+        echo json_encode(['status' => 'error', 'message' => $rTelefono['msg'], 'campo' => 'telefono']);
+        exit;
+    }
 }
 
 // Validar rol

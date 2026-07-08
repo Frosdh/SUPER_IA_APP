@@ -9,6 +9,7 @@ import 'package:super_ia/Core/Models/SupervisorModel.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
+import 'package:super_ia/Core/Utils/EcValidators.dart';
 
 class AsesorRegistrationScreen extends StatefulWidget {
   static const String route = '/asesor-registration';
@@ -572,12 +573,8 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                                   label: '👤 Nombres',
                                   hint: 'Ej: Juan Carlos',
                                   controller: _nombresController,
-                                  validator: (value) {
-                                    if (value?.isEmpty ?? true) {
-                                      return 'Requerido';
-                                    }
-                                    return null;
-                                  },
+                                  validator: (value) =>
+                                      EcValidators.nombre(value, 'Los nombres'),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -586,12 +583,8 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                                   label: '👤 Apellidos',
                                   hint: 'Ej: García López',
                                   controller: _apellidosController,
-                                  validator: (value) {
-                                    if (value?.isEmpty ?? true) {
-                                      return 'Requerido';
-                                    }
-                                    return null;
-                                  },
+                                  validator: (value) =>
+                                      EcValidators.nombre(value, 'Los apellidos'),
                                 ),
                               ),
                             ],
@@ -605,15 +598,7 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                             hint: 'tu@email.com',
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
-                            validator: (value) {
-                              if (value?.isEmpty ?? true) {
-                                return 'Email requerido';
-                              }
-                              if (!value!.contains('@')) {
-                                return 'Email inválido';
-                              }
-                              return null;
-                            },
+                            validator: (value) => EcValidators.email(value),
                           ),
 
                           const SizedBox(height: 16),
@@ -621,15 +606,10 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                           // ── Teléfono ───────────────────────────
                           _buildTextField(
                             label: '📱 Teléfono',
-                            hint: 'Ej: +593 99 1234567',
+                            hint: 'Ej: 0987654321',
                             controller: _telefonoController,
                             keyboardType: TextInputType.phone,
-                            validator: (value) {
-                              if (value?.isEmpty ?? true) {
-                                return 'Teléfono requerido';
-                              }
-                              return null;
-                            },
+                            validator: (value) => EcValidators.telefono(value),
                           ),
 
                           const SizedBox(height: 20),

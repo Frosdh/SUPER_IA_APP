@@ -1110,9 +1110,12 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
               ],
 
               // ── Descartar: el cliente/prospecto ya no quiere continuar.
-              // Disponible en cualquier tarea que aún no llegó a un estado
-              // final (ni completada ni ya descartada).
-              if (!isDone && !isCancel) ...[
+              // Solo disponible cuando el asesor ya "hizo suya" la tarea
+              // (la seleccionó y quedó en_proceso). Una tarea todavía
+              // 'pendiente'/'programada' (sin seleccionar por nadie, p. ej.
+              // las del pool o las vencidas sin tomar) no debe poder
+              // descartarse desde acá: nadie la ha tomado todavía.
+              if (isProc) ...[
                 const SizedBox(height: 10),
                 SizedBox(
                   width: double.infinity,

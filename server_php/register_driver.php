@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db_config.php';
+require_once __DIR__ . '/admin/funciones_validacion.php';
 
 // ============================================================
 // register_driver.php - API para registrar conductores
@@ -45,6 +46,36 @@ if (empty($nombre) || empty($telefono) || empty($cedula) || empty($password_plai
     empty($marca) || empty($modelo) || empty($placa) || empty($color) || $anio < 1990) {
     echo json_encode(["status" => "error", "message" => "Todos los campos son requeridos"]);
     exit;
+}
+
+// Validar nombre (solo letras)
+$rNombre = validarNombre($nombre, 'El nombre');
+if (!$rNombre['ok']) {
+    echo json_encode(["status" => "error", "message" => $rNombre['msg'], "campo" => "nombre"]);
+    exit;
+}
+
+// Validar teléfono (formato ecuatoriano)
+$rTelefono = validarTelefono($telefono);
+if (!$rTelefono['ok']) {
+    echo json_encode(["status" => "error", "message" => $rTelefono['msg'], "campo" => "telefono"]);
+    exit;
+}
+
+// Validar cédula (algoritmo oficial ecuatoriano)
+$rCedula = validarCedulaEc($cedula);
+if (!$rCedula['ok']) {
+    echo json_encode(["status" => "error", "message" => $rCedula['msg'], "campo" => "cedula"]);
+    exit;
+}
+
+// Validar email si se proporcionó
+if (!empty($email)) {
+    $rEmail = validarEmail($email);
+    if (!$rEmail['ok']) {
+        echo json_encode(["status" => "error", "message" => $rEmail['msg'], "campo" => "email"]);
+        exit;
+    }
 }
 if (!in_array($tipo_conductor, ['independiente', 'cooperativa'])) {
     $tipo_conductor = 'independiente';
