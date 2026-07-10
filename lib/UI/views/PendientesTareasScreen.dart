@@ -430,6 +430,82 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
       }
 
       _buenVisto.remove(tareaId);
+
+      final esIncumplida = decoded['incumplida'] == true;
+      final advertencia = decoded['advertencia']?.toString() ?? '';
+      final mensaje = decoded['message']?.toString() ?? '';
+
+      if (!mounted) return;
+
+      if (esIncumplida) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ConstantColors.backgroundCard,
+            title: const Row(
+              children: [
+                Icon(Icons.block_rounded, color: Colors.redAccent),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Tarea incumplida',
+                    style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              mensaje.isNotEmpty
+                  ? mensaje
+                  : 'Ya pospusiste esta tarea 5 veces. Se marcó como incumplida; tu supervisor deberá reasignarla a otro asesor.',
+              style: const TextStyle(color: ConstantColors.textGrey, fontSize: 13.5),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade700, foregroundColor: Colors.white),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      } else if (advertencia.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: ConstantColors.backgroundCard,
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: ConstantColors.warning),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Última posposición disponible',
+                    style: TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              advertencia,
+              style: const TextStyle(color: ConstantColors.textGrey, fontSize: 13.5),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                style: ElevatedButton.styleFrom(backgroundColor: ConstantColors.warning, foregroundColor: Colors.white),
+                child: const Text('Entendido'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tarea pospuesta'), backgroundColor: Colors.green),
+        );
+      }
+
       await _cargar();
     } catch (e) {
       if (!mounted) return;

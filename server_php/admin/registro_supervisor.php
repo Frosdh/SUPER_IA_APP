@@ -37,21 +37,36 @@ if ($modo_gerente) {
 $success = isset($_GET['success']) ? $_GET['success'] : false;
 $error = isset($_GET['error']) ? $_GET['error'] : false;
 
-// Obtener cooperativas
+// Obtener cooperativas: unidad_bancaria (internas) + seps_cooperativas
+// (catastro SEPS importado). Antes esta lista era un UNION SELECT con 4
+// cooperativas fijas de ejemplo ("Super_IA - Quito/Guayaquil/Cuenca/Ambato"),
+// sin tocar ninguna tabla real — por eso nunca aparecían los bancos
+// importados. Se cambia para leer las mismas dos tablas que ya se usan en
+// registro_asesor.php y en Encuestas.
 $cooperativas = [];
 try {
-    $stmt = $pdo->query("
-        SELECT DISTINCT id_cooperativa, nombre 
-        FROM (
-            SELECT 1 as id_cooperativa, 'Super_IA - Quito' as nombre
-            UNION SELECT 2, 'Super_IA - Guayaquil'
-            UNION SELECT 3, 'Super_IA - Cuenca'
-            UNION SELECT 4, 'Super_IA - Ambato'
-        ) a
-        ORDER BY nombre ASC
+    $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria ORDER BY nombre ASC");
+    $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) {
+    $cooperativas = [];
+}
+try {
+    $stmtSepsSup = $pdo->query("
+        SELECT CONCAT('seps_', id) AS id_cooperativa, razon_social AS nombre
+        FROM seps_cooperativas
+        WHERE activo = 1
+        ORDER BY razon_social ASC
     ");
-    $cooperativas = $stmt->fetchAll();
-} catch (Exception $e) {
+    foreach ($stmtSepsSup->fetchAll(PDO::FETCH_ASSOC) as $scSup) {
+        $cooperativas[] = $scSup;
+    }
+} catch (\Throwable $e) {
+    // Tabla SEPS ausente: se ignora, quedan solo las internas.
+}
+
+// Si por algún motivo ambas consultas fallan (tablas ausentes), usar los
+// 4 valores de ejemplo como último respaldo para no dejar el select vacío.
+if (empty($cooperativas)) {
     $cooperativas = [
         ['id_cooperativa' => 1, 'nombre' => 'Super_IA - Quito'],
         ['id_cooperativa' => 2, 'nombre' => 'Super_IA - Guayaquil'],
@@ -368,6 +383,9 @@ require_once '_sidebar_gerente.php';
                 <i class="fas fa-check-circle me-2"></i>
                 <strong>Solicitud Enviada</strong><br>
                 Tu solicitud ha sido enviada. El Administrador la revisará pronto.
+                <?php if (!$modo_gerente): ?>
+                <br>Serás redirigido al inicio de sesión de supervisor en <span id="countdownRedirectSup">4</span> segundos…
+                <?php endif; ?>
             </div>
             <?php endif; ?>
 
@@ -381,7 +399,7 @@ require_once '_sidebar_gerente.php';
             <?php if (!$modo_gerente): ?>
             <div class="info-box">
                 <i class="fas fa-info-circle me-2"></i>
-                <strong>Selección Requerida:</strong> Escoge la cooperativa y el administrador filtrará automáticamente.
+                <strong>Selección Requerida:</strong> Escoge la cooperativa y el gerente responsable se filtrará automáticamente.
             </div>
             <?php endif; ?>
 
@@ -396,7 +414,7 @@ require_once '_sidebar_gerente.php';
                 <div class="form-group">
                     <label><i class="fas fa-user-cog me-2"></i>Gerente Responsable</label>
                     <div class="form-control field-readonly"><?= htmlspecialchars($gerente_admin_nombre) ?></div>
-                    <input type="hidden" name="administrador" value="<?= htmlspecialchars((string)$gerente_admin_id) ?>">
+                    <input type="hidden" name="gerente" value="<?= htmlspecialchars((string)$gerente_admin_id) ?>">
                 </div>
                 <?php else: ?>
                 <div class="form-group">
@@ -412,8 +430,8 @@ require_once '_sidebar_gerente.php';
                 </div>
 
                 <div class="form-group">
-                    <label for="administrador"><i class="fas fa-user-cog me-2"></i>Administrador Responsable</label>
-                    <select name="administrador" id="administrador" class="form-control" required>
+                    <label for="gerente"><i class="fas fa-user-cog me-2"></i>Gerente Responsable</label>
+                    <select name="gerente" id="gerente" class="form-control" required>
                         <option value="">-- Primero selecciona una cooperativa --</option>
                     </select>
                 </div>
@@ -574,33 +592,33 @@ document.querySelector('form').addEventListener('submit', function(e) {
 // Manejo del file upload
 document.getElementById('cooperativa').addEventListener('change', function() {
     const coopId = this.value;
-    const adminSelect = document.getElementById('administrador');
-    
+    const gerenteSelect = document.getElementById('gerente');
+
     if (!coopId) {
-        adminSelect.innerHTML = '<option value="">-- Primero selecciona una cooperativa --</option>';
+        gerenteSelect.innerHTML = '<option value="">-- Primero selecciona una cooperativa --</option>';
         return;
     }
 
-    // Cargar administradores de esa cooperativa
-    fetch(`api_administradores_por_coop.php?cooperativa_id=${coopId}`)
+    // Cargar gerentes reales vinculados a esa cooperativa
+    fetch(`api_gerentes_por_coop.php?cooperativa_id=${coopId}`)
         .then(res => res.json())
         .then(data => {
-            adminSelect.innerHTML = '<option value="">-- Selecciona un administrador --</option>';
-            
-            if (data.administradores && data.administradores.length > 0) {
-                data.administradores.forEach(admin => {
+            gerenteSelect.innerHTML = '<option value="">-- Selecciona un gerente --</option>';
+
+            if (data.gerentes && data.gerentes.length > 0) {
+                data.gerentes.forEach(ger => {
                     const option = document.createElement('option');
-                    option.value = admin.id_usuario;
-                    option.textContent = admin.nombre + ' (' + admin.email + ')';
-                    adminSelect.appendChild(option);
+                    option.value = ger.id_usuario;
+                    option.textContent = ger.nombre + ' (' + ger.email + ')';
+                    gerenteSelect.appendChild(option);
                 });
             } else {
-                adminSelect.innerHTML = '<option value="">No hay administradores en esta cooperativa</option>';
+                gerenteSelect.innerHTML = '<option value="">No hay gerente asignado a esta cooperativa</option>';
             }
         })
         .catch(err => {
-            console.error('Error cargando administradores:', err);
-            adminSelect.innerHTML = '<option value="">Error al cargar administradores</option>';
+            console.error('Error cargando gerentes:', err);
+            gerenteSelect.innerHTML = '<option value="">Error al cargar gerentes</option>';
         });
 });
 <?php endif; ?>
@@ -666,6 +684,23 @@ fileLabel.addEventListener('drop', (e) => {
         fileInput.dispatchEvent(event);
     }
 });
+
+// ── Tras registrarse con éxito (modo público), redirigir automáticamente
+// al login de supervisor — igual que se hizo para el registro de asesor.
+<?php if ($success && !$modo_gerente): ?>
+(function () {
+    let seg = 4;
+    const span = document.getElementById('countdownRedirectSup');
+    const timer = setInterval(() => {
+        seg--;
+        if (span) span.textContent = seg;
+        if (seg <= 0) {
+            clearInterval(timer);
+            window.location.href = 'login.php?role=supervisor';
+        }
+    }, 1000);
+})();
+<?php endif; ?>
 </script>
 
 </body>

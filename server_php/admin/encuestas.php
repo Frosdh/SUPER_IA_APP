@@ -85,7 +85,7 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $f_hasta)) {
 if ($f_desde > $f_hasta) {
     [$f_desde, $f_hasta] = [$f_hasta, $f_desde];
 }
-if (!in_array($f_estado, ['completada', 'programada', 'incompleta'], true)) {
+if (!in_array($f_estado, ['completada', 'programada', 'incompleta', 'incumplida'], true)) {
     $f_estado = '';
 }
 if (!in_array($f_tipo, ['encuesta', 'levantamiento'], true)) {
@@ -117,6 +117,7 @@ function enc_bucket_estado(array $t): string {
     $estado = $t['estado'] ?? '';
     if ($estado === 'completada') return 'completada';
     if ($estado === 'cancelada')  return 'cancelada';
+    if ($estado === 'incumplida') return 'incumplida';
 
     $hoy = date('Y-m-d');
     $horaActual = (int)date('H');
@@ -131,13 +132,36 @@ function enc_bucket_badge(string $bucket): array {
         case 'completada': return ['Completada', 'badge-success-soft'];
         case 'cancelada':  return ['Cancelada',  'badge-navy-soft'];
         case 'incompleta': return ['Incompleta', 'badge-danger-soft'];
+        case 'incumplida': return ['Incumplida', 'badge-dark-soft'];
         default:           return ['Programada', 'badge-info-soft'];
     }
 }
 
+// Asegurar columnas nuevas de posposición (por si el mobile aún no las
+// creó en esta BD — mismo patrón defensivo usado en el resto del panel).
+foreach ([
+    'posposiciones' => "ADD COLUMN posposiciones INT NOT NULL DEFAULT 0",
+    'incumplida_at' => "ADD COLUMN incumplida_at DATETIME DEFAULT NULL",
+] as $col => $ddl) {
+    try {
+        $chk = $pdo->query("SHOW COLUMNS FROM tarea LIKE '$col'")->fetchAll();
+        if (empty($chk)) {
+            $pdo->exec("ALTER TABLE tarea $ddl");
+        }
+    } catch (Throwable $e) {}
+}
+try {
+    $colEstado = $pdo->query("SHOW COLUMNS FROM tarea LIKE 'estado'")->fetch();
+    if ($colEstado && stripos($colEstado['Type'], 'enum') !== false && stripos($colEstado['Type'], "'incumplida'") === false) {
+        $pdo->exec("ALTER TABLE tarea MODIFY COLUMN estado
+            ENUM('programada','pendiente','postergada','en_proceso','completada','cancelada','incumplida')
+            NOT NULL DEFAULT 'programada'");
+    }
+} catch (Throwable $e) {}
+
 // ── Consulta principal ────────────────────────────────────────
 $encuestas = [];
-$resumen = ['total' => 0, 'completada' => 0, 'programada' => 0, 'incompleta' => 0, 'cancelada' => 0, 'pendiente_sync' => 0];
+$resumen = ['total' => 0, 'completada' => 0, 'programada' => 0, 'incompleta' => 0, 'cancelada' => 0, 'incumplida' => 0, 'pendiente_sync' => 0];
 
 if (!empty($asesor_ids_equipo)) {
     try {
@@ -170,6 +194,8 @@ if (!empty($asesor_ids_equipo)) {
                        t.fecha_programada, t.hora_programada,
                        t.fecha_realizada, t.hora_realizada,
                        t.pospuesta_de_dia,
+                       COALESCE(t.posposiciones, 0) AS posposiciones,
+                       t.asesor_id,
                        u.nombre AS asesor_nombre,
                        cp.id AS cliente_id,
                        cp.nombre AS cliente_nombre,
@@ -243,14 +269,19 @@ if (!empty($asesor_ids_equipo)) {
         .enc-cliente-cell .sub{font-size:11.5px;color:#6b7280;}
         .btn-ver-detalle{background:var(--brand-navy,#123a6d);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:700;text-decoration:none;display:inline-flex;align-items:center;gap:6px;transition:.15s;}
         .btn-ver-detalle:hover{background:#0a2748;color:#fff;}
-        .kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:20px;}
+        .kpi-row{display:grid;grid-template-columns:repeat(6,1fr);gap:14px;margin-bottom:20px;}
         .kpi-card{background:#fff;border:1px solid var(--brand-border,#d7e0ea);border-radius:14px;padding:16px 18px;box-shadow:0 4px 12px rgba(18,58,109,.06);}
         .kpi-card .kpi-num{font-size:24px;font-weight:800;color:#0a2748;}
         .kpi-card .kpi-lbl{font-size:11.5px;color:#6b7280;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-top:2px;}
         .kpi-card.kpi-completada .kpi-num{color:#059669;}
         .kpi-card.kpi-programada .kpi-num{color:#3b82f6;}
         .kpi-card.kpi-incompleta .kpi-num{color:#dc2626;}
+        .kpi-card.kpi-incumplida .kpi-num{color:#1f2937;}
         .kpi-card.kpi-pendiente .kpi-num{color:#d97706;}
+        .badge-dark-soft{background:#1f2937;color:#fca5a5;}
+        .btn-reasignar{background:#fff;color:#1f2937;border:1.5px solid #1f2937;border-radius:8px;padding:7px 14px;font-size:12.5px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:.15s;}
+        .btn-reasignar:hover{background:#1f2937;color:#fff;}
+        .posp-chip{display:inline-block;margin-top:3px;font-size:10.5px;font-weight:700;color:#991b1b;}
         @media (max-width: 992px){ .kpi-row{grid-template-columns:repeat(2,1fr);} }
     </style>
 </head>
@@ -298,6 +329,10 @@ if ($is_admin_gerente) {
                 <div class="kpi-num"><?= $resumen['incompleta'] ?></div>
                 <div class="kpi-lbl">Incompletas</div>
             </div>
+            <div class="kpi-card kpi-incumplida">
+                <div class="kpi-num"><?= $resumen['incumplida'] ?></div>
+                <div class="kpi-lbl">Incumplidas (por reasignar)</div>
+            </div>
             <div class="kpi-card kpi-pendiente">
                 <div class="kpi-num"><?= $resumen['pendiente_sync'] ?></div>
                 <div class="kpi-lbl">Pendientes de sincronizar</div>
@@ -339,6 +374,7 @@ if ($is_admin_gerente) {
                             <option value="completada" <?= $f_estado === 'completada' ? 'selected' : '' ?>>Completada</option>
                             <option value="programada" <?= $f_estado === 'programada' ? 'selected' : '' ?>>Programada</option>
                             <option value="incompleta" <?= $f_estado === 'incompleta' ? 'selected' : '' ?>>Incompleta</option>
+                            <option value="incumplida" <?= $f_estado === 'incumplida' ? 'selected' : '' ?>>Incumplida (por reasignar)</option>
                         </select>
                     </div>
                     <div class="col-auto">
@@ -419,12 +455,23 @@ if ($is_admin_gerente) {
                                             <span class="text-muted">—</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="text-center"><?= $subidaHtml ?></td>
-                                    <td class="text-center"><span class="badge-premium <?= $estClass ?>"><?= $estLabel ?></span></td>
+                                    <td class="text-center">
+                                        <span class="badge-premium <?= $estClass ?>"><?= $estLabel ?></span>
+                                        <?php if ((int)($t['posposiciones'] ?? 0) > 0): ?>
+                                            <div class="posp-chip"><i class="fas fa-history"></i> Pospuesta <?= (int)$t['posposiciones'] ?>x</div>
+                                        <?php endif; ?>
+                                    </td>
                                     <td class="text-end">
-                                        <a class="btn-ver-detalle" href="ver_encuesta.php?tarea_id=<?= urlencode($t['id']) ?>">
-                                            <i class="fas fa-eye"></i> Ver encuesta
-                                        </a>
+                                        <?php if ($t['_bucket'] === 'incumplida'): ?>
+                                            <button type="button" class="btn-reasignar"
+                                                onclick="abrirReasignar('<?= htmlspecialchars($t['id'], ENT_QUOTES) ?>', '<?= htmlspecialchars($t['cliente_nombre'] ?: 'Sin cliente', ENT_QUOTES) ?>', '<?= htmlspecialchars($t['asesor_nombre'] ?: '—', ENT_QUOTES) ?>')">
+                                                <i class="fas fa-people-arrows"></i> Reasignar
+                                            </button>
+                                        <?php else: ?>
+                                            <a class="btn-ver-detalle" href="ver_encuesta.php?tarea_id=<?= urlencode($t['id']) ?>">
+                                                <i class="fas fa-eye"></i> Ver encuesta
+                                            </a>
+                                        <?php endif; ?>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -438,6 +485,72 @@ if ($is_admin_gerente) {
     </div>
     </div><!-- /.content-area -->
 </div><!-- /.main-content -->
+
+<!-- Modal Reasignar tarea incumplida -->
+<div id="modalReasignar" style="display:none;position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.5);align-items:center;justify-content:center;">
+    <div style="background:#fff;border-radius:16px;width:420px;max-width:95vw;overflow:hidden;box-shadow:0 24px 48px rgba(0,0,0,.2);">
+        <div style="background:linear-gradient(135deg,#1f2937,#111827);color:#fff;padding:18px 22px;display:flex;align-items:center;justify-content:space-between;">
+            <strong style="font-size:15px;"><i class="fas fa-people-arrows me-2"></i>Reasignar tarea incumplida</strong>
+            <button onclick="cerrarReasignar()" style="background:none;border:none;color:#fff;font-size:20px;cursor:pointer;">×</button>
+        </div>
+        <div style="padding:22px;">
+            <p style="font-size:13.5px;color:#374151;margin-bottom:4px;">Cliente: <strong id="reasignarCliente"></strong></p>
+            <p style="font-size:12.5px;color:#9ca3af;margin-bottom:16px;">Asesor actual: <span id="reasignarAsesorActual"></span> (5 posposiciones agotadas)</p>
+
+            <label style="font-size:13px;font-weight:700;display:block;margin-bottom:6px;">Nuevo asesor:</label>
+            <select id="reasignarNuevoAsesor" style="width:100%;padding:10px;border:1.5px solid #d7e0ea;border-radius:9px;font-size:14px;margin-bottom:14px;">
+                <option value="">— Selecciona un asesor —</option>
+                <?php foreach ($asesores as $a): ?>
+                    <option value="<?= htmlspecialchars($a['id']) ?>"><?= htmlspecialchars($a['nombre']) ?></option>
+                <?php endforeach; ?>
+            </select>
+
+            <label style="font-size:13px;font-weight:700;display:block;margin-bottom:6px;">Nueva fecha:</label>
+            <input type="date" id="reasignarFecha" style="width:100%;padding:10px;border:1.5px solid #d7e0ea;border-radius:9px;font-size:14px;">
+            <input type="hidden" id="reasignarTareaId">
+        </div>
+        <div style="padding:0 22px 22px;display:flex;gap:10px;">
+            <button onclick="cerrarReasignar()" style="flex:1;padding:10px;border:1.5px solid #d7e0ea;border-radius:9px;background:#fff;font-weight:700;cursor:pointer;">Cancelar</button>
+            <button onclick="confirmarReasignar()" id="btnConfReasignar" style="flex:1;padding:10px;background:#1f2937;border:none;border-radius:9px;font-weight:800;color:#fff;cursor:pointer;"><i class="fas fa-check me-1"></i>Reasignar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function abrirReasignar(tareaId, cliente, asesorActual) {
+        document.getElementById('reasignarTareaId').value = tareaId;
+        document.getElementById('reasignarCliente').textContent = cliente;
+        document.getElementById('reasignarAsesorActual').textContent = asesorActual;
+        document.getElementById('reasignarNuevoAsesor').value = '';
+        var d = new Date(); d.setDate(d.getDate() + 1);
+        document.getElementById('reasignarFecha').value = d.toISOString().split('T')[0];
+        document.getElementById('modalReasignar').style.display = 'flex';
+    }
+    function cerrarReasignar() { document.getElementById('modalReasignar').style.display = 'none'; }
+    function confirmarReasignar() {
+        var btn = document.getElementById('btnConfReasignar'); btn.disabled = true;
+        var tid = document.getElementById('reasignarTareaId').value;
+        var nuevoAsesor = document.getElementById('reasignarNuevoAsesor').value;
+        var fecha = document.getElementById('reasignarFecha').value;
+        if (!nuevoAsesor) { alert('Selecciona el nuevo asesor'); btn.disabled = false; return; }
+        if (!fecha) { alert('Selecciona una fecha'); btn.disabled = false; return; }
+        var fd = new FormData();
+        fd.append('tarea_id', tid);
+        fd.append('nuevo_asesor_id', nuevoAsesor);
+        fd.append('nueva_fecha', fecha);
+        fetch('reasignar_tarea.php', { method: 'POST', body: fd })
+            .then(r => r.json()).then(j => {
+                btn.disabled = false;
+                if (j.status === 'success') {
+                    cerrarReasignar();
+                    alert('✅ ' + (j.message || 'Tarea reasignada'));
+                    window.location.reload();
+                } else {
+                    alert('Error: ' + (j.message || 'no se pudo reasignar'));
+                }
+            }).catch(() => { btn.disabled = false; alert('Error de red'); });
+    }
+</script>
 
 </body>
 </html>

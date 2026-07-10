@@ -61,9 +61,28 @@ try {
             "INSERT INTO tarea (id, asesor_id, cliente_prospecto_id, tipo_tarea, estado, fecha_programada, hora_programada, fecha_realizada, hora_realizada, latitud_inicio, longitud_inicio, observaciones)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         );
-        // asesor_id: intentamos usar si viene, sino null
+        // asesor_id: la tarea DEBE quedar asignada a quien la levantó, nunca
+        // sin dueño (si quedara en NULL caería en el "pool" y sería visible
+        // para cualquier asesor, no solo para quien hizo el levantamiento).
         $asesor_id = trim($_POST['asesor_id'] ?? '');
-        if ($asesor_id === '') $asesor_id = null;
+        if ($asesor_id === '') {
+            $usuario_id_neg = trim($_POST['usuario_id'] ?? '');
+            if ($usuario_id_neg !== '') {
+                $stA = $conn->prepare('SELECT id FROM asesor WHERE usuario_id = ? LIMIT 1');
+                $stA->bind_param('s', $usuario_id_neg);
+                $stA->execute();
+                $rowA = $stA->get_result()->fetch_assoc();
+                $stA->close();
+                if ($rowA && !empty($rowA['id'])) {
+                    $asesor_id = (string)$rowA['id'];
+                }
+            }
+        }
+        if ($asesor_id === '') {
+            $conn->rollback();
+            respond_json(200, ['status' => 'error', 'message' => 'No se pudo determinar el asesor (envíe asesor_id o usuario_id). La tarea no se creó para evitar dejarla sin dueño.']);
+            exit;
+        }
         $fecha_hoy = date('Y-m-d'); $hora_hoy = date('H:i:s');
         $st->bind_param('sssss s s s dd s', $tarea_id, $asesor_id, $cliente_id, $tipo_tarea, $estado, $fecha_prog, $hora_prog, $fecha_hoy, $hora_hoy, $lat_ini, $lng_ini, $obs);
         // NOTE: older PHP/mysqli may complain about typed bind string; use fallback if prepare fails

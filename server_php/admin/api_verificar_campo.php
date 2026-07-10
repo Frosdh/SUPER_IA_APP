@@ -1,6 +1,12 @@
 <?php
 // api_verificar_campo.php — Verifica si email, usuario o cédula ya existen
+// Para "email" también verifica en vivo que el DOMINIO exista de verdad
+// (registro DNS MX/A), reutilizando la misma validarEmail() que se usa en
+// el servidor al procesar el formulario. Antes esta API solo comprobaba
+// unicidad y dejaba pasar cualquier formato con "@algo.com", aunque el
+// dominio fuera inventado (ej. "gmailIIIIIII.com").
 require_once 'db_admin.php';
+require_once 'funciones_validacion.php';
 header('Content-Type: application/json');
 
 $campo = $_GET['campo'] ?? '';
@@ -9,6 +15,14 @@ $valor = trim($_GET['valor'] ?? '');
 if (!$valor || !in_array($campo, ['email', 'usuario', 'cedula'])) {
     echo json_encode(['disponible' => true]);
     exit;
+}
+
+if ($campo === 'email') {
+    $rFormato = validarEmail($valor);
+    if (!$rFormato['ok']) {
+        echo json_encode(['disponible' => true, 'valido' => false, 'msg' => $rFormato['msg']]);
+        exit;
+    }
 }
 
 $existe = false;

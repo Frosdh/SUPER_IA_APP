@@ -71,7 +71,40 @@ function validarEmail(string $email): array {
     if (isset($typos[$domain])) {
         return ['ok' => false, 'msg' => "¿Quisiste decir @{$typos[$domain]}?"];
     }
+
+    // El formato puede ser sintácticamente correcto ("maroa@gmailIIIIIII.com")
+    // sin que el dominio exista de verdad. Se verifica contra DNS (registro
+    // MX o, en su defecto, A/AAAA) para no aceptar dominios inventados.
+    if (!dominioEmailExiste($domain)) {
+        return ['ok' => false, 'msg' => "El dominio \"$domain\" no existe o no puede recibir correos"];
+    }
+
     return ['ok' => true, 'msg' => 'Email válido'];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Verifica que el dominio de un email tenga registros DNS reales
+// (MX = servidor de correo, o A/AAAA como respaldo). Con esto se rechazan
+// dominios inventados que antes pasaban solo por tener el formato correcto.
+// ─────────────────────────────────────────────────────────────
+function dominioEmailExiste(string $domain): bool {
+    static $dnsDisponible = null;
+    if ($dnsDisponible === null) {
+        // Auto-detección: si ni siquiera gmail.com resuelve, el servidor no
+        // tiene salida DNS/internet (ej. entorno local sin conexión) — en
+        // ese caso no se bloquean los registros por esta validación, solo
+        // se aplican el resto de reglas (formato, typos, etc.).
+        $dnsDisponible = function_exists('checkdnsrr') && @checkdnsrr('gmail.com', 'MX');
+    }
+    if (!$dnsDisponible) return true;
+
+    // Soporte para dominios con tildes/ñ (IDN) si la extensión intl existe
+    if (function_exists('idn_to_ascii')) {
+        $ascii = @idn_to_ascii($domain, 0, defined('INTL_IDNA_VARIANT_UTS46') ? INTL_IDNA_VARIANT_UTS46 : 0);
+        if ($ascii !== false && $ascii !== '') $domain = $ascii;
+    }
+
+    return @checkdnsrr($domain, 'MX') || @checkdnsrr($domain, 'A') || @checkdnsrr($domain, 'AAAA');
 }
 
 // ─────────────────────────────────────────────────────────────

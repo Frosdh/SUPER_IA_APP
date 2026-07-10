@@ -88,6 +88,13 @@ function validarCedulaEc(valor) {
 // ─────────────────────────────────────────────────────────────
 // EMAIL
 // ─────────────────────────────────────────────────────────────
+// NOTA: esta función solo valida FORMATO (sintaxis) + typos comunes. Un
+// email con formato correcto puede tener un dominio inventado que no existe
+// de verdad (ej. "maroa@gmailIIIIIII.com") — el navegador no puede resolver
+// DNS, así que esa verificación real se hace en el servidor vía
+// api_verificar_campo.php (ver bindEmailConDominio() más abajo, que la usa
+// para el chequeo en vivo, y funciones_validacion.php::validarEmail() en PHP
+// para el chequeo definitivo al enviar el formulario).
 function validarEmail(valor) {
     if (!valor) return { ok: false, msg: 'El email es requerido' };
     // RFC 5322 simplificado
@@ -98,6 +105,63 @@ function validarEmail(valor) {
     const domain = valor.split('@')[1].toLowerCase();
     if (typos[domain]) return { ok: false, msg: `¿Quisiste decir @${typos[domain]}?` };
     return { ok: true, msg: 'Email válido' };
+}
+
+// ─────────────────────────────────────────────────────────────
+// EMAIL + DOMINIO REAL — chequeo en vivo contra el servidor (DNS)
+// Se conecta al mismo endpoint que ya verifica unicidad de email
+// (api_verificar_campo.php), que ahora también valida el dominio con
+// checkdnsrr(). Guarda el resultado en input.dataset.dominioValido para
+// que el submit-handler de bindValidaciones() lo pueda usar.
+// ─────────────────────────────────────────────────────────────
+function bindEmailConDominio(form, endpointUrl) {
+    const input = form.querySelector('[name="email"]');
+    if (!input) return;
+
+    let timer = null;
+
+    function marcarEstado(ok, msg) {
+        setFieldState(input, ok, msg);
+    }
+
+    function verificar() {
+        const valor = input.value.trim();
+        const rFormato = validarEmail(valor);
+        if (!rFormato.ok) {
+            input.dataset.dominioValido = 'false';
+            marcarEstado(false, rFormato.msg);
+            return;
+        }
+
+        input.dataset.dominioValido = 'checking';
+        marcarEstado(null, '');
+        const hint = (input.closest('.form-group') || input.parentElement).querySelector('.val-hint');
+        if (hint) { hint.textContent = 'Verificando dominio…'; hint.style.color = '#6b7280'; hint.className = 'val-hint'; }
+
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+            fetch(`${endpointUrl}?campo=email&valor=${encodeURIComponent(valor)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (input.value.trim() !== valor) return; // el usuario siguió escribiendo
+                    if (data.valido === false) {
+                        input.dataset.dominioValido = 'false';
+                        marcarEstado(false, data.msg || 'El dominio del correo no existe o no puede recibir correos');
+                    } else {
+                        input.dataset.dominioValido = 'true';
+                        marcarEstado(true, 'Email válido');
+                    }
+                })
+                .catch(() => {
+                    // Sin respuesta del servidor: no bloquear al usuario aquí,
+                    // la validación definitiva ocurre igual en el servidor.
+                    input.dataset.dominioValido = 'unknown';
+                });
+        }, 500);
+    }
+
+    input.addEventListener('blur', verificar);
+    input.addEventListener('input', verificar);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -179,8 +243,10 @@ function bindValidaciones(formSelector) {
     on('nombres',          v => validarNombre(v, 'Nombres'));
     on('apellidos',        v => validarNombre(v, 'Apellidos'));
     on('cedula',           v => validarCedulaEc(v));
-    on('email',            v => validarEmail(v));
     on('telefono',         v => validarTelefono(v));
+    // Email: formato instantáneo + verificación real del dominio contra el
+    // servidor (ver bindEmailConDominio arriba) en vez de solo el regex.
+    bindEmailConDominio(form, 'api_verificar_campo.php');
     on('usuario',          v => validarUsuario(v));
     on('password',         v => validarPassword(v));
     on('password_confirm', v => {
@@ -214,10 +280,23 @@ function bindValidaciones(formSelector) {
         check('nombres',          v => validarNombre(v, 'Nombres'));
         check('apellidos',        v => validarNombre(v, 'Apellidos'));
         check('cedula',           v => validarCedulaEc(v));
-        check('email',            v => validarEmail(v));
         check('telefono',         v => validarTelefono(v));
         check('usuario',          v => validarUsuario(v));
         check('password',         v => validarPassword(v));
+
+        // Email: formato + resultado del chequeo de dominio ya calculado
+        // por bindEmailConDominio (dataset.dominioValido). Si el chequeo
+        // aún no ha llegado ("checking"/"unknown"), no se bloquea aquí —
+        // la validación definitiva del dominio la hace el servidor.
+        const emailEl = form.querySelector('[name="email"]');
+        if (emailEl) {
+            const rEmail = validarEmail(emailEl.value);
+            if (rEmail.ok && emailEl.dataset.dominioValido === 'false') {
+                if (!setFieldState(emailEl, false, 'El dominio del correo no existe o no puede recibir correos')) valido = false;
+            } else if (!setFieldState(emailEl, rEmail.ok, rEmail.msg)) {
+                valido = false;
+            }
+        }
 
         const p  = form.querySelector('[name="password"]');
         const pc = form.querySelector('[name="password_confirm"]');

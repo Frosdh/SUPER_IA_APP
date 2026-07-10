@@ -27,14 +27,18 @@ $params = [':a' => $asesor_table_id];
 
 if ($filtro === 'hoy') {
     $where[] = 't.fecha_programada = :hoy';
+    $where[] = "t.estado <> 'incumplida'";
     $params[':hoy'] = date('Y-m-d');
 } elseif ($filtro === 'semana') {
     $where[] = 't.fecha_programada BETWEEN :ini AND :fin';
+    $where[] = "t.estado <> 'incumplida'";
     $params[':ini'] = date('Y-m-d');
     $params[':fin'] = date('Y-m-d', strtotime('+7 days'));
 } elseif ($filtro === 'pendientes') {
     $where[] = "t.estado IN ('programada','en_proceso','postergada')";
 }
+// 'todas' se deja sin filtrar 'incumplida' para que el asesor conserve el
+// historial (queda visible pero sin acciones, ver badge/botones abajo).
 if ($tipo) {
     $where[] = 't.tipo_tarea = :tipo';
     $params[':tipo'] = $tipo;
@@ -512,6 +516,11 @@ $tipo_labels = [
             color: #991b1b;
         }
 
+        .be-incumplida {
+            background: #1f2937;
+            color: #fca5a5;
+        }
+
         .empty {
             background: #fff;
             border: 1px dashed var(--brand-border);
@@ -630,6 +639,8 @@ $tipo_labels = [
                                             $clase = 'be-proc';
                                         elseif ($estado === 'postergada')
                                             $clase = 'be-post';
+                                        elseif ($estado === 'incumplida')
+                                            $clase = 'be-incumplida';
                                         ?>
                                         · <span
                                             class="badge-estado <?= $clase ?>"><?= ucfirst(str_replace('_', ' ', $estado)) ?></span>
@@ -655,6 +666,8 @@ $tipo_labels = [
                                 <?php if ($done): ?>
                                     <a class="btn-act ghost" href="ver_cliente.php?id=<?= urlencode($t['cedula'] ?? '') ?>"><i
                                             class="fas fa-eye"></i> Ver ficha</a>
+                                <?php elseif ($estado === 'incumplida'): ?>
+                                    <span class="btn-act ghost" style="cursor:default;opacity:.7;"><i class="fas fa-ban"></i> Incumplida — a la espera de reasignación</span>
                                 <?php else: ?>
                                     <a class="btn-act primary" href="nueva_encuesta.php?tarea_id=<?= urlencode($t['id']) ?>"><i
                                             class="fas fa-play"></i> Iniciar</a>
@@ -728,7 +741,13 @@ $tipo_labels = [
                     btn.disabled = false;
                     cerrarPosponer();
                     if (j.status === 'success') {
-                        showToast('📅 Tarea pospuesta correctamente');
+                        if (j.incumplida) {
+                            alert('⛔ ' + (j.message || 'Ya pospusiste esta tarea 5 veces. Se marcó como incumplida; tu supervisor deberá reasignarla.'));
+                        } else if (j.advertencia) {
+                            alert('⚠️ ' + j.advertencia);
+                        } else {
+                            showToast('📅 Tarea pospuesta correctamente');
+                        }
                         setTimeout(() => window.location.reload(), 1200);
                     } else { showToast('Error: ' + (j.message || 'no se pudo posponer'), 'err'); }
                 }).catch(() => { btn.disabled = false; showToast('Error de red', 'err'); });

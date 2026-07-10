@@ -260,6 +260,161 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
     }
   }
 
+  /// Selector de cooperativa con filtrado en tiempo real al escribir
+  Future<void> _mostrarSelectorCooperativa() async {
+    String query = '';
+    List<CooperativaModel> filtradas = List.from(cooperativas);
+
+    final CooperativaModel? seleccionada = await showModalBottomSheet<CooperativaModel>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.75,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFDDDDDD),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '🏢 Selecciona una cooperativa',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Color(0xFF333333),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        autofocus: true,
+                        textInputAction: TextInputAction.search,
+                        style: const TextStyle(
+                          color: Color(0xFF333333),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        cursorColor: const Color(0xFF003D7A),
+                        decoration: InputDecoration(
+                          hintText: 'Escribe para buscar...',
+                          hintStyle: const TextStyle(
+                            color: Color(0xFFBBBBBB),
+                            fontSize: 13,
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.search,
+                            color: Color(0xFF999999),
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF5F5F5),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 0,
+                            horizontal: 12,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          final q = value.trim().toLowerCase();
+                          setModalState(() {
+                            query = q;
+                            filtradas = query.isEmpty
+                                ? List.from(cooperativas)
+                                : cooperativas.where((c) {
+                                    return c.nombre.toLowerCase().contains(query) ||
+                                        c.codigo.toLowerCase().contains(query);
+                                  }).toList();
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: filtradas.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'No se encontraron cooperativas',
+                                style: TextStyle(
+                                  color: Color(0xFF999999),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              itemCount: filtradas.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                              itemBuilder: (_, i) {
+                                final coop = filtradas[i];
+                                final isSelected =
+                                    coop.id == cooperativaSeleccionada?.id;
+                                return ListTile(
+                                  title: Text(
+                                    '${coop.nombre} (${coop.codigo})',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                      color: isSelected
+                                          ? const Color(0xFF003D7A)
+                                          : const Color(0xFF333333),
+                                    ),
+                                  ),
+                                  trailing: isSelected
+                                      ? const Icon(
+                                          Icons.check_circle,
+                                          color: Color(0xFF003D7A),
+                                          size: 20,
+                                        )
+                                      : null,
+                                  onTap: () => Navigator.pop(ctx, coop),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (seleccionada != null) {
+      setState(() {
+        cooperativaSeleccionada = seleccionada;
+      });
+      _cargarSupervisores(seleccionada.id);
+    }
+  }
+
   void _mostrarError(String mensaje) {
     _mostrarSnackbar('❌ $mensaje', Colors.red);
   }
@@ -422,48 +577,46 @@ class _AsesorRegistrationScreenState extends State<AsesorRegistrationScreen>
                                   ),
                                 ),
                                 const SizedBox(height: 6),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    border: Border.all(
-                                      color: const Color(0xFFE0E0E0),
-                                    ),
-                                    borderRadius: BorderRadius.circular(10),
-                                    color: const Color(0xFFFAFAFA),
-                                  ),
-                                  child: DropdownButtonFormField<CooperativaModel>(
-                                    value: cooperativaSeleccionada,
-                                    isExpanded: true,
-                                    items: cooperativas
-                                        .map((coop) => DropdownMenuItem(
-                                              value: coop,
-                                              child: Text(
-                                                '${coop.nombre} (${coop.codigo})',
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ))
-                                        .toList(),
-                                    onChanged: (coop) {
-                                      setState(() {
-                                        cooperativaSeleccionada = coop;
-                                      });
-                                      if (coop != null) {
-                                        _cargarSupervisores(coop.id);
-                                      }
-                                    },
-                                    decoration: InputDecoration(
-                                      border: InputBorder.none,
-                                      contentPadding:
-                                          const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 12,
-                                          ),
-                                      hint: const Text(
-                                        '-- Selecciona una cooperativa --',
-                                        style: TextStyle(
-                                          color: Color(0xFFBBBBBB),
-                                          fontSize: 13,
-                                        ),
+                                GestureDetector(
+                                  onTap: cooperativas.isEmpty
+                                      ? null
+                                      : _mostrarSelectorCooperativa,
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: const Color(0xFFE0E0E0),
                                       ),
+                                      borderRadius: BorderRadius.circular(10),
+                                      color: const Color(0xFFFAFAFA),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 14,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            cooperativaSeleccionada != null
+                                                ? '${cooperativaSeleccionada!.nombre} (${cooperativaSeleccionada!.codigo})'
+                                                : '-- Selecciona una cooperativa --',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: cooperativaSeleccionada != null
+                                                  ? const Color(0xFF333333)
+                                                  : const Color(0xFFBBBBBB),
+                                              fontSize: 13,
+                                              fontWeight: cooperativaSeleccionada != null
+                                                  ? FontWeight.w500
+                                                  : FontWeight.w400,
+                                            ),
+                                          ),
+                                        ),
+                                        const Icon(
+                                          Icons.arrow_drop_down,
+                                          color: Color(0xFF999999),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),

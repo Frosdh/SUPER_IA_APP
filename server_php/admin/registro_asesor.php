@@ -345,9 +345,14 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
 
         <!-- ── Alertas ───────────────────────────────────── -->
         <?php if ($success): ?>
-        <div class="alert alert-success"><i class="fas fa-check-circle"></i> Solicitud enviada. El supervisor revisará tu registro pronto.</div>
+        <div class="alert alert-success">
+            <i class="fas fa-check-circle"></i> Solicitud enviada. El supervisor revisará tu registro pronto.
+            <?php if (!$modo_supervisor): ?>
+            <br>Serás redirigido al inicio de sesión de asesor en <span id="countdownRedirect">4</span> segundos…
+            <?php endif; ?>
+        </div>
         <?php endif; ?>
-        
+
 
         <!-- ── Formulario ────────────────────────────────── -->
         <form method="POST" action="procesar_registro_asesor.php" enctype="multipart/form-data" novalidate>
@@ -643,25 +648,52 @@ document.addEventListener('DOMContentLoaded', () => {
 <?php endif; ?>
 
 // ── Validación en tiempo real: email, usuario, cédula ─────
+// Cada campo primero se valida en FORMATO (validarEmail/validarCedulaEc de
+// validaciones.js) y solo si el formato es correcto se consulta al servidor
+// si ya existe. Antes se consultaba "¿ya existe?" sin importar el formato,
+// así que un correo mal escrito (ej. "correo@gmailcom", sin el ".com")
+// podía mostrar "✓ Disponible" en vez de avisar que el formato es inválido.
 const camposUnicos = [
-    { id: 'email',   campo: 'email',   msgExiste: 'Este correo ya está registrado.' },
-    { id: 'usuario', campo: 'usuario', msgExiste: 'Este nombre de usuario ya está en uso.' },
-    { id: 'cedula',  campo: 'cedula',  msgExiste: 'Esta cédula ya está registrada.' },
+    { id: 'email',   campo: 'email',   msgExiste: 'Este correo ya está registrado.',        formatoFn: v => validarEmail(v) },
+    { id: 'usuario', campo: 'usuario', msgExiste: 'Este nombre de usuario ya está en uso.',  formatoFn: null },
+    { id: 'cedula',  campo: 'cedula',  msgExiste: 'Esta cédula ya está registrada.',          formatoFn: v => validarCedulaEc(v) },
 ];
 let debounceTimers = {};
 
-camposUnicos.forEach(({ id, campo, msgExiste }) => {
+function mostrarFeedback(feedback, input, ok, msg) {
+    feedback.innerHTML = '<i class="fas fa-' + (ok ? 'check-circle' : 'exclamation-circle') + '"></i> ' + msg;
+    feedback.className  = 'field-feedback ' + (ok ? 'ok' : 'error');
+    input.classList.toggle('input-ok', ok);
+    input.classList.toggle('input-error', !ok);
+}
+
+camposUnicos.forEach(({ id, campo, msgExiste, formatoFn }) => {
     const input    = document.getElementById(id);
     const feedback = document.getElementById(id + '-feedback');
     if (!input || !feedback) return;
 
-    input.addEventListener('blur', () => verificarCampo(input, campo, feedback, msgExiste));
+    const ejecutar = () => {
+        // 1) Formato primero (si aplica al campo)
+        if (formatoFn) {
+            const val = input.value.trim();
+            if (!val) return;
+            const r = formatoFn(val);
+            if (!r.ok) {
+                mostrarFeedback(feedback, input, false, r.msg);
+                return; // no seguir a comprobar disponibilidad con un valor inválido
+            }
+        }
+        // 2) Disponibilidad en el servidor
+        verificarCampo(input, campo, feedback, msgExiste);
+    };
+
+    input.addEventListener('blur', ejecutar);
     input.addEventListener('input', () => {
         clearTimeout(debounceTimers[id]);
         feedback.textContent = '';
         feedback.className = 'field-feedback';
         input.classList.remove('input-error', 'input-ok');
-        debounceTimers[id] = setTimeout(() => verificarCampo(input, campo, feedback, msgExiste), 600);
+        debounceTimers[id] = setTimeout(ejecutar, 600);
     });
 });
 
@@ -671,6 +703,17 @@ async function verificarCampo(input, campo, feedback, msgExiste) {
     try {
         const res  = await fetch('api_verificar_campo.php?campo=' + campo + '&valor=' + encodeURIComponent(val));
         const data = await res.json();
+
+        // Para email, la API también verifica que el dominio exista de
+        // verdad (DNS). Si no existe, se marca error aunque "disponible"
+        // sea true (nunca se ha registrado, pero tampoco es un dominio real).
+        if (data.valido === false) {
+            feedback.textContent = '✗ ' + (data.msg || 'El dominio del correo no existe o no puede recibir correos');
+            feedback.className   = 'field-feedback error';
+            input.classList.remove('input-ok'); input.classList.add('input-error');
+            return;
+        }
+
         if (data.disponible) {
             feedback.textContent = '✓ Disponible';
             feedback.className   = 'field-feedback ok';
@@ -730,9 +773,46 @@ dropZone?.addEventListener('drop', e => {
 <script src="js/validaciones.js"></script>
 <script>
 // ── Validación de formato en tiempo real: nombres/apellidos (solo letras)
-// y teléfono (formato ecuatoriano). La verificación de duplicados
-// (email/usuario/cédula) ya se hace arriba vía AJAX.
-bindValidaciones('form');
+// y teléfono (formato ecuatoriano). Email, usuario y cédula NO se pasan
+// por bindValidaciones() aquí a propósito: ya tienen su propio manejo más
+// completo (formato + disponibilidad en el servidor) arriba, con sus
+// propios spans #email-feedback/#usuario-feedback/#cedula-feedback; usar
+// también bindValidaciones() en esos campos duplicaría los mensajes.
+const formAsesor = document.querySelector('form');
+
+function bindFormato(name, fn) {
+    const el = formAsesor?.querySelector(`[name="${name}"]`);
+    if (!el) return;
+    const run = () => {
+        const r = fn(el.value);
+        setFieldState(el, el.value ? r.ok : null, r.msg);
+    };
+    el.addEventListener('blur', run);
+    el.addEventListener('input', run);
+}
+
+bindFormato('nombres',   v => validarNombre(v, 'Nombres'));
+bindFormato('apellidos', v => validarNombre(v, 'Apellidos'));
+bindFormato('telefono',  v => validarTelefono(v));
+
+// ── Tras registrarse con éxito (modo público), redirigir automáticamente
+// al login del rol correspondiente (asesor) para que el usuario pueda
+// iniciar sesión de inmediato apenas lo aprueben — mayor interacción,
+// en vez de dejarlo parado en la misma pantalla de registro.
+<?php if ($success && !$modo_supervisor): ?>
+(function () {
+    let seg = 4;
+    const span = document.getElementById('countdownRedirect');
+    const timer = setInterval(() => {
+        seg--;
+        if (span) span.textContent = seg;
+        if (seg <= 0) {
+            clearInterval(timer);
+            window.location.href = 'login.php?role=asesor';
+        }
+    }, 1000);
+})();
+<?php endif; ?>
 </script>
 </body>
 </html>

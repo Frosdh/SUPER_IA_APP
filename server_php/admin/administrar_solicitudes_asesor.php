@@ -198,7 +198,7 @@ try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS solicitudes_asesor (
             id_solicitud INT AUTO_INCREMENT PRIMARY KEY,
-            id_supervisor INT NOT NULL,
+            id_supervisor VARCHAR(64) NOT NULL,
             usuario VARCHAR(50) NOT NULL UNIQUE,
             nombres VARCHAR(100) NOT NULL,
             apellidos VARCHAR(100) NOT NULL,
@@ -215,11 +215,22 @@ try {
             observaciones TEXT NULL
         )
     ");
-    
+
     // Verificar si la columna credencial_archivo existe, si no agregarla
     $stmt = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE 'credencial_archivo'");
     if (!$stmt->fetch()) {
         $pdo->exec("ALTER TABLE solicitudes_asesor ADD COLUMN credencial_archivo VARCHAR(255) NULL AFTER tipo_cuenta");
+    }
+
+    // Corregir tipo de id_supervisor si la tabla ya existía como INT.
+    // El id real de usuario/supervisor es un UUID (VARCHAR), no un entero:
+    // si esta columna se creó como INT en algún momento, MySQL truncaba/
+    // convertía ese UUID a un número al guardar la solicitud, y luego
+    // "WHERE id_supervisor = ?" (con el UUID de la sesión) nunca coincidía
+    // — por eso el supervisor no veía las solicitudes creadas desde la web.
+    $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_asesor LIKE 'id_supervisor'")->fetch(PDO::FETCH_ASSOC);
+    if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+        $pdo->exec("ALTER TABLE solicitudes_asesor MODIFY COLUMN id_supervisor VARCHAR(64) NOT NULL DEFAULT ''");
     }
 } catch (Exception $e) {}
 
@@ -653,17 +664,47 @@ require_once '_sidebar_supervisor.php';
                 $t_cta = htmlspecialchars($solicitud['tipo_cuenta']);
                 $est = $solicitud['estado']; // pendiente, aprobada, rechazada
                 
-                // Credencial
+                // Credencial — se resuelve la ruta REAL en disco (no solo se
+                // adivina un href) para no abrir "otra cosa" ni un enlace roto.
+                // Antes, si el valor guardado no calzaba con los patrones
+                // esperados, el <a href> apuntaba a un archivo que no era el
+                // correcto (o a nada), y si no había credencial simplemente
+                // no se mostraba ningún aviso.
                 $cred = $solicitud['credencial_archivo'];
                 $credPath = '';
+                $credExiste = false;
                 $ext = '';
                 if (!empty($cred)) {
-                    if (str_contains($cred, 'documentos_asesor') || str_contains($cred, 'uploads/')) {
-                        $credPath = '../../' . ltrim($cred, '/');
+                    $credNorm = str_replace('\\', '/', $cred);
+                    $credNorm = ltrim($credNorm, '/');
+                    // Candidatos físicos posibles según el origen del registro
+                    // (web público: solo nombre de archivo en asesor_credentials/;
+                    //  app móvil: ruta completa uploads/documentos_asesor/...).
+                    $candidatos = [];
+                    if (str_starts_with(strtolower($credNorm), 'uploads/')) {
+                        $candidatos[] = __DIR__ . '/../../' . $credNorm;
                     } else {
-                        $credPath = '../../uploads/asesor_credentials/' . $cred;
+                        $candidatos[] = __DIR__ . '/../../uploads/documentos_asesor/' . basename($credNorm);
+                        $candidatos[] = __DIR__ . '/../../uploads/asesor_credentials/' . basename($credNorm);
                     }
-                    $ext = strtolower(pathinfo($cred, PATHINFO_EXTENSION));
+                    foreach ($candidatos as $rutaFisica) {
+                        if (is_file($rutaFisica)) {
+                            $credExiste = true;
+                            // Ruta relativa desde admin/ para el <a href>
+                            $credPath = '../../' . ltrim(str_replace(__DIR__ . '/../../', '', $rutaFisica), '/');
+                            break;
+                        }
+                    }
+                    // Si ningún candidato existe físicamente, igual se arma un
+                    // href de mejor esfuerzo (por si el archivo real está en
+                    // otra carpeta no contemplada), pero se marca como no
+                    // confirmado para mostrar el aviso correspondiente.
+                    if (!$credPath) {
+                        $credPath = str_starts_with(strtolower($credNorm), 'uploads/')
+                            ? '../../' . $credNorm
+                            : '../../uploads/documentos_asesor/' . basename($credNorm);
+                    }
+                    $ext = strtolower(pathinfo($credNorm, PATHINFO_EXTENSION));
                 }
             ?>
             <div class="sc" data-search-user="<?= strtolower($usr) ?>" data-search-name="<?= strtolower($nom) ?>" data-search-status="<?= $est ?>">
@@ -708,7 +749,7 @@ require_once '_sidebar_supervisor.php';
                             <?= ucfirst($est) ?>
                         </span>
                         
-                        <?php if (!empty($cred)):
+                        <?php if (!empty($cred) && $credExiste):
                             $icon = $ext === 'pdf' ? 'fa-file-pdf' : 'fa-file-image';
                             $color = $ext === 'pdf' ? '#ef4444' : '#3182fe';
                         ?>
@@ -718,15 +759,24 @@ require_once '_sidebar_supervisor.php';
                            style="color:<?= $color ?>; text-decoration:none; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border:1px solid <?= $color ?>33; border-radius:8px; font-size:11.5px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
                             <i class="fas <?= $icon ?>"></i> Credencial
                         </a>
+                        <?php elseif (!empty($cred) && !$credExiste): ?>
+                        <span title="El archivo no se encontró en el servidor"
+                              style="color:#94a3b8; font-weight:700; display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:8px; font-size:11.5px; background:#f8fafc;">
+                            <i class="fas fa-exclamation-triangle"></i> Credencial no encontrada
+                        </span>
+                        <?php else: ?>
+                        <span style="color:#94a3b8; font-weight:600; display:inline-flex; align-items:center; gap:4px; padding:4px 8px; border:1px solid #e2e8f0; border-radius:8px; font-size:11.5px; background:#f8fafc;">
+                            <i class="fas fa-file-circle-xmark"></i> Sin credencial
+                        </span>
                         <?php endif; ?>
                     </div>
 
                     <div style="display: flex; gap: 5px;">
                         <?php if ($est === 'pendiente'): ?>
-                        <button class="btn-aprobar btn-sm" style="padding: 6px 10px; border-radius: 8px;" onclick="mostrarModal('aprobar', '<?= htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['nombres'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['credencial_archivo'])) ?>')">
+                        <button class="btn-aprobar btn-sm" style="padding: 6px 10px; border-radius: 8px;" onclick="mostrarModal('aprobar', '<?= htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['nombres'])) ?>', '<?= $credExiste ? htmlspecialchars(addslashes($credPath)) : '' ?>')">
                             <i class="fas fa-check"></i>
                         </button>
-                        <button class="btn-rechazar btn-sm" style="padding: 6px 10px; border-radius: 8px;" onclick="mostrarModal('rechazar', '<?= htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['nombres'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['credencial_archivo'])) ?>')">
+                        <button class="btn-rechazar btn-sm" style="padding: 6px 10px; border-radius: 8px;" onclick="mostrarModal('rechazar', '<?= htmlspecialchars(addslashes((string)$solicitud['id_solicitud'])) ?>', '<?= htmlspecialchars(addslashes($solicitud['nombres'])) ?>', '<?= $credExiste ? htmlspecialchars(addslashes($credPath)) : '' ?>')">
                             <i class="fas fa-times"></i>
                         </button>
                         <?php else: ?>
@@ -797,72 +847,22 @@ function mostrarModal(accion, id, nombre, credencial) {
         btnConfirmar.style.background = '#ef4444';
     }
     
-    // Agregar sección de credencial
+    // Agregar sección de credencial.
+    // NOTA: "credencial" ya llega como la ruta relativa VERIFICADA en el
+    // servidor (PHP ya comprobó con is_file() que el archivo existe ahí),
+    // no un valor crudo de la BD para adivinar aquí en JS. Si el servidor no
+    // pudo confirmar el archivo, este parámetro llega vacío y se muestra el
+    // aviso de "no encontrada" directamente, sin intentar rutas al azar.
     if (credencial) {
         modalHTML += '<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e7eb;">';
-        modalHTML += '<p style="margin-bottom: 10px; color: #6c757d; font-size: 13px;\"><strong>Credencial:</strong></p>';
-        // Normalizar diferentes formatos que puedan venir desde la DB:
-        // - URLs absolutas (http/https)
-        // - Rutas relativas que contienen 'uploads/' (con / o \ en Windows)
-        // - Solo nombre de archivo (legacy)
-        let credPath = '';
-        // URL absoluta
-        if (/^(https?:)?\/\//i.test(credencial)) {
-            credPath = credencial;
+        modalHTML += '<p style="margin-bottom: 10px; color: #6c757d; font-size: 13px;"><strong>Credencial:</strong></p>';
+        const ext = credencial.split('.').pop().toLowerCase();
+        if (ext === 'pdf') {
+            modalHTML += '<embed src="' + credencial + '" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
         } else {
-            // Normalizar backslashes a slashes
-            let normalized = credencial.replace(/\\\\/g, '/').replace(/\\/g, '/');
-            const lower = normalized.toLowerCase();
-            const idx = lower.indexOf('uploads/');
-            if (idx !== -1) {
-                // Tomar desde 'uploads/' en adelante y convertir a ruta relativa web
-                const sub = normalized.substr(idx);
-                credPath = '../../' + sub.replace(/^\/+/, '');
-            } else {
-                // Tratar como nombre de archivo almacenado en la carpeta legacy
-                credPath = '../../uploads/asesor_credentials/' + encodeURIComponent(normalized);
-            }
+            modalHTML += '<img src="' + credencial + '" style="max-width: 100%; max-height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
         }
-        console.log('Credencial raw:', credencial, '-> credPath:', credPath);
-        const ext = credPath.split('.').pop().toLowerCase();
-        // Intentar HEAD al recurso y si falla, usar fallback legacy
-        const legacyPath = '../../uploads/asesor_credentials/' + encodeURIComponent(credencial.replace(/.*[\\\/]?/, ''));
-        // marcador temporal donde colocaremos la vista previa
-        const previewId = 'cred-preview-' + Math.random().toString(36).substring(2, 8);
-        modalHTML += '<div id="' + previewId + '" style="min-height: 60px; display:flex; align-items:center; justify-content:center;"></div>';
-        modalHTML += '<p style="margin-top: 10px;"><a id="cred-download-' + previewId + '" href="#" target="_blank" style="color: #3182fe; text-decoration: none; font-size: 12px;\"><i class="fas fa-download me-1"></i>Descargar</a></p>';
-
-        // Después de que el modal sea insertado en DOM, haremos la comprobación
-        setTimeout(() => {
-            const container = document.getElementById(previewId);
-            const downloadLink = document.getElementById('cred-download-' + previewId);
-            const tryPaths = [credPath, legacyPath];
-
-            const tryNext = (index) => {
-                if (index >= tryPaths.length) {
-                    container.innerHTML = '<div style="color:#6c757d;">No se encontró el archivo.</div>';
-                    downloadLink.href = '#';
-                    return;
-                }
-                const p = tryPaths[index];
-                fetch(p, { method: 'HEAD' }).then(res => {
-                    if (res.ok) {
-                        if (ext === 'pdf') {
-                            container.innerHTML = '<embed src="' + p + '" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
-                        } else {
-                            container.innerHTML = '<img src="' + p + '" style="max-width: 100%; max-height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
-                        }
-                        downloadLink.href = p;
-                    } else {
-                        tryNext(index + 1);
-                    }
-                }).catch(err => {
-                    tryNext(index + 1);
-                });
-            };
-
-            tryNext(0);
-        }, 50);
+        modalHTML += '<p style="margin-top: 10px;"><a href="' + credencial + '" target="_blank" style="color: #3182fe; text-decoration: none; font-size: 12px;"><i class="fas fa-download me-1"></i>Descargar</a></p>';
     } else {
         modalHTML += '<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e7eb;">';
         modalHTML += '<p style="color: #fbbf24; font-size: 12px;"><i class="fas fa-exclamation-triangle me-1"></i>⚠️ No hay credencial disponible</p>';
@@ -891,7 +891,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         cards.forEach(card => {
             const texto  = card.textContent.toLowerCase();
-            const estado = (card.dataset.estado || '').toLowerCase();
+            const estado = (card.dataset.searchStatus || '').toLowerCase();
             const matchBusq = !term || texto.includes(term);
             const matchFilt = currentStatus === 'todos' || estado === currentStatus;
             card.style.display = (matchBusq && matchFilt) ? '' : 'none';
@@ -907,7 +907,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.addEventListener('click', function() {
             filterButtons.forEach(b => b.classList.remove('active'));
             this.classList.add('active');
-            currentStatus = this.dataset.filter || 'todos';
+            currentStatus = this.dataset.status || 'todos';
             aplicarFiltros();
         });
     });

@@ -9,7 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 // Obtener y validar datos
 $cooperativa = $_POST['cooperativa'] ?? '';
-$administrador = $_POST['administrador'] ?? '';
+$gerente = $_POST['gerente'] ?? '';
 $nombres = trim($_POST['nombres'] ?? '');
 $apellidos = trim($_POST['apellidos'] ?? '');
 $usuario = trim($_POST['usuario'] ?? '');
@@ -24,7 +24,7 @@ $archivo_guardado = null;
 
 // Validaciones
 if (empty($cooperativa)) $errores[] = 'La cooperativa es requerida';
-if (empty($administrador)) $errores[] = 'El administrador es requerido';
+if (empty($gerente)) $errores[] = 'El gerente responsable es requerido';
 
 $rNombres = validarNombre($nombres, 'Los nombres');
 if (!$rNombres['ok']) $errores[] = $rNombres['msg'];
@@ -97,8 +97,8 @@ try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS solicitudes_supervisor (
             id_solicitud INT AUTO_INCREMENT PRIMARY KEY,
-            id_cooperativa INT NOT NULL,
-            id_administrador INT NOT NULL,
+            id_cooperativa VARCHAR(36) NOT NULL,
+            id_administrador VARCHAR(64) NOT NULL,
             usuario VARCHAR(50) NOT NULL UNIQUE,
             cedula VARCHAR(13) NULL,
             nombres VARCHAR(100) NOT NULL,
@@ -126,6 +126,19 @@ try {
         $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
     }
 
+    // Asegurar que id_administrador e id_cooperativa acepten UUID (VARCHAR).
+    // El gerente y la cooperativa reales son UUID/CHAR(36); si estas columnas
+    // se crearon antes como INT, MySQL truncaba el UUID al guardar y luego
+    // el filtrado "WHERE id_administrador = ..." nunca coincidía.
+    $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'id_administrador'")->fetch(PDO::FETCH_ASSOC);
+    if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+        $pdo->exec("ALTER TABLE solicitudes_supervisor MODIFY COLUMN id_administrador VARCHAR(64) NOT NULL DEFAULT ''");
+    }
+    $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'id_cooperativa'")->fetch(PDO::FETCH_ASSOC);
+    if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+        $pdo->exec("ALTER TABLE solicitudes_supervisor MODIFY COLUMN id_cooperativa VARCHAR(36) NOT NULL DEFAULT ''");
+    }
+
     // Hash de contraseña
     $password_hash = hash('sha256', $password);
 
@@ -138,7 +151,7 @@ try {
 
     $stmt->execute([
         $cooperativa,
-        $administrador,
+        $gerente,
         $usuario,
         $cedula,
         $nombres,

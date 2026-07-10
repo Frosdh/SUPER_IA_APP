@@ -68,6 +68,8 @@ try {
         'seleccion_fijada'      => "ADD COLUMN seleccion_fijada TINYINT(1) NOT NULL DEFAULT 0 AFTER seleccionada_at",
         'seleccion_fijada_at'   => "ADD COLUMN seleccion_fijada_at DATETIME DEFAULT NULL AFTER seleccion_fijada",
         'pospuesta_de_dia'      => "ADD COLUMN pospuesta_de_dia DATE DEFAULT NULL AFTER seleccion_fijada_at",
+        'posposiciones'         => "ADD COLUMN posposiciones INT NOT NULL DEFAULT 0 AFTER pospuesta_de_dia",
+        'incumplida_at'         => "ADD COLUMN incumplida_at DATETIME DEFAULT NULL AFTER posposiciones",
     ] as $col => $ddl) {
         $chk = $conn->query("SHOW COLUMNS FROM tarea LIKE '$col'");
         if ($chk && $chk->num_rows === 0) {
@@ -75,9 +77,24 @@ try {
         }
     }
 
+    // Asegurar que el estado admita 'incumplida' (tarea pospuesta 5 veces).
+    // Si la columna es ENUM se amplía; si es VARCHAR no hace falta nada.
+    $colEstado = $conn->query("SHOW COLUMNS FROM tarea LIKE 'estado'")->fetch_assoc();
+    if ($colEstado && stripos($colEstado['Type'], 'enum') !== false && stripos($colEstado['Type'], "'incumplida'") === false) {
+        $conn->query("ALTER TABLE tarea MODIFY COLUMN estado
+            ENUM('programada','pendiente','postergada','en_proceso','completada','cancelada','incumplida')
+            NOT NULL DEFAULT 'programada'");
+    }
+
+    // Límite de posposiciones: al llegar a la 5ta, la tarea se marca como
+    // 'incumplida' en vez de reprogramarse (deja de verla el asesor y no
+    // vuelve al pool; solo el supervisor puede reasignarla desde la web).
+    // En la 4ta posposición se avisa que la próxima será la última.
+    $MAX_POSPOSICIONES = 5;
+
     // Verificar tarea pertenece al asesor y que sea editable
     $stChk = $conn->prepare(
-        'SELECT estado, estado_seleccion_prev, seleccionada_dia, fecha_programada, pospuesta_de_dia
+        'SELECT estado, estado_seleccion_prev, seleccionada_dia, fecha_programada, pospuesta_de_dia, posposiciones
          FROM tarea WHERE id = ? AND asesor_id = ? LIMIT 1'
     );
     $stChk->bind_param('ss', $tarea_id, $asesor_id);
@@ -95,6 +112,7 @@ try {
     $sel_dia   = (string)($r['seleccionada_dia'] ?? '');
     $fecha_prog= (string)($r['fecha_programada'] ?? '');
     $pospDia   = (string)($r['pospuesta_de_dia'] ?? '');
+    $posp      = (int)($r['posposiciones'] ?? 0);
 
     if ($estado === 'cancelada') {
         echo json_encode(['status' => 'error', 'message' => 'La tarea está cancelada'], JSON_UNESCAPED_UNICODE);
@@ -102,6 +120,37 @@ try {
     }
     if ($estado === 'completada') {
         echo json_encode(['status' => 'error', 'message' => 'La tarea ya está finalizada'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    if ($estado === 'incumplida') {
+        echo json_encode(['status' => 'error', 'message' => 'Esta tarea ya fue marcada como incumplida. Debe ser reasignada por tu supervisor.'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
+    $nuevoConteo = $posp + 1;
+
+    // ── Se agotaron las posposiciones: marcar como incumplida ──────────
+    if ($nuevoConteo >= $MAX_POSPOSICIONES) {
+        $stInc = $conn->prepare(
+            "UPDATE tarea
+             SET estado = 'incumplida',
+                 posposiciones = ?,
+                 incumplida_at = NOW(),
+                 seleccion_fijada = 0,
+                 seleccion_fijada_at = NULL
+             WHERE id = ? AND asesor_id = ?"
+        );
+        $stInc->bind_param('iss', $nuevoConteo, $tarea_id, $asesor_id);
+        $ok = $stInc->execute();
+        $stInc->close();
+
+        echo json_encode([
+            'status'      => $ok ? 'success' : 'error',
+            'incumplida'  => (bool)$ok,
+            'message'     => $ok
+                ? 'Ya pospusiste esta tarea 5 veces. Se marcó como incumplida y ya no aparecerá en tu lista; tu supervisor deberá reasignarla a otro asesor.'
+                : 'No se pudo actualizar la tarea',
+        ], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -134,17 +183,26 @@ try {
              seleccionada_at  = NOW(),
              seleccion_fijada = 0,
              seleccion_fijada_at = NULL,
-             pospuesta_de_dia = ?
+             pospuesta_de_dia = ?,
+             posposiciones = ?
          WHERE id = ? AND asesor_id = ?"
     );
-    $stUp->bind_param('ssssss', $nueva_fecha, $prev, $nueva_fecha, $pospDia, $tarea_id, $asesor_id);
+    $stUp->bind_param('ssssiss', $nueva_fecha, $prev, $nueva_fecha, $pospDia, $nuevoConteo, $tarea_id, $asesor_id);
     $ok = $stUp->execute();
     $stUp->close();
 
-    echo json_encode([
-        'status' => $ok ? 'success' : 'error',
-        'message' => $ok ? 'Tarea pospuesta' : 'No se pudo posponer la tarea',
-    ], JSON_UNESCAPED_UNICODE);
+    $resp = [
+        'status'         => $ok ? 'success' : 'error',
+        'message'        => $ok ? 'Tarea pospuesta' : 'No se pudo posponer la tarea',
+        'posposiciones'  => $nuevoConteo,
+    ];
+
+    // Aviso en la penúltima oportunidad (4ta posposición de 5)
+    if ($ok && $nuevoConteo === $MAX_POSPOSICIONES - 1) {
+        $resp['advertencia'] = 'Ya pospusiste esta tarea ' . $nuevoConteo . ' veces. Si la pospones una vez más se marcará como incumplida, dejarás de verla y tu supervisor deberá reasignarla.';
+    }
+
+    echo json_encode($resp, JSON_UNESCAPED_UNICODE);
 
 } catch (Throwable $e) {
     error_log('[posponer_tarea] ' . $e->getMessage());

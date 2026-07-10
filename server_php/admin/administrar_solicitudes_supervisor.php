@@ -29,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->exec("
                     CREATE TABLE IF NOT EXISTS solicitudes_supervisor (
                         id_solicitud INT AUTO_INCREMENT PRIMARY KEY,
-                        id_cooperativa INT NOT NULL,
-                        id_administrador INT NOT NULL,
+                        id_cooperativa VARCHAR(36) NOT NULL,
+                        id_administrador VARCHAR(64) NOT NULL,
                         usuario VARCHAR(50) NOT NULL UNIQUE,
                         cedula VARCHAR(13) NULL,
                         nombres VARCHAR(100) NOT NULL,
@@ -136,8 +136,8 @@ try {
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS solicitudes_supervisor (
             id_solicitud INT AUTO_INCREMENT PRIMARY KEY,
-            id_cooperativa INT NOT NULL,
-            id_administrador INT NOT NULL,
+            id_cooperativa VARCHAR(36) NOT NULL,
+            id_administrador VARCHAR(64) NOT NULL,
             usuario VARCHAR(50) NOT NULL UNIQUE,
             cedula VARCHAR(13) NULL,
             nombres VARCHAR(100) NOT NULL,
@@ -164,28 +164,49 @@ try {
     if (!$stmt->fetch()) {
         $pdo->exec("ALTER TABLE solicitudes_supervisor ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
     }
+
+    // Corregir tipo de id_administrador / id_cooperativa si la tabla ya
+    // existía como INT. El gerente y la cooperativa reales son UUID
+    // (VARCHAR), no un entero: si estas columnas se crearon como INT en
+    // algún momento, MySQL truncaba/convertía ese UUID a un número al
+    // guardar la solicitud, y luego "WHERE id_administrador = ..." (con el
+    // UUID de la sesión) nunca coincidía — por eso el gerente no veía las
+    // solicitudes de supervisor que le correspondían.
+    $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'id_administrador'")->fetch(PDO::FETCH_ASSOC);
+    if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+        $pdo->exec("ALTER TABLE solicitudes_supervisor MODIFY COLUMN id_administrador VARCHAR(64) NOT NULL DEFAULT ''");
+    }
+    $colInfo = $pdo->query("SHOW COLUMNS FROM solicitudes_supervisor LIKE 'id_cooperativa'")->fetch(PDO::FETCH_ASSOC);
+    if ($colInfo && stripos($colInfo['Type'], 'int') !== false) {
+        $pdo->exec("ALTER TABLE solicitudes_supervisor MODIFY COLUMN id_cooperativa VARCHAR(36) NOT NULL DEFAULT ''");
+    }
 } catch (Exception $e) {}
 
 // Obtener solicitudes de supervisores
 $solicitudes = [];
 try {
     $query = "SELECT * FROM solicitudes_supervisor ";
-    
-    // Si es admin (no super admin), solo ver sus propias solicitudes
+    $params = [];
+
+    // Si es admin (no super admin), solo ver sus propias solicitudes.
+    // id_administrador es un UUID (VARCHAR) — antes se usaba intval($admin_id),
+    // que truncaba el UUID a 0 y nunca traía resultados.
     if (!$is_super_admin && $is_admin) {
-        $query .= "WHERE id_administrador = " . intval($admin_id) . " ";
+        $query .= "WHERE id_administrador = ? ";
+        $params[] = $admin_id;
     }
-    
-    $query .= "ORDER BY 
-            CASE estado 
-                WHEN 'pendiente' THEN 1 
-                WHEN 'rechazada' THEN 2 
-                WHEN 'aprobada' THEN 3 
+
+    $query .= "ORDER BY
+            CASE estado
+                WHEN 'pendiente' THEN 1
+                WHEN 'rechazada' THEN 2
+                WHEN 'aprobada' THEN 3
             END,
             fecha_solicitud DESC
     ";
-    
-    $stmt = $pdo->query($query);
+
+    $stmt = $pdo->prepare($query);
+    $stmt->execute($params);
     $solicitudes = $stmt->fetchAll();
 } catch (Exception $e) {}
 
@@ -292,8 +313,17 @@ require_once '_sidebar_gerente.php';
         <div class="filter-bar" style="background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 14px 18px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,.04);">
             <i class="fas fa-search" style="color:#6b7280;"></i>
             <input type="text" id="busquedaSolicitud" placeholder="Buscar por nombre o email..." style="min-width:260px; flex:1; padding:9px 14px; border:1.5px solid #e2e8f0; border-radius:9px; font-size:14px; outline:none; transition: border-color 0.2s;" onfocus="this.style.borderColor='#fbbf24'" onblur="this.style.borderColor='#e2e8f0'">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn-filter active" data-status="todos" style="padding:7px 14px;border:1.5px solid #e2e8f0;border-radius:8px;background:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">Todos</button>
+                <button type="button" class="btn-filter" data-status="pendiente" style="padding:7px 14px;border:1.5px solid #fbbf2433;border-radius:8px;background:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">Pendientes</button>
+                <button type="button" class="btn-filter" data-status="aprobada" style="padding:7px 14px;border:1.5px solid #10b98133;border-radius:8px;background:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">Aprobadas</button>
+                <button type="button" class="btn-filter" data-status="rechazada" style="padding:7px 14px;border:1.5px solid #ef444433;border-radius:8px;background:#fff;font-size:12.5px;font-weight:700;cursor:pointer;">Rechazadas</button>
+            </div>
             <span id="cntResultados" style="font-size:13px; color:#6b7280; margin-left:auto;"><?php echo count($solicitudes); ?> resultados</span>
         </div>
+        <style>
+            .btn-filter.active { background: var(--brand-navy-deep) !important; color: #fff !important; border-color: var(--brand-navy-deep) !important; }
+        </style>
 
         <!-- TABLA DE SOLICITUDES -->
         <div class="table-card">
@@ -322,22 +352,40 @@ require_once '_sidebar_gerente.php';
                             </td>
                         </tr>
                         <?php else: ?>
-                            <?php foreach ($solicitudes as $solicitud): ?>
-                            <tr>
+                            <?php foreach ($solicitudes as $solicitud):
+                                // Credencial: verificar en disco (is_file) igual que en
+                                // solicitudes de asesor, para no mostrar "Ver Credencial"
+                                // si el archivo en realidad no existe ahí.
+                                $credSup = $solicitud['credencial_archivo'] ?? '';
+                                $credSupPath = '';
+                                $credSupExiste = false;
+                                if (!empty($credSup)) {
+                                    $rutaFisicaSup = __DIR__ . '/../../uploads/supervisor_credentials/' . basename($credSup);
+                                    if (is_file($rutaFisicaSup)) {
+                                        $credSupExiste = true;
+                                        $credSupPath = '../../uploads/supervisor_credentials/' . basename($credSup);
+                                    }
+                                }
+                            ?>
+                            <tr data-search-status="<?php echo htmlspecialchars($solicitud['estado']); ?>">
                                 <td><strong><?php echo htmlspecialchars($solicitud['usuario']); ?></strong></td>
                                 <td><?php echo htmlspecialchars($solicitud['cedula'] ?? ''); ?></td>
                                 <td><?php echo htmlspecialchars($solicitud['nombres'] . ' ' . $solicitud['apellidos']); ?></td>
                                 <td><?php echo htmlspecialchars($solicitud['email']); ?></td>
                                 <td>
-                                    <?php if ($solicitud['credencial_archivo']): ?>
-                                    <a href="../../uploads/supervisor_credentials/<?php echo htmlspecialchars($solicitud['credencial_archivo']); ?>" 
-                                       target="_blank" 
+                                    <?php if ($credSupExiste): ?>
+                                    <a href="<?php echo htmlspecialchars($credSupPath); ?>"
+                                       target="_blank"
                                        style="color: #3182fe; text-decoration: none; font-weight: 600;">
                                         <i class="fas fa-file-pdf me-1"></i>Ver Credencial
                                     </a>
+                                    <?php elseif (!empty($credSup)): ?>
+                                    <span style="color: #9ca3af; font-size: 12px;">
+                                        <i class="fas fa-exclamation-triangle me-1"></i>Credencial no encontrada
+                                    </span>
                                     <?php else: ?>
                                     <span style="color: #9ca3af; font-size: 12px;">
-                                        <i class="fas fa-exclamation-triangle me-1"></i>No disponible
+                                        <i class="fas fa-file-circle-xmark me-1"></i>Sin credencial
                                     </span>
                                     <?php endif; ?>
                                 </td>
@@ -349,10 +397,10 @@ require_once '_sidebar_gerente.php';
                                 <td><?php echo date('d/m/Y H:i', strtotime($solicitud['fecha_solicitud'])); ?></td>
                                 <td>
                                     <?php if ($solicitud['estado'] === 'pendiente'): ?>
-                                    <button class="btn-aprobar" onclick="mostrarModal('aprobar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo htmlspecialchars(addslashes($solicitud['credencial_archivo'])); ?>')">
+                                    <button class="btn-aprobar" onclick="mostrarModal('aprobar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo $credSupExiste ? htmlspecialchars(addslashes($credSupPath)) : ''; ?>')">
                                         <i class="fas fa-check me-1"></i>Aprobar
                                     </button>
-                                    <button class="btn-rechazar" onclick="mostrarModal('rechazar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo htmlspecialchars(addslashes($solicitud['credencial_archivo'])); ?>')" style="margin-left: 5px;">
+                                    <button class="btn-rechazar" onclick="mostrarModal('rechazar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo $credSupExiste ? htmlspecialchars(addslashes($credSupPath)) : ''; ?>')" style="margin-left: 5px;">
                                         <i class="fas fa-times me-1"></i>Rechazar
                                     </button>
                                     <?php else: ?>
@@ -418,17 +466,20 @@ function mostrarModal(accion, id, credencial) {
         btnConfirmar.style.background = '#ef4444';
     }
     
-    // Agregar sección de credencial
+    // Agregar sección de credencial.
+    // "credencial" ya llega como la ruta relativa VERIFICADA en el servidor
+    // (is_file() ya confirmó que el archivo existe ahí); si no se pudo
+    // confirmar, llega vacío y se muestra el aviso de "no disponible".
     if (credencial) {
         modalHTML += '<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e7eb;">';
         modalHTML += '<p style="margin-bottom: 10px; color: #6c757d; font-size: 13px;"><strong>Credencial:</strong></p>';
         const ext = credencial.split('.').pop().toLowerCase();
         if (ext === 'pdf') {
-            modalHTML += '<embed src="../../uploads/supervisor_credentials/' + encodeURIComponent(credencial) + '" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
+            modalHTML += '<embed src="' + credencial + '" type="application/pdf" style="width: 100%; height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
         } else {
-            modalHTML += '<img src="../../uploads/supervisor_credentials/' + encodeURIComponent(credencial) + '" style="max-width: 100%; max-height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
+            modalHTML += '<img src="' + credencial + '" style="max-width: 100%; max-height: 300px; border: 1px solid #e5e7eb; border-radius: 6px;">';
         }
-        modalHTML += '<p style="margin-top: 10px;"><a href="../../uploads/supervisor_credentials/' + encodeURIComponent(credencial) + '" target="_blank" style="color: #3182fe; text-decoration: none; font-size: 12px;"><i class="fas fa-download me-1"></i>Descargar archivo</a></p>';
+        modalHTML += '<p style="margin-top: 10px;"><a href="' + credencial + '" target="_blank" style="color: #3182fe; text-decoration: none; font-size: 12px;"><i class="fas fa-download me-1"></i>Descargar archivo</a></p>';
     } else {
         modalHTML += '<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e7eb;">';
         modalHTML += '<p style="color: #fbbf24; font-size: 12px;"><i class="fas fa-exclamation-triangle me-1"></i>⚠️ No hay credencial disponible</p>';
@@ -442,52 +493,65 @@ function cerrarModal() {
     document.getElementById('solModal').classList.remove('show');
 }
 
-// Lógica de búsqueda en la tabla
+// Lógica de búsqueda + filtro por estado en la tabla
 document.addEventListener('DOMContentLoaded', function() {
     const inputBusqueda = document.getElementById('busquedaSolicitud');
     const cntResultados = document.getElementById('cntResultados');
+    const filterButtons = document.querySelectorAll('.btn-filter');
+    let currentStatus = 'todos';
 
-    if (inputBusqueda) {
-        inputBusqueda.addEventListener('input', function() {
-            const term = this.value.toLowerCase().trim();
-            const filas = document.querySelectorAll('.table tbody tr:not(.empty-row)');
-            let visibles = 0;
-            
-            filas.forEach(fila => {
-                // Si la fila es la de "No hay solicitudes", la ignoramos
-                if (fila.querySelector('td[colspan]')) return;
-                
-                const usuario = fila.querySelector('td:nth-child(1)').textContent.toLowerCase();
-                const cedula = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
-                const nombre = fila.querySelector('td:nth-child(3)').textContent.toLowerCase();
-                const email = fila.querySelector('td:nth-child(4)').textContent.toLowerCase();
+    function aplicarFiltros() {
+        const term = inputBusqueda ? inputBusqueda.value.toLowerCase().trim() : '';
+        const filas = document.querySelectorAll('.table tbody tr:not(.empty-row)');
+        let visibles = 0;
 
-                if (usuario.includes(term) || cedula.includes(term) || nombre.includes(term) || email.includes(term)) {
-                    fila.style.display = '';
-                    visibles++;
-                } else {
-                    fila.style.display = 'none';
-                }
-            });
+        filas.forEach(fila => {
+            // Si la fila es la de "No hay solicitudes", la ignoramos
+            if (fila.querySelector('td[colspan]')) return;
 
-            if (cntResultados) cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
+            const estado = (fila.dataset.searchStatus || '').toLowerCase();
+            const usuario = fila.querySelector('td:nth-child(1)').textContent.toLowerCase();
+            const cedula = fila.querySelector('td:nth-child(2)').textContent.toLowerCase();
+            const nombre = fila.querySelector('td:nth-child(3)').textContent.toLowerCase();
+            const email = fila.querySelector('td:nth-child(4)').textContent.toLowerCase();
 
-            let emptyRow = document.querySelector('.empty-row');
-            if (visibles === 0 && filas.length > 0) {
-                if (!emptyRow) {
-                    const tbody = document.querySelector('.table tbody');
-                    const tr = document.createElement('tr');
-                    tr.className = 'empty-row';
-                    tr.innerHTML = '<td colspan="8" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con la búsqueda.</td>';
-                    tbody.appendChild(tr);
-                } else {
-                    emptyRow.querySelector('td').innerHTML = `<i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes para "${this.value}".`;
-                }
+            const matchBusq = !term || usuario.includes(term) || cedula.includes(term) || nombre.includes(term) || email.includes(term);
+            const matchFilt = currentStatus === 'todos' || estado === currentStatus;
+
+            if (matchBusq && matchFilt) {
+                fila.style.display = '';
+                visibles++;
             } else {
-                if (emptyRow) emptyRow.remove();
+                fila.style.display = 'none';
             }
         });
+
+        if (cntResultados) cntResultados.textContent = visibles + (visibles === 1 ? ' resultado' : ' resultados');
+
+        let emptyRow = document.querySelector('.empty-row');
+        if (visibles === 0 && filas.length > 0) {
+            if (!emptyRow) {
+                const tbody = document.querySelector('.table tbody');
+                const tr = document.createElement('tr');
+                tr.className = 'empty-row';
+                tr.innerHTML = '<td colspan="8" style="text-align:center;padding:32px 0;color:#9ca3af;"><i class="fas fa-search" style="font-size:28px;display:block;margin-bottom:10px;opacity:.4;"></i>No hay solicitudes que coincidan con el filtro.</td>';
+                tbody.appendChild(tr);
+            }
+        } else {
+            if (emptyRow) emptyRow.remove();
+        }
     }
+
+    if (inputBusqueda) inputBusqueda.addEventListener('input', aplicarFiltros);
+
+    filterButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            filterButtons.forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentStatus = this.dataset.status || 'todos';
+            aplicarFiltros();
+        });
+    });
 });
 
 document.getElementById('solModalForm').onsubmit = function(e) {
