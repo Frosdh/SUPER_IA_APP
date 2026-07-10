@@ -55,6 +55,18 @@ function fi(string $key): string {
     global $formErrors;
     return !empty($formErrors[$key]) ? ' input-error' : '';
 }
+// Nombre de la cooperativa previamente elegida (para repintar el buscador
+// tras un error de validación, ya que ahora es un input de texto y no un
+// <select> que recuerda su propia opción seleccionada).
+function fv_coop_nombre(): string {
+    global $formPrev, $cooperativas;
+    $id = $formPrev['id_cooperativa'] ?? '';
+    if ($id === '') return '';
+    foreach ($cooperativas as $c) {
+        if ((string)$c['id_cooperativa'] === (string)$id) return $c['nombre'];
+    }
+    return '';
+}
 
 // ── Cargar cooperativas: unidad_bancaria (internas) + seps_cooperativas
 // (catastro SEPS importado). Antes solo se leía unidad_bancaria, por eso
@@ -274,6 +286,26 @@ if ($modo_supervisor) {
         .form-group input:focus,
         .form-group select:focus { outline:none; border-color:var(--brand-navy); box-shadow:0 0 0 3px rgba(18,58,109,.10); }
         .form-group input::placeholder { color:#b0bac5; }
+        .coop-buscador-wrap { position: relative; }
+        .coop-buscador-list {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            max-height: 260px;
+            overflow-y: auto;
+            background: #fff;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 10px;
+            margin-top: 6px;
+            box-shadow: 0 12px 28px rgba(18,58,109,.15);
+        }
+        .coop-buscador-item { padding: 10px 13px; font-size: 14px; color: #1e293b; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(18,58,109,.08); }
+        .coop-buscador-empty { padding: 12px 13px; font-size: 13px; color: #9ca3af; font-style: italic; }
         .row-cols { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
         .row-cols .form-group { margin-bottom:0; }
         .form-row-cols-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:15px; }
@@ -360,17 +392,11 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = ''; require_once '_sidebar_supervi
             <?php if (!$modo_supervisor): ?>
             <!-- Selección cooperativa + supervisor (solo público) -->
             <div class="section-title"><i class="fas fa-building" style="color:var(--brand-yellow-deep);"></i> Cooperativa y Supervisor</div>
-            <div class="form-group">
-                <label><i class="fas fa-building me-1"></i> Cooperativa</label>
-                <select name="id_cooperativa" id="id_cooperativa" required>
-                    <option value="">-- Selecciona una cooperativa --</option>
-                    <?php foreach ($cooperativas as $c): ?>
-                        <option value="<?= htmlspecialchars($c['id_cooperativa']) ?>"
-                            <?= fv('id_cooperativa') === htmlspecialchars($c['id_cooperativa']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($c['nombre']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+            <div class="form-group coop-buscador-wrap">
+                <label for="id_cooperativa_buscar"><i class="fas fa-building me-1"></i> Cooperativa</label>
+                <input type="text" id="id_cooperativa_buscar" placeholder="Escribe para buscar tu cooperativa/banco…" autocomplete="off" value="<?= htmlspecialchars(fv_coop_nombre()) ?>">
+                <input type="hidden" name="id_cooperativa" id="id_cooperativa" value="<?= fv('id_cooperativa') ?>" required>
+                <div id="id_cooperativa_lista" class="coop-buscador-list"></div>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-user-tie me-1"></i> Supervisor</label>
@@ -538,6 +564,7 @@ input.input-ok     { border-color:#10b981 !important; }
 .public-card .prule.ok { background:rgba(74,222,128,.18); color:#4ADE80; }
 </style>
 
+<script src="js/cooperativa_buscador.js"></script>
 <script>
 // ── Mostrar/ocultar contraseña ─────────────────────────────
 function toggleVis(inputId, iconId) {
@@ -606,7 +633,7 @@ function checkConfirm() {
 
 // ── Carga dinámica de supervisores (modo público) ─────────
 <?php if (!$modo_supervisor): ?>
-const coopSel = document.getElementById('id_cooperativa');
+const coopSel = document.getElementById('id_cooperativa'); // input hidden
 const supSel  = document.getElementById('id_supervisor');
 
 async function cargarSupervisores(idCoop) {
@@ -637,8 +664,17 @@ async function cargarSupervisores(idCoop) {
     }
 }
 
-coopSel?.addEventListener('change', function() {
-    cargarSupervisores(this.value);
+// Combobox de búsqueda por palabra (misma lista real de unidad_bancaria +
+// seps_cooperativas que usan gerente/registro_admin.php y
+// registro_supervisor.php), en vez del <select> plano anterior.
+initCooperativaBuscador({
+    inputId:  'id_cooperativa_buscar',
+    hiddenId: 'id_cooperativa',
+    listId:   'id_cooperativa_lista',
+    data:     <?= json_encode(array_map(function ($c) {
+        return ['id' => (string)$c['id_cooperativa'], 'nombre' => (string)$c['nombre']];
+    }, $cooperativas), JSON_UNESCAPED_UNICODE) ?>,
+    onSelect: function (item) { cargarSupervisores(item.id); }
 });
 
 // Si ya viene una cooperativa pre-seleccionada (error previo), cargar sus supervisores
@@ -732,9 +768,10 @@ document.querySelector('form')?.addEventListener('submit', function(e) {
         e.preventDefault(); alert('Corrige los campos marcados antes de continuar.'); return;
     }
     <?php if (!$modo_supervisor): ?>
-    const coop = document.getElementById('id_cooperativa');
+    const coop = document.getElementById('id_cooperativa'); // input hidden
+    const coopBuscar = document.getElementById('id_cooperativa_buscar');
     const sup  = document.getElementById('id_supervisor');
-    if (!coop?.value) { e.preventDefault(); coop.style.borderColor='#ef4444'; coop.focus(); alert('Debes seleccionar una cooperativa.'); return; }
+    if (!coop?.value) { e.preventDefault(); coopBuscar?.style && (coopBuscar.style.borderColor='#ef4444'); coopBuscar?.focus(); alert('Selecciona tu cooperativa de la lista de sugerencias.'); return; }
     if (!sup?.value)  { e.preventDefault(); sup.style.borderColor='#ef4444';  sup.focus();  alert('Debes seleccionar un supervisor.');   return; }
     <?php endif; ?>
 });

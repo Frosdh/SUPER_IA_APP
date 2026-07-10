@@ -139,8 +139,8 @@ $currentPage = 'super_admin_dashboard';
 
     <div class="sidebar-section">
         <div class="sidebar-section-title">Super Administración</div>
-        <a href="administrar_solicitudes_admin.php" class="sidebar-link">
-            <i class="fas fa-file-alt"></i> Solicitudes de Admin
+        <a href="administrar_solicitudes_global.php" class="sidebar-link">
+            <i class="fas fa-file-signature"></i> Solicitudes Pendientes
             <span class="badge-alert" style="margin-left: auto;" id="badge-solicitudes">
                 <?php echo $solicitudes_pendientes > 0 ? $solicitudes_pendientes : ''; ?>
             </span>
@@ -185,9 +185,9 @@ $currentPage = 'super_admin_dashboard';
         <?php if ($solicitudes_pendientes > 0): ?>
         <div class="alert-warning">
             <i class="fas fa-exclamation-triangle me-2"></i>
-            <strong>Atención:</strong> Tienes <strong><?php echo $solicitudes_pendientes; ?></strong> 
-            solicitud(es) de creación de administrador pendiente(s) de revisar.
-            <a href="administrar_solicitudes_admin.php" style="margin-left: 10px; font-weight: 600; text-decoration: underline;">
+            <strong>Atención:</strong> Tienes <strong><?php echo $solicitudes_pendientes; ?></strong>
+            solicitud(es) de registro (gerente, supervisor, asesor o administrador) pendiente(s) de revisar, de cualquier banco/cooperativa.
+            <a href="administrar_solicitudes_global.php" style="margin-left: 10px; font-weight: 600; text-decoration: underline;">
                 Revisar ahora →
             </a>
         </div>
@@ -224,10 +224,10 @@ $currentPage = 'super_admin_dashboard';
         <!-- ACCIONES RÁPIDAS -->
         <h3 style="font-weight: 700; margin-bottom: 20px; font-size: 16px;">Acciones Rápidas</h3>
         <div class="quick-actions">
-            <a href="administrar_solicitudes_admin.php" class="action-card warning">
-                <i class="fas fa-file-alt"></i>
+            <a href="administrar_solicitudes_global.php" class="action-card warning">
+                <i class="fas fa-file-signature"></i>
                 <h4>Solicitudes Pendientes</h4>
-                <p style="font-size: 14px; color: #9ca3af;">Revisar nuevas cuentas de admin</p>
+                <p style="font-size: 14px; color: #9ca3af;">Aprobar/denegar gerentes, supervisores, asesores y admins de cualquier banco</p>
             </a>
             <a href="usuarios.php" class="action-card info">
                 <i class="fas fa-users"></i>

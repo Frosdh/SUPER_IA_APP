@@ -5,23 +5,35 @@ require_once 'db_admin.php';
 $success = isset($_GET['success']) ? $_GET['success'] : false;
 $error = isset($_GET['error']) ? $_GET['error'] : false;
 
-// Obtener cooperativas
+// Obtener cooperativas: unidad_bancaria (internas) + seps_cooperativas
+// (catastro SEPS importado). Antes esta consulta apuntaba a una tabla
+// `cooperativas` que no existe en este esquema, así que siempre caía al
+// respaldo de 4 cooperativas de ejemplo y nunca mostraba los bancos reales
+// importados. Se cambia para leer las mismas tablas que ya usan
+// registro_asesor.php y registro_supervisor.php.
 $cooperativas = [];
 try {
-    $stmt = $pdo->query("
-        SELECT DISTINCT id_cooperativa, nombre 
-        FROM cooperativas 
-        ORDER BY nombre ASC 
-        LIMIT 20
+    $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria ORDER BY nombre ASC");
+    $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
+} catch (\Throwable $e) {
+    $cooperativas = [];
+}
+try {
+    $stmtSeps = $pdo->query("
+        SELECT CONCAT('seps_', id) AS id_cooperativa, razon_social AS nombre
+        FROM seps_cooperativas
+        WHERE activo = 1
+        ORDER BY razon_social ASC
     ");
-    $cooperativas = $stmt->fetchAll();
-    
-    // Si no hay resultados, usar por defecto
-    if (empty($cooperativas)) {
-        throw new Exception("No hay cooperativas");
+    foreach ($stmtSeps->fetchAll(PDO::FETCH_ASSOC) as $sc) {
+        $cooperativas[] = $sc;
     }
-} catch (Exception $e) {
-    // Usar valores por defecto
+} catch (\Throwable $e) {
+    // Tabla SEPS ausente: se ignora, quedan solo las internas.
+}
+
+// Respaldo final si ambas tablas fallaran (no deberían, pero evita un select vacío)
+if (empty($cooperativas)) {
     $cooperativas = [
         ['id_cooperativa' => 1, 'nombre' => 'Super_IA - Quito'],
         ['id_cooperativa' => 2, 'nombre' => 'Super_IA - Guayaquil'],
@@ -261,6 +273,26 @@ try {
             background: linear-gradient(#6366f1, #6366f1);
             background-color: #6366f1;
         }
+        .coop-buscador-wrap { position: relative; }
+        .coop-buscador-list {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            max-height: 260px;
+            overflow-y: auto;
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            margin-top: 6px;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+        .coop-buscador-item { padding: 10px 14px; font-size: 0.9rem; color: #e2e8f0; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(99,102,241,0.25); }
+        .coop-buscador-empty { padding: 12px 14px; font-size: 0.85rem; color: #94a3b8; font-style: italic; }
     </style>
 </head>
 <body>
@@ -296,26 +328,11 @@ try {
             </div>
 
             <form method="POST" action="procesar_registro_admin.php" enctype="multipart/form-data" novalidate>
-                <div class="form-group">
-                    <label for="cooperativa"><i class="fas fa-building me-2"></i>Cooperativa</label>
-                    <select class="form-control" id="cooperativa" name="cooperativa" required style="min-height: 45px;">
-                        <option value="" disabled selected>-- Selecciona tu cooperativa --</option>
-                        <?php 
-                        if (!empty($cooperativas)):
-                            foreach ($cooperativas as $coop): 
-                        ?>
-                        <option value="<?php echo htmlspecialchars($coop['id_cooperativa']); ?>">
-                            <?php echo htmlspecialchars($coop['nombre']); ?>
-                        </option>
-                        <?php 
-                            endforeach;
-                        else:
-                        ?>
-                        <option value="">No hay cooperativas disponibles</option>
-                        <?php 
-                        endif;
-                        ?>
-                    </select>
+                <div class="form-group coop-buscador-wrap">
+                    <label for="cooperativa_buscar"><i class="fas fa-building me-2"></i>Cooperativa</label>
+                    <input type="text" class="form-control" id="cooperativa_buscar" placeholder="Escribe para buscar tu cooperativa/banco…" autocomplete="off">
+                    <input type="hidden" id="cooperativa" name="cooperativa" required>
+                    <div id="cooperativa_lista" class="coop-buscador-list"></div>
                 </div>
                 <div class="form-group">
                     <label for="nombres">Nombre Completo</label>
@@ -388,6 +405,7 @@ try {
                 </a>
             </form>
             <script src="js/validaciones.js"></script>
+            <script src="js/cooperativa_buscador.js"></script>
             <script>bindValidaciones('form');</script>
 
             <div class="divider">
@@ -398,6 +416,27 @@ try {
     </div>
 
     <script>
+        initCooperativaBuscador({
+            inputId:  'cooperativa_buscar',
+            hiddenId: 'cooperativa',
+            listId:   'cooperativa_lista',
+            data:     <?= json_encode(array_map(function ($c) {
+                return ['id' => (string)$c['id_cooperativa'], 'nombre' => (string)$c['nombre']];
+            }, $cooperativas), JSON_UNESCAPED_UNICODE) ?>
+        });
+
+        // El "required" del navegador no aplica a inputs type="hidden", así
+        // que se valida a mano que se haya elegido una cooperativa real de
+        // la lista (no solo texto suelto) antes de enviar el formulario.
+        document.querySelector('form').addEventListener('submit', function (e) {
+            var coopHidden = document.getElementById('cooperativa');
+            if (!coopHidden.value) {
+                e.preventDefault();
+                alert('Selecciona tu cooperativa de la lista de sugerencias.');
+                document.getElementById('cooperativa_buscar').focus();
+            }
+        });
+
         // Manejar carga de archivo
         const fileInput = document.getElementById('credencial');
         const fileNameDisplay = document.getElementById('fileName');

@@ -90,11 +90,15 @@ try {
         throw new Exception("El email ya está registrado");
     }
 
-    // Crear tabla solicitudes_admin si no existe
+    // Crear tabla solicitudes_admin si no existe.
+    // id_cooperativa es VARCHAR(64) porque los IDs reales de cooperativa
+    // (UUID de unidad_bancaria, o "seps_123" del catastro SEPS) no son
+    // enteros — antes era INT y solo "funcionaba" con la lista de 4
+    // cooperativas de ejemplo que ya no se usa.
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS solicitudes_admin (
             id_solicitud INT AUTO_INCREMENT PRIMARY KEY,
-            id_cooperativa INT NOT NULL,
+            id_cooperativa VARCHAR(64) NOT NULL,
             usuario VARCHAR(50) NOT NULL UNIQUE,
             nombres VARCHAR(100) NOT NULL,
             apellidos VARCHAR(100) NOT NULL,
@@ -109,6 +113,17 @@ try {
             observaciones TEXT NULL
         )
     ");
+
+    // Migración defensiva: si la tabla ya existía con id_cooperativa INT
+    // (de una versión anterior), se amplía a VARCHAR sin perder datos.
+    try {
+        $colCoop = $pdo->query("SHOW COLUMNS FROM solicitudes_admin LIKE 'id_cooperativa'")->fetch();
+        if ($colCoop && stripos($colCoop['Type'], 'int') !== false) {
+            $pdo->exec("ALTER TABLE solicitudes_admin MODIFY COLUMN id_cooperativa VARCHAR(64) NOT NULL");
+        }
+    } catch (\Throwable $e) {
+        // no crítico
+    }
 
     // Crear carpeta de solicitudes si no existe
     $dir_solicitudes = __DIR__ . '/solicitudes_admin';

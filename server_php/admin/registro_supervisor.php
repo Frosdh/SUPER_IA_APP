@@ -347,6 +347,26 @@ if (empty($cooperativas)) {
         .file-name.show {
             display: block;
         }
+        .coop-buscador-wrap { position: relative; }
+        .coop-buscador-list {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            max-height: 260px;
+            overflow-y: auto;
+            background: #1e293b;
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px;
+            margin-top: 6px;
+            box-shadow: 0 12px 28px rgba(0,0,0,.35);
+        }
+        .coop-buscador-item { padding: 10px 14px; font-size: 0.9rem; color: #e2e8f0; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(49,130,254,0.25); }
+        .coop-buscador-empty { padding: 12px 14px; font-size: 0.85rem; color: #94a3b8; font-style: italic; }
     </style>
 </head>
 <body class="<?= $modo_gerente ? 'panel-mode' : 'public-mode' ?>">
@@ -417,16 +437,11 @@ require_once '_sidebar_gerente.php';
                     <input type="hidden" name="gerente" value="<?= htmlspecialchars((string)$gerente_admin_id) ?>">
                 </div>
                 <?php else: ?>
-                <div class="form-group">
-                    <label for="cooperativa"><i class="fas fa-building me-2"></i>Cooperativa</label>
-                    <select name="cooperativa" id="cooperativa" class="form-control" required>
-                        <option value="">-- Selecciona una cooperativa --</option>
-                        <?php foreach ($cooperativas as $coop): ?>
-                            <option value="<?= htmlspecialchars($coop['id_cooperativa']) ?>">
-                                <?= htmlspecialchars($coop['nombre']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
+                <div class="form-group coop-buscador-wrap">
+                    <label for="cooperativa_buscar"><i class="fas fa-building me-2"></i>Cooperativa</label>
+                    <input type="text" class="form-control" id="cooperativa_buscar" placeholder="Escribe para buscar tu cooperativa/banco…" autocomplete="off">
+                    <input type="hidden" id="cooperativa" name="cooperativa" required>
+                    <div id="cooperativa_lista" class="coop-buscador-list"></div>
                 </div>
 
                 <div class="form-group">
@@ -517,6 +532,7 @@ require_once '_sidebar_gerente.php';
 <?php endif; ?>
 
 <script src="js/validaciones.js"></script>
+<script src="js/cooperativa_buscador.js"></script>
 <script>
 // ── Validación completa en tiempo real (nombres, apellidos, teléfono, email, usuario, password) ──
 bindValidaciones('form');
@@ -589,9 +605,7 @@ document.querySelector('form').addEventListener('submit', function(e) {
 });
 
 <?php if (!$modo_gerente): ?>
-// Manejo del file upload
-document.getElementById('cooperativa').addEventListener('change', function() {
-    const coopId = this.value;
+function cargarGerentesDeCooperativa(coopId) {
     const gerenteSelect = document.getElementById('gerente');
 
     if (!coopId) {
@@ -599,8 +613,10 @@ document.getElementById('cooperativa').addEventListener('change', function() {
         return;
     }
 
+    gerenteSelect.innerHTML = '<option value="">Cargando gerentes…</option>';
+
     // Cargar gerentes reales vinculados a esa cooperativa
-    fetch(`api_gerentes_por_coop.php?cooperativa_id=${coopId}`)
+    fetch(`api_gerentes_por_coop.php?cooperativa_id=${encodeURIComponent(coopId)}`)
         .then(res => res.json())
         .then(data => {
             gerenteSelect.innerHTML = '<option value="">-- Selecciona un gerente --</option>';
@@ -620,6 +636,27 @@ document.getElementById('cooperativa').addEventListener('change', function() {
             console.error('Error cargando gerentes:', err);
             gerenteSelect.innerHTML = '<option value="">Error al cargar gerentes</option>';
         });
+}
+
+initCooperativaBuscador({
+    inputId:  'cooperativa_buscar',
+    hiddenId: 'cooperativa',
+    listId:   'cooperativa_lista',
+    data:     <?= json_encode(array_map(function ($c) {
+        return ['id' => (string)$c['id_cooperativa'], 'nombre' => (string)$c['nombre']];
+    }, $cooperativas), JSON_UNESCAPED_UNICODE) ?>,
+    onSelect: function (item) { cargarGerentesDeCooperativa(item.id); }
+});
+
+// El "required" del navegador no aplica a inputs type="hidden", así que se
+// valida a mano que se haya elegido una cooperativa real de la lista.
+document.querySelector('form').addEventListener('submit', function (e) {
+    const coopHidden = document.getElementById('cooperativa');
+    if (!coopHidden.value) {
+        e.preventDefault();
+        alert('Selecciona tu cooperativa de la lista de sugerencias.');
+        document.getElementById('cooperativa_buscar').focus();
+    }
 });
 <?php endif; ?>
 

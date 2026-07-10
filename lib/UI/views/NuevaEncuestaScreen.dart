@@ -14,6 +14,7 @@ import 'package:super_ia/Core/Services/InstitucionesCacheService.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
 import 'package:super_ia/Core/Services/SyncService.dart';
 import 'package:super_ia/Core/Services/TareasFijadasCacheService.dart';
+import 'package:super_ia/Core/Utils/EcValidators.dart';
 import 'package:super_ia/UI/views/EncuestaProductoScreen.dart';
 
 // ─────────────────────────────────────────────────────────────
@@ -1615,6 +1616,48 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
   Future<void> _guardarEncuesta({bool fueEncuestado = true}) async {
     if (_guardando) return;
+
+    // Para FINALIZAR una encuesta (fueEncuestado = true) se exige al menos
+    // el nombre o la cédula del prospecto — igual que la solicitud de
+    // crédito. Si es solo "visita sin encuesta" (fueEncuestado = false, no
+    // se levantó ningún dato) no se exige nada; esto no toca la cola/sync
+    // offline, solo corta antes de armar el body y encolar.
+    if (fueEncuestado) {
+      final tieneNombre = _nombreCtrl.text.trim().isNotEmpty;
+      final tieneCedula = _cedulaCtrl.text.trim().isNotEmpty;
+      if (!tieneNombre && !tieneCedula) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                  'Ingresa al menos el nombre o la cédula del prospecto para finalizar la encuesta.'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+      // En modo edición la cédula es de solo lectura (viene de un registro
+      // ya guardado): no se vuelve a validar su checksum para no bloquear
+      // la edición de registros antiguos que pudieran tener datos legados.
+      if (tieneCedula && !widget.modoEdicion) {
+        final errCedula = EcValidators.cedula(_cedulaCtrl.text.trim());
+        if (errCedula != null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Cédula inválida: $errCedula'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+
     setState(() => _guardando = true);
 
     // Se genera una sola vez por encuesta/tarea: si el primer intento falla
@@ -3481,15 +3524,17 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           _seccionTitulo('Información Personal'),
           _campo(
             controller: _nombreCtrl,
-            label: 'Nombres *',
+            label: 'Nombres',
             icon: Icons.person_rounded,
-            validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Campo requerido' : null,
+            validator: (v) => _valOpcional(
+                (val) => EcValidators.nombre(val, 'El nombre'), v),
           ),
           _campo(
             controller: _apellidosCtrl,
             label: 'Apellidos',
             icon: Icons.person_outline_rounded,
+            validator: (v) => _valOpcional(
+                (val) => EcValidators.nombre(val, 'El apellido'), v),
           ),
           _campo(
             controller: _cedulaCtrl,
@@ -3498,24 +3543,30 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             readOnly: widget.modoEdicion,
+            validator: (v) => widget.modoEdicion
+                ? null
+                : _valOpcional(EcValidators.cedula, v),
           ),
           _campo(
             controller: _telefonoCtrl,
             label: 'Teléfono fijo',
             icon: Icons.phone_rounded,
             keyboardType: TextInputType.phone,
+            validator: (v) => _valOpcional(EcValidators.telefono, v),
           ),
           _campo(
             controller: _celularCtrl,
             label: 'Celular',
             icon: Icons.smartphone_rounded,
             keyboardType: TextInputType.phone,
+            validator: (v) => _valOpcional(EcValidators.celular, v),
           ),
           _campo(
             controller: _emailCtrl,
             label: 'Email',
             icon: Icons.email_rounded,
             keyboardType: TextInputType.emailAddress,
+            validator: (v) => _valOpcional(EcValidators.email, v),
           ),
           _campo(
             controller: _direccionCtrl,
@@ -6722,6 +6773,16 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
         ),
       ),
     );
+  }
+
+  /// Valida el FORMATO de un campo solo si el usuario escribió algo.
+  /// Los campos del prospecto son opcionales al avanzar de paso (se puede
+  /// seguir la encuesta sin llenar nada); si se llenan, deben tener un
+  /// formato válido (misma regla que web: EcValidators / validaciones.js).
+  String? _valOpcional(
+      String? Function(String?) validator, String? valor) {
+    if (valor == null || valor.trim().isEmpty) return null;
+    return validator(valor);
   }
 
   Widget _campo({
