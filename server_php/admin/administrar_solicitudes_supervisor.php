@@ -24,6 +24,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($id_solicitud && $accion) {
         try {
+            // Si la solicitud llegó sin gerente asignado (el solicitante lo
+            // dejó opcional), el administrador puede elegirlo aquí mismo al
+            // aprobar/rechazar, vía el selector "gerente_asignar" del modal.
+            $gerente_asignar = trim($_POST['gerente_asignar'] ?? '');
+            if ($gerente_asignar !== '') {
+                try {
+                    $stmtGA = $pdo->prepare("UPDATE solicitudes_supervisor SET id_administrador = ? WHERE id_solicitud = ? AND (id_administrador IS NULL OR id_administrador = '')");
+                    $stmtGA->execute([$gerente_asignar, $id_solicitud]);
+                } catch (Exception $e) {}
+            }
+
             if ($accion === 'aprobar') {
                 // Crear tabla si no existe
                 $pdo->exec("
@@ -185,14 +196,20 @@ try {
 // Obtener solicitudes de supervisores
 $solicitudes = [];
 try {
-    $query = "SELECT * FROM solicitudes_supervisor ";
+    // LEFT JOIN a usuario para mostrar el nombre del gerente asignado (si
+    // ya tiene uno) — id_administrador ahora puede llegar vacío porque el
+    // gerente responsable es opcional en el formulario de registro.
+    $query = "SELECT ss.*, u_ger.nombre AS gerente_nombre
+              FROM solicitudes_supervisor ss
+              LEFT JOIN usuario u_ger ON u_ger.id = ss.id_administrador ";
     $params = [];
 
-    // Si es admin (no super admin), solo ver sus propias solicitudes.
+    // Si es admin (no super admin), solo ver sus propias solicitudes o las
+    // que aún no tienen gerente asignado (para poder tomarlas).
     // id_administrador es un UUID (VARCHAR) — antes se usaba intval($admin_id),
     // que truncaba el UUID a 0 y nunca traía resultados.
     if (!$is_super_admin && $is_admin) {
-        $query .= "WHERE id_administrador = ? ";
+        $query .= "WHERE (ss.id_administrador = ? OR ss.id_administrador = '' OR ss.id_administrador IS NULL) ";
         $params[] = $admin_id;
     }
 
@@ -338,6 +355,7 @@ require_once '_sidebar_gerente.php';
                             <th>Cédula</th>
                             <th>Nombre</th>
                             <th>Email</th>
+                            <th>Gerente</th>
                             <th>Credencial</th>
                             <th>Estado</th>
                             <th>Fecha Solicitud</th>
@@ -347,7 +365,7 @@ require_once '_sidebar_gerente.php';
                     <tbody>
                         <?php if (empty($solicitudes)): ?>
                         <tr>
-                            <td colspan="8" style="text-align: center; color: #9ca3af; padding: 30px;">
+                            <td colspan="9" style="text-align: center; color: #9ca3af; padding: 30px;">
                                 <i class="fas fa-inbox me-2"></i>No hay solicitudes
                             </td>
                         </tr>
@@ -373,6 +391,13 @@ require_once '_sidebar_gerente.php';
                                 <td><?php echo htmlspecialchars($solicitud['nombres'] . ' ' . $solicitud['apellidos']); ?></td>
                                 <td><?php echo htmlspecialchars($solicitud['email']); ?></td>
                                 <td>
+                                    <?php if (!empty($solicitud['gerente_nombre'])): ?>
+                                    <?php echo htmlspecialchars($solicitud['gerente_nombre']); ?>
+                                    <?php else: ?>
+                                    <span style="color:#9ca3af;font-size:12px;font-style:italic;">Sin asignar</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
                                     <?php if ($credSupExiste): ?>
                                     <a href="<?php echo htmlspecialchars($credSupPath); ?>"
                                        target="_blank"
@@ -397,7 +422,7 @@ require_once '_sidebar_gerente.php';
                                 <td><?php echo date('d/m/Y H:i', strtotime($solicitud['fecha_solicitud'])); ?></td>
                                 <td>
                                     <?php if ($solicitud['estado'] === 'pendiente'): ?>
-                                    <button class="btn-aprobar" onclick="mostrarModal('aprobar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo $credSupExiste ? htmlspecialchars(addslashes($credSupPath)) : ''; ?>')">
+                                    <button class="btn-aprobar" onclick="mostrarModal('aprobar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo $credSupExiste ? htmlspecialchars(addslashes($credSupPath)) : ''; ?>', '<?php echo htmlspecialchars(addslashes($solicitud['id_cooperativa'])); ?>', <?php echo empty($solicitud['id_administrador']) ? 'true' : 'false'; ?>)">
                                         <i class="fas fa-check me-1"></i>Aprobar
                                     </button>
                                     <button class="btn-rechazar" onclick="mostrarModal('rechazar', <?php echo $solicitud['id_solicitud']; ?>, '<?php echo $credSupExiste ? htmlspecialchars(addslashes($credSupPath)) : ''; ?>')" style="margin-left: 5px;">
@@ -427,6 +452,14 @@ require_once '_sidebar_gerente.php';
             <input type="hidden" name="id_solicitud" id="input-solicitud">
             <input type="hidden" name="accion" id="input-accion">
             <div id="modal-body-content"></div>
+            <div id="gerente-asignar-wrap" style="display:none;margin-top:12px;">
+                <label style="font-size:13px;font-weight:700;color:#374151;display:block;margin-bottom:6px;">
+                    <i class="fas fa-user-cog me-1"></i>Esta solicitud no tiene gerente asignado — elige uno (opcional):
+                </label>
+                <select name="gerente_asignar" id="gerente_asignar" style="width:100%;padding:9px 12px;border:1.5px solid #e5e7eb;border-radius:9px;font-size:13.5px;">
+                    <option value="">-- Dejar sin asignar --</option>
+                </select>
+            </div>
             <textarea id="observaciones" name="observaciones" placeholder="Observaciones (opcional)..." style="display:none;"></textarea>
             <div class="sol-modal-footer">
                 <button type="button" class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
@@ -437,7 +470,7 @@ require_once '_sidebar_gerente.php';
 </div>
 
 <script>
-function mostrarModal(accion, id, credencial) {
+function mostrarModal(accion, id, credencial, coopId, sinGerente) {
     const modal = document.getElementById('solModal');
     const title = document.getElementById('solModalTitle');
     const inputSolicitud = document.getElementById('input-solicitud');
@@ -445,9 +478,35 @@ function mostrarModal(accion, id, credencial) {
     const modalBody = document.getElementById('modal-body-content');
     const observaciones = document.getElementById('observaciones');
     const btnConfirmar = document.getElementById('btn-confirmar');
+    const gerenteWrap = document.getElementById('gerente-asignar-wrap');
+    const gerenteSelect = document.getElementById('gerente_asignar');
 
     inputSolicitud.value = id;
     inputAccion.value = accion;
+
+    // Si la solicitud no tiene gerente asignado, ofrecer elegirlo aquí
+    // mismo (es opcional: se puede aprobar igual dejándolo sin asignar).
+    if (accion === 'aprobar' && sinGerente && coopId) {
+        gerenteWrap.style.display = 'block';
+        gerenteSelect.innerHTML = '<option value="">Cargando gerentes…</option>';
+        fetch(`api_gerentes_por_coop.php?cooperativa_id=${encodeURIComponent(coopId)}`)
+            .then(res => res.json())
+            .then(data => {
+                gerenteSelect.innerHTML = '<option value="">-- Dejar sin asignar --</option>';
+                (data.gerentes || []).forEach(ger => {
+                    const option = document.createElement('option');
+                    option.value = ger.id_usuario;
+                    option.textContent = ger.nombre + ' (' + ger.email + ')';
+                    gerenteSelect.appendChild(option);
+                });
+            })
+            .catch(() => {
+                gerenteSelect.innerHTML = '<option value="">-- Dejar sin asignar --</option>';
+            });
+    } else {
+        gerenteWrap.style.display = 'none';
+        gerenteSelect.value = '';
+    }
 
     let modalHTML = '';
     

@@ -419,7 +419,7 @@ require_once '_sidebar_gerente.php';
             <?php if (!$modo_gerente): ?>
             <div class="info-box">
                 <i class="fas fa-info-circle me-2"></i>
-                <strong>Selección Requerida:</strong> Escoge la cooperativa y el gerente responsable se filtrará automáticamente.
+                <strong>Cooperativa Requerida:</strong> Escoge tu cooperativa. Elegir el gerente responsable es opcional: si lo dejas sin asignar, el administrador lo asignará al aceptar tu solicitud.
             </div>
             <?php endif; ?>
 
@@ -445,10 +445,11 @@ require_once '_sidebar_gerente.php';
                 </div>
 
                 <div class="form-group">
-                    <label for="gerente"><i class="fas fa-user-cog me-2"></i>Gerente Responsable</label>
-                    <select name="gerente" id="gerente" class="form-control" required>
+                    <label for="gerente"><i class="fas fa-user-cog me-2"></i>Gerente Responsable <span style="font-weight:400;color:#94a3b8;">(opcional)</span></label>
+                    <select name="gerente" id="gerente" class="form-control">
                         <option value="">-- Primero selecciona una cooperativa --</option>
                     </select>
+                    <small style="display:block;margin-top:6px;color:#94a3b8;font-size:12px;">Si no lo sabes o no aparece, puedes dejarlo sin asignar; el administrador lo asignará al aprobar tu solicitud.</small>
                 </div>
                 <?php endif; ?>
 
@@ -619,7 +620,9 @@ function cargarGerentesDeCooperativa(coopId) {
     fetch(`api_gerentes_por_coop.php?cooperativa_id=${encodeURIComponent(coopId)}`)
         .then(res => res.json())
         .then(data => {
-            gerenteSelect.innerHTML = '<option value="">-- Selecciona un gerente --</option>';
+            // El gerente es opcional: siempre se ofrece "Sin asignar" como
+            // opción válida, además de la lista de gerentes reales (si hay).
+            gerenteSelect.innerHTML = '<option value="">-- Sin asignar (opcional) --</option>';
 
             if (data.gerentes && data.gerentes.length > 0) {
                 data.gerentes.forEach(ger => {
@@ -628,13 +631,11 @@ function cargarGerentesDeCooperativa(coopId) {
                     option.textContent = ger.nombre + ' (' + ger.email + ')';
                     gerenteSelect.appendChild(option);
                 });
-            } else {
-                gerenteSelect.innerHTML = '<option value="">No hay gerente asignado a esta cooperativa</option>';
             }
         })
         .catch(err => {
             console.error('Error cargando gerentes:', err);
-            gerenteSelect.innerHTML = '<option value="">Error al cargar gerentes</option>';
+            gerenteSelect.innerHTML = '<option value="">-- Sin asignar (opcional) --</option>';
         });
 }
 

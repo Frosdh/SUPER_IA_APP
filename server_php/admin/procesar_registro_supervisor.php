@@ -23,8 +23,10 @@ $errores = [];
 $archivo_guardado = null;
 
 // Validaciones
+// El gerente responsable es opcional: si el solicitante no lo elige, la
+// solicitud queda sin gerente asignado y el administrador podrá asignarlo
+// (o aprobarla directamente) al momento de aceptarla.
 if (empty($cooperativa)) $errores[] = 'La cooperativa es requerida';
-if (empty($gerente)) $errores[] = 'El gerente responsable es requerido';
 
 $rNombres = validarNombre($nombres, 'Los nombres');
 if (!$rNombres['ok']) $errores[] = $rNombres['msg'];

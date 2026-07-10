@@ -1626,16 +1626,9 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       final tieneNombre = _nombreCtrl.text.trim().isNotEmpty;
       final tieneCedula = _cedulaCtrl.text.trim().isNotEmpty;
       if (!tieneNombre && !tieneCedula) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Ingresa al menos el nombre o la cédula del prospecto para finalizar la encuesta.'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 4),
-            ),
-          );
-        }
+        _mostrarDialogFaltaDatosProspecto(
+          'Para finalizar la encuesta ingresa al menos el nombre o la cédula del prospecto.',
+        );
         return;
       }
       // En modo edición la cédula es de solo lectura (viene de un registro
@@ -1644,15 +1637,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       if (tieneCedula && !widget.modoEdicion) {
         final errCedula = EcValidators.cedula(_cedulaCtrl.text.trim());
         if (errCedula != null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Cédula inválida: $errCedula'),
-                backgroundColor: Colors.red,
-                duration: const Duration(seconds: 4),
-              ),
-            );
-          }
+          _mostrarDialogFaltaDatosProspecto('Cédula inválida: $errCedula');
           return;
         }
       }
@@ -3456,6 +3441,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   Widget _buildPasoDatosCliente() {
     return Form(
       key: _formKeyCliente,
+      // Muestra el error de formato debajo de cada casilla apenas el
+      // usuario empieza a escribir en ella, sin esperar a tocar
+      // "Siguiente" o "Finalizar".
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3541,7 +3530,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: widget.modoEdicion ? 'Cédula (no editable)' : 'Cédula',
             icon: Icons.badge_rounded,
             keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
             readOnly: widget.modoEdicion,
             validator: (v) => widget.modoEdicion
                 ? null
@@ -3552,6 +3544,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Teléfono fijo',
             icon: Icons.phone_rounded,
             keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
             validator: (v) => _valOpcional(EcValidators.telefono, v),
           ),
           _campo(
@@ -3559,6 +3555,10 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Celular',
             icon: Icons.smartphone_rounded,
             keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
             validator: (v) => _valOpcional(EcValidators.celular, v),
           ),
           _campo(
@@ -6476,6 +6476,109 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   }
 
   // ── Navegación a ficha de producto ───────────────────────────
+
+  /// Se muestra cuando se intenta FINALIZAR la encuesta sin nombre ni
+  /// cédula (o con una cédula inválida). En vez de solo avisar con un
+  /// SnackBar, manda al usuario de regreso al paso de datos del prospecto
+  /// para que complete lo que falta (mismo patrón que
+  /// _validarCedulaParaProducto más abajo).
+  void _mostrarDialogFaltaDatosProspecto(String mensaje) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40, height: 4,
+              decoration: BoxDecoration(
+                color: ConstantColors.borderLight,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Container(
+              width: 64, height: 64,
+              decoration: BoxDecoration(
+                color: ConstantColors.backgroundAmber.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.badge_rounded,
+                color: ConstantColors.backgroundAmber,
+                size: 32,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Faltan datos del prospecto',
+              style: TextStyle(
+                color: ConstantColors.textDark,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              mensaje,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: ConstantColors.textDarkGrey,
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  // Ir al paso de datos del prospecto para completarlos
+                  setState(() => _paso = _Paso.datosCliente);
+                },
+                icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                label: const Text(
+                  'Ir a datos del prospecto',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ConstantColors.backgroundAmber,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Cancelar',
+                  style: TextStyle(
+                    color: ConstantColors.textDarkGrey,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   /// Valida que la cédula esté completa antes de permitir seleccionar un producto.
   /// Muestra un bottomSheet explicativo con opción de ir al paso de datos.
