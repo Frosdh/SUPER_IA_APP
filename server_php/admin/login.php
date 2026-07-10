@@ -145,10 +145,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Credenciales de super administrador incorrectas.';
         }
     } elseif ($login_role === 'admin') {
-        // Administrador (jefe_agencia)
-        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+        // Gerente (jefe_agencia / gerente_general). También se permite
+        // rol='administrador': según el propio comentario de esa columna en
+        // la base ("administrador = acceso total: supervisor + gerente"),
+        // la cuenta administradora debe poder entrar por cualquier panel,
+        // no solo por su pestaña dedicada.
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion
                                FROM usuario
-                               WHERE email = ? AND (rol = 'jefe_agencia' OR rol = 'gerente_general') AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+                               WHERE email = ? AND rol IN ('jefe_agencia', 'gerente_general', 'administrador') AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
         $stmt->execute([$email]);
         $admin = $stmt->fetch();
         
@@ -165,10 +169,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Credenciales de administrador incorrectas.';
         }
     } elseif ($login_role === 'supervisor') {
-        // Supervisor
-        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion 
+        // Supervisor (+ administrador, acceso total)
+        $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion
                                FROM usuario
-                               WHERE email = ? AND rol = 'supervisor' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+                               WHERE email = ? AND rol IN ('supervisor', 'administrador') AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
         $stmt->execute([$email]);
         $supervisor = $stmt->fetch();
         
@@ -185,10 +189,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Credenciales de supervisor incorrectas.';
         }
     } elseif ($login_role === 'asesor') {
-        // Asesor
+        // Asesor (+ administrador, acceso total)
         $stmt = $pdo->prepare("SELECT id, nombre, email, password_hash, rol, activo, estado_aprobacion
                                FROM usuario
-                               WHERE email = ? AND rol = 'asesor' AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
+                               WHERE email = ? AND rol IN ('asesor', 'administrador') AND activo = 1 AND estado_aprobacion = 'aprobado' LIMIT 1");
         $stmt->execute([$email]);
         $asesor = $stmt->fetch();
 

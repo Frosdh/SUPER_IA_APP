@@ -79,7 +79,11 @@ function fv_coop_nombre(): string {
 $cooperativas = [];
 if (!$modo_supervisor) {
     try {
-        $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria ORDER BY nombre ASC");
+        // Se excluyen las filas "espejo" (codigo LIKE 'SEPS-%') que crea
+        // resolverUnidadBancariaId() al aprobar un gerente de una cooperativa
+        // del catastro SEPS — ya están representadas por seps_cooperativas
+        // más abajo; si no se excluyen, la cooperativa sale duplicada.
+        $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria WHERE codigo IS NULL OR codigo NOT LIKE 'SEPS-%' ORDER BY nombre ASC");
         $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (\Throwable $e) {
         $cooperativas = [];

@@ -72,12 +72,12 @@ function validarEmail(string $email): array {
         return ['ok' => false, 'msg' => "¿Quisiste decir @{$typos[$domain]}?"];
     }
 
-    // El formato puede ser sintácticamente correcto ("maroa@gmailIIIIIII.com")
-    // sin que el dominio exista de verdad. Se verifica contra DNS (registro
-    // MX o, en su defecto, A/AAAA) para no aceptar dominios inventados.
-    if (!dominioEmailExiste($domain)) {
-        return ['ok' => false, 'msg' => "El dominio \"$domain\" no existe o no puede recibir correos"];
-    }
+    // Nota: antes se verificaba contra DNS (registro MX/A/AAAA) que el
+    // dominio existiera de verdad. Se quitó ese chequeo: hay demasiados
+    // dominios corporativos/cooperativos válidos (ej. "coacchy.ec") cuyo DNS
+    // no resuelve igual que gmail.com/hotmail.com, y terminaba bloqueando
+    // registros legítimos de gerentes, asesores y supervisores. Ahora solo
+    // se valida formato + typos comunes.
 
     return ['ok' => true, 'msg' => 'Email válido'];
 }

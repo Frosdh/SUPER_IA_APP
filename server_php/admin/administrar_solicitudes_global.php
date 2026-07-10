@@ -146,6 +146,18 @@ try {
     $resueltas = [];
 }
 
+// Contador de solicitudes de administrador/gerente pendientes en la tabla
+// legacy `solicitudes_admin` (usada por registro_admin.php), para mostrar
+// el badge en el enlace del sidebar — esta página solo lista
+// `solicitud_registro`, así que sin este enlace esas solicitudes nunca
+// aparecían en ningún lado accesible para el Super Administrador.
+$pendientes_admin_legacy = 0;
+try {
+    $pendientes_admin_legacy = (int) $pdo->query("SELECT COUNT(*) FROM solicitudes_admin WHERE estado = 'pendiente'")->fetchColumn();
+} catch (Throwable $e) {
+    $pendientes_admin_legacy = 0;
+}
+
 $rol_labels = [
     'gerente_general' => 'Gerente General',
     'jefe_regional'   => 'Jefe Regional',
@@ -228,6 +240,10 @@ $rol_labels = [
         <a href="administrar_solicitudes_global.php" class="sidebar-link active">
             <i class="fas fa-file-signature"></i> Solicitudes Pendientes
             <?php if (count($pendientes) > 0): ?><span class="badge-nav"><?= count($pendientes) ?></span><?php endif; ?>
+        </a>
+        <a href="administrar_solicitudes_admin.php" class="sidebar-link">
+            <i class="fas fa-user-shield"></i> Solicitudes de Gerente/Admin
+            <?php if ($pendientes_admin_legacy > 0): ?><span class="badge-nav"><?= $pendientes_admin_legacy ?></span><?php endif; ?>
         </a>
         <a href="crear_asesor_admin.php" class="sidebar-link"><i class="fas fa-user-plus"></i> Crear Asesor</a>
         <a href="administrar_asesores.php" class="sidebar-link"><i class="fas fa-users-cog"></i> Administrar Asesores</a>

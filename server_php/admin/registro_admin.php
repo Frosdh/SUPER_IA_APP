@@ -13,7 +13,13 @@ $error = isset($_GET['error']) ? $_GET['error'] : false;
 // registro_asesor.php y registro_supervisor.php.
 $cooperativas = [];
 try {
-    $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria ORDER BY nombre ASC");
+    // Se excluyen las filas "espejo" (codigo LIKE 'SEPS-%') que crea
+    // resolverUnidadBancariaId() al aprobar un gerente de una cooperativa
+    // del catastro SEPS — esas filas son solo un puente técnico para la
+    // llave foránea de gerente_general y ya están representadas más abajo
+    // por la consulta a seps_cooperativas; si no se excluyen aquí, la misma
+    // cooperativa aparece dos veces en el buscador.
+    $stmt = $pdo->query("SELECT id AS id_cooperativa, nombre FROM unidad_bancaria WHERE codigo IS NULL OR codigo NOT LIKE 'SEPS-%' ORDER BY nombre ASC");
     $cooperativas = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (\Throwable $e) {
     $cooperativas = [];
@@ -47,7 +53,7 @@ if (empty($cooperativas)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super_IA - Registro de Administrador</title>
+    <title>Super_IA - Registro de Gerente</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
@@ -302,8 +308,8 @@ if (empty($cooperativas)) {
                 <div class="icon-header">
                     <i class="fas fa-user-plus"></i>
                 </div>
-                <h1>Registro de Administrador</h1>
-                <p>Crea una solicitud de cuenta de administrador</p>
+                <h1>Registro de Gerente</h1>
+                <p>Crea una solicitud de cuenta de gerente</p>
             </div>
 
             <?php if ($success): ?>
@@ -324,7 +330,7 @@ if (empty($cooperativas)) {
 
             <div class="info-box">
                 <i class="fas fa-info-circle me-2"></i>
-                <strong>Verificación Requerida:</strong> El Super administrador verificará tu documento para autorizar tu cuenta.
+                <strong>Verificación Requerida:</strong> El Superadministrador verificará tu documento para autorizar tu cuenta de gerente.
             </div>
 
             <form method="POST" action="procesar_registro_admin.php" enctype="multipart/form-data" novalidate>
@@ -349,7 +355,7 @@ if (empty($cooperativas)) {
                 <div class="form-group">
                     <label for="email">Correo Electrónico</label>
                     <input type="email" class="form-control" id="email" name="email" 
-                           placeholder="admin@coac.local" required>
+                           placeholder="gerente@coac.local" required>
                 </div>
 
                 <div class="form-group">
@@ -360,8 +366,11 @@ if (empty($cooperativas)) {
 
                 <div class="form-group">
                     <label for="password">Contraseña</label>
-                    <input type="password" class="form-control" id="password" name="password" 
-                           placeholder="Mínimo 8 caracteres" required>
+                    <div style="position:relative;">
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="Mínimo 8 caracteres" required style="padding-right:42px;">
+                        <button type="button" onclick="toggleVis('password','eyePwd')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:#94a3b8;cursor:pointer;padding:0;font-size:14px;"><i class="fas fa-eye" id="eyePwd"></i></button>
+                    </div>
                     <div class="password-helper">
                         <i class="fas fa-info-circle me-1"></i>
                         La contraseña debe tener al menos 8 caracteres
@@ -416,6 +425,19 @@ if (empty($cooperativas)) {
     </div>
 
     <script>
+        // ── Mostrar/ocultar contraseña ─────────────────────────────
+        function toggleVis(inputId, iconId) {
+            const inp  = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+            if (inp.type === 'password') {
+                inp.type = 'text';
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                inp.type = 'password';
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
         initCooperativaBuscador({
             inputId:  'cooperativa_buscar',
             hiddenId: 'cooperativa',

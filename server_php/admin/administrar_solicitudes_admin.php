@@ -1,6 +1,47 @@
 <?php
 require_once 'db_admin.php';
 
+// Resuelve el id de cooperativa guardado en la solicitud (que puede ser el
+// UUID real de una `unidad_bancaria` interna, o "seps_123" si el solicitante
+// eligió una entidad del catastro SEPS importado) a un `unidad_bancaria.id`
+// real, creando una fila espejo si hace falta. gerente_general.unidad_bancaria_id
+// es NOT NULL y solo puede apuntar a `unidad_bancaria`, nunca a `seps_cooperativas`.
+function resolverUnidadBancariaId(PDO $pdo, string $idCooperativa): ?string {
+    $idCooperativa = trim($idCooperativa);
+    if ($idCooperativa === '') return null;
+
+    if (strpos($idCooperativa, 'seps_') === 0) {
+        $sepsId = substr($idCooperativa, 5);
+        $stSeps = $pdo->prepare('SELECT * FROM seps_cooperativas WHERE id = ? LIMIT 1');
+        $stSeps->execute([$sepsId]);
+        $seps = $stSeps->fetch(PDO::FETCH_ASSOC);
+        if (!$seps) return null;
+
+        $codigo = 'SEPS-' . $seps['id'];
+        $stExiste = $pdo->prepare('SELECT id FROM unidad_bancaria WHERE codigo = ? LIMIT 1');
+        $stExiste->execute([$codigo]);
+        $existente = $stExiste->fetchColumn();
+        if ($existente) return (string)$existente;
+
+        $nuevoId = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+            mt_rand(0, 0xffff),
+            mt_rand(0, 0x0fff) | 0x4000,
+            mt_rand(0, 0x3fff) | 0x8000,
+            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+        );
+        $stIns = $pdo->prepare('INSERT INTO unidad_bancaria (id, nombre, codigo, descripcion, activo) VALUES (?, ?, ?, ?, 1)');
+        $stIns->execute([$nuevoId, $seps['razon_social'], $codigo, $seps['direccion'] ?? null]);
+        return $nuevoId;
+    }
+
+    // Ya es (o debería ser) el UUID real de una unidad_bancaria interna.
+    $stChk = $pdo->prepare('SELECT id FROM unidad_bancaria WHERE id = ? LIMIT 1');
+    $stChk->execute([$idCooperativa]);
+    $found = $stChk->fetchColumn();
+    return $found ? (string)$found : null;
+}
+
 // Verificar sesión - SOLO SUPER ADMIN
 $is_super_admin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
 
@@ -29,33 +70,87 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $solicitud = $stmt->fetch();
 
                 if ($solicitud) {
-                    // Insertar usuario en tabla usuarios
-                    $stmt = $pdo->prepare("
-                        INSERT INTO usuarios (usuario, clave, nombres, apellidos, email, telefono, ciudad, provincia, canton, activo, id_rol_fk)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 2)
-                    ");
+                    // Nota: antes esto insertaba en una tabla `usuarios` (plural)
+                    // con columnas (clave, ciudad, provincia, canton, id_rol_fk)
+                    // que no existen en este esquema — la consulta fallaba
+                    // silenciosamente (atrapada por el catch) y nunca se creaba
+                    // la cuenta, aunque la solicitud quedaba marcada como
+                    // "aprobada". Ahora se crea el registro real en `usuario`.
+                    $chkEmail = $pdo->prepare("SELECT id FROM usuario WHERE email = ? LIMIT 1");
+                    $chkEmail->execute([$solicitud['email']]);
+                    if ($chkEmail->fetch()) {
+                        $mensaje_error = "❌ Ya existe un usuario con ese email.";
+                    } else {
+                        $nombre_completo = trim($solicitud['nombres'] . ' ' . $solicitud['apellidos']);
+                        $nuevo_usuario_id = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                            mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                            mt_rand(0, 0xffff),
+                            mt_rand(0, 0x0fff) | 0x4000,
+                            mt_rand(0, 0x3fff) | 0x8000,
+                            mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                        );
 
-                    $stmt->execute([
-                        $solicitud['usuario'],
-                        $solicitud['password_hash'],
-                        $solicitud['nombres'],
-                        $solicitud['apellidos'],
-                        $solicitud['email'],
-                        $solicitud['telefono'],
-                        $solicitud['region'],
-                        $solicitud['region'],
-                        $solicitud['region']
-                    ]);
+                        // Rol 'gerente_general': este formulario (registro_admin.php,
+                        // "Crear Cuenta de Gerente") registra un gerente a cargo de
+                        // TODA una cooperativa (elige "Cooperativa", no una agencia
+                        // puntual). El login de "Gerente" (login.php?role=admin) solo
+                        // acepta rol IN ('jefe_agencia','gerente_general') — antes se
+                        // creaba con rol='administrador', que ese login rechazaba.
+                        $pdo->beginTransaction();
+                        try {
+                            $stmt = $pdo->prepare("
+                                INSERT INTO usuario
+                                    (id, nombre, email, telefono, password_hash, rol, activo, estado_aprobacion, aprobado_por, fecha_aprobacion)
+                                VALUES (?, ?, ?, ?, ?, 'gerente_general', 1, 'aprobado', ?, NOW())
+                            ");
+                            $stmt->execute([
+                                $nuevo_usuario_id,
+                                $nombre_completo,
+                                $solicitud['email'],
+                                $solicitud['telefono'],
+                                $solicitud['password_hash'],
+                                $admin_id,
+                            ]);
 
-                    // Actualizar solicitud como aprobada
-                    $stmt = $pdo->prepare("
-                        UPDATE solicitudes_admin 
-                        SET estado = 'aprobada', fecha_aprobacion = NOW() 
-                        WHERE id_solicitud = ?
-                    ");
-                    $stmt->execute([$id_solicitud]);
+                            // gerente_general.unidad_bancaria_id es NOT NULL y debe
+                            // apuntar a una fila real de `unidad_bancaria`. El
+                            // solicitante pudo haber elegido una cooperativa del
+                            // catastro SEPS (id con prefijo "seps_"), que vive en una
+                            // tabla distinta — se crea/reutiliza una fila espejo en
+                            // unidad_bancaria para poder enlazarla.
+                            $unidadBancariaId = resolverUnidadBancariaId($pdo, (string)$solicitud['id_cooperativa']);
+                            if (!$unidadBancariaId) {
+                                throw new Exception('No se pudo vincular la cooperativa seleccionada en la solicitud (id_cooperativa="' . $solicitud['id_cooperativa'] . '"). Revisa/edita manualmente el registro.');
+                            }
 
-                    $mensaje_exito = "✅ Solicitud aprobada. El nuevo administrador puede iniciar sesión.";
+                            $nuevo_gg_id = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                                mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                                mt_rand(0, 0xffff),
+                                mt_rand(0, 0x0fff) | 0x4000,
+                                mt_rand(0, 0x3fff) | 0x8000,
+                                mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                            );
+                            $stmtGG = $pdo->prepare("
+                                INSERT INTO gerente_general (id, usuario_id, unidad_bancaria_id)
+                                VALUES (?, ?, ?)
+                            ");
+                            $stmtGG->execute([$nuevo_gg_id, $nuevo_usuario_id, $unidadBancariaId]);
+
+                            // Actualizar solicitud como aprobada
+                            $stmt = $pdo->prepare("
+                                UPDATE solicitudes_admin
+                                SET estado = 'aprobada', fecha_aprobacion = NOW()
+                                WHERE id_solicitud = ?
+                            ");
+                            $stmt->execute([$id_solicitud]);
+
+                            $pdo->commit();
+                            $mensaje_exito = "✅ Solicitud aprobada. El nuevo gerente puede iniciar sesión.";
+                        } catch (\Throwable $eTx) {
+                            $pdo->rollBack();
+                            $mensaje_error = "Error al aprobar: " . $eTx->getMessage();
+                        }
+                    }
                 }
             } elseif ($accion === 'rechazar') {
                 // Actualizar como rechazada
@@ -233,8 +328,11 @@ $currentPage = 'solicitudes_admin';
 
     <div class="sidebar-section">
         <div class="sidebar-section-title">Super Administración</div>
+        <a href="administrar_solicitudes_global.php" class="sidebar-link">
+            <i class="fas fa-file-signature"></i> Solicitudes Pendientes
+        </a>
         <a href="administrar_solicitudes_admin.php" class="sidebar-link active">
-            <i class="fas fa-file-alt"></i> Solicitudes de Admin
+            <i class="fas fa-file-alt"></i> Solicitudes de Gerente/Admin
         </a>
     </div>
     

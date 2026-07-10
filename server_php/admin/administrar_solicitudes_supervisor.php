@@ -1,6 +1,122 @@
 <?php
 require_once 'db_admin.php';
 
+function _nuevoUuid(): string {
+    return sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+        mt_rand(0, 0xffff),
+        mt_rand(0, 0x0fff) | 0x4000,
+        mt_rand(0, 0x3fff) | 0x8000,
+        mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+    );
+}
+
+// Misma lógica que administrar_solicitudes_admin.php: resuelve el id de
+// cooperativa guardado en una solicitud (UUID real de unidad_bancaria, o
+// "seps_123" del catastro SEPS) a un unidad_bancaria.id real, creando una
+// fila espejo si hace falta.
+function resolverUnidadBancariaIdSup(PDO $pdo, string $idCooperativa): ?string {
+    $idCooperativa = trim($idCooperativa);
+    if ($idCooperativa === '') return null;
+
+    if (strpos($idCooperativa, 'seps_') === 0) {
+        $sepsId = substr($idCooperativa, 5);
+        $stSeps = $pdo->prepare('SELECT * FROM seps_cooperativas WHERE id = ? LIMIT 1');
+        $stSeps->execute([$sepsId]);
+        $seps = $stSeps->fetch(PDO::FETCH_ASSOC);
+        if (!$seps) return null;
+
+        $codigo = 'SEPS-' . $seps['id'];
+        $stExiste = $pdo->prepare('SELECT id FROM unidad_bancaria WHERE codigo = ? LIMIT 1');
+        $stExiste->execute([$codigo]);
+        $existente = $stExiste->fetchColumn();
+        if ($existente) return (string)$existente;
+
+        $nuevoId = _nuevoUuid();
+        $stIns = $pdo->prepare('INSERT INTO unidad_bancaria (id, nombre, codigo, descripcion, activo) VALUES (?, ?, ?, ?, 1)');
+        $stIns->execute([$nuevoId, $seps['razon_social'], $codigo, $seps['direccion'] ?? null]);
+        return $nuevoId;
+    }
+
+    $stChk = $pdo->prepare('SELECT id FROM unidad_bancaria WHERE id = ? LIMIT 1');
+    $stChk->execute([$idCooperativa]);
+    $found = $stChk->fetchColumn();
+    return $found ? (string)$found : null;
+}
+
+// Encuentra (o crea) una agencia "por defecto" para una cooperativa que
+// todavía no tiene ninguna agencia registrada. Necesaria porque
+// supervisor.jefe_agencia_id es NOT NULL y jefe_agencia.agencia_id también
+// lo es -- sin esto, un gerente_general (a cargo de TODA la cooperativa, sin
+// agencias creadas todavía) no podía tener supervisores aprobados debajo.
+function resolverAgenciaPrincipalSup(PDO $pdo, string $unidadBancariaId): string {
+    $st = $pdo->prepare("SELECT id FROM agencia WHERE unidad_bancaria_id = ? ORDER BY id LIMIT 1");
+    $st->execute([$unidadBancariaId]);
+    $ag = $st->fetchColumn();
+    if ($ag) return (string)$ag;
+
+    $st = $pdo->prepare("SELECT nombre FROM unidad_bancaria WHERE id = ? LIMIT 1");
+    $st->execute([$unidadBancariaId]);
+    $nombreCoop = $st->fetchColumn() ?: 'Cooperativa';
+
+    // zona.ciudad suele ser NOT NULL en este esquema; se usa un valor
+    // genérico ('N/D') si no hay dato de ciudad disponible, en vez de
+    // fallar la creación de la agencia por falta de ese dato.
+    $zonaId = _nuevoUuid();
+    try {
+        $pdo->prepare("INSERT INTO zona (id, nombre, ciudad) VALUES (?, ?, ?)")
+            ->execute([$zonaId, 'Zona Principal - ' . $nombreCoop, 'N/D']);
+    } catch (\Throwable $e) {
+        // Reintento mínimo por si la columna ciudad no existe/es distinta
+        $pdo->prepare("INSERT INTO zona (id, nombre) VALUES (?, ?)")
+            ->execute([$zonaId, 'Zona Principal - ' . $nombreCoop]);
+    }
+
+    $agenciaId = _nuevoUuid();
+    try {
+        $pdo->prepare("INSERT INTO agencia (id, zona_id, unidad_bancaria_id, nombre, ciudad, direccion, activo) VALUES (?, ?, ?, ?, ?, ?, 1)")
+            ->execute([$agenciaId, $zonaId, $unidadBancariaId, 'Agencia Principal', 'N/D', 'N/D']);
+    } catch (\Throwable $e) {
+        // Reintento mínimo si alguna de esas columnas no existe en este host
+        $pdo->prepare("INSERT INTO agencia (id, zona_id, unidad_bancaria_id, nombre, activo) VALUES (?, ?, ?, ?, 1)")
+            ->execute([$agenciaId, $zonaId, $unidadBancariaId, 'Agencia Principal']);
+    }
+    return $agenciaId;
+}
+
+// Resuelve supervisor.jefe_agencia_id (NOT NULL) a partir del "gerente
+// responsable" elegido en la solicitud. Tres casos:
+//   1) El responsable ya es un jefe_agencia real -> se usa directo.
+//   2) El responsable es un gerente_general (a cargo de toda la cooperativa,
+//      sin agencia puntual todavía) -> se crea/reusa una "Agencia Principal"
+//      para su cooperativa y se lo registra también como jefe_agencia de esa
+//      agencia (una persona puede ser gerente_general Y jefe_agencia a la vez;
+//      son tablas de perfil distintas sobre el mismo usuario).
+//   3) No hay responsable resoluble -> se usa la cooperativa de la propia
+//      solicitud para crear/reusar la Agencia Principal, pero sin un usuario
+//      dueño no se puede crear el jefe_agencia -> devuelve null (el llamador
+//      debe pedir que se asigne un gerente antes de aprobar).
+function resolverJefeAgenciaIdSup(PDO $pdo, ?string $idAdministrador, string $idCooperativaSolicitud): ?string {
+    if (!empty($idAdministrador)) {
+        $st = $pdo->prepare('SELECT id FROM jefe_agencia WHERE usuario_id = ? LIMIT 1');
+        $st->execute([$idAdministrador]);
+        $ja = $st->fetchColumn();
+        if ($ja) return (string)$ja;
+
+        $st = $pdo->prepare('SELECT unidad_bancaria_id FROM gerente_general WHERE usuario_id = ? LIMIT 1');
+        $st->execute([$idAdministrador]);
+        $ubId = $st->fetchColumn();
+        if ($ubId) {
+            $agenciaId = resolverAgenciaPrincipalSup($pdo, (string)$ubId);
+            $nuevoJaId = _nuevoUuid();
+            $pdo->prepare('INSERT INTO jefe_agencia (id, usuario_id, agencia_id) VALUES (?, ?, ?)')
+                ->execute([$nuevoJaId, $idAdministrador, $agenciaId]);
+            return $nuevoJaId;
+        }
+    }
+    return null;
+}
+
 // Verificar sesión del admin
 $is_admin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
 $is_super_admin = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
@@ -79,37 +195,82 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (!$is_super_admin && $solicitud['id_administrador'] != $admin_id) {
                         $mensaje_error = "❌ No tienes permiso para procesar esta solicitud.";
                     } else {
-                        // Asegurar que la columna cedula exista en la tabla usuarios
-                        $chkCed = $pdo->query("SHOW COLUMNS FROM usuarios LIKE 'cedula'");
-                        if (!$chkCed->fetch()) {
-                            $pdo->exec("ALTER TABLE usuarios ADD COLUMN cedula VARCHAR(13) NULL AFTER usuario");
+                        // Nota: antes esto insertaba en una tabla `usuarios` (plural,
+                        // con columnas clave/nombres/id_rol_fk) que no existe en este
+                        // esquema — la consulta fallaba con un 1146 y la solicitud
+                        // nunca creaba la cuenta real. La tabla real es `usuario`
+                        // (singular, UUID), igual que en la aprobación de gerentes y
+                        // asesores. `usuario` no tiene columna `cedula`; ese dato se
+                        // queda solo en `solicitudes_supervisor` para referencia.
+                        $chkEmail = $pdo->prepare("SELECT id FROM usuario WHERE email = ? LIMIT 1");
+                        $chkEmail->execute([$solicitud['email']]);
+                        if ($chkEmail->fetch()) {
+                            $mensaje_error = "❌ Ya existe un usuario con ese email.";
+                        } else {
+                            $pdo->beginTransaction();
+                            try {
+                                $nombre_completo = trim($solicitud['nombres'] . ' ' . $solicitud['apellidos']);
+                                $nuevo_usuario_id = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                                    mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                                    mt_rand(0, 0xffff),
+                                    mt_rand(0, 0x0fff) | 0x4000,
+                                    mt_rand(0, 0x3fff) | 0x8000,
+                                    mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                                );
+
+                                $stmtUsr = $pdo->prepare("
+                                    INSERT INTO usuario
+                                        (id, nombre, email, telefono, password_hash, rol, activo, estado_aprobacion, aprobado_por, fecha_aprobacion)
+                                    VALUES (?, ?, ?, ?, ?, 'supervisor', 1, 'aprobado', ?, NOW())
+                                ");
+                                $stmtUsr->execute([
+                                    $nuevo_usuario_id,
+                                    $nombre_completo,
+                                    $solicitud['email'],
+                                    $solicitud['telefono'],
+                                    $solicitud['password_hash'],
+                                    $admin_id,
+                                ]);
+
+                                // supervisor.jefe_agencia_id es NOT NULL: hay que resolver
+                                // (o crear) el jefe_agencia real detrás del "gerente
+                                // responsable" elegido al aprobar. Ver resolverJefeAgenciaIdSup()
+                                // arriba: si el responsable es un gerente_general de toda la
+                                // cooperativa (como en este caso), se crea/reusa una "Agencia
+                                // Principal" y se lo registra ahí también como jefe_agencia.
+                                $jefeAgenciaId = resolverJefeAgenciaIdSup($pdo, $solicitud['id_administrador'] ?: null, (string)$solicitud['id_cooperativa']);
+                                if (!$jefeAgenciaId) {
+                                    throw new \Exception('No se pudo asignar una agencia/jefe de agencia para esta solicitud. Asigna un "Gerente Responsable" antes de aprobar.');
+                                }
+
+                                $nuevo_sup_id = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
+                                    mt_rand(0, 0xffff), mt_rand(0, 0xffff),
+                                    mt_rand(0, 0xffff),
+                                    mt_rand(0, 0x0fff) | 0x4000,
+                                    mt_rand(0, 0x3fff) | 0x8000,
+                                    mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff)
+                                );
+                                $stmtSup = $pdo->prepare("
+                                    INSERT INTO supervisor (id, usuario_id, jefe_agencia_id, meta_asesores)
+                                    VALUES (?, ?, ?, 5)
+                                ");
+                                $stmtSup->execute([$nuevo_sup_id, $nuevo_usuario_id, $jefeAgenciaId]);
+
+                                // Actualizar solicitud como aprobada
+                                $stmt = $pdo->prepare("
+                                    UPDATE solicitudes_supervisor
+                                    SET estado = 'aprobada', fecha_aprobacion = NOW()
+                                    WHERE id_solicitud = ?
+                                ");
+                                $stmt->execute([$id_solicitud]);
+
+                                $pdo->commit();
+                                $mensaje_exito = "✅ Solicitud aprobada. El nuevo supervisor puede iniciar sesión.";
+                            } catch (\Throwable $eTx) {
+                                $pdo->rollBack();
+                                $mensaje_error = "Error al aprobar: " . $eTx->getMessage();
+                            }
                         }
-
-                        // Insertar usuario en tabla usuarios con rol Supervisor (asumiendo id_rol = 3)
-                        $stmt = $pdo->prepare("
-                            INSERT INTO usuarios (usuario, clave, nombres, apellidos, email, telefono, cedula, activo, id_rol_fk)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, 1, 3)
-                        ");
-
-                        $stmt->execute([
-                            $solicitud['usuario'],
-                            $solicitud['password_hash'],
-                            $solicitud['nombres'],
-                            $solicitud['apellidos'],
-                            $solicitud['email'],
-                            $solicitud['telefono'],
-                            $solicitud['cedula']
-                        ]);
-
-                        // Actualizar solicitud como aprobada
-                        $stmt = $pdo->prepare("
-                            UPDATE solicitudes_supervisor 
-                            SET estado = 'aprobada', fecha_aprobacion = NOW() 
-                            WHERE id_solicitud = ?
-                        ");
-                        $stmt->execute([$id_solicitud]);
-
-                        $mensaje_exito = "✅ Solicitud aprobada. El nuevo supervisor puede iniciar sesión.";
                     }
                 }
             } elseif ($accion === 'rechazar') {

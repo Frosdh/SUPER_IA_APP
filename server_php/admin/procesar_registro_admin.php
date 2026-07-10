@@ -53,13 +53,24 @@ if (!isset($_FILES['credencial']) || $_FILES['credencial']['error'] != UPLOAD_ER
     $errores[] = "Debes enviar la credencial/nombramiento en PDF";
 } else {
     $file = $_FILES['credencial'];
-    
-    // Validar tipo
-    $finfo = finfo_open(FILEINFO_MIME_TYPE);
-    $tipo = finfo_file($finfo, $file['tmp_name']);
-    finfo_close($finfo);
-    
-    if ($tipo !== 'application/pdf' && $file['type'] !== 'application/pdf') {
+
+    // Validar tipo. finfo_open() puede no estar disponible en algunos
+    // hostings (extensión fileinfo deshabilitada) y antes eso provocaba un
+    // error fatal (500) en vez de un mensaje de validación normal — ahora
+    // se usa solo si existe, con el tipo MIME reportado por el navegador y
+    // la extensión del archivo como respaldo.
+    $tipo = null;
+    if (function_exists('finfo_open')) {
+        $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+        if ($finfo) {
+            $tipo = @finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+        }
+    }
+    $tipoDeclarado = $file['type'] ?? '';
+    $extensionArchivo = strtolower(pathinfo($file['name'] ?? '', PATHINFO_EXTENSION));
+
+    if ($tipo !== 'application/pdf' && $tipoDeclarado !== 'application/pdf' && $extensionArchivo !== 'pdf') {
         $errores[] = "El archivo debe ser un PDF válido";
     }
     
@@ -76,21 +87,15 @@ if (!empty($errores)) {
 }
 
 try {
-    // Verificar si el usuario ya existe
-    $stmt = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE usuario = ?");
-    $stmt->execute([$usuario]);
-    if ($stmt->rowCount() > 0) {
-        throw new Exception("El usuario ya existe");
-    }
+    // Nota: antes esto consultaba una tabla `usuarios` (plural) que no
+    // existe en este esquema — la tabla real de usuarios activos se llama
+    // `usuario` (singular) y no tiene columna de nombre de usuario (el
+    // "usuario" de login solo se guarda en las tablas de solicitudes
+    // pendientes, como `solicitudes_admin`). Esa consulta rota terminaba
+    // provocando el error 500 al enviar el formulario.
 
-    // Verificar si el email ya existe
-    $stmt = $pdo->prepare("SELECT id_usuario FROM usuarios WHERE email = ?");
-    $stmt->execute([$email]);
-    if ($stmt->rowCount() > 0) {
-        throw new Exception("El email ya está registrado");
-    }
-
-    // Crear tabla solicitudes_admin si no existe.
+    // Crear tabla solicitudes_admin si no existe (debe ir ANTES de
+    // consultarla para verificar duplicados).
     // id_cooperativa es VARCHAR(64) porque los IDs reales de cooperativa
     // (UUID de unidad_bancaria, o "seps_123" del catastro SEPS) no son
     // enteros — antes era INT y solo "funcionaba" con la lista de 4
@@ -125,6 +130,26 @@ try {
         // no crítico
     }
 
+    // Verificar si el nombre de usuario ya existe en solicitudes de admin
+    // pendientes/aprobadas
+    $stmt = $pdo->prepare("SELECT 1 FROM solicitudes_admin WHERE usuario = ? AND estado != 'rechazada' LIMIT 1");
+    $stmt->execute([$usuario]);
+    if ($stmt->fetchColumn()) {
+        throw new Exception("El usuario ya existe");
+    }
+
+    // Verificar si el email ya existe (cuenta activa o solicitud pendiente)
+    $stmt = $pdo->prepare("SELECT 1 FROM usuario WHERE email = ? LIMIT 1");
+    $stmt->execute([$email]);
+    if ($stmt->fetchColumn()) {
+        throw new Exception("El email ya está registrado");
+    }
+    $stmt = $pdo->prepare("SELECT 1 FROM solicitudes_admin WHERE email = ? AND estado != 'rechazada' LIMIT 1");
+    $stmt->execute([$email]);
+    if ($stmt->fetchColumn()) {
+        throw new Exception("El email ya está registrado");
+    }
+
     // Crear carpeta de solicitudes si no existe
     $dir_solicitudes = __DIR__ . '/solicitudes_admin';
     if (!is_dir($dir_solicitudes)) {
@@ -140,7 +165,11 @@ try {
     }
 
     // Insertar solicitud pendiente
-    $hash_password = hash('sha256', $password);
+    // password_hash() (bcrypt) en vez de hash('sha256', ...): el login usa
+    // password_verify(), que solo reconoce hashes generados por
+    // password_hash(). Con sha256 el administrador aprobado nunca podría
+    // iniciar sesión (la contraseña "correcta" siempre fallaría).
+    $hash_password = password_hash($password, PASSWORD_BCRYPT);
     
     $stmt = $pdo->prepare("
         INSERT INTO solicitudes_admin (id_cooperativa, usuario, nombres, apellidos, email, password_hash, region, telefono, archivo_credencial, estado)
@@ -163,7 +192,11 @@ try {
     header('Location: registro_admin.php?success=1');
     exit;
 
-} catch (Exception $e) {
+} catch (\Throwable $e) {
+    // \Throwable (no solo Exception) para que cualquier error inesperado
+    // — incluyendo errores de PHP como TypeError o consultas a tablas que
+    // no existen — termine en un mensaje de error normal en vez de una
+    // página en blanco con 500 Internal Server Error.
     // Limpiar archivo si hay error
     if (isset($ruta_archivo) && file_exists($ruta_archivo)) {
         unlink($ruta_archivo);

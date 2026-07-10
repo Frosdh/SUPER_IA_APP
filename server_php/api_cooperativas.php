@@ -81,7 +81,14 @@ try {
 
     // ── 1. Unidades bancarias internas ────────────────────────
     if ($fuente !== 'seps') {
-        $where = '1=1';
+        // Se excluyen las filas "espejo" (codigo LIKE 'SEPS-%') que crea
+        // resolverUnidadBancariaId() al aprobar un gerente de una cooperativa
+        // del catastro SEPS — esas filas son solo un puente técnico para la
+        // llave foránea de gerente_general y ya están representadas más abajo
+        // por la sección de seps_cooperativas; si no se excluyen aquí, la
+        // misma cooperativa sale duplicada (una vez como "interna" y otra
+        // como "seps") tanto en la app móvil como en el buscador web.
+        $where = "(codigo IS NULL OR codigo NOT LIKE 'SEPS-%')";
         $vals  = [];
         $types = '';
         if ($q !== '') {
@@ -104,6 +111,10 @@ try {
             // funciona: solo id + nombre, sin filtro por texto en esas
             // columnas ausentes.
             error_log('[api_cooperativas] prepare() falló para unidad_bancaria (codigo/ciudad): ' . $conn->error . ' — usando fallback mínimo');
+            // Nota: este fallback solo se usa cuando la tabla NO tiene columna
+            // `codigo` (por eso falló el prepare() de arriba) — en ese caso no
+            // pueden existir filas espejo "SEPS-%" (esas se crean escribiendo
+            // justo en esa columna), así que no hace falta filtrarlas aquí.
             $whereMin = '1=1';
             $valsMin  = [];
             $typesMin = '';

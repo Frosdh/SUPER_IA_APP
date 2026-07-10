@@ -23,15 +23,31 @@ if (!isset($_GET['cooperativa_id']) || $_GET['cooperativa_id'] === '') {
 
 $cooperativa_id = (string)$_GET['cooperativa_id'];
 
-// Las cooperativas importadas del catastro SEPS (id con prefijo "seps_") son
-// solo catálogo externo: no tienen gerente interno asignado en el sistema.
+// Las cooperativas importadas del catastro SEPS (id con prefijo "seps_") no
+// tienen gerente directamente sobre esa fila: cuando se aprueba un gerente
+// para una de estas cooperativas, administrar_solicitudes_admin.php crea
+// una fila "espejo" en unidad_bancaria (codigo = 'SEPS-<id>') y el gerente
+// queda enlazado a ESA fila (gerente_general.unidad_bancaria_id). Antes esta
+// API cortaba aquí y devolvía siempre lista vacía para toda cooperativa
+// "seps_", así que un gerente ya aprobado nunca aparecía como opción al
+// registrar un supervisor. Ahora se resuelve la fila espejo (si existe) y
+// se sigue el mismo camino que las cooperativas internas.
 if (strpos($cooperativa_id, 'seps_') === 0) {
-    echo json_encode([
-        'status' => 'ok',
-        'gerentes' => [],
-        'info' => 'Cooperativa del catastro SEPS: aún no tiene gerente asignado en el sistema.'
-    ]);
-    exit;
+    $sepsId = substr($cooperativa_id, 5);
+    $codigo = 'SEPS-' . $sepsId;
+    $stEspejo = $pdo->prepare('SELECT id FROM unidad_bancaria WHERE codigo = ? LIMIT 1');
+    $stEspejo->execute([$codigo]);
+    $ubId = $stEspejo->fetchColumn();
+
+    if (!$ubId) {
+        echo json_encode([
+            'status' => 'ok',
+            'gerentes' => [],
+            'info' => 'Cooperativa del catastro SEPS: aún no tiene gerente asignado en el sistema.'
+        ]);
+        exit;
+    }
+    $cooperativa_id = $ubId;
 }
 
 try {
