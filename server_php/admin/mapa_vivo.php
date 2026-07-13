@@ -165,6 +165,12 @@ $currentPage = 'mapa_vivo';
 
         <div class="map-toolbar">
             <div class="field">
+                <label>Banco / Cooperativa</label>
+                <select id="filtro-banco">
+                    <option value="">Todos los bancos</option>
+                </select>
+            </div>
+            <div class="field">
                 <label>Gerente</label>
                 <select id="filtro-gerente">
                     <option value="">Todos los gerentes</option>
@@ -174,6 +180,12 @@ $currentPage = 'mapa_vivo';
                 <label>Supervisor</label>
                 <select id="filtro-supervisor">
                     <option value="">Todos los supervisores</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Asesor</label>
+                <select id="filtro-asesor">
+                    <option value="">Todos los asesores</option>
                 </select>
             </div>
             <div class="status">
@@ -197,14 +209,36 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 let markers = [];
 let emptyMsgEl = null;
+let allGerentes = [];     // [{id, nombre, banco_id}]
 let allSupervisores = []; // [{id, nombre, jefe_agencia_id}]
+let allAsesores = [];     // [{id, nombre, supervisor_id}]
 let firstLoad = true;
 
+const selBanco = document.getElementById('filtro-banco');
 const selGerente = document.getElementById('filtro-gerente');
 const selSupervisor = document.getElementById('filtro-supervisor');
+const selAsesor = document.getElementById('filtro-asesor');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const legendEl = document.getElementById('map-legend');
+
+function poblarGerentes(bancoId) {
+    const actual = selGerente.value;
+    selGerente.innerHTML = '<option value="">Todos los gerentes</option>';
+    allGerentes
+        .filter(g => !bancoId || String(g.banco_id) === String(bancoId))
+        .forEach(g => {
+            const opt = document.createElement('option');
+            opt.value = g.id;
+            opt.textContent = g.nombre;
+            selGerente.appendChild(opt);
+        });
+    if ([...selGerente.options].some(o => o.value === actual)) {
+        selGerente.value = actual;
+    } else {
+        selGerente.value = '';
+    }
+}
 
 function poblarSupervisores(gerenteId) {
     const actual = selSupervisor.value;
@@ -220,6 +254,26 @@ function poblarSupervisores(gerenteId) {
     // Conserva la selección previa si sigue siendo válida
     if ([...selSupervisor.options].some(o => o.value === actual)) {
         selSupervisor.value = actual;
+    } else {
+        selSupervisor.value = '';
+    }
+}
+
+function poblarAsesores(supervisorId) {
+    const actual = selAsesor.value;
+    selAsesor.innerHTML = '<option value="">Todos los asesores</option>';
+    allAsesores
+        .filter(a => !supervisorId || String(a.supervisor_id) === String(supervisorId))
+        .forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.id;
+            opt.textContent = a.nombre;
+            selAsesor.appendChild(opt);
+        });
+    if ([...selAsesor.options].some(o => o.value === actual)) {
+        selAsesor.value = actual;
+    } else {
+        selAsesor.value = '';
     }
 }
 
@@ -259,8 +313,10 @@ function actualizarLeyenda(ubicaciones) {
 
 async function cargarUbicaciones() {
     const params = new URLSearchParams();
+    if (selBanco.value) params.set('banco_id', selBanco.value);
     if (selGerente.value) params.set('gerente_id', selGerente.value);
     if (selSupervisor.value) params.set('supervisor_id', selSupervisor.value);
+    if (selAsesor.value) params.set('asesor_id', selAsesor.value);
 
     try {
         const resp = await fetch('api_mapa_vivo_admin.php?' + params.toString(), { credentials: 'same-origin' });
@@ -273,10 +329,14 @@ async function cargarUbicaciones() {
         }
 
         if (firstLoad) {
+            allGerentes = data.gerentes || [];
             allSupervisores = data.supervisores || [];
-            selGerente.innerHTML = '<option value="">Todos los gerentes</option>' +
-                (data.gerentes || []).map(g => `<option value="${g.id}">${g.nombre}</option>`).join('');
+            allAsesores = data.asesores || [];
+            selBanco.innerHTML = '<option value="">Todos los bancos</option>' +
+                (data.bancos || []).map(b => `<option value="${b.id}">${b.nombre}</option>`).join('');
+            poblarGerentes('');
             poblarSupervisores('');
+            poblarAsesores('');
             firstLoad = false;
         }
 
@@ -298,6 +358,7 @@ async function cargarUbicaciones() {
                     `<strong>${u.asesor_nombre}</strong><br>` +
                     `Supervisor: ${u.supervisor_nombre}<br>` +
                     `Gerente: ${u.gerente_nombre}<br>` +
+                    `Banco/Cooperativa: ${u.banco_nombre || '—'}<br>` +
                     `<small>Última actualización: ${u.timestamp}</small>`
                 );
                 markers.push(marker);
@@ -313,11 +374,22 @@ async function cargarUbicaciones() {
     }
 }
 
-selGerente.addEventListener('change', () => {
+selBanco.addEventListener('change', () => {
+    poblarGerentes(selBanco.value);
     poblarSupervisores(selGerente.value);
+    poblarAsesores(selSupervisor.value);
     cargarUbicaciones();
 });
-selSupervisor.addEventListener('change', cargarUbicaciones);
+selGerente.addEventListener('change', () => {
+    poblarSupervisores(selGerente.value);
+    poblarAsesores(selSupervisor.value);
+    cargarUbicaciones();
+});
+selSupervisor.addEventListener('change', () => {
+    poblarAsesores(selSupervisor.value);
+    cargarUbicaciones();
+});
+selAsesor.addEventListener('change', cargarUbicaciones);
 
 cargarUbicaciones();
 setInterval(cargarUbicaciones, 15000);

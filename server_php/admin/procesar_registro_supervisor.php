@@ -141,8 +141,12 @@ try {
         $pdo->exec("ALTER TABLE solicitudes_supervisor MODIFY COLUMN id_cooperativa VARCHAR(36) NOT NULL DEFAULT ''");
     }
 
-    // Hash de contraseña
-    $password_hash = hash('sha256', $password);
+    // Hash de contraseña: password_hash() (bcrypt) en vez de hash('sha256', ...)
+    // -- el login usa password_verify(), que solo reconoce hashes generados
+    // por password_hash(). Con sha256 el supervisor aprobado nunca podía
+    // iniciar sesión aunque la contraseña fuera la correcta (mismo bug ya
+    // corregido antes en procesar_registro_admin.php y procesar_registro_asesor.php).
+    $password_hash = password_hash($password, PASSWORD_BCRYPT);
 
     // Insertar solicitud
     $stmt = $pdo->prepare("

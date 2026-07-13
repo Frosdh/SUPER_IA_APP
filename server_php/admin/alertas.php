@@ -295,7 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-<?php if ($is_supervisor_ui): ?>
+<?php if ($is_supervisor_ui || $user_role === 'super_admin'): ?>
         :root {
             --brand-yellow: #ffdd00;
             --brand-yellow-deep: #f4c400;
@@ -632,11 +632,56 @@ if ($user_role === 'supervisor') {
         </div>
     </div>
     <div class="content-area">
-<?php } else { ?>
-<!-- SIDEBAR Y NAVBAR LEGACY PARA OTROS ROLES -->
-<div class="sidebar">...</div>
+<?php } elseif ($user_role === 'asesor') { ?>
+<!-- SIDEBAR ASESOR -->
+<?php
+    $currentPage = 'alertas';
+    $asesor_nombre = $_SESSION['asesor_nombre'] ?? 'Asesor';
+    require_once '_sidebar_asesor.php';
+?>
 <div class="main-content">
-    <div class="navbar-custom">...</div>
+    <div class="navbar-custom">
+        <h2><i class="fas fa-bell me-2" style="color:var(--brand-yellow)"></i> Centro de Alertas</h2>
+        <div class="user-info">
+            <div style="text-align:right;">
+                <strong><?= htmlspecialchars($asesor_nombre) ?></strong><br>
+                <small style="opacity:.7;">Asesor</small>
+            </div>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt me-1"></i> Cerrar Sesión</a>
+        </div>
+    </div>
+    <div class="content-area">
+<?php } else { ?>
+<!-- SIDEBAR ÚNICO DE SUPERADMIN (mismo set de enlaces que mapa_vivo.php / usuarios.php) -->
+<div class="sidebar">
+    <div class="sidebar-brand"><i class="fas fa-crown"></i><span>Super_IA</span></div>
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Principal</div>
+        <a href="super_admin_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
+        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
+        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
+    </div>
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Gestion</div>
+        <a href="usuarios.php" class="sidebar-link"><i class="fas fa-users"></i> Usuarios</a>
+        <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> Clientes</a>
+        <a href="operaciones.php" class="sidebar-link"><i class="fas fa-handshake"></i> Operaciones</a>
+        <a href="metas.php" class="sidebar-link"><i class="fas fa-bullseye"></i> Metas</a>
+        <a href="alertas.php" class="sidebar-link active"><i class="fas fa-bell"></i> Alertas</a>
+    </div>
+</div>
+<div class="main-content">
+    <div class="navbar-custom">
+        <h2><i class="fas fa-bell me-2" style="color:var(--brand-yellow)"></i> Centro de Alertas</h2>
+        <div class="user-info">
+            <div style="text-align:right;">
+                <strong><?= htmlspecialchars($_SESSION['super_admin_nombre'] ?? 'SuperAdmin') ?></strong><br>
+                <small style="opacity:.7;">SuperAdministrador</small>
+            </div>
+            <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt me-1"></i> Cerrar Sesión</a>
+        </div>
+    </div>
     <div class="content-area">
 <?php } ?>
 

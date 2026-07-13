@@ -172,6 +172,16 @@ $tipo = $_GET['tipo'] ?? $_POST['tipo'] ?? 'credito';
 if (!isset($tipos_map[$tipo])) $tipo = 'credito';
 $tipo_info = $tipos_map[$tipo];
 
+// ── Filtro por Banco/Cooperativa (solo admin/super_admin) ───
+$banco_id_filtro = '';
+$bancos_lista = [];
+if ($user_role === 'super_admin' || $user_role === 'admin') {
+    $banco_id_filtro = trim((string)($_GET['banco_id'] ?? ''));
+    try {
+        $bancos_lista = $pdo->query("SELECT id, nombre FROM unidad_bancaria WHERE activo = 1 ORDER BY nombre ASC")->fetchAll();
+    } catch (Throwable $e) { $bancos_lista = []; }
+}
+
 // ── Migración no destructiva: estado de revisión de fichas ───
 try {
     $exists = $pdo->query("SHOW TABLES LIKE 'ficha_producto'")->fetchColumn();
@@ -364,8 +374,13 @@ try {
               JOIN cliente_prospecto cl ON cp.cliente_prospecto_id = cl.id
               LEFT JOIN asesor a ON cp.asesor_id = a.id
               LEFT JOIN usuario u ON a.usuario_id = u.id
-              ORDER BY cp.created_at DESC";
-        $st = $pdo->query($q);
+              LEFT JOIN supervisor   sup ON sup.id = a.supervisor_id
+              LEFT JOIN jefe_agencia ja  ON ja.id  = sup.jefe_agencia_id
+              LEFT JOIN agencia      ag  ON ag.id  = ja.agencia_id"
+              . ($banco_id_filtro !== '' ? " WHERE ag.unidad_bancaria_id = ?" : "") .
+              " ORDER BY cp.created_at DESC";
+        $st = $pdo->prepare($q);
+        $st->execute($banco_id_filtro !== '' ? [$banco_id_filtro] : []);
     } elseif ($user_role === 'supervisor') {
         $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
                      cp.monto_aprobado as cantidad, cp.estado_credito as estado,
@@ -444,9 +459,15 @@ try {
               LEFT JOIN cliente_prospecto cp ON cp.cedula = fp.cliente_cedula COLLATE utf8mb4_unicode_ci";
 
     if ($user_role === 'super_admin' || $user_role === 'admin') {
-        $q  = "$select_base WHERE fp.producto_tipo = ? ORDER BY fp.created_at DESC";
+        $select_base_banco = "$select_base
+              LEFT JOIN supervisor   sup ON sup.id = a.supervisor_id
+              LEFT JOIN jefe_agencia ja  ON ja.id  = sup.jefe_agencia_id
+              LEFT JOIN agencia      ag  ON ag.id  = ja.agencia_id";
+        $q  = "$select_base_banco WHERE fp.producto_tipo = ?"
+              . ($banco_id_filtro !== '' ? " AND ag.unidad_bancaria_id = ?" : "") .
+              " ORDER BY fp.created_at DESC";
         $st = $pdo->prepare($q);
-        $st->execute([$tipo]);
+        $st->execute($banco_id_filtro !== '' ? [$tipo, $banco_id_filtro] : [$tipo]);
 
     } elseif ($user_role === 'supervisor') {
         $sid = $supervisor_table_id;
@@ -613,19 +634,25 @@ $table_title        = 'Solicitudes de ' . $tipo_info['label'];
     <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
 <?php else: ?>
     <style>
-        /* Estilos para admin/superadmin (sin sidebar supervisor) */
+        /* Estilos para admin/superadmin (sin sidebar supervisor) — navy unificado con el resto del panel */
+        :root {
+            --brand-yellow: #ffdd00;
+            --brand-yellow-deep: #f4c400;
+            --brand-navy: #123a6d;
+            --brand-navy-deep: #0a2748;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; display: flex; height: 100vh; }
-        .sidebar { width: 230px; background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%); color: white; padding: 20px 0; overflow-y: auto; position: fixed; height: 100vh; left: 0; top: 0; }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: #7c3aed; }
+        .sidebar { width: 230px; background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%); color: white; padding: 20px 0; overflow-y: auto; position: sticky; height: 100vh; top: 0; flex-shrink: 0; }
+        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
+        .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
         .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
-        .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
-        .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; }
+        .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; }
+        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; }
         .main-content { flex: 1; margin-left: 0 !important; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-        .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
+        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 24px rgba(18, 58, 109, 0.16); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }
         .btn-logout { background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; }
@@ -676,19 +703,23 @@ if ($user_role === 'supervisor') {
     $currentPage = 'operaciones';
     require_once '_sidebar_gerente.php';
 } else {
-    // Sidebar genérico para SuperAdmin
+    // Sidebar único de SuperAdmin (mismo set de enlaces que mapa_vivo.php / usuarios.php)
 ?>
 <div class="sidebar">
-    <div class="sidebar-brand"><i class="fas fa-chart-pie"></i><span>Super_IA</span></div>
+    <div class="sidebar-brand"><i class="fas fa-crown"></i><span>Super_IA</span></div>
     <div class="sidebar-section">
-        <div class="sidebar-section-title">PRINCIPAL</div>
-        <a href="index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
-        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa</a>
+        <div class="sidebar-section-title">Principal</div>
+        <a href="super_admin_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
+        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
+        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
+        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
     </div>
     <div class="sidebar-section">
-        <div class="sidebar-section-title">GESTIÓN</div>
+        <div class="sidebar-section-title">Gestion</div>
+        <a href="usuarios.php" class="sidebar-link"><i class="fas fa-users"></i> Usuarios</a>
         <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> Clientes</a>
         <a href="operaciones.php" class="sidebar-link active"><i class="fas fa-handshake"></i> Operaciones</a>
+        <a href="metas.php" class="sidebar-link"><i class="fas fa-bullseye"></i> Metas</a>
         <a href="alertas.php" class="sidebar-link"><i class="fas fa-bell"></i> Alertas</a>
     </div>
 </div>
@@ -777,9 +808,10 @@ if ($user_role === 'supervisor') {
             <div class="tipo-tabs-wrap">
                 <?php foreach ($tipos_map as $k => $info):
                     $isActive = ($k === $tipo);
+                    $tabHref = 'operaciones.php?tipo=' . urlencode($k) . ($banco_id_filtro !== '' ? '&banco_id=' . urlencode($banco_id_filtro) : '');
                 ?>
                     <a
-                        href="operaciones.php?tipo=<?= urlencode($k) ?>"
+                        href="<?= htmlspecialchars($tabHref) ?>"
                         class="tipo-tab <?= $isActive ? 'tipo-tab-active' : 'tipo-tab-inactive' ?>"
                     >
                         <i class="fas <?= htmlspecialchars($info['icon']) ?>"></i>
@@ -787,6 +819,23 @@ if ($user_role === 'supervisor') {
                     </a>
                 <?php endforeach; ?>
             </div>
+
+            <?php if ($user_role === 'super_admin' || $user_role === 'admin'): ?>
+            <div class="banco-filter-wrap" style="margin-top:14px;">
+                <label for="filtroBancoOperaciones" style="font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--brand-navy-deep,#0a2748);display:block;margin-bottom:5px;">
+                    Banco / Cooperativa
+                </label>
+                <select id="filtroBancoOperaciones" onchange="if(this.value){window.location.href='operaciones.php?tipo=<?= urlencode($tipo) ?>&banco_id='+encodeURIComponent(this.value);}else{window.location.href='operaciones.php?tipo=<?= urlencode($tipo) ?>';}"
+                        style="padding:9px 12px;border-radius:9px;border:1.5px solid #E2E8F0;font-size:13.5px;font-family:'Inter',sans-serif;color:#0D1929;background:#fff;min-width:240px;">
+                    <option value="">Todos los bancos</option>
+                    <?php foreach ($bancos_lista as $b): ?>
+                        <option value="<?= htmlspecialchars($b['id']) ?>" <?= ($banco_id_filtro === $b['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($b['nombre']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <?php endif; ?>
         </div>
 
         <?php if (!empty($mensaje_exito)): ?>

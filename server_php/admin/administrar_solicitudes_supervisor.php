@@ -59,17 +59,24 @@ function resolverAgenciaPrincipalSup(PDO $pdo, string $unidadBancariaId): string
     $st->execute([$unidadBancariaId]);
     $nombreCoop = $st->fetchColumn() ?: 'Cooperativa';
 
+    // Los nombres reales de cooperativa (sobre todo del catastro SEPS) pueden
+    // ser larguísimos ("COOPERATIVA DE AHORRO Y CREDITO DEL SINDICATO DE
+    // CHOFERES PROFESIONALES DEL CANTON YANTZAZA") y desbordar columnas
+    // nombre VARCHAR angostas de zona/agencia -- se recorta agresivo.
+    $nombreCoopCorto = mb_substr((string)$nombreCoop, 0, 30);
+    $nombreZona = mb_substr('Zona - ' . $nombreCoopCorto, 0, 45);
+
     // zona.ciudad suele ser NOT NULL en este esquema; se usa un valor
     // genérico ('N/D') si no hay dato de ciudad disponible, en vez de
     // fallar la creación de la agencia por falta de ese dato.
     $zonaId = _nuevoUuid();
     try {
         $pdo->prepare("INSERT INTO zona (id, nombre, ciudad) VALUES (?, ?, ?)")
-            ->execute([$zonaId, 'Zona Principal - ' . $nombreCoop, 'N/D']);
+            ->execute([$zonaId, $nombreZona, 'N/D']);
     } catch (\Throwable $e) {
         // Reintento mínimo por si la columna ciudad no existe/es distinta
         $pdo->prepare("INSERT INTO zona (id, nombre) VALUES (?, ?)")
-            ->execute([$zonaId, 'Zona Principal - ' . $nombreCoop]);
+            ->execute([$zonaId, $nombreZona]);
     }
 
     $agenciaId = _nuevoUuid();

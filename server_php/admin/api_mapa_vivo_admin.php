@@ -3,8 +3,9 @@
 // admin/api_mapa_vivo_admin.php
 // Endpoint AJAX para el Mapa en Vivo del panel Super Admin / Gerente.
 // Devuelve la ubicación de asesores conectados, con el color de
-// equipo (por supervisor) y soporte para filtrar por gerente
-// (jefe_agencia) y/o supervisor.
+// equipo (por supervisor) y soporte para filtrar en cascada por
+// banco/cooperativa (unidad_bancaria) -> gerente (jefe_agencia) ->
+// supervisor -> asesor.
 // ============================================================
 require_once 'db_admin.php';
 
@@ -31,8 +32,10 @@ function colorForId(array $palette, ?string $id): string {
     return $palette[$hash % count($palette)];
 }
 
+$banco_id      = isset($_GET['banco_id'])      && $_GET['banco_id']      !== '' ? $_GET['banco_id']      : null;
 $gerente_id    = isset($_GET['gerente_id'])    && $_GET['gerente_id']    !== '' ? $_GET['gerente_id']    : null;
 $supervisor_id = isset($_GET['supervisor_id']) && $_GET['supervisor_id'] !== '' ? $_GET['supervisor_id'] : null;
+$asesor_id     = isset($_GET['asesor_id'])     && $_GET['asesor_id']     !== '' ? $_GET['asesor_id']     : null;
 
 $ubicaciones = [];
 $error_msg   = '';
@@ -54,7 +57,9 @@ try {
             sup.id     AS supervisor_id,
             su.nombre  AS supervisor_nombre,
             ja.id      AS gerente_id,
-            ju.nombre  AS gerente_nombre
+            ju.nombre  AS gerente_nombre,
+            ag.unidad_bancaria_id AS banco_id,
+            ub.nombre  AS banco_nombre
         FROM ubicacion_asesor ua
         INNER JOIN asesor       a   ON a.id   = ua.asesor_id
         INNER JOIN usuario      au  ON au.id  = a.usuario_id
@@ -62,6 +67,8 @@ try {
         INNER JOIN usuario      su  ON su.id  = sup.usuario_id
         INNER JOIN jefe_agencia ja  ON ja.id  = sup.jefe_agencia_id
         INNER JOIN usuario      ju  ON ju.id  = ja.usuario_id
+        LEFT  JOIN agencia        ag ON ag.id = ja.agencia_id
+        LEFT  JOIN unidad_bancaria ub ON ub.id = ag.unidad_bancaria_id
         LEFT  JOIN asesor_presencia ap ON ap.asesor_id = ua.asesor_id
         WHERE ua.timestamp >= DATE_SUB(NOW(), INTERVAL 2 MINUTE)
           AND ua.latitud  IS NOT NULL
@@ -69,13 +76,21 @@ try {
           AND COALESCE(ap.estado, 'conectado') != 'desconectado'
     ";
     $params = [];
-    if ($supervisor_id !== null) {
-        $sql .= " AND sup.id = :supervisor_id";
-        $params[':supervisor_id'] = $supervisor_id;
+    if ($banco_id !== null) {
+        $sql .= " AND ag.unidad_bancaria_id = :banco_id";
+        $params[':banco_id'] = $banco_id;
     }
     if ($gerente_id !== null) {
         $sql .= " AND ja.id = :gerente_id";
         $params[':gerente_id'] = $gerente_id;
+    }
+    if ($supervisor_id !== null) {
+        $sql .= " AND sup.id = :supervisor_id";
+        $params[':supervisor_id'] = $supervisor_id;
+    }
+    if ($asesor_id !== null) {
+        $sql .= " AND a.id = :asesor_id";
+        $params[':asesor_id'] = $asesor_id;
     }
     $sql .= " ORDER BY ua.asesor_id DESC, ua.timestamp DESC";
 
@@ -90,11 +105,20 @@ try {
         $ubicaciones[] = $row;
     }
 
-    // Listas para poblar/actualizar los filtros del frontend
+    // Listas para poblar/actualizar los filtros del frontend (cascada
+    // banco -> gerente -> supervisor -> asesor)
+    $bancos = $pdo->query("
+        SELECT id, nombre
+        FROM unidad_bancaria
+        WHERE activo = 1
+        ORDER BY nombre ASC
+    ")->fetchAll();
+
     $gerentes = $pdo->query("
-        SELECT ja.id, ju.nombre
+        SELECT ja.id, ju.nombre, ag.unidad_bancaria_id AS banco_id
         FROM jefe_agencia ja
         INNER JOIN usuario ju ON ju.id = ja.usuario_id
+        LEFT  JOIN agencia ag ON ag.id = ja.agencia_id
         ORDER BY ju.nombre ASC
     ")->fetchAll();
 
@@ -103,6 +127,13 @@ try {
         FROM supervisor sup
         INNER JOIN usuario su ON su.id = sup.usuario_id
         ORDER BY su.nombre ASC
+    ")->fetchAll();
+
+    $asesores = $pdo->query("
+        SELECT a.id, au.nombre, a.supervisor_id
+        FROM asesor a
+        INNER JOIN usuario au ON au.id = a.usuario_id
+        ORDER BY au.nombre ASC
     ")->fetchAll();
 
 } catch (Throwable $e) {
@@ -115,7 +146,9 @@ echo json_encode([
     'ts'           => date('H:i:s'),
     'total'        => count($ubicaciones),
     'ubicaciones'  => $ubicaciones,
+    'bancos'       => $bancos ?? [],
     'gerentes'     => $gerentes ?? [],
     'supervisores' => $supervisores ?? [],
+    'asesores'     => $asesores ?? [],
     'error'        => $error_msg ?: null,
 ], JSON_UNESCAPED_UNICODE);

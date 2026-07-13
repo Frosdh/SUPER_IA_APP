@@ -8,15 +8,18 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once 'db_admin.php';   // PDO ($pdo)
 
 $is_admin_gerente = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
-if (!isset($_SESSION['supervisor_logged_in']) && !$is_admin_gerente) {
+$is_super_admin   = isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true;
+if (!isset($_SESSION['supervisor_logged_in']) && !$is_admin_gerente && !$is_super_admin) {
     header('Location: login.php?role=supervisor');
     exit;
 }
 
-
-$supervisor_usuario_id = $_SESSION['supervisor_id'];
-$supervisor_nombre     = $_SESSION['supervisor_nombre'] ?? 'Supervisor';
-$supervisor_rol        = $_SESSION['supervisor_rol'] ?? 'Supervisor';
+// Para admin/super_admin no existe un supervisor.id propio: las consultas de
+// abajo ya contemplan $supervisor_table_id = null como "vista global de todos
+// los supervisores/asesores" (ver uso de $is_admin_gerente más abajo).
+$supervisor_usuario_id = $_SESSION['supervisor_id'] ?? null;
+$supervisor_nombre     = $_SESSION['supervisor_nombre'] ?? ($is_super_admin ? ($_SESSION['super_admin_nombre'] ?? 'SuperAdmin') : ($_SESSION['admin_nombre'] ?? 'Gerente'));
+$supervisor_rol        = $_SESSION['supervisor_rol'] ?? ($is_super_admin ? 'SuperAdministrador' : ($_SESSION['admin_rol'] ?? 'Gerente'));
 
 // Resolver supervisor.id
 $supervisor_table_id = null;
@@ -438,7 +441,7 @@ if ($supervisor_table_id) {
                          ORDER BY u.nombre');
     $st->execute([$supervisor_table_id]);
     $asesores = $st->fetchAll();
-} elseif ($is_admin_gerente) {
+} elseif ($is_admin_gerente || $is_super_admin) {
     try {
         $st = $pdo->query('SELECT a.id, u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE u.activo = 1 ORDER BY u.nombre');
         $asesores = $st->fetchAll();
@@ -448,7 +451,7 @@ if ($supervisor_table_id) {
 // ── Metas del día actual con avance ──────────────────────────
 $fecha_filtro = $_GET['fecha'] ?? date('Y-m-d');
 $metas_hoy = [];
-if (($supervisor_table_id || $is_admin_gerente) && $metas_instaladas) {
+if (($supervisor_table_id || $is_admin_gerente || $is_super_admin) && $metas_instaladas) {
     $meta_where  = $supervisor_table_id ? 'WHERE a.supervisor_id = ? AND m.fecha = ?' : 'WHERE m.fecha = ?';
     $meta_params = $supervisor_table_id ? [$supervisor_table_id, $fecha_filtro]       : [$fecha_filtro];
 
@@ -783,7 +786,7 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
 
 <?php
 $navTitle = ''; $navIcon = ''; $navSubtitle = '';
-if ($is_admin_gerente) {
+if ($is_admin_gerente || $is_super_admin) {
     $currentPage = 'metas';
     require_once '_sidebar_gerente.php';
 } else {
@@ -818,7 +821,7 @@ if ($is_admin_gerente) {
             </div>
         </div>
 
-        <?php if (!$is_admin_gerente): ?>
+        <?php if (!$is_admin_gerente && !$is_super_admin): ?>
         <!-- FORMULARIO ASIGNAR META -->
         <div class="section-card mb-4">
             <div class="section-header">
