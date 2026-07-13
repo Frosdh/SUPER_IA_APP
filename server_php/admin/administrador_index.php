@@ -378,9 +378,6 @@ html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:
     <a class="nav-link-adm" href="super_admin_index.php">
       <span class="ico"><i class="fa-solid fa-crown"></i></span> Super Admin
     </a>
-    <a class="nav-link-adm" href="configurar_smtp.php">
-      <span class="ico"><i class="fa-solid fa-envelope-open-text"></i></span> Config SMTP
-    </a>
 
     <div class="sidebar-user">
       <div class="avatar"><?=strtoupper(substr($admin_nombre,0,1))?></div>

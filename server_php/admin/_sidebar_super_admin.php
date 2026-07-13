@@ -10,8 +10,9 @@
  *   - Debe existir $pdo (PDO) — se incluye db_admin.php si no está.
  *   - Definir $currentPage (string) con uno de estos valores:
  *       dashboard | mapa | mapa_calor | historial | usuarios |
- *       clientes | operaciones | metas | alertas | tareas_descartadas |
- *       solicitudes | crear_asesor | administrar_asesores | smtp
+ *       operaciones | metas | alertas | tareas_descartadas |
+ *       solicitudes | solicitudes_admin | crear_asesor |
+ *       administrar_asesores
  *   - El <style> de cada página debe definir las clases .sidebar,
  *     .sidebar-brand, .sidebar-section, .sidebar-link (mismo navy en
  *     todas las páginas: --brand-navy / --brand-navy-deep / --brand-yellow).
@@ -28,6 +29,15 @@ try {
     )->fetchColumn();
 } catch (Throwable $e) {
     $solicitudes_pendientes_sa = 0;
+}
+
+$solicitudes_admin_pendientes_sa = 0;
+try {
+    $solicitudes_admin_pendientes_sa = (int)$pdo->query(
+        "SELECT COUNT(*) FROM solicitudes_admin WHERE estado = 'pendiente'"
+    )->fetchColumn();
+} catch (Throwable $e) {
+    $solicitudes_admin_pendientes_sa = 0;
 }
 
 function _sa_active(string $page, string $current): string {
@@ -58,9 +68,6 @@ function _sa_active(string $page, string $current): string {
         <a href="usuarios.php" class="sidebar-link <?= _sa_active('usuarios', $currentPage) ?>">
             <i class="fas fa-users"></i> Usuarios
         </a>
-        <a href="clientes.php" class="sidebar-link <?= _sa_active('clientes', $currentPage) ?>">
-            <i class="fas fa-briefcase"></i> Clientes
-        </a>
         <a href="operaciones.php" class="sidebar-link <?= _sa_active('operaciones', $currentPage) ?>">
             <i class="fas fa-handshake"></i> Operaciones
         </a>
@@ -83,18 +90,17 @@ function _sa_active(string $page, string $current): string {
                 <span class="badge bg-danger ms-auto" style="font-size:10px;padding:3px 7px;border-radius:10px;"><?= $solicitudes_pendientes_sa ?></span>
             <?php endif; ?>
         </a>
+        <a href="administrar_solicitudes_admin.php" class="sidebar-link <?= _sa_active('solicitudes_admin', $currentPage) ?>">
+            <i class="fas fa-file-alt"></i> Solicitudes de Gerente/Admin
+            <?php if ($solicitudes_admin_pendientes_sa > 0): ?>
+                <span class="badge bg-danger ms-auto" style="font-size:10px;padding:3px 7px;border-radius:10px;"><?= $solicitudes_admin_pendientes_sa ?></span>
+            <?php endif; ?>
+        </a>
         <a href="crear_asesor_admin.php" class="sidebar-link <?= _sa_active('crear_asesor', $currentPage) ?>">
             <i class="fas fa-user-plus"></i> Crear Asesor
         </a>
         <a href="administrar_asesores.php" class="sidebar-link <?= _sa_active('administrar_asesores', $currentPage) ?>">
             <i class="fas fa-users-cog"></i> Administrar Asesores
-        </a>
-    </div>
-
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Configuracion</div>
-        <a href="configurar_smtp.php" class="sidebar-link <?= _sa_active('smtp', $currentPage) ?>">
-            <i class="fas fa-mail-bulk"></i> Configurar SMTP
         </a>
     </div>
 </div>

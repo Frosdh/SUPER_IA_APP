@@ -187,11 +187,6 @@ $currentPage = 'super_admin_dashboard';
                 <h4>Operaciones</h4>
                 <p style="font-size: 14px; color: #9ca3af;">Supervisar operaciones de crédito</p>
             </a>
-            <a href="configurar_smtp.php" class="action-card">
-                <i class="fas fa-mail-bulk" style="color: #6b11ff;"></i>
-                <h4>Configurar SMTP</h4>
-                <p style="font-size: 14px; color: #9ca3af;">Actualizar correo y contraseña de app</p>
-            </a>
         </div>
 
         <!-- DISTRIBUCIÓN DE USUARIOS -->
