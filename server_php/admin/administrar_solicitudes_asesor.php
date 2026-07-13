@@ -55,8 +55,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Marcar también la solicitud de registro (si existe)
                         try {
-                            $updSol = $pdo->prepare("UPDATE solicitud_registro SET estado = 'aprobada' WHERE usuario_id = ? AND rol_solicitado = 'asesor'");
-                            $updSol->execute([$app_usuario_id]);
+                            $updSol = $pdo->prepare("UPDATE solicitud_registro SET estado = 'aprobado', revisado_por = ?, revisado_at = NOW() WHERE usuario_id = ? AND rol_solicitado = 'asesor'");
+                            $updSol->execute([$supervisor_id, $app_usuario_id]);
                         } catch (Exception $e) {
                             // no bloquear
                         }
@@ -155,8 +155,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                         // Marcar también la solicitud de registro (si existe)
                         try {
-                            $updSol = $pdo->prepare("UPDATE solicitud_registro SET estado = 'rechazada' WHERE usuario_id = ? AND rol_solicitado = 'asesor'");
-                            $updSol->execute([$app_usuario_id]);
+                            $updSol = $pdo->prepare("UPDATE solicitud_registro SET estado = 'denegado', revisado_por = ?, revisado_at = NOW() WHERE usuario_id = ? AND rol_solicitado = 'asesor'");
+                            $updSol->execute([$supervisor_id, $app_usuario_id]);
                         } catch (Exception $e) {
                             // no bloquear
                         }

@@ -786,7 +786,10 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
 
 <?php
 $navTitle = ''; $navIcon = ''; $navSubtitle = '';
-if ($is_admin_gerente || $is_super_admin) {
+if ($is_super_admin) {
+    $currentPage = 'metas';
+    require_once '_sidebar_super_admin.php';
+} elseif ($is_admin_gerente) {
     $currentPage = 'metas';
     require_once '_sidebar_gerente.php';
 } else {

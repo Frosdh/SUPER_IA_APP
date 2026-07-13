@@ -101,40 +101,33 @@ $currentPage = 'mapa_vivo';
     </style>
 </head>
 <body>
+<?php if ($is_super_admin): ?>
+    <?php $currentPage = 'mapa'; require_once '_sidebar_super_admin.php'; ?>
+<?php else: ?>
 <div class="sidebar">
     <div class="sidebar-brand">
         <i class="fas fa-crown"></i> Super_IA
     </div>
     <div class="sidebar-section">
         <div class="sidebar-section-title">Principal</div>
-        <?php if ($is_super_admin): ?>
-        <a href="super_admin_index.php" class="sidebar-link">
-            <i class="fas fa-home"></i> Dashboard
-        </a>
-        <?php else: ?>
         <a href="index.php" class="sidebar-link">
             <i class="fas fa-home"></i> Dashboard
         </a>
-        <?php endif; ?>
         <a href="mapa_vivo.php" class="sidebar-link active">
             <i class="fas fa-map"></i> Mapa en Vivo
         </a>
-        <?php if ($is_super_admin || $is_admin): ?>
         <a href="mapa_calor.php" class="sidebar-link">
             <i class="fas fa-fire"></i> Mapa de Calor
         </a>
         <a href="historial_rutas.php" class="sidebar-link">
             <i class="fas fa-history"></i> Historial de Viajes
         </a>
-        <?php endif; ?>
     </div>
     <div class="sidebar-section">
         <div class="sidebar-section-title">Gestion</div>
-        <?php if ($is_super_admin || $is_admin): ?>
         <a href="usuarios.php" class="sidebar-link">
             <i class="fas fa-users"></i> Usuarios
         </a>
-        <?php endif; ?>
         <a href="clientes.php" class="sidebar-link">
             <i class="fas fa-briefcase"></i> Clientes
         </a>
@@ -146,6 +139,7 @@ $currentPage = 'mapa_vivo';
         </a>
     </div>
 </div>
+<?php endif; ?>
 <div class="main-content">
     <div class="navbar-custom">
         <h2><i class="fas fa-map-location-dot me-2" style="color: #ffdd00;"></i>Super_IA <?php echo $is_super_admin ? '- SuperAdmin' : '- Admin'; ?></h2>

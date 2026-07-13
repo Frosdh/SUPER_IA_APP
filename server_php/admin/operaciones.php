@@ -703,27 +703,10 @@ if ($user_role === 'supervisor') {
     $currentPage = 'operaciones';
     require_once '_sidebar_gerente.php';
 } else {
-    // Sidebar único de SuperAdmin (mismo set de enlaces que mapa_vivo.php / usuarios.php)
-?>
-<div class="sidebar">
-    <div class="sidebar-brand"><i class="fas fa-crown"></i><span>Super_IA</span></div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Principal</div>
-        <a href="super_admin_index.php" class="sidebar-link"><i class="fas fa-home"></i> Dashboard</a>
-        <a href="mapa_vivo.php" class="sidebar-link"><i class="fas fa-map"></i> Mapa en Vivo</a>
-        <a href="mapa_calor.php" class="sidebar-link"><i class="fas fa-fire"></i> Mapa de Calor</a>
-        <a href="historial_rutas.php" class="sidebar-link"><i class="fas fa-history"></i> Historial de Viajes</a>
-    </div>
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Gestion</div>
-        <a href="usuarios.php" class="sidebar-link"><i class="fas fa-users"></i> Usuarios</a>
-        <a href="clientes.php" class="sidebar-link"><i class="fas fa-briefcase"></i> Clientes</a>
-        <a href="operaciones.php" class="sidebar-link active"><i class="fas fa-handshake"></i> Operaciones</a>
-        <a href="metas.php" class="sidebar-link"><i class="fas fa-bullseye"></i> Metas</a>
-        <a href="alertas.php" class="sidebar-link"><i class="fas fa-bell"></i> Alertas</a>
-    </div>
-</div>
-<?php } ?>
+    // Sidebar único de SuperAdmin (mismo archivo compartido en todas las páginas)
+    $currentPage = 'operaciones';
+    require_once '_sidebar_super_admin.php';
+} ?>
 
 
 <?php if ($user_role !== 'supervisor'): ?>

@@ -88,11 +88,17 @@ $currentPage = 'usuarios';
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        :root {
+            --brand-yellow: #ffdd00;
+            --brand-yellow-deep: #f4c400;
+            --brand-navy: #123a6d;
+            --brand-navy-deep: #0a2748;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', 'Segoe UI', sans-serif; background: #f5f7fa; display: flex; height: 100vh; }
         .sidebar {
             width: 230px;
-            background: linear-gradient(180deg, #2d1b69 0%, #1a0f3d 100%);
+            background: linear-gradient(180deg, var(--brand-navy-deep) 0%, var(--brand-navy) 100%);
             color: white;
             padding: 20px 0;
             overflow-y: auto;
@@ -101,23 +107,21 @@ $currentPage = 'usuarios';
             top: 0;
             flex-shrink: 0;
         }
-        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 20px; }
-        .sidebar-brand i { margin-right: 10px; color: #7c3aed; }
+        .sidebar-brand { padding: 0 20px 30px; font-size: 18px; font-weight: 800; border-bottom: 1px solid rgba(255,221,0,0.18); margin-bottom: 20px; }
+        .sidebar-brand i { margin-right: 10px; color: var(--brand-yellow); }
         .sidebar-section { padding: 0 15px; margin-bottom: 25px; }
-        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: #9ca3af; letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
-        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 8px; color: #d1d5db; cursor: pointer; transition: all 0.3s ease; text-decoration: none; font-size: 14px; }
-        .sidebar-link:hover { background: rgba(124, 58, 237, 0.2); color: #fff; padding-left: 20px; }
-        .sidebar-link.active { background: linear-gradient(90deg, #6b11ff, #7c3aed); color: #fff; }
+        .sidebar-section-title { font-size: 11px; text-transform: uppercase; color: rgba(255,255,255,0.58); letter-spacing: 0.5px; padding: 0 10px; margin-bottom: 10px; font-weight: 600; }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 15px; margin-bottom: 5px; border-radius: 10px; color: rgba(255,255,255,0.82); cursor: pointer; transition: all 0.25s ease; text-decoration: none; font-size: 14px; }
+        .sidebar-link:hover { background: rgba(255,221,0,0.12); color: #fff; padding-left: 20px; }
+        .sidebar-link.active { background: linear-gradient(90deg, var(--brand-yellow), var(--brand-yellow-deep)); color: var(--brand-navy-deep); font-weight: 700; }
         .main-content { flex: 1; margin-left: 0 !important; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
         @media (max-width: 1200px) {
             .sidebar { width: 200px; }
-            .main-content { margin-left: 200px; }
         }
         @media (max-width: 768px) {
             .sidebar { width: 180px; }
-            .main-content { margin-left: 180px; }
         }
-        .navbar-custom { background: linear-gradient(135deg, #6b11ff, #3182fe); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1); }
+        .navbar-custom { background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy)); color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 10px 24px rgba(18, 58, 109, 0.16); }
         .navbar-custom h2 { margin: 0; font-size: 20px; font-weight: 700; }
         .user-info { display: flex; align-items: center; gap: 15px; }
         .btn-logout { background: rgba(255, 255, 255, 0.2); color: white; border: 1px solid white; padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; }
@@ -141,15 +145,17 @@ $currentPage = 'usuarios';
 </head>
 <body>
 
-<!-- SIDEBAR -->
+<?php if ($user_role === 'super_admin'): ?>
+    <?php $currentPage = 'usuarios'; require_once '_sidebar_super_admin.php'; ?>
+<?php else: ?>
+<!-- SIDEBAR ADMIN (gerente/jefe_agencia) -->
 <div class="sidebar">
     <div class="sidebar-brand">
         <i class="fas fa-crown"></i> Super_IA
     </div>
-    
     <div class="sidebar-section">
         <div class="sidebar-section-title">Principal</div>
-        <a href="<?php echo ($user_role === 'super_admin') ? 'super_admin_index.php' : 'index.php'; ?>" class="sidebar-link">
+        <a href="index.php" class="sidebar-link">
             <i class="fas fa-home"></i> Dashboard
         </a>
         <a href="mapa_vivo.php" class="sidebar-link">
@@ -162,7 +168,6 @@ $currentPage = 'usuarios';
             <i class="fas fa-history"></i> Historial de Viajes
         </a>
     </div>
-    
     <div class="sidebar-section">
         <div class="sidebar-section-title">Gestión</div>
         <a href="usuarios.php" class="sidebar-link active">
@@ -178,14 +183,8 @@ $currentPage = 'usuarios';
             <i class="fas fa-bell"></i> Alertas
         </a>
     </div>
-
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Configuración</div>
-        <a href="#" class="sidebar-link">
-            <i class="fas fa-cog"></i> Configuración
-        </a>
-    </div>
 </div>
+<?php endif; ?>
 
 <!-- MAIN CONTENT -->
 <div class="main-content">
