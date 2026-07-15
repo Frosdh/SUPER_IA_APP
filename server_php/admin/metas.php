@@ -29,6 +29,68 @@ try {
     $supervisor_table_id = $st->fetchColumn() ?: null;
 } catch (PDOException $e) {}
 
+// ── Configuración de tipos de meta habilitados para el banco/cooperativa
+// del supervisor (definida por el SuperAdmin en configurar_metas_banco.php).
+// Si el banco no tiene fila configurada, se mantiene el comportamiento
+// histórico: diaria y mensual habilitadas, semanal deshabilitada.
+try {
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS config_metas_banco (
+            id VARCHAR(36) NOT NULL PRIMARY KEY,
+            unidad_bancaria_id VARCHAR(36) NOT NULL,
+            permite_diaria TINYINT(1) NOT NULL DEFAULT 1,
+            permite_semanal TINYINT(1) NOT NULL DEFAULT 0,
+            permite_mensual TINYINT(1) NOT NULL DEFAULT 1,
+            dias_semana_habilitados VARCHAR(20) NOT NULL DEFAULT '1,2,3,4,5',
+            actualizado_por VARCHAR(36) DEFAULT NULL,
+            actualizado_at TIMESTAMP NULL DEFAULT NULL,
+            UNIQUE KEY uq_config_metas_banco_ub (unidad_bancaria_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+    ");
+} catch (Throwable $e) {}
+
+$banco_id_supervisor = null;
+if ($supervisor_table_id) {
+    try {
+        $stB = $pdo->prepare("
+            SELECT ag.unidad_bancaria_id
+            FROM supervisor sv
+            LEFT JOIN jefe_agencia ja ON ja.id = sv.jefe_agencia_id
+            LEFT JOIN agencia ag ON ag.id = ja.agencia_id
+            WHERE sv.id = ? LIMIT 1
+        ");
+        $stB->execute([$supervisor_table_id]);
+        $banco_id_supervisor = $stB->fetchColumn() ?: null;
+    } catch (Throwable $e) {
+        $banco_id_supervisor = null;
+    }
+}
+
+$cfg_metas = [
+    'permite_diaria'  => 1,
+    'permite_semanal' => 0,
+    'permite_mensual' => 1,
+];
+if ($banco_id_supervisor) {
+    try {
+        $stC = $pdo->prepare("SELECT permite_diaria, permite_semanal, permite_mensual
+                               FROM config_metas_banco WHERE unidad_bancaria_id = ? LIMIT 1");
+        $stC->execute([$banco_id_supervisor]);
+        $rowCfg = $stC->fetch();
+        if ($rowCfg) $cfg_metas = $rowCfg;
+    } catch (Throwable $e) {}
+}
+$cfg_metas['permite_diaria']  = (int)$cfg_metas['permite_diaria'];
+$cfg_metas['permite_semanal'] = (int)$cfg_metas['permite_semanal'];
+$cfg_metas['permite_mensual'] = (int)$cfg_metas['permite_mensual'];
+
+// El SuperAdmin solo habilita/deshabilita el tipo "Semana"; los días
+// concretos los elige el propio supervisor, por cada asesor, al asignar
+// la meta (un asesor puede tener L-M-X y otro M-J-V en la misma semana).
+$dias_habilitados_arr = [1, 2, 3, 4, 5, 6, 7];
+
+$dias_labels_meta = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
+
 $flash = null;
 
 // Sidebar vars
@@ -92,6 +154,13 @@ if ($metas_instaladas) {
                 $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN $col INT NOT NULL DEFAULT 0 AFTER $after");
                 $cols_exist[] = $col;
             }
+        }
+
+        // Guarda con qué modo se asignó cada fila (dia/semana/mes), para poder
+        // mostrarlo en "Estado de Metas del Equipo" (columna Tipo).
+        if (!in_array('origen_meta', $cols_exist)) {
+            $pdo->exec("ALTER TABLE meta_asesor_diaria ADD COLUMN origen_meta VARCHAR(10) NOT NULL DEFAULT 'dia'");
+            $cols_exist[] = 'origen_meta';
         }
 
         $cols_asesor = $pdo->query("SHOW COLUMNS FROM asesor")->fetchAll(PDO::FETCH_COLUMN);
@@ -194,7 +263,31 @@ if ($metas_instaladas) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_instaladas) {
     $asesor_id = $_POST['asesor_id'] ?? '';
     $fecha     = $_POST['fecha'] ?? date('Y-m-d');
-    $modo_meta = ($_POST['modo_meta'] ?? 'dia') === 'mes' ? 'mes' : 'dia';
+    $modo_meta_raw = (string)($_POST['modo_meta'] ?? 'dia');
+    $modo_meta = in_array($modo_meta_raw, ['dia', 'semana', 'mes'], true) ? $modo_meta_raw : 'dia';
+
+    // Enforce en backend lo habilitado por el SuperAdmin para este banco,
+    // por si el formulario fue manipulado en el navegador.
+    $modo_permitido = [
+        'dia'    => (bool)$cfg_metas['permite_diaria'],
+        'semana' => (bool)$cfg_metas['permite_semanal'],
+        'mes'    => (bool)$cfg_metas['permite_mensual'],
+    ];
+    if (empty($modo_permitido[$modo_meta])) {
+        // Cae al primer modo habilitado disponible, o 'dia' si ninguno lo está
+        foreach (['dia', 'semana', 'mes'] as $mOpt) {
+            if ($modo_permitido[$mOpt]) { $modo_meta = $mOpt; break; }
+        }
+    }
+
+    $dias_semana_post = $_POST['dias_semana'] ?? [];
+    if (!is_array($dias_semana_post)) $dias_semana_post = [];
+    $dias_semana_sel = array_values(array_intersect(
+        array_unique(array_filter(array_map('intval', $dias_semana_post), fn($d) => $d >= 1 && $d <= 7)),
+        $dias_habilitados_arr
+    ));
+    sort($dias_semana_sel);
+
     $m_enc     = (int)($_POST['meta_encuestas'] ?? 0);
     $m_cli     = (int)($_POST['meta_clientes_nuevos'] ?? 0);
     $m_cre     = (int)($_POST['meta_creditos'] ?? 0);
@@ -247,7 +340,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
             // Aun así, el filtrado se mantiene por asesor.supervisor_id.
 
             // Closure: guarda/actualiza la meta de un asesor para UNA fecha concreta
-            $guardarMetaDia = function (string $fAsesorId, string $fFecha, array $v, string $fObs) use ($pdo, $has_supervisor_id, $has_actualizado_at, $supervisor_table_id) {
+            $guardarMetaDia = function (string $fAsesorId, string $fFecha, array $v, string $fObs, string $fOrigen = 'dia') use ($pdo, $has_supervisor_id, $has_actualizado_at, $supervisor_table_id) {
                 $cols = [
                     'asesor_id', 'fecha',
                     'meta_encuestas', 'meta_clientes_nuevos', 'meta_creditos',
@@ -255,7 +348,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                     'meta_visitas',
                     'meta_monto_creditos_aprobados', 'meta_cuentas_ahorro_abiertas',
                     'meta_inversiones_aprobadas',
-                    'observaciones'
+                    'observaciones', 'origen_meta'
                 ];
                 $vals = [
                     $fAsesorId, $fFecha,
@@ -264,7 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                     $v['meta_visitas'],
                     $v['meta_monto_creditos_aprobados'], $v['meta_cuentas_ahorro_abiertas'],
                     $v['meta_inversiones_aprobadas'],
-                    $fObs
+                    $fObs, $fOrigen
                 ];
                 if ($has_supervisor_id) {
                     $cols[] = 'supervisor_id';
@@ -292,7 +385,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                           meta_monto_creditos_aprobados = meta_monto_creditos_aprobados + VALUES(meta_monto_creditos_aprobados),
                           meta_cuentas_ahorro_abiertas = meta_cuentas_ahorro_abiertas + VALUES(meta_cuentas_ahorro_abiertas),
                           meta_inversiones_aprobadas = meta_inversiones_aprobadas + VALUES(meta_inversiones_aprobadas),
-                          observaciones = IF(VALUES(observaciones) = '', observaciones, IF(observaciones = '' OR observaciones IS NULL, VALUES(observaciones), CONCAT(observaciones, '\\n---\\n', VALUES(observaciones))))";
+                          observaciones = IF(VALUES(observaciones) = '', observaciones, IF(observaciones = '' OR observaciones IS NULL, VALUES(observaciones), CONCAT(observaciones, '\\n---\\n', VALUES(observaciones)))),
+                          origen_meta = VALUES(origen_meta)";
 
                 if ($has_supervisor_id) {
                     $sql .= ", supervisor_id = VALUES(supervisor_id)";
@@ -364,7 +458,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                         foreach ($valoresIngresados as $campo => $total) {
                             $vDia[$campo] = $distribuciones[$campo][$idx];
                         }
-                        $guardarMetaDia((string)$asesor_id, $fDia, $vDia, $obs);
+                        $guardarMetaDia((string)$asesor_id, $fDia, $vDia, $obs, 'mes');
                     }
 
                     // Actualizar metas base del asesor con el reparto del primer día generado
@@ -398,9 +492,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $supervisor_table_id && $metas_inst
                                   ". Si esos días ya tenían metas asignadas, esta cantidad se <b>sumó</b> a lo existente."
                     ];
                 }
+            } elseif ($modo_meta === 'semana') {
+                // ── Modo "Por Semana": los valores ingresados son TOTALES de la
+                // semana. Se reparten entre los días de esa semana (lunes a
+                // domingo) que el supervisor marcó, limitados a los días que el
+                // SuperAdmin habilitó para este banco/cooperativa.
+                if (empty($dias_semana_sel)) {
+                    $flash = ['type' => 'error', 'msg' => 'Selecciona al menos un día de la semana habilitado para repartir la meta semanal.'];
+                } else {
+                    $inicioRef = new DateTime($fecha);
+                    $dowRef = (int)$inicioRef->format('N'); // 1=lunes ... 7=domingo
+                    $lunesSemana = clone $inicioRef;
+                    $lunesSemana->modify('-' . ($dowRef - 1) . ' days');
+
+                    $diasSemanaFechas = [];
+                    foreach ($dias_semana_sel as $dNum) {
+                        $fDia = clone $lunesSemana;
+                        $fDia->modify('+' . ($dNum - 1) . ' days');
+                        $diasSemanaFechas[] = $fDia->format('Y-m-d');
+                    }
+                    sort($diasSemanaFechas);
+                    $numDiasSemana = count($diasSemanaFechas);
+
+                    $distribucionesSemana = [];
+                    foreach ($valoresIngresados as $campo => $total) {
+                        $distribucionesSemana[$campo] = $distribuirMeta($total, $numDiasSemana);
+                    }
+
+                    foreach ($diasSemanaFechas as $idx => $fDia) {
+                        $vDia = [];
+                        foreach ($valoresIngresados as $campo => $total) {
+                            $vDia[$campo] = $distribucionesSemana[$campo][$idx];
+                        }
+                        $guardarMetaDia((string)$asesor_id, $fDia, $vDia, $obs, 'semana');
+                    }
+
+                    try {
+                        $stBase = $pdo->prepare("UPDATE asesor SET
+                            meta_encuestas = :m1, meta_clientes_nuevos = :m2, meta_creditos = :m3,
+                            meta_cuenta_ahorros = :m4, meta_cuenta_corriente = :m5, meta_inversiones = :m6,
+                            meta_visitas = :m7,
+                            meta_monto_creditos_aprobados = :m8, meta_cuentas_ahorro_abiertas = :m9,
+                            meta_inversiones_aprobadas = :m10
+                            WHERE id = :aid");
+                        $stBase->execute([
+                            ':m1' => $distribucionesSemana['meta_encuestas'][0],
+                            ':m2' => $distribucionesSemana['meta_clientes_nuevos'][0],
+                            ':m3' => $distribucionesSemana['meta_creditos'][0],
+                            ':m4' => $distribucionesSemana['meta_cuenta_ahorros'][0],
+                            ':m5' => $distribucionesSemana['meta_cuenta_corriente'][0],
+                            ':m6' => $distribucionesSemana['meta_inversiones'][0],
+                            ':m7' => $distribucionesSemana['meta_visitas'][0],
+                            ':m8' => $distribucionesSemana['meta_monto_creditos_aprobados'][0],
+                            ':m9' => $distribucionesSemana['meta_cuentas_ahorro_abiertas'][0],
+                            ':m10' => $distribucionesSemana['meta_inversiones_aprobadas'][0],
+                            ':aid' => $asesor_id
+                        ]);
+                    } catch (PDOException $e_base) {}
+
+                    $nombresDias = array_map(fn($f) => $dias_labels_meta[(int)(new DateTime($f))->format('N')], $diasSemanaFechas);
+                    $flash = [
+                        'type' => 'success',
+                        'msg'  => "Meta semanal asignada correctamente. Se repartió entre <b>{$numDiasSemana} día(s)</b>: " .
+                                  htmlspecialchars(implode(', ', $nombresDias)) .
+                                  " (" . date('d/m/Y', strtotime($diasSemanaFechas[0])) . " al " . date('d/m/Y', strtotime($diasSemanaFechas[$numDiasSemana - 1])) . ")" .
+                                  ". Si esos días ya tenían metas asignadas, esta cantidad se <b>sumó</b> a lo existente."
+                    ];
+                }
             } else {
                 // ── Modo "Por Día" (comportamiento original): se guarda tal cual para la fecha indicada
-                $guardarMetaDia((string)$asesor_id, $fecha, $valoresIngresados, $obs);
+                $guardarMetaDia((string)$asesor_id, $fecha, $valoresIngresados, $obs, 'dia');
 
                 // También actualizar las metas base en la tabla asesor (como solicitó el usuario)
                 try {
@@ -448,12 +609,54 @@ if ($supervisor_table_id) {
     } catch (Throwable $_) {}
 }
 
+// ── Lista de supervisores, para el filtro visible solo en admin/gerente/super_admin ──
+$supervisores_filtro_list = [];
+if ($is_admin_gerente || $is_super_admin) {
+    try {
+        $supervisores_filtro_list = $pdo->query("
+            SELECT sv.id, u.nombre
+            FROM supervisor sv
+            JOIN usuario u ON u.id = sv.usuario_id
+            WHERE u.activo = 1
+            ORDER BY u.nombre
+        ")->fetchAll();
+    } catch (Throwable $_) {}
+}
+
+// ── Filtros de la tabla "Estado de Metas del Equipo" ─────────
+$asesor_filtro_meta = trim($_GET['asesor_filtro'] ?? '');
+$asesor_ids_validos_meta = array_map(fn($a) => (string)$a['id'], $asesores);
+if ($asesor_filtro_meta !== '' && !in_array($asesor_filtro_meta, $asesor_ids_validos_meta, true)) {
+    $asesor_filtro_meta = '';
+}
+
+$supervisor_filtro_meta = trim($_GET['supervisor_filtro'] ?? '');
+$supervisor_ids_validos_meta = array_map(fn($s) => (string)$s['id'], $supervisores_filtro_list);
+if (!($is_admin_gerente || $is_super_admin) || !in_array($supervisor_filtro_meta, $supervisor_ids_validos_meta, true)) {
+    $supervisor_filtro_meta = '';
+}
+
 // ── Metas del día actual con avance ──────────────────────────
 $fecha_filtro = $_GET['fecha'] ?? date('Y-m-d');
 $metas_hoy = [];
 if (($supervisor_table_id || $is_admin_gerente || $is_super_admin) && $metas_instaladas) {
-    $meta_where  = $supervisor_table_id ? 'WHERE a.supervisor_id = ? AND m.fecha = ?' : 'WHERE m.fecha = ?';
-    $meta_params = $supervisor_table_id ? [$supervisor_table_id, $fecha_filtro]       : [$fecha_filtro];
+    $meta_where  = 'WHERE m.fecha = ?';
+    $meta_params = [$fecha_filtro];
+
+    if ($supervisor_table_id) {
+        // Supervisor: siempre acotado a su propio equipo
+        $meta_where .= ' AND a.supervisor_id = ?';
+        $meta_params[] = $supervisor_table_id;
+    } elseif ($supervisor_filtro_meta !== '') {
+        // Admin/Gerente/SuperAdmin: filtro opcional por supervisor
+        $meta_where .= ' AND a.supervisor_id = ?';
+        $meta_params[] = $supervisor_filtro_meta;
+    }
+
+    if ($asesor_filtro_meta !== '') {
+        $meta_where .= ' AND m.asesor_id = ?';
+        $meta_params[] = $asesor_filtro_meta;
+    }
 
     // Intentar con la vista de avances; si no existe, usar avances 0.
     $sql = "SELECT m.*, u.nombre AS asesor_nombre,
@@ -824,6 +1027,14 @@ if ($is_super_admin) {
             </div>
         </div>
 
+        <?php
+        $modos_habilitados_ui = [];
+        if ($cfg_metas['permite_diaria'])  $modos_habilitados_ui[] = 'dia';
+        if ($cfg_metas['permite_semanal']) $modos_habilitados_ui[] = 'semana';
+        if ($cfg_metas['permite_mensual']) $modos_habilitados_ui[] = 'mes';
+        if (empty($modos_habilitados_ui)) $modos_habilitados_ui = ['dia'];
+        $modo_default_ui = $modos_habilitados_ui[0];
+        ?>
         <?php if (!$is_admin_gerente && !$is_super_admin): ?>
         <!-- FORMULARIO ASIGNAR META -->
         <div class="section-card mb-4">
@@ -837,19 +1048,56 @@ if ($is_super_admin) {
                         <div class="col-12">
                             <div class="d-flex flex-wrap align-items-center gap-3 p-3" style="background:#f8fafc; border-radius:14px; border:1px solid #e2e8f0;">
                                 <span class="form-label fw-bold small text-muted mb-0 text-uppercase"><i class="fas fa-sliders-h me-1"></i> Tipo de Asignación:</span>
+                                <?php if (count($modos_habilitados_ui) > 1): ?>
                                 <div class="btn-group" role="group" aria-label="Tipo de asignación">
-                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaDia" value="dia" checked autocomplete="off" onchange="cambiarModoMeta()">
-                                    <label class="btn btn-outline-primary" for="modoMetaDia" style="border-radius:10px 0 0 10px;"><i class="fas fa-calendar-day me-1"></i> Por Día</label>
+                                    <?php if ($cfg_metas['permite_diaria']): ?>
+                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaDia" value="dia" <?= $modo_default_ui === 'dia' ? 'checked' : '' ?> autocomplete="off" onchange="cambiarModoMeta()">
+                                    <label class="btn btn-outline-primary" for="modoMetaDia"><i class="fas fa-calendar-day me-1"></i> Por Día</label>
+                                    <?php endif; ?>
 
-                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaMes" value="mes" autocomplete="off" onchange="cambiarModoMeta()">
-                                    <label class="btn btn-outline-primary" for="modoMetaMes" style="border-radius:0 10px 10px 0;"><i class="fas fa-calendar-alt me-1"></i> Por Mes</label>
+                                    <?php if ($cfg_metas['permite_semanal']): ?>
+                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaSemana" value="semana" <?= $modo_default_ui === 'semana' ? 'checked' : '' ?> autocomplete="off" onchange="cambiarModoMeta()">
+                                    <label class="btn btn-outline-primary" for="modoMetaSemana"><i class="fas fa-calendar-week me-1"></i> Por Semana</label>
+                                    <?php endif; ?>
+
+                                    <?php if ($cfg_metas['permite_mensual']): ?>
+                                    <input type="radio" class="btn-check" name="modo_meta" id="modoMetaMes" value="mes" <?= $modo_default_ui === 'mes' ? 'checked' : '' ?> autocomplete="off" onchange="cambiarModoMeta()">
+                                    <label class="btn btn-outline-primary" for="modoMetaMes"><i class="fas fa-calendar-alt me-1"></i> Por Mes</label>
+                                    <?php endif; ?>
                                 </div>
+                                <?php else: ?>
+                                    <input type="hidden" name="modo_meta" value="<?= htmlspecialchars($modo_default_ui) ?>">
+                                    <span class="badge-premium badge-navy-soft">
+                                        <?= ['dia' => 'Por Día', 'semana' => 'Por Semana', 'mes' => 'Por Mes'][$modo_default_ui] ?>
+                                    </span>
+                                    <small class="text-muted">(El SuperAdmin solo habilitó este tipo de meta para tu banco/cooperativa)</small>
+                                <?php endif; ?>
                                 <div id="hintModoMes" class="small text-muted mb-0" style="display:none; flex:1 1 260px;">
                                     <i class="fas fa-circle-info text-warning me-1"></i>
                                     Los valores de <b>Objetivos</b> serán el <b>total del mes</b> y se repartirán automáticamente entre los días <b>lunes a viernes</b> restantes del mes, a partir de la fecha indicada. Si algún día ya tenía una meta asignada, lo nuevo se <b>suma</b> a lo existente (no lo reemplaza).
                                 </div>
+                                <div id="hintModoSemana" class="small text-muted mb-0" style="display:none; flex:1 1 260px;">
+                                    <i class="fas fa-circle-info text-warning me-1"></i>
+                                    Los valores de <b>Objetivos</b> serán el <b>total de la semana</b> y se repartirán entre los días marcados abajo. Si algún día ya tenía una meta asignada, lo nuevo se <b>suma</b> a lo existente (no lo reemplaza).
+                                </div>
                             </div>
                         </div>
+                        <?php if ($cfg_metas['permite_semanal']): ?>
+                        <div class="col-12" id="boxDiasSemanaMeta" style="display:none;">
+                            <div class="p-3" style="background:#f0f5ff; border-radius:14px; border:1px solid #dbeafe;">
+                                <div class="form-label fw-bold small text-muted mb-2 text-uppercase"><i class="fas fa-calendar-week me-1"></i> Días de la semana a repartir (elige los días de ESTE asesor)</div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <?php foreach ($dias_labels_meta as $dNum => $dLabel): ?>
+                                        <label style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; border-radius:20px; border:1.5px solid #cbd5e1; background:#fff; font-size:13px; font-weight:600; color:#334155; cursor:pointer;">
+                                            <input type="checkbox" name="dias_semana[]" value="<?= $dNum ?>" <?= in_array($dNum, [1,2,3,4,5], true) ? 'checked' : '' ?> style="accent-color:var(--brand-navy);">
+                                            <?= $dLabel ?>
+                                        </label>
+                                    <?php endforeach; ?>
+                                </div>
+                                <small class="text-muted d-block mt-2"><i class="fas fa-circle-info"></i> Cada asesor puede tener días distintos: marca solo los días en que ESTE asesor trabajará su meta semanal.</small>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                         <div class="col-md-6">
                             <div class="form-section h-100">
                                 <h4><i class="fas fa-user-tie"></i> Información General</h4>
@@ -938,11 +1186,37 @@ if ($is_super_admin) {
 
         <!-- METAS ACTUALES -->
         <div class="section-card mb-4">
-            <div class="section-header">
+            <div class="section-header" style="flex-wrap:wrap; row-gap:10px;">
                 <h5><i class="fas fa-list-check text-primary"></i> Estado de Metas del Equipo</h5>
-                <form method="get" class="d-flex align-items-center gap-3">
-                    <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-calendar-day"></i> Consultar Fecha:</label>
-                    <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" onchange="this.form.submit()" class="form-control form-control-sm shadow-sm" style="width:auto; border-radius:8px;">
+                <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+                    <?php if ($is_admin_gerente || $is_super_admin): ?>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-user-tie"></i> Supervisor:</label>
+                        <select name="supervisor_filtro" onchange="this.form.submit()" class="form-select form-select-sm shadow-sm" style="width:auto; border-radius:8px;">
+                            <option value="">Todos</option>
+                            <?php foreach ($supervisores_filtro_list as $sv): ?>
+                                <option value="<?= htmlspecialchars($sv['id']) ?>" <?= $supervisor_filtro_meta === $sv['id'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($sv['nombre']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <?php endif; ?>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-user"></i> Asesor:</label>
+                        <select name="asesor_filtro" onchange="this.form.submit()" class="form-select form-select-sm shadow-sm" style="width:auto; border-radius:8px;">
+                            <option value="">Todos</option>
+                            <?php foreach ($asesores as $a): ?>
+                                <option value="<?= htmlspecialchars($a['id']) ?>" <?= $asesor_filtro_meta === $a['id'] ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($a['nombre']) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-calendar-day"></i> Consultar Fecha:</label>
+                        <input type="date" name="fecha" value="<?= htmlspecialchars($fecha_filtro) ?>" onchange="this.form.submit()" class="form-control form-control-sm shadow-sm" style="width:auto; border-radius:8px;">
+                    </div>
                 </form>
             </div>
             <div class="section-body p-0">
@@ -958,6 +1232,7 @@ if ($is_super_admin) {
                         <thead>
                             <tr>
                                 <th>Asesor</th>
+                                <th class="text-center">Tipo</th>
                                 <th class="text-center">Encuestas</th>
                                 <th class="text-center">Clientes</th>
                                 <th class="text-center">Créditos</th>
@@ -976,7 +1251,10 @@ if ($is_super_admin) {
                             <?php
                             $estClass = 'badge-' . ($m['estado'] === 'completado' ? 'success' : ($m['estado'] === 'no_cumplido' ? 'danger' : 'warning')) . '-soft';
                             $estLabel = ['pendiente'=>'Pendiente','completado'=>'Completado','no_cumplido'=>'No cumplido'][$m['estado']] ?? $m['estado'];
-                            
+
+                            $origenLabels = ['dia' => ['Diaria', 'badge-navy-soft'], 'semana' => ['Semanal', 'badge-warning-soft'], 'mes' => ['Mensual', 'badge-success-soft']];
+                            [$origenLabel, $origenClass] = $origenLabels[$m['origen_meta'] ?? 'dia'] ?? ['Diaria', 'badge-navy-soft'];
+
                             $fmtProgress = function($av, $meta) {
                                 $av = (int)$av; $meta = (int)$meta;
                                 if ($meta <= 0) return '<span class="text-muted small">—</span>';
@@ -1009,6 +1287,7 @@ if ($is_super_admin) {
                                     <div class="fw-bold text-navy"><?= htmlspecialchars($m['asesor_nombre']) ?></div>
                                     <small class="text-muted" style="font-size:10px;">ID: <?= $m['asesor_id'] ?></small>
                                 </td>
+                                <td class="text-center"><span class="badge-premium <?= $origenClass ?>"><?= $origenLabel ?></span></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_encuestas'], $m['meta_encuestas']) ?></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_clientes_nuevos'], $m['meta_clientes_nuevos']) ?></td>
                                 <td class="text-center"><?= $fmtProgress($m['avance_creditos'], $m['meta_creditos']) ?></td>
@@ -1074,32 +1353,51 @@ if ($is_super_admin) {
 </div><!-- /.main-content -->
 
 <script>
+function getModoMetaActual() {
+    const checked = document.querySelector('input[name="modo_meta"]:checked');
+    if (checked) return checked.value;
+    const hidden = document.querySelector('input[type="hidden"][name="modo_meta"]');
+    if (hidden) return hidden.value;
+    return 'dia';
+}
+
 function cambiarModoMeta() {
-    const esMes = document.getElementById('modoMetaMes').checked;
-    const hint = document.getElementById('hintModoMes');
+    if (!document.getElementById('formAsignarMeta')) return; // admin/super_admin no asignan metas
+
+    const modo = getModoMetaActual();
+    const esMes = modo === 'mes';
+    const esSemana = modo === 'semana';
+
+    const hintMes = document.getElementById('hintModoMes');
+    const hintSemana = document.getElementById('hintModoSemana');
+    const boxDias = document.getElementById('boxDiasSemanaMeta');
     const lblFecha = document.getElementById('lblFechaAplicacion');
     const lblTitulo = document.getElementById('lblObjetivosTitulo');
     const lblBoton = document.getElementById('lblBotonGuardar');
     const smallFecha = document.getElementById('smallFechaAyuda');
-    const inputFecha = document.getElementById('inputFechaMeta');
-
-    hint.style.display = esMes ? 'block' : 'none';
-    lblFecha.textContent = esMes ? 'Fecha de Inicio (dentro del mes)' : 'Fecha de Aplicación';
-    lblTitulo.innerHTML = esMes
-        ? '<i class="fas fa-bullseye"></i> Objetivos del Mes (Totales)'
-        : '<i class="fas fa-bullseye"></i> Objetivos del Día';
-    lblBoton.textContent = esMes ? 'ESTABLECER METAS DEL MES' : 'ESTABLECER METAS';
-
     const lblMonto = document.getElementById('lblMontoCreditos');
-    lblMonto.innerHTML = esMes
-        ? '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/mes)'
-        : '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/día)';
 
-    if (esMes) {
-        smallFecha.style.display = 'block';
-        actualizarResumenMes();
-    } else {
-        smallFecha.style.display = 'none';
+    if (hintMes) hintMes.style.display = esMes ? 'block' : 'none';
+    if (hintSemana) hintSemana.style.display = esSemana ? 'block' : 'none';
+    if (boxDias) boxDias.style.display = esSemana ? 'block' : 'none';
+
+    if (lblFecha) lblFecha.textContent = esMes ? 'Fecha de Inicio (dentro del mes)' : (esSemana ? 'Fecha dentro de la semana' : 'Fecha de Aplicación');
+    if (lblTitulo) lblTitulo.innerHTML = esMes
+        ? '<i class="fas fa-bullseye"></i> Objetivos del Mes (Totales)'
+        : (esSemana ? '<i class="fas fa-bullseye"></i> Objetivos de la Semana (Totales)' : '<i class="fas fa-bullseye"></i> Objetivos del Día');
+    if (lblBoton) lblBoton.textContent = esMes ? 'ESTABLECER METAS DEL MES' : (esSemana ? 'ESTABLECER METAS DE LA SEMANA' : 'ESTABLECER METAS');
+
+    if (lblMonto) lblMonto.innerHTML = esMes
+        ? '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/mes)'
+        : (esSemana ? '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/semana)' : '<i class="fas fa-dollar-sign me-1"></i> Monto Créditos Aprob. ($/día)');
+
+    if (smallFecha) {
+        if (esMes) {
+            smallFecha.style.display = 'block';
+            actualizarResumenMes();
+        } else {
+            smallFecha.style.display = 'none';
+        }
     }
 }
 
@@ -1127,9 +1425,12 @@ function actualizarResumenMes() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    document.getElementById('inputFechaMeta').addEventListener('change', function () {
-        if (document.getElementById('modoMetaMes').checked) actualizarResumenMes();
-    });
+    const inputFecha = document.getElementById('inputFechaMeta');
+    if (inputFecha) {
+        inputFecha.addEventListener('change', function () {
+            if (getModoMetaActual() === 'mes') actualizarResumenMes();
+        });
+    }
     cambiarModoMeta();
 });
 </script>

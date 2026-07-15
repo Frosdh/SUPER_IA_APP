@@ -77,7 +77,9 @@ try {
         'estado_seleccion_prev' => "ADD COLUMN estado_seleccion_prev VARCHAR(20) DEFAULT NULL AFTER estado",
         'seleccionada_dia'      => "ADD COLUMN seleccionada_dia VARCHAR(10) DEFAULT NULL",
         'seleccion_fijada'      => "ADD COLUMN seleccion_fijada TINYINT(1) DEFAULT 0",
-        'fecha_seleccion_fijada'=> "ADD COLUMN fecha_seleccion_fijada DATE DEFAULT NULL"
+        'fecha_seleccion_fijada'=> "ADD COLUMN fecha_seleccion_fijada DATE DEFAULT NULL",
+        'motivo_descarte'       => "ADD COLUMN motivo_descarte TEXT DEFAULT NULL",
+        'descartada_at'         => "ADD COLUMN descartada_at DATETIME DEFAULT NULL",
     ] as $col => $ddl) {
         $check = $conn->query("SHOW COLUMNS FROM tarea LIKE '$col'");
         if ($check && $check->num_rows === 0) {
@@ -130,6 +132,8 @@ try {
             t.seleccionada_at,
             t.seleccion_fijada,
             t.seleccion_fijada_at,
+            t.motivo_descarte,
+            t.descartada_at,
             t.created_at,
             t.asesor_id,
             cp.id                      AS cliente_id,
@@ -153,6 +157,7 @@ try {
                 AND (
                     t.estado IN ('programada','pendiente','postergada','en_proceso')
                     OR (t.estado = 'completada' AND t.fecha_realizada >= ?)
+                    OR (t.estado = 'cancelada' AND COALESCE(t.descartada_at, t.created_at) >= DATE_SUB(?, INTERVAL 30 DAY))
                 )
             )
             OR
@@ -170,8 +175,8 @@ try {
     ";
 
     $st = $conn->prepare($sql);
-    // Bind de parámetros: asesor_id (1), asesor_id (2), desde (3)
-    $st->bind_param('sss', $asesor_id, $asesor_id, $desde);
+    // Bind de parámetros: asesor_id (1), asesor_id (2), desde -> completadas (3), desde -> canceladas (4)
+    $st->bind_param('ssss', $asesor_id, $asesor_id, $desde, $desde);
     $st->execute();
     $res = $st->get_result();
 
@@ -192,6 +197,8 @@ try {
             'seleccionada_at'  => (string)($r['seleccionada_at'] ?? ''),
             'seleccion_fijada' => (string)($r['seleccion_fijada'] ?? '0'),
             'seleccion_fijada_at' => (string)($r['seleccion_fijada_at'] ?? ''),
+            'motivo_descarte' => (string)($r['motivo_descarte'] ?? ''),
+            'descartada_at' => (string)($r['descartada_at'] ?? ''),
             'es_pool' => $esPool ? '1' : '0',   // 1 = tarea disponible para cualquier asesor
             'cliente_id'        => (string)($r['cliente_id'] ?? ''),
             'cliente_nombre'    => (string)($r['cliente_nombre'] ?? ''),

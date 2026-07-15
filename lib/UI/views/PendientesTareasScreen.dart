@@ -1462,8 +1462,115 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
       return buildBaseList(children: widgets);
     }
 
+    // ── Pestaña "Rechazadas": tareas que el asesor descartó (estado
+    // 'cancelada'), con el motivo indicado al descartarlas.
+    Widget _cardRechazada(Map<String, dynamic> t) {
+      final tipo = t['tipo_tarea']?.toString() ?? '';
+      final cliente = t['cliente_nombre']?.toString() ?? 'Cliente';
+      final ciudad = t['cliente_ciudad']?.toString() ?? '';
+      final motivo = t['motivo_descarte']?.toString() ?? '';
+      final fechaDescarte = t['descartada_at']?.toString() ?? '';
+      final fechaMostrar = fechaDescarte.isNotEmpty
+          ? fechaDescarte.split(' ').first
+          : (t['fecha_programada']?.toString() ?? '');
+
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: ConstantColors.backgroundCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.red.shade300.withOpacity(0.35)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _tipoLabel(tipo),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                      color: ConstantColors.textWhite,
+                    ),
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.red.shade300),
+                  ),
+                  child: Text(
+                    'Rechazada',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: Colors.red.shade300),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(cliente, style: const TextStyle(color: ConstantColors.textWhite, fontWeight: FontWeight.w700)),
+            if (ciudad.trim().isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(ciudad, style: const TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+            ],
+            if (fechaMostrar.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Icon(Icons.event_busy_rounded, size: 16, color: ConstantColors.textGrey),
+                  const SizedBox(width: 6),
+                  Text(fechaMostrar, style: const TextStyle(color: ConstantColors.textGrey, fontSize: 12)),
+                ],
+              ),
+            ],
+            if (motivo.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  motivo,
+                  style: const TextStyle(color: ConstantColors.textGrey, fontSize: 12.5, fontStyle: FontStyle.italic),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    Widget buildRechazadas() {
+      if (_loading) return buildLoading();
+      if (_error != null) return buildError();
+
+      final rechazadas = _tareas.where((t) => (t['estado']?.toString() ?? '') == 'cancelada').toList();
+      rechazadas.sort((a, b) {
+        final fa = (a['descartada_at']?.toString().isNotEmpty ?? false) ? a['descartada_at'].toString() : (a['created_at']?.toString() ?? '');
+        final fb = (b['descartada_at']?.toString().isNotEmpty ?? false) ? b['descartada_at'].toString() : (b['created_at']?.toString() ?? '');
+        return fb.compareTo(fa); // más reciente primero
+      });
+
+      if (rechazadas.isEmpty) {
+        return buildEmpty('No tienes tareas rechazadas.');
+      }
+
+      return buildBaseList(children: [
+        for (final t in rechazadas) ...[
+          _cardRechazada(t),
+          const SizedBox(height: 10),
+        ],
+      ]);
+    }
+
     return DefaultTabController(
-      length: 2,
+      length: 3,
       initialIndex: 1,
       child: Scaffold(
         backgroundColor: ConstantColors.backgroundDark,
@@ -1488,6 +1595,7 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
             tabs: [
               Tab(text: 'Hoy'),
               Tab(text: 'Lista'),
+              Tab(text: 'Rechazadas'),
             ],
           ),
         ),
@@ -1500,6 +1608,10 @@ class _PendientesTareasScreenState extends State<PendientesTareasScreen> {
             RefreshIndicator(
               onRefresh: _cargar,
               child: buildLista(soloHoy: false),
+            ),
+            RefreshIndicator(
+              onRefresh: _cargar,
+              child: buildRechazadas(),
             ),
           ],
         ),

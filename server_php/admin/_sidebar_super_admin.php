@@ -10,7 +10,7 @@
  *   - Debe existir $pdo (PDO) — se incluye db_admin.php si no está.
  *   - Definir $currentPage (string) con uno de estos valores:
  *       dashboard | mapa | mapa_calor | historial | usuarios |
- *       operaciones | metas | alertas | tareas_descartadas |
+ *       operaciones | metas | config_metas | alertas | tareas_descartadas |
  *       solicitudes | solicitudes_admin | crear_asesor |
  *       administrar_asesores
  *   - El <style> de cada página debe definir las clases .sidebar,
@@ -73,6 +73,9 @@ function _sa_active(string $page, string $current): string {
         </a>
         <a href="metas.php" class="sidebar-link <?= _sa_active('metas', $currentPage) ?>">
             <i class="fas fa-bullseye"></i> Metas
+        </a>
+        <a href="configurar_metas_banco.php" class="sidebar-link <?= _sa_active('config_metas', $currentPage) ?>">
+            <i class="fas fa-sliders-h"></i> Configurar Metas
         </a>
         <a href="alertas.php" class="sidebar-link <?= _sa_active('alertas', $currentPage) ?>">
             <i class="fas fa-bell"></i> Alertas

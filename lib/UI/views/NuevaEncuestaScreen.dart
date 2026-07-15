@@ -1,10 +1,13 @@
 // ignore_for_file: deprecated_member_use
 
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Constants/Constants.dart';
 import 'package:super_ia/Core/Preferences/AuthPrefs.dart';
@@ -2348,68 +2351,144 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: ConstantColors.backgroundCard,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Icono ──
-              Container(
-                width: 68,
-                height: 68,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: ConstantColors.primaryGradient,
-                ),
-                child: const Icon(
-                  Icons.business_center_rounded,
-                  color: Colors.white,
-                  size: 36,
-                ),
-              ),
-              const SizedBox(height: 18),
-              const Text(
-                'Levantamiento Guardado',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Los datos de la empresa fueron registrados correctamente.',
-                style: TextStyle(color: ConstantColors.textGrey, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              // ── Botón Volver ──
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    Navigator.of(context).pop(true);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ConstantColors.primaryViolet,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          bool descargando = false;
+          return Dialog(
+            backgroundColor: ConstantColors.backgroundCard,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // ── Icono ──
+                  Container(
+                    width: 68,
+                    height: 68,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: ConstantColors.primaryGradient,
+                    ),
+                    child: const Icon(
+                      Icons.business_center_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
                   ),
-                  child: const Text('Volver',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'Levantamiento Guardado',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Los datos de la empresa fueron registrados correctamente.',
+                    style: TextStyle(color: ConstantColors.textGrey, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  // ── Botón Descargar Excel de Solicitud de Crédito ──
+                  if (clienteId.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: descargando
+                            ? null
+                            : () async {
+                                setDialogState(() => descargando = true);
+                                await _descargarExcelSolicitud(clienteId);
+                                setDialogState(() => descargando = false);
+                              },
+                        icon: descargando
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.file_download_rounded),
+                        label: Text(descargando ? 'Generando...' : 'Descargar Excel de Solicitud'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: ConstantColors.primaryViolet),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  if (clienteId.isNotEmpty) const SizedBox(height: 12),
+                  // ── Botón Volver ──
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).pop(true);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ConstantColors.primaryViolet,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Volver',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  /// Descarga el Excel de "Solicitud de Crédito" (réplica del formulario
+  /// físico) ya llenado con los datos reales del cliente, y abre la hoja
+  /// nativa de compartir/guardar del celular.
+  Future<void> _descargarExcelSolicitud(String clienteId) async {
+    if (clienteId.isEmpty) {
+      _mostrarError('No se pudo identificar al cliente para generar el Excel.');
+      return;
+    }
+    try {
+      final url = Uri.parse(
+          '${Constants.apiBaseUrl}/generar_solicitud_credito_excel.php?cliente_id=$clienteId');
+      final resp = await http.get(
+        url,
+        headers: {'ngrok-skip-browser-warning': 'true'},
+      ).timeout(const Duration(seconds: 30));
+
+      if (resp.statusCode != 200 || resp.bodyBytes.isEmpty) {
+        throw Exception('HTTP ${resp.statusCode}');
+      }
+
+      final contentType = (resp.headers['content-type'] ?? '').toLowerCase();
+      if (contentType.contains('application/json')) {
+        final data = json.decode(resp.body) as Map<String, dynamic>;
+        throw Exception(data['message']?.toString() ?? 'Error del servidor');
+      }
+
+      final dir = await getTemporaryDirectory();
+      final path = '${dir.path}/Solicitud_Credito_$clienteId.xls';
+      final file = File(path);
+      await file.writeAsBytes(resp.bodyBytes, flush: true);
+
+      await Share.shareXFiles(
+        [XFile(path, name: 'Solicitud_Credito.xls')],
+        text: 'Solicitud de Crédito',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _mostrarError('No se pudo generar el Excel. ($e)');
+    }
   }
 
   /// Diálogo que se muestra cuando una edición de encuesta se guardó
@@ -2486,79 +2565,114 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     required bool fueEncuestado,
     String? seguimientoTexto,
   }) {
+    final clienteIdBtn = fueEncuestado ? (_clienteId ?? '') : '';
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: ConstantColors.grey100,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      ConstantColors.warning,
-                      ConstantColors.primaryBlue
-                    ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          bool descargando = false;
+          return Dialog(
+            backgroundColor: ConstantColors.grey100,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          ConstantColors.warning,
+                          ConstantColors.primaryBlue
+                        ],
+                      ),
+                    ),
+                    child: Icon(Icons.check_rounded, color: Colors.white, size: 34),
                   ),
-                ),
-                child: Icon(Icons.check_rounded, color: Colors.white, size: 34),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Tarea Finalizada',
-                style: TextStyle(
-                  color: ConstantColors.textDark,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                fueEncuestado
-                    ? 'Encuesta y datos del prospecto guardados correctamente.'
-                    : 'Se registró que el prospecto no quiso ser encuestado.',
-                style:
-                    TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              if (seguimientoTexto != null && seguimientoTexto.trim().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  seguimientoTexto,
-                  style: TextStyle(color: ConstantColors.textDark, fontSize: 13, fontWeight: FontWeight.w600),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    Navigator.of(context).pop(true);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ConstantColors.warning,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Tarea Finalizada',
+                    style: TextStyle(
+                      color: ConstantColors.textDark,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  child: const Text('Volver al mapa',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
+                  const SizedBox(height: 10),
+                  Text(
+                    fueEncuestado
+                        ? 'Encuesta y datos del prospecto guardados correctamente.'
+                        : 'Se registró que el prospecto no quiso ser encuestado.',
+                    style:
+                        TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (seguimientoTexto != null && seguimientoTexto.trim().isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      seguimientoTexto,
+                      style: TextStyle(color: ConstantColors.textDark, fontSize: 13, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  if (clienteIdBtn.isNotEmpty)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: descargando
+                            ? null
+                            : () async {
+                                setDialogState(() => descargando = true);
+                                await _descargarExcelSolicitud(clienteIdBtn);
+                                setDialogState(() => descargando = false);
+                              },
+                        icon: descargando
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.file_download_rounded),
+                        label: Text(descargando ? 'Generando...' : 'Descargar Excel de Solicitud'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ConstantColors.textDark,
+                          side: BorderSide(color: ConstantColors.warning),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  if (clienteIdBtn.isNotEmpty) const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).pop(true);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ConstantColors.warning,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Volver al mapa',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }

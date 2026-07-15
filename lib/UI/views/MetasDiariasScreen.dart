@@ -33,6 +33,15 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen>
   String _mensajeUI = '';
   Map<String, dynamic>? _meta;
 
+  // Día de la semana actual que se está viendo (por defecto: hoy). Permite
+  // al asesor navegar cualquier día de su semana, ya que ahora el
+  // supervisor puede asignarle metas repartidas en días específicos
+  // (meta "Por Semana"), no solo hoy.
+  late DateTime _fechaVista;
+  late DateTime _lunesSemana;
+
+  static const _diasCortos = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
   // ── Estado: metas del mes ──────────────────────────────────
   bool _loadingMes = true;
   String? _errorMes;
@@ -51,6 +60,10 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    final hoy = DateTime.now();
+    _fechaVista = DateTime(hoy.year, hoy.month, hoy.day);
+    // weekday: 1=lunes ... 7=domingo
+    _lunesSemana = _fechaVista.subtract(Duration(days: _fechaVista.weekday - 1));
     _cargar();
     _cargarMes();
     // Refresca cada 60s para ir actualizando el avance
@@ -58,6 +71,15 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen>
       _cargar();
       _cargarMes();
     });
+  }
+
+  String _fechaIso(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  void _seleccionarDia(DateTime dia) {
+    if (_fechaVista == dia) return;
+    setState(() => _fechaVista = dia);
+    _cargar();
   }
 
   @override
@@ -77,13 +99,13 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen>
     try {
       final asesorId = await AuthPrefs.getAsesorId();
       final usuarioId = await AuthPrefs.getUsuarioId();
-      final hoy = DateTime.now().toIso8601String().substring(0, 10);
+      final fechaConsulta = _fechaIso(_fechaVista);
 
       final url = Uri.parse('${Constants.apiBaseUrl}/obtener_metas_asesor.php');
       final resp = await http.post(url, body: {
         if (asesorId.isNotEmpty) 'asesor_id': asesorId,
         if (usuarioId.isNotEmpty) 'usuario_id': usuarioId,
-        'fecha': hoy,
+        'fecha': fechaConsulta,
       }).timeout(const Duration(seconds: 20));
 
       final decoded = json.decode(resp.body);
@@ -227,18 +249,25 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen>
         controller: _tabController,
         children: [
           // ── Pestaña: Metas del día ─────────────────────────
-          RefreshIndicator(
-            onRefresh: _cargar,
-            child: _loading && _meta == null
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? _buildError(_error!, _cargar)
-                    : !_tieneMeta
-                        ? _buildNoMeta(
-                            _mensajeUI,
-                            'El supervisor aún no te asignó metas para hoy.',
-                          )
-                        : _buildMeta(),
+          Column(
+            children: [
+              _buildSelectorDias(),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _cargar,
+                  child: _loading && _meta == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : _error != null
+                          ? _buildError(_error!, _cargar)
+                          : !_tieneMeta
+                              ? _buildNoMeta(
+                                  _mensajeUI,
+                                  'El supervisor aún no te asignó metas para este día.',
+                                )
+                              : _buildMeta(),
+                ),
+              ),
+            ],
           ),
           // ── Pestaña: Metas del mes ──────────────────────────
           RefreshIndicator(
@@ -255,6 +284,66 @@ class _MetasDiariasScreenState extends State<MetasDiariasScreen>
                         : _buildMetaMes(),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Selector de los 7 días de la semana actual (lunes a domingo). El
+  /// supervisor puede repartir la meta semanal en días distintos por
+  /// asesor, así que aquí el asesor puede revisar cualquier día de su
+  /// semana, no solo hoy.
+  Widget _buildSelectorDias() {
+    final hoy = DateTime.now();
+    final hoyDate = DateTime(hoy.year, hoy.month, hoy.day);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      color: const Color(0xFF0A2748),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: List.generate(7, (i) {
+          final dia = _lunesSemana.add(Duration(days: i));
+          final esSeleccionado = dia == _fechaVista;
+          final esHoy = dia == hoyDate;
+
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => _seleccionarDia(dia),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: esSeleccionado ? const Color(0xFFFFDD00) : Colors.white.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: esHoy && !esSeleccionado
+                      ? Border.all(color: const Color(0xFFFFDD00), width: 1.2)
+                      : null,
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      _diasCortos[i],
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: esSeleccionado ? const Color(0xFF0A2748) : Colors.white70,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${dia.day}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: esSeleccionado ? const Color(0xFF0A2748) : Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
