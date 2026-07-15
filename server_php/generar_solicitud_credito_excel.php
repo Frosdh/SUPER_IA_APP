@@ -1,13 +1,25 @@
 <?php
 // ============================================================
 // generar_solicitud_credito_excel.php
-// Genera un Excel (SpreadsheetML) que replica el formato físico
-// "SOLICITUD DE CRÉDITO" (tipo Yantzaza Coop), llenado con los
-// datos reales ya capturados del cliente/prospecto. Los campos
-// que la app no captura hoy se dejan en blanco.
+// ------------------------------------------------------------
+// Genera un archivo .xlsx REAL (OOXML, vía ZipArchive) que
+// replica exactamente la plantilla física "SOLICITUD DE CRÉDITO"
+// de Yantzaza Coop (hoja "Solicitud def" del archivo subido por
+// el usuario), incluyendo los 2 logos incrustados, colores,
+// merges y anchos/alturas originales — y la llena con los datos
+// reales ya capturados del cliente/prospecto.
+//
+// Los datos de estructura (texto de etiquetas, merges, alturas
+// de fila) se extrajeron una sola vez de la plantilla real y se
+// guardaron en:
+//   - plantilla_solicitud_cells.php       (677 celdas con estilo)
+//   - plantilla_solicitud_merges.php      (189 rangos combinados)
+//   - plantilla_solicitud_row_heights.php (alto real por fila)
+//   - plantilla_solicitud_col_widths.php  (ancho real A-N)
+// No editar esos archivos a mano.
 //
 // Uso (mobile): GET/POST generar_solicitud_credito_excel.php?cliente_id=XXXX
-// Responde el archivo binario .xls listo para descargar/compartir.
+// Responde el archivo binario .xlsx listo para descargar/compartir.
 // ============================================================
 
 require_once __DIR__ . '/db_config.php';
@@ -19,16 +31,37 @@ if ($cliente_id === '') {
     exit;
 }
 
-// ── Helpers ──────────────────────────────────────────────────
+// ── Helpers numéricos/texto ─────────────────────────────────
+function n2($v): float { return is_numeric($v) ? (float)$v : 0.0; }
+function money($v): string { return number_format(n2($v), 2, '.', ''); }
 function xesc($v): string {
     if ($v === null) return '';
-    return htmlspecialchars((string)$v, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    $s = (string)$v;
+    return str_replace(['&', '<', '>', '"'], ['&amp;', '&lt;', '&gt;', '&quot;'], $s);
 }
-function n2($v): float {
-    return is_numeric($v) ? (float)$v : 0.0;
+function colLetter(int $idx): string {
+    $s = '';
+    while ($idx > 0) {
+        $r = ($idx - 1) % 26;
+        $s = chr(65 + $r) . $s;
+        $idx = intdiv($idx - 1, 26);
+    }
+    return $s;
 }
-function money($v): string {
-    return number_format(n2($v), 2, '.', '');
+// Heurística de nombre (Ecuador: 1-2 nombres + 1-2 apellidos).
+// Devuelve [nombres, apellidoPaterno, apellidoMaterno].
+function splitNombre(string $full): array {
+    $full = trim(preg_replace('/\s+/', ' ', $full));
+    if ($full === '') return ['', '', ''];
+    $tok = explode(' ', $full);
+    $n = count($tok);
+    if ($n === 1) return [$tok[0], '', ''];
+    if ($n === 2) return [$tok[0], $tok[1], ''];
+    if ($n === 3) return [$tok[0], $tok[1], $tok[2]];
+    // 4+: últimos 2 son apellidos, resto son nombres
+    $apMat = array_pop($tok);
+    $apPat = array_pop($tok);
+    return [implode(' ', $tok), $apPat, $apMat];
 }
 
 try {
@@ -46,7 +79,7 @@ try {
     }
     $cedula = (string)($cliente['cedula'] ?? '');
 
-    // ── 2. Ficha de Crédito (solicitud formal más reciente) ───
+    // ── 2. Ficha de Crédito ────────────────────────────────────
     $ficha_credito = null;
     if ($cedula !== '') {
         $st = $conn->prepare("
@@ -63,7 +96,6 @@ try {
     }
 
     // ── 3. Encuesta de Negocio (levantamiento de empresa) ─────
-    $encuesta_negocio = null;
     $st = $conn->prepare("
         SELECT en.*
         FROM encuesta_negocio en
@@ -76,25 +108,34 @@ try {
     $encuesta_negocio = $st->get_result()->fetch_assoc();
     $st->close();
 
-    // ── 4. Crédito en Proceso (estado / monto aprobado) ───────
-    $credito_proceso = null;
+    // ── 4. Crédito en Proceso ──────────────────────────────────
     $st = $conn->prepare("SELECT * FROM credito_proceso WHERE cliente_prospecto_id = ? ORDER BY created_at DESC LIMIT 1");
     $st->bind_param('s', $cliente_id);
     $st->execute();
     $credito_proceso = $st->get_result()->fetch_assoc();
     $st->close();
 
-    // ── Cálculos de ventas/compras semanales y mensuales ──────
+    // ── 5. Nombre del asesor ────────────────────────────────────
+    $asesorNombre = '';
+    if (!empty($cliente['asesor_id'])) {
+        $st = $conn->prepare("SELECT u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE a.id = ? LIMIT 1");
+        $st->bind_param('s', $cliente['asesor_id']);
+        $st->execute();
+        $rowA = $st->get_result()->fetch_assoc();
+        $st->close();
+        $asesorNombre = $rowA['nombre'] ?? '';
+    }
+
     $en = $encuesta_negocio ?: [];
+    $fc = $ficha_credito ?: [];
+    $cp = $credito_proceso ?: [];
+
+    // ── Cálculos financieros (mismas fórmulas que la versión anterior) ──
     $tot_v_sem = n2($en['venta_lunes'] ?? 0) + n2($en['venta_martes'] ?? 0) + n2($en['venta_miercoles'] ?? 0)
         + n2($en['venta_jueves'] ?? 0) + n2($en['venta_viernes'] ?? 0) + n2($en['venta_sabado'] ?? 0) + n2($en['venta_domingo'] ?? 0);
     if ($tot_v_sem <= 0) $tot_v_sem = n2($en['venta_lv'] ?? 0) + n2($en['venta_sabado'] ?? 0) + n2($en['venta_domingo'] ?? 0);
-    $tot_c_sem = n2($en['compra_lunes'] ?? 0) + n2($en['compra_martes'] ?? 0) + n2($en['compra_miercoles'] ?? 0)
-        + n2($en['compra_jueves'] ?? 0) + n2($en['compra_viernes'] ?? 0) + n2($en['compra_sabado'] ?? 0) + n2($en['compra_domingo'] ?? 0);
-    if ($tot_c_sem <= 0) $tot_c_sem = n2($en['compra_lv'] ?? 0) + n2($en['compra_sabado'] ?? 0) + n2($en['compra_domingo'] ?? 0);
-    $ventas_mes  = $tot_v_sem * 4.33;
+    $ventas_mes = $tot_v_sem * 4.33;
 
-    // ── Decodificar JSONs de activos ──────────────────────────
     $veh_neg = json_decode($en['vehiculos_negocio_json'] ?? '[]', true) ?: [];
     $veh_hog = json_decode($en['vehiculos_hogar_json'] ?? '[]', true) ?: [];
     $inm_neg = json_decode($en['inmuebles_negocio_json'] ?? '[]', true) ?: [];
@@ -104,7 +145,7 @@ try {
 
     $tot_veh = 0; foreach (array_merge($veh_neg, $veh_hog) as $v) $tot_veh += n2($v['valor'] ?? 0);
     $tot_inm = 0; foreach (array_merge($inm_neg, $inm_hog) as $i) $tot_inm += n2($i['valor'] ?? 0);
-    $tot_oa  = 0;
+    $tot_oa = 0;
     foreach (array_merge($act_neg, $act_hog) as $a) {
         $cu = n2($a['valor_unitario'] ?? $a['valor_comercial'] ?? $a['valor'] ?? 0);
         $ct = n2($a['cantidad'] ?? 1); if ($ct <= 0) $ct = 1;
@@ -112,434 +153,351 @@ try {
     }
     $tot_inventario = n2($en['inv_mat_prima'] ?? 0) + n2($en['inv_prod_proc'] ?? 0);
 
-    $total_activos = n2($en['caja_efectivo'] ?? 0) + n2($en['bancos_saldo'] ?? 0) + n2($en['cxp_netas'] ?? 0)
-        + $tot_inventario + $tot_veh + $tot_inm + $tot_oa;
-    $total_pasivos = n2($en['creditos_pagar'] ?? 0) + n2($en['proveedores'] ?? 0)
-        + n2($en['otras_deudas_cp'] ?? 0) + n2($en['pasivos_lp'] ?? 0);
-    $patrimonio = $total_activos - $total_pasivos;
+    // Ingresos (columna izquierda del bloque "INGRESOS MENSUALES")
+    $ing_sueldo   = 0.0; // no capturado (sección dependiente no existe en la app)
+    $ing_negocio  = $ventas_mes;
+    $ing_honorar  = 0.0;
+    $ing_agric    = 0.0;
+    $ing_rentabr  = 0.0;
+    $ing_rentainv = 0.0;
+    // Ingresos (columna central)
+    $ing_remesas  = 0.0;
+    $ing_conyuge  = n2($en['o_ing_conyuge'] ?? 0);
+    $ing_otros    = n2($en['o_ing_arriendos'] ?? 0) + n2($en['o_ing_pensiones'] ?? 0) + n2($en['o_ing_otros'] ?? 0);
+    $tot_ingresos = $ing_sueldo + $ing_negocio + $ing_honorar + $ing_agric + $ing_rentabr + $ing_rentainv
+        + $ing_remesas + $ing_conyuge + $ing_otros;
 
-    $ing_extra = n2($en['o_ing_conyuge'] ?? 0) + n2($en['o_ing_arriendos'] ?? 0) + n2($en['o_ing_pensiones'] ?? 0) + n2($en['o_ing_otros'] ?? 0);
-    $ing_total = $ventas_mes + $ing_extra;
-    $gas_total = n2($en['gastos_negocio'] ?? 0) + n2($en['gastos_familiares'] ?? 0);
-    $excedente = $ing_total - $gas_total;
+    // Gastos (columna derecha del bloque)
+    $gas_familiares = n2($en['g_fam_alim'] ?? 0) + n2($en['g_fam_educacion'] ?? 0) + n2($en['g_fam_salud'] ?? 0);
+    $gas_negocio    = n2($en['g_neg_sueldos'] ?? 0) + n2($en['g_neg_serv_bas'] ?? 0) + n2($en['g_neg_transporte'] ?? 0) + n2($en['costos_ventas'] ?? 0);
+    $gas_arriendo   = n2($en['g_fam_arriendo'] ?? 0) + n2($en['g_neg_arriendo'] ?? 0);
+    $gas_financ     = 0.0; // no capturado distinto de créditos ya registrados
+    $gas_imprevistos = 0.0; // no capturado
+    $gas_otros      = n2($en['g_fam_otros'] ?? 0);
+    $tot_gastos = $gas_familiares + $gas_negocio + $gas_arriendo + $gas_financ + $gas_imprevistos + $gas_otros;
 
-    $tieneEmpresa = ((int)($cliente['tiene_ruc'] ?? 0) === 1) || !empty($cliente['nombre_empresa']) || !empty($en);
+    $tot_activo_neto = $tot_ingresos - $tot_gastos;
 
-    $fc = $ficha_credito ?: [];
-    $cp = $credito_proceso ?: [];
+    // Estado de situación personal (Activos / Pasivos)
+    $act_efectivo = n2($en['caja_efectivo'] ?? 0);
+    $act_bancos   = n2($en['bancos_saldo'] ?? 0);
+    $act_cxc      = n2($en['cxp_netas'] ?? 0);
+    $act_fijos    = $tot_veh + $tot_inm + $tot_oa;
+    $act_otros    = $tot_inventario;
+    $tot_activos  = $act_efectivo + $act_bancos + $act_cxc + $act_fijos + $act_otros;
 
-    // ── Datos generales de encabezado ─────────────────────────
-    $fechaHoy = date('d/m/Y');
+    $pas_proveedores = n2($en['proveedores'] ?? 0);
+    $pas_cxp         = n2($en['creditos_pagar'] ?? 0);
+    $pas_cortoplazo  = n2($en['otras_deudas_cp'] ?? 0);
+    $pas_largoplazo  = n2($en['pasivos_lp'] ?? 0);
+    $pas_otros       = 0.0;
+    $tot_pasivos = $pas_proveedores + $pas_cxp + $pas_cortoplazo + $pas_largoplazo + $pas_otros;
+
+    $patrimonio = $tot_activos - $tot_pasivos;
+
+    // ── Nombre cliente y destino de crédito ───────────────────
     $nombreCliente = (string)($cliente['nombre'] ?? $fc['solicitante_nombre'] ?? '');
+    [$nomN, $nomP, $nomM] = splitNombre($nombreCliente);
 
-    // ================================================================
-    //  Construcción del XML (SpreadsheetML / Excel 2003 XML)
-    // ================================================================
-    $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-    $xml .= '<?mso-application progid="Excel.Sheet"?>' . "\n";
-    $xml .= '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
-     xmlns:o="urn:schemas-microsoft-com:office:office"
-     xmlns:x="urn:schemas-microsoft-com:office:excel"
-     xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
-     xmlns:html="http://www.w3.org/TR/REC-html40">' . "\n";
+    $nombreConyuge = (string)($fc['solicitante_conyuge_nombre'] ?? '');
+    [$conN, $conP, $conM] = splitNombre($nombreConyuge);
 
-    // ── Estilos ────────────────────────────────────────────────
-    $xml .= <<<STYLES
-<Styles>
- <Style ss:ID="Default" ss:Name="Normal">
-  <Font ss:FontName="Calibri" ss:Size="10"/>
- </Style>
- <Style ss:ID="sTitle">
-  <Font ss:FontName="Calibri" ss:Size="16" ss:Bold="1" ss:Color="#FFFFFF"/>
-  <Interior ss:Color="#C00000" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-  <Borders>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
-  </Borders>
- </Style>
- <Style ss:ID="sSubTitle">
-  <Font ss:FontName="Calibri" ss:Size="10" ss:Bold="1" ss:Color="#FFFFFF"/>
-  <Interior ss:Color="#C00000" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
- </Style>
- <Style ss:ID="sSection">
-  <Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1" ss:Color="#FFFFFF"/>
-  <Interior ss:Color="#C00000" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:Indent="1"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-  </Borders>
- </Style>
- <Style ss:ID="sLabel">
-  <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#000000"/>
-  <Interior ss:Color="#D9D9D9" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1" ss:Indent="1"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-  </Borders>
- </Style>
- <Style ss:ID="sInput">
-  <Font ss:FontName="Calibri" ss:Size="9" ss:Color="#00339C"/>
-  <Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Left" ss:Vertical="Center" ss:WrapText="1" ss:Indent="1"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-  </Borders>
- </Style>
- <Style ss:ID="sInputC">
-  <Font ss:FontName="Calibri" ss:Size="9" ss:Color="#00339C"/>
-  <Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-  </Borders>
- </Style>
- <Style ss:ID="sTh">
-  <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#000000"/>
-  <Interior ss:Color="#BFBFBF" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-  </Borders>
- </Style>
- <Style ss:ID="sTotal">
-  <Font ss:FontName="Calibri" ss:Size="9" ss:Bold="1" ss:Color="#000000"/>
-  <Interior ss:Color="#F2F2F2" ss:Pattern="Solid"/>
-  <Alignment ss:Horizontal="Right" ss:Vertical="Center" ss:Indent="1"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#000000"/>
-  </Borders>
- </Style>
- <Style ss:ID="sBlank">
-  <Font ss:FontName="Calibri" ss:Size="9"/>
-  <Interior ss:Color="#FFFFFF" ss:Pattern="Solid"/>
-  <Borders>
-   <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-   <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1" ss:Color="#808080"/>
-  </Borders>
- </Style>
- <Style ss:ID="sNote">
-  <Font ss:FontName="Calibri" ss:Size="8" ss:Italic="1" ss:Color="#666666"/>
-  <Alignment ss:Horizontal="Left" ss:Vertical="Top" ss:WrapText="1"/>
- </Style>
-</Styles>
-
-STYLES;
-
-    // ── Helpers de celda ───────────────────────────────────────
-    function cell(string $val, string $style = 'sInput', int $merge = 0): string {
-        $m = $merge > 0 ? " ss:MergeAcross=\"$merge\"" : '';
-        $v = xesc($val);
-        return "<Cell ss:StyleID=\"$style\"$m><Data ss:Type=\"String\">$v</Data></Cell>";
-    }
-    function row(array $cells): string {
-        return "<Row>" . implode('', $cells) . "</Row>\n";
-    }
-    // Etiqueta + valor en un solo renglón (label ocupa $lw, valor ocupa el resto hasta $totalCols)
-    function lv(string $label, $valor, int $labelSpan = 0, int $valSpan = 0): array {
-        $out = [];
-        $out[] = cell($label, 'sLabel', $labelSpan);
-        $out[] = cell($valor === null ? '' : (string)$valor, 'sInput', $valSpan);
-        return $out;
-    }
-
-    $TOTAL_COLS = 8; // columnas totales de la hoja (índices 0..7)
-
-    $xml .= '<Worksheet ss:Name="Solicitud de Credito">' . "\n";
-    $xml .= '<Table ss:DefaultColumnWidth="70">' . "\n";
-    $xml .= '<Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/><Column ss:Width="90"/>' . "\n";
-
-    // ── Título ──────────────────────────────────────────────────
-    $xml .= row([cell('SOLICITUD DE CRÉDITO', 'sTitle', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('Fecha de generación: ' . $fechaHoy . '   |   Cliente: ' . $nombreCliente . '   |   Cédula: ' . $cedula, 'sSubTitle', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
-
-    // ── 1. INFORMACIÓN DEL CRÉDITO ─────────────────────────────
-    $xml .= row([cell('INFORMACIÓN DEL CRÉDITO', 'sSection', $TOTAL_COLS - 1)]);
     $destino = (string)($fc['destino_credito'] ?? '');
     if ($destino !== '' && strtolower($destino) === 'otros' && !empty($fc['dest_otros_detalle'])) {
         $destino .= ' - ' . $fc['dest_otros_detalle'];
     }
-    $xml .= row(array_merge(
-        lv('Monto Solicitado ($)', $fc['monto_credito'] ?? '', 1, 1),
-        lv('Plazo (meses)', $fc['plazo_credito_meses'] ?? '', 1, 1),
-        lv('Tipo de Crédito', '', 1, 1)
-    ));
-    $xml .= row(array_merge(
-        lv('Destino del Crédito', $destino, 1, 1),
-        lv('Cuotas', '', 1, 1),
-        lv('Periodicidad', '', 1, 1)
-    ));
-    $xml .= row(array_merge(
-        lv('Fecha de Pago', '', 1, 1),
-        lv('Monto Aprobado ($)', isset($cp['monto_aprobado']) ? money($cp['monto_aprobado']) : '', 1, 1),
-        lv('Estado', $cp['estado_credito'] ?? 'levantamiento', 1, 1)
-    ));
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
 
-    // ── 2. INFORMACIÓN PERSONAL ─────────────────────────────────
-    $xml .= row([cell('INFORMACIÓN PERSONAL', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row(array_merge(
-        lv('Nombre Completo', $nombreCliente, 1, 3),
-        lv('Cédula', $cedula, 1, 1)
-    ));
-    $celular = $fc['solicitante_celular'] ?? $cliente['celular'] ?? $cliente['telefono2'] ?? '';
-    $xml .= row(array_merge(
-        lv('Celular', $celular, 1, 1),
-        lv('Teléfono Fijo', $cliente['telefono'] ?? '', 1, 1),
-        lv('Email', $cliente['email'] ?? '', 1, 1)
-    ));
-    $estadoCivil = $fc['solicitante_estado_civil'] ?? $cliente['estado_civil'] ?? '';
-    $xml .= row(array_merge(
-        lv('Estado Civil', $estadoCivil, 1, 1),
-        lv('Género', $cliente['genero'] ?? '', 1, 1),
-        lv('Nivel Educación', $cliente['nivel_educacion'] ?? '', 1, 1)
-    ));
-    $xml .= row(array_merge(
-        lv('N° Dependientes', $cliente['num_dependientes'] ?? '', 1, 1),
-        lv('Dirección Domicilio', $cliente['direccion'] ?? '', 1, 3)
-    ));
-    $xml .= row(array_merge(
-        lv('Tipo de Vivienda', $cliente['tipo_vivienda'] ?? '', 1, 1),
-        lv('Zona', $cliente['zona'] ?? '', 1, 1),
-        lv('Ciudad', $cliente['ciudad'] ?? '', 1, 1)
-    ));
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+    $celular = (string)($fc['solicitante_celular'] ?? $cliente['celular'] ?? $cliente['telefono2'] ?? '');
+    $telefonoFijo = (string)($cliente['telefono'] ?? '');
 
-    // ── 3. ACTIVIDAD ECONÓMICA DEUDOR (DEPENDIENTE) ────────────
-    $xml .= row([cell('INFORMACIÓN DE ACTIVIDAD ECONÓMICA DEUDOR (DEPENDIENTE)', 'sSection', $TOTAL_COLS - 1)]);
-    if (!$tieneEmpresa) {
-        $xml .= row(array_merge(lv('Actividad / Ocupación', $cliente['actividad'] ?? '', 1, 3), lv('Antigüedad', '', 1, 1)));
-        $xml .= row(array_merge(lv('Empresa donde Trabaja', '', 1, 3), lv('Cargo', '', 1, 1)));
-        $xml .= row(array_merge(lv('Teléfono Empresa', '', 1, 1), lv('Sueldo Mensual ($)', '', 1, 1), lv('Ingreso Adicional ($)', '', 1, 1)));
-    } else {
-        $xml .= row([cell('No aplica (el cliente registra actividad económica independiente, ver sección siguiente)', 'sNote', $TOTAL_COLS - 1)]);
-    }
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+    // ================================================================
+    //  Mapa de valores reales -> coordenadas de la plantilla (celda
+    //  superior-izquierda de cada casilla de INPUT identificada en la
+    //  plantilla real, filas 9-98). Las celdas no listadas aquí se
+    //  quedan en blanco (campo no capturado por la app hoy).
+    // ================================================================
+    $overrides = [
+        // INFORMACIÓN DEL CRÉDITO (fila 12-15)
+        'C13' => $fc['monto_credito'] ?? null ? money($fc['monto_credito']) : null,
+        'C15' => $destino ?: null,
 
-    // ── 4. ACTIVIDAD ECONÓMICA (INDEPENDIENTE) ─────────────────
-    $xml .= row([cell('INFORMACIÓN DE ACTIVIDAD ECONÓMICA (INDEPENDIENTE)', 'sSection', $TOTAL_COLS - 1)]);
-    if ($tieneEmpresa) {
-        $xml .= row(array_merge(lv('Nombre del Negocio', $cliente['nombre_empresa'] ?? '', 1, 3), lv('Actividad', $cliente['actividad'] ?? '', 1, 1)));
-        $xml .= row(array_merge(
-            lv('N° RUC', $cliente['numero_ruc'] ?? $cliente['ruc_val'] ?? '', 1, 1),
-            lv('N° RISE', $cliente['rise_val'] ?? '', 1, 1),
-            lv('Tipo Empresa', $cliente['tipo_empresa'] ?? '', 1, 1)
-        ));
-        $xml .= row(array_merge(
-            lv('Régimen Tributario', $cliente['regimen_tributario'] ?? '', 1, 1),
-            lv('Lleva Contabilidad', (isset($cliente['lleva_contabilidad']) ? ((int)$cliente['lleva_contabilidad'] === 1 ? 'Sí' : 'No') : ''), 1, 1),
-            lv('Declara IVA', (isset($cliente['declara_iva']) ? ((int)$cliente['declara_iva'] === 1 ? 'Sí' : 'No') : ''), 1, 1)
-        ));
-        $xml .= row([cell('Ventas y Compras Semanales', 'sTh', $TOTAL_COLS - 1)]);
-        $xml .= row([
-            cell('Concepto', 'sTh'), cell('Lunes', 'sTh'), cell('Martes', 'sTh'), cell('Miércoles', 'sTh'),
-            cell('Jueves', 'sTh'), cell('Viernes', 'sTh'), cell('Sábado', 'sTh'), cell('Domingo', 'sTh'),
-        ]);
-        $xml .= row([
-            cell('Ventas ($)', 'sLabel'),
-            cell(money($en['venta_lunes'] ?? 0), 'sInputC'), cell(money($en['venta_martes'] ?? 0), 'sInputC'),
-            cell(money($en['venta_miercoles'] ?? 0), 'sInputC'), cell(money($en['venta_jueves'] ?? 0), 'sInputC'),
-            cell(money($en['venta_viernes'] ?? 0), 'sInputC'), cell(money($en['venta_sabado'] ?? 0), 'sInputC'),
-            cell(money($en['venta_domingo'] ?? 0), 'sInputC'),
-        ]);
-        $xml .= row([
-            cell('Compras ($)', 'sLabel'),
-            cell(money($en['compra_lunes'] ?? 0), 'sInputC'), cell(money($en['compra_martes'] ?? 0), 'sInputC'),
-            cell(money($en['compra_miercoles'] ?? 0), 'sInputC'), cell(money($en['compra_jueves'] ?? 0), 'sInputC'),
-            cell(money($en['compra_viernes'] ?? 0), 'sInputC'), cell(money($en['compra_sabado'] ?? 0), 'sInputC'),
-            cell(money($en['compra_domingo'] ?? 0), 'sInputC'),
-        ]);
-        $xml .= row(array_merge(
-            lv('Total Ventas Semana ($)', money($tot_v_sem), 1, 1),
-            lv('Total Compras Semana ($)', money($tot_c_sem), 1, 1),
-            lv('Ventas Mensuales Estimadas ($)', money($ventas_mes), 1, 1)
-        ));
-    } else {
-        $xml .= row([cell('No aplica (el cliente no registra actividad económica independiente)', 'sNote', $TOTAL_COLS - 1)]);
-    }
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+        // INFORMACIÓN PERSONAL (fila 18-27)
+        'A19' => $nomN ?: null, 'F19' => $nomP ?: null, 'J19' => $nomM ?: null,
+        'M19' => $cliente['email'] ?? null,
+        'A21' => $cedula ?: null,
+        'A23' => $cliente['estado_civil'] ?? null,
+        'G23' => isset($cliente['num_dependientes']) ? (string)$cliente['num_dependientes'] : null,
+        'A25' => $cliente['direccion'] ?? null,
+        'K25' => $telefonoFijo ?: null,
+        'M25' => $celular ?: null,
+        'A27' => $cliente['ciudad'] ?? null,
+        'C27' => $cliente['zona'] ?? null,
 
-    // ── 5. INFORMACIÓN DEL CÓNYUGE ─────────────────────────────
-    $xml .= row([cell('INFORMACIÓN DEL CÓNYUGE', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row(array_merge(
-        lv('Nombre Cónyuge', $fc['solicitante_conyuge_nombre'] ?? '', 1, 3),
-        lv('Cédula', $fc['solicitante_conyuge_cedula'] ?? '', 1, 1)
-    ));
-    $xml .= row(array_merge(
-        lv('Celular', $fc['solicitante_conyuge_celular'] ?? '', 1, 1),
-        lv('Ingreso Mensual Cónyuge ($)', isset($en['o_ing_conyuge']) ? money($en['o_ing_conyuge']) : '', 1, 1),
-        lv('Ocupación', '', 1, 1)
-    ));
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+        // ACTIVIDAD ECONÓMICA (INDEPENDIENTE) (fila 38-45)
+        'A39' => $cliente['nombre_empresa'] ?? null,
+        'E39' => $cliente['actividad'] ?? null,
+        'E41' => $cliente['ciudad'] ?? null,
+        'K41' => $telefonoFijo ?: null,
 
-    // ── 6. REFERENCIAS PERSONALES ──────────────────────────────
-    $xml .= row([cell('REFERENCIAS PERSONALES', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('Nombre', 'sTh', 2), cell('', 'sTh'), cell('Cédula', 'sTh'), cell('Celular', 'sTh'), cell('Parentesco/Relación', 'sTh', 1)]);
-    $garanteNombre = $fc['garante_nombre'] ?? '';
-    $xml .= row([
-        cell($garanteNombre, 'sInput', 2), cell('', 'sInput'),
-        cell($fc['garante_cedula'] ?? '', 'sInputC'),
-        cell($fc['garante_celular'] ?? '', 'sInputC'),
-        cell($garanteNombre !== '' ? 'Garante' : '', 'sInputC', 1),
-    ]);
-    for ($i = 0; $i < 2; $i++) {
-        $xml .= row([cell('', 'sBlank', 2), cell('', 'sBlank'), cell('', 'sBlank'), cell('', 'sBlank'), cell('', 'sBlank', 1)]);
-    }
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+        // INFORMACIÓN DEL CÓNYUGE (fila 48-55)
+        'A49' => $conN ?: null,
+        'F49' => $conP ?: null,
+        'A51' => $fc['solicitante_conyuge_cedula'] ?? null,
 
-    // ── 7. REFERENCIAS BANCARIAS ────────────────────────────────
-    $xml .= row([cell('REFERENCIAS BANCARIAS', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('Institución', 'sTh', 2), cell('', 'sTh'), cell('Tipo de Cuenta', 'sTh'), cell('N° Cuenta', 'sTh'), cell('Antigüedad', 'sTh', 1)]);
-    for ($i = 0; $i < 2; $i++) {
-        $xml .= row([cell('', 'sBlank', 2), cell('', 'sBlank'), cell('', 'sBlank'), cell('', 'sBlank'), cell('', 'sBlank', 1)]);
-    }
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+        // INGRESOS MENSUALES (fila 79-87) — valores ya numéricos "0.00" por defecto en la plantilla
+        'C79' => money($ing_sueldo), 'C80' => money($ing_negocio), 'C81' => money($ing_honorar),
+        'C82' => money($ing_agric), 'C83' => money($ing_rentabr), 'C84' => money($ing_rentainv),
+        'H79' => money($ing_remesas), 'H80' => money($ing_conyuge), 'H81' => money($ing_otros),
+        'M79' => money($gas_familiares), 'M80' => money($gas_negocio), 'M81' => money($gas_arriendo),
+        'M82' => money($gas_financ), 'M83' => money($gas_imprevistos), 'M84' => money($gas_otros),
+        'C85' => money($tot_ingresos), 'M85' => money($tot_gastos),
+        'D87' => money($tot_activo_neto),
 
-    // ── 8. REFERENCIAS COMERCIALES ──────────────────────────────
-    $xml .= row([cell('REFERENCIAS COMERCIALES', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('Nombre / Empresa', 'sTh', 2), cell('', 'sTh'), cell('Cédula/RUC', 'sTh'), cell('Teléfono', 'sTh'), cell('Relación Comercial', 'sTh', 1)]);
-    for ($i = 0; $i < 2; $i++) {
-        $xml .= row([cell('', 'sBlank', 2), cell('', 'sBlank'), cell('', 'sBlank'), cell('', 'sBlank'), cell('', 'sBlank', 1)]);
-    }
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
-
-    // ── 9. INGRESOS MENSUALES (Ingresos / Gastos) ───────────────
-    $xml .= row([cell('INGRESOS MENSUALES', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('INGRESOS', 'sTh', 3), cell('', 'sTh'), cell('', 'sTh'), cell('', 'sTh'), cell('GASTOS', 'sTh', 3), cell('', 'sTh')]);
-    $ingresosRows = [
-        ['Ventas Mensuales (negocio)', money($ventas_mes)],
-        ['Ingreso Cónyuge', money($en['o_ing_conyuge'] ?? 0)],
-        ['Arriendos', money($en['o_ing_arriendos'] ?? 0)],
-        ['Pensiones', money($en['o_ing_pensiones'] ?? 0)],
-        ['Otros Ingresos', money($en['o_ing_otros'] ?? 0)],
+        // ESTADO DE SITUACIÓN PERSONAL (fila 92-98)
+        'B92' => money($act_efectivo), 'B93' => money($act_bancos), 'B94' => money($act_cxc),
+        'B95' => money($act_fijos), 'B96' => money($act_otros),
+        'K92' => money($pas_proveedores), 'K93' => money($pas_cxp), 'K94' => money($pas_cortoplazo),
+        'K95' => money($pas_largoplazo), 'K96' => money($pas_otros),
+        'B97' => money($tot_activos), 'K97' => money($tot_pasivos),
+        'D98' => money($patrimonio),
     ];
-    $gastosRows = [
-        ['Costos de Venta', money($en['costos_ventas'] ?? 0)],
-        ['Sueldos (negocio)', money($en['g_neg_sueldos'] ?? 0)],
-        ['Arriendo (negocio)', money($en['g_neg_arriendo'] ?? 0)],
-        ['Servicios Básicos (negocio)', money($en['g_neg_serv_bas'] ?? 0)],
-        ['Transporte (negocio)', money($en['g_neg_transporte'] ?? 0)],
-        ['Alimentación (familiar)', money($en['g_fam_alim'] ?? 0)],
-        ['Arriendo (familiar)', money($en['g_fam_arriendo'] ?? 0)],
-        ['Educación (familiar)', money($en['g_fam_educacion'] ?? 0)],
-        ['Salud (familiar)', money($en['g_fam_salud'] ?? 0)],
-        ['Otros Gastos (familiar)', money($en['g_fam_otros'] ?? 0)],
-    ];
-    $maxRows = max(count($ingresosRows), count($gastosRows));
-    for ($i = 0; $i < $maxRows; $i++) {
-        $ing = $ingresosRows[$i] ?? ['', ''];
-        $gas = $gastosRows[$i] ?? ['', ''];
-        $xml .= row([
-            cell($ing[0], 'sLabel', 2), cell('', 'sLabel'), cell($ing[1], 'sInputC'),
-            cell($gas[0], 'sLabel', 2), cell('', 'sLabel'), cell($gas[1], 'sInputC'),
-        ]);
+    // Limpia nulos (deja el placeholder original de la plantilla, p. ej. "0" en celdas numéricas)
+    $overrides = array_filter($overrides, fn($v) => $v !== null && $v !== '');
+
+    // ================================================================
+    //  Construcción del .xlsx real (OOXML) vía ZipArchive
+    // ================================================================
+    $cellsRaw   = require __DIR__ . '/plantilla_solicitud_cells.php';        // [r1,c1,r2,c2,text,fill,bold]
+    $mergesRaw  = require __DIR__ . '/plantilla_solicitud_merges.php';       // [r1,c1,r2,c2]
+    $rowHeights = require __DIR__ . '/plantilla_solicitud_row_heights.php';  // row => height
+    $colWidths  = require __DIR__ . '/plantilla_solicitud_col_widths.php';   // 'A'..'N' => width
+    $rowHeightsTop = [1 => 19.8, 2 => 16.2, 3 => 7.5, 4 => 24.0, 5 => 16.5, 6 => 10.5, 7 => 6.0, 8 => 6.0];
+
+    // Agrupar celdas de la plantilla por fila
+    $byRow = [];
+    foreach ($cellsRaw as $c) {
+        [$r1, $c1, $c2r2, $c2, $text, $fill, $bold] = $c;
+        $byRow[$r1][] = [$c1, $c2, $text, $fill, $bold];
     }
-    $xml .= row([
-        cell('TOTAL INGRESOS ($)', 'sTotal', 2), cell('', 'sTotal'), cell(money($ing_total), 'sInputC'),
-        cell('TOTAL GASTOS ($)', 'sTotal', 2), cell('', 'sTotal'), cell(money($gas_total), 'sInputC'),
-    ]);
-    $xml .= row([cell('EXCEDENTE / SALDO FINAL MENSUAL ($)', 'sTotal', 5), cell(money($excedente), 'sInputC')]);
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
 
-    // ── 10. ESTADO DE SITUACIÓN PERSONAL (Activos / Pasivos) ────
-    $xml .= row([cell('ESTADO DE SITUACIÓN PERSONAL', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('ACTIVOS', 'sTh', 3), cell('', 'sTh'), cell('', 'sTh'), cell('PASIVOS', 'sTh', 3), cell('', 'sTh')]);
-    $activosRows = [
-        ['Caja / Efectivo', money($en['caja_efectivo'] ?? 0)],
-        ['Bancos / Ahorros', money($en['bancos_saldo'] ?? 0)],
-        ['Cuentas por Cobrar (Netas)', money($en['cxp_netas'] ?? 0)],
-        ['Inventario (Mat. Prima/Producción)', money($tot_inventario)],
-        ['Vehículos', money($tot_veh)],
-        ['Inmuebles / Propiedades', money($tot_inm)],
-        ['Maquinaria / Enseres / Otros', money($tot_oa)],
+    // ── Estilos (fonts / fills / borders / cellXfs) ───────────
+    $fonts = [
+        '<font><sz val="10"/><name val="Calibri"/></font>',                                   // 0 default
+        '<font><b/><sz val="14"/><color rgb="FF003366"/><name val="Verdana"/></font>',        // 1 title
+        '<font><b/><sz val="9"/><color rgb="FFFFFFFF"/><name val="Verdana"/></font>',         // 2 red header
+        '<font><sz val="8"/><color rgb="FF003366"/><name val="Verdana"/></font>',             // 3 label (no bold)
+        '<font><b/><sz val="8"/><color rgb="FF003366"/><name val="Verdana"/></font>',         // 4 label bold
+        '<font><b/><sz val="9"/><color rgb="FF000000"/><name val="Verdana"/></font>',         // 5 input
+        '<font><sz val="7.5"/><color rgb="FF003366"/><name val="Verdana"/></font>',           // 6 plain
     ];
-    $pasivosRows = [
-        ['Créditos por Pagar (C.P.)', money($en['creditos_pagar'] ?? 0)],
-        ['Proveedores', money($en['proveedores'] ?? 0)],
-        ['Otras Deudas C.P.', money($en['otras_deudas_cp'] ?? 0)],
-        ['Pasivos L.P. (Hipotecas/Otros)', money($en['pasivos_lp'] ?? 0)],
+    $fills = [
+        '<fill><patternFill patternType="none"/></fill>',                                              // 0
+        '<fill><patternFill patternType="gray125"/></fill>',                                            // 1 (reservado, requerido por spec)
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFC00000"/><bgColor indexed="64"/></patternFill></fill>', // 2 RED
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFD9D9D9"/><bgColor indexed="64"/></patternFill></fill>', // 3 GRAY
+        '<fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>', // 4 WHITE
     ];
-    $maxRows2 = max(count($activosRows), count($pasivosRows));
-    for ($i = 0; $i < $maxRows2; $i++) {
-        $a = $activosRows[$i] ?? ['', ''];
-        $p = $pasivosRows[$i] ?? ['', ''];
-        $xml .= row([
-            cell($a[0], 'sLabel', 2), cell('', 'sLabel'), cell($a[1], 'sInputC'),
-            cell($p[0], 'sLabel', 2), cell('', 'sLabel'), cell($p[1], 'sInputC'),
-        ]);
+    $thinBorder = '<border><left style="thin"><color rgb="FF999999"/></left><right style="thin"><color rgb="FF999999"/></right><top style="thin"><color rgb="FF999999"/></top><bottom style="thin"><color rgb="FF999999"/></bottom></border>';
+    $noBorder = '<border><left/><right/><top/><bottom/></border>';
+    $borders = [$noBorder, $thinBorder];
+
+    // xf: [fontIdx, fillIdx, borderIdx, halign, valign, wrap]
+    $xfs = [];
+    $addXf = function ($fontIdx, $fillIdx, $borderIdx, $halign = 'left', $valign = 'center', $wrap = false) use (&$xfs) {
+        $xfs[] = [$fontIdx, $fillIdx, $borderIdx, $halign, $valign, $wrap];
+        return count($xfs) - 1;
+    };
+    $XF_DEFAULT  = $addXf(0, 0, 0, 'left', 'bottom', false);
+    $XF_TITLE    = $addXf(1, 0, 0, 'center', 'center', true);
+    $XF_HDRLABEL = $addXf(4, 4, 0, 'left', 'center', false);
+    $XF_RED      = $addXf(2, 2, 1, 'left', 'center', false);
+    $XF_LABEL    = $addXf(4, 4, 1, 'left', 'center', true);
+    $XF_INPUT_W  = $addXf(5, 4, 1, 'left', 'center', false);
+    $XF_INPUT_G  = $addXf(5, 3, 1, 'left', 'center', false);
+
+    $styleFor = function ($fill, $bold, $hasText) use ($XF_RED, $XF_LABEL, $XF_INPUT_W, $XF_INPUT_G, $XF_DEFAULT) {
+        if ($fill === 'RED') return $XF_RED;
+        if ($fill === 'WHITE') return ($bold && $hasText) ? $XF_LABEL : $XF_INPUT_W;
+        if ($fill === 'GRAY') return ($bold && $hasText) ? $XF_LABEL : $XF_INPUT_G;
+        return $XF_DEFAULT;
+    };
+
+    $stylesXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
+    $stylesXml .= '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+    $stylesXml .= '<numFmts count="0"/>';
+    $stylesXml .= '<fonts count="' . count($fonts) . '">' . implode('', $fonts) . '</fonts>';
+    $stylesXml .= '<fills count="' . count($fills) . '">' . implode('', $fills) . '</fills>';
+    $stylesXml .= '<borders count="' . count($borders) . '">' . implode('', $borders) . '</borders>';
+    $stylesXml .= '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>';
+    $cellXfsXml = [];
+    foreach ($xfs as [$fontIdx, $fillIdx, $borderIdx, $halign, $valign, $wrap]) {
+        $align = '<alignment horizontal="' . $halign . '" vertical="' . $valign . '" wrapText="' . ($wrap ? 1 : 0) . '"/>';
+        $cellXfsXml[] = '<xf numFmtId="0" fontId="' . $fontIdx . '" fillId="' . $fillIdx . '" borderId="' . $borderIdx . '" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">' . $align . '</xf>';
     }
-    $xml .= row([
-        cell('TOTAL ACTIVOS ($)', 'sTotal', 2), cell('', 'sTotal'), cell(money($total_activos), 'sInputC'),
-        cell('TOTAL PASIVOS ($)', 'sTotal', 2), cell('', 'sTotal'), cell(money($total_pasivos), 'sInputC'),
-    ]);
-    $xml .= row([cell('PATRIMONIO (CAPITAL) ($)', 'sTotal', 5), cell(money($patrimonio), 'sInputC')]);
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+    $stylesXml .= '<cellXfs count="' . count($cellXfsXml) . '">' . implode('', $cellXfsXml) . '</cellXfs>';
+    $stylesXml .= '</styleSheet>';
 
-    // ── 11. Declaración Legal / Firmas ──────────────────────────
-    $xml .= row([cell('DECLARACIÓN Y FIRMAS', 'sSection', $TOTAL_COLS - 1)]);
-    $xml .= row([cell(
-        'Declaro que la información contenida en esta solicitud es verídica y autorizo a la institución a verificarla ' .
-        'en centrales de riesgo y demás fuentes que considere necesarias para el análisis de la presente solicitud de crédito.',
-        'sNote', $TOTAL_COLS - 1
-    )]);
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
-    $xml .= row(array_merge(
-        [cell('Firma Solicitante: _______________________', 'sBlank', 3)],
-        [cell('Firma Garante: _______________________', 'sBlank', 3)]
-    ));
-    $xml .= row([cell('Fecha: ' . $fechaHoy, 'sBlank', $TOTAL_COLS - 1)]);
-    $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
-
-    // ── 12. Croquis del domicilio / negocio ─────────────────────
-    $xml .= row([cell('CROQUIS DEL DOMICILIO / NEGOCIO', 'sSection', $TOTAL_COLS - 1)]);
-    for ($i = 0; $i < 6; $i++) {
-        $xml .= row([cell('', 'sBlank', $TOTAL_COLS - 1)]);
+    // ── Detectar filas "banner" (RED completo, todas las celdas rojas) para fusionarlas en una sola celda ──
+    $bannerRows = [];
+    foreach ($byRow as $r => $items) {
+        $fillsSet = array_unique(array_column($items, 3));
+        if ($fillsSet === ['RED']) $bannerRows[] = $r;
     }
-    $refUbic = trim(($cliente['direccion'] ?? '') . ' ' . (isset($cliente['latitud'], $cliente['longitud']) ? '(GPS: ' . $cliente['latitud'] . ', ' . $cliente['longitud'] . ')' : ''));
-    $xml .= row([cell('Referencia de ubicación registrada: ' . $refUbic, 'sNote', $TOTAL_COLS - 1)]);
 
-    $xml .= '</Table>' . "\n";
-    $xml .= '<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel">
-   <PageSetup>
-    <Layout x:Orientation="Portrait"/>
-    <PageMargins x:Bottom="0.5" x:Left="0.4" x:Right="0.4" x:Top="0.5"/>
-   </PageSetup>
-   <FitToPage/>
-   <Print>
-    <FitWidth>1</FitWidth>
-    <FitHeight>0</FitHeight>
-   </Print>
-  </WorksheetOptions>' . "\n";
-    $xml .= '</Worksheet>' . "\n";
-    $xml .= '</Workbook>';
+    // ── Construir filas del sheet (9..142) ────────────────────
+    $maxRow = 142;
+    $rowsXml = array_fill(1, $maxRow, '');
+    for ($r = 9; $r <= $maxRow; $r++) {
+        $rowCellsXml = '';
+        if (isset($byRow[$r])) {
+            foreach ($byRow[$r] as [$c1, $c2, $text, $fill, $bold]) {
+                $ref = colLetter($c1) . $r;
+                $val = $overrides[$ref] ?? $text;
+                $hasText = $val !== null && $val !== '';
+                $sidx = $styleFor($fill, $bold, $hasText);
+                if (!$hasText) {
+                    $rowCellsXml .= '<c r="' . $ref . '" s="' . $sidx . '"/>';
+                } else {
+                    $sval = (string)$val;
+                    if (strpos($sval, '=') === 0) {
+                        $rowCellsXml .= '<c r="' . $ref . '" s="' . $sidx . '"><f>' . xesc(substr($sval, 1)) . '</f></c>';
+                    } else {
+                        $rowCellsXml .= '<c r="' . $ref . '" s="' . $sidx . '" t="inlineStr"><is><t xml:space="preserve">' . xesc($sval) . '</t></is></c>';
+                    }
+                }
+            }
+        }
+        $h = $rowHeights[$r] ?? 15.0;
+        $rowsXml[$r] = '<row r="' . $r . '" ht="' . $h . '" customHeight="1">' . $rowCellsXml . '</row>';
+    }
 
-    $filenameSafe = 'Solicitud_Credito_' . preg_replace('/[^A-Za-z0-9_-]/', '', $cedula ?: $cliente_id) . '.xls';
+    // ── Filas 1-8: título, logos, asesor, DEUDOR/GARANTE ──────
+    $mkCell = function ($ref, $text, $sidx) {
+        if ($text === null || $text === '') return '<c r="' . $ref . '" s="' . $sidx . '"/>';
+        return '<c r="' . $ref . '" s="' . $sidx . '" t="inlineStr"><is><t xml:space="preserve">' . xesc($text) . '</t></is></c>';
+    };
+    $topRows = [
+        5 => $mkCell('D5', 'SOLICITUD DE CRÉDITO', $XF_TITLE) . $mkCell('M5', 'DEUDOR', $XF_HDRLABEL),
+        6 => $mkCell('H6', 'ASESOR:', $XF_HDRLABEL) . $mkCell('I6', $asesorNombre, $XF_HDRLABEL) . $mkCell('M6', 'GARANTE', $XF_HDRLABEL),
+    ];
+    for ($r = 1; $r <= 8; $r++) {
+        $h = $rowHeightsTop[$r] ?? 15.0;
+        $rowsXml[$r] = '<row r="' . $r . '" ht="' . $h . '" customHeight="1">' . ($topRows[$r] ?? '') . '</row>';
+    }
 
-    header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+    $sheetData = implode('', $rowsXml);
+
+    // ── Merges ──────────────────────────────────────────────
+    $mergesAll = [[5, 4, 5, 11], [5, 13, 5, 14], [6, 13, 6, 14]];
+    foreach ($mergesRaw as $m) $mergesAll[] = $m;
+    foreach ($bannerRows as $r) $mergesAll[] = [$r, 1, $r, 14];
+    $mergeXml = '';
+    foreach ($mergesAll as [$r1, $c1, $r2, $c2]) {
+        $mergeXml .= '<mergeCell ref="' . colLetter($c1) . $r1 . ':' . colLetter($c2) . $r2 . '"/>';
+    }
+
+    // ── Anchos de columna ───────────────────────────────────
+    $colsXml = '';
+    for ($i = 1; $i <= 14; $i++) {
+        $letter = colLetter($i);
+        $w = $colWidths[$letter] ?? 10.0;
+        $colsXml .= '<col min="' . $i . '" max="' . $i . '" width="' . $w . '" customWidth="1"/>';
+    }
+
+    $sheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        . '<dimension ref="A1:N' . $maxRow . '"/>'
+        . '<sheetViews><sheetView showGridLines="0" workbookViewId="0"/></sheetViews>'
+        . '<sheetFormatPr defaultRowHeight="15"/>'
+        . '<cols>' . $colsXml . '</cols>'
+        . '<sheetData>' . $sheetData . '</sheetData>'
+        . '<mergeCells count="' . count($mergesAll) . '">' . $mergeXml . '</mergeCells>'
+        . '<drawing r:id="rId1"/>'
+        . '</worksheet>';
+
+    $sheetRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>'
+        . '</Relationships>';
+
+    // ── Dibujo (logos incrustados, anclas 2 celdas tomadas de la plantilla real) ──
+    $anchor = function ($idx, $name, $fromCol, $fromColOff, $fromRow, $fromRowOff, $toCol, $toColOff, $toRow, $toRowOff) {
+        return '<xdr:twoCellAnchor xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing">'
+            . '<xdr:from><xdr:col>' . $fromCol . '</xdr:col><xdr:colOff>' . $fromColOff . '</xdr:colOff><xdr:row>' . $fromRow . '</xdr:row><xdr:rowOff>' . $fromRowOff . '</xdr:rowOff></xdr:from>'
+            . '<xdr:to><xdr:col>' . $toCol . '</xdr:col><xdr:colOff>' . $toColOff . '</xdr:colOff><xdr:row>' . $toRow . '</xdr:row><xdr:rowOff>' . $toRowOff . '</xdr:rowOff></xdr:to>'
+            . '<xdr:pic><xdr:nvPicPr><xdr:cNvPr id="' . ($idx + 1) . '" name="' . $name . '"/><xdr:cNvPicPr/></xdr:nvPicPr>'
+            . '<xdr:blipFill><a:blip xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" r:embed="rId' . ($idx + 1) . '" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>'
+            . '<xdr:spPr><a:xfrm xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></a:xfrm><a:prstGeom xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>'
+            . '</xdr:pic></xdr:twoCellAnchor>';
+    };
+    $drawingXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        . $anchor(0, 'logo_texto', 4, 336600, 0, 15840, 10, 72000, 3, 106920)
+        . $anchor(1, 'logo_icono', 1, 7560, 0, 137520, 3, 305640, 4, 167760)
+        . '</xdr:wsDr>';
+
+    $drawingRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.jpeg"/>'
+        . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image2.jpeg"/>'
+        . '</Relationships>';
+
+    $contentTypes = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        . '<Default Extension="xml" ContentType="application/xml"/>'
+        . '<Default Extension="jpeg" ContentType="image/jpeg"/>'
+        . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        . '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
+        . '<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>'
+        . '</Types>';
+
+    $rootRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+        . '</Relationships>';
+
+    $workbookXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        . '<sheets><sheet name="Solicitud" sheetId="1" r:id="rId1"/></sheets>'
+        . '</workbook>';
+
+    $workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+        . '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        . '</Relationships>';
+
+    $imgTexto = @file_get_contents(__DIR__ . '/assets/plantilla_logo_texto.jpg');
+    $imgIcono = @file_get_contents(__DIR__ . '/assets/plantilla_logo_icono.jpg');
+
+    $tmpPath = tempnam(sys_get_temp_dir(), 'sol_credito_') . '.xlsx';
+    $zip = new ZipArchive();
+    if ($zip->open($tmpPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+        throw new Exception('No se pudo crear el archivo .xlsx temporal');
+    }
+    $zip->addFromString('[Content_Types].xml', $contentTypes);
+    $zip->addFromString('_rels/.rels', $rootRels);
+    $zip->addFromString('xl/workbook.xml', $workbookXml);
+    $zip->addFromString('xl/_rels/workbook.xml.rels', $workbookRels);
+    $zip->addFromString('xl/styles.xml', $stylesXml);
+    $zip->addFromString('xl/worksheets/sheet1.xml', $sheetXml);
+    $zip->addFromString('xl/worksheets/_rels/sheet1.xml.rels', $sheetRels);
+    $zip->addFromString('xl/drawings/drawing1.xml', $drawingXml);
+    $zip->addFromString('xl/drawings/_rels/drawing1.xml.rels', $drawingRels);
+    if ($imgTexto !== false) $zip->addFromString('xl/media/image1.jpeg', $imgTexto);
+    if ($imgIcono !== false) $zip->addFromString('xl/media/image2.jpeg', $imgIcono);
+    $zip->close();
+
+    $filenameSafe = 'Solicitud_Credito_' . preg_replace('/[^A-Za-z0-9_-]/', '', $cedula ?: $cliente_id) . '.xlsx';
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     header('Content-Disposition: attachment; filename="' . $filenameSafe . '"');
+    header('Content-Length: ' . filesize($tmpPath));
     header('Cache-Control: max-age=0');
-    echo $xml;
+    readfile($tmpPath);
+    unlink($tmpPath);
     exit;
 
 } catch (Throwable $e) {

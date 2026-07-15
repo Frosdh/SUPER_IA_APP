@@ -44,6 +44,31 @@ class SyncService {
     _listeners.remove(listener);
   }
 
+  /// Se dispara cuando una encuesta guardada SIN internet se sube sola en
+  /// segundo plano y tenía cliente asociado (levantamiento de empresa o
+  /// encuesta general). Como en ese momento el asesor ya salió de la
+  /// pantalla de la encuesta (no hay ningún diálogo "guardado con éxito"
+  /// en pantalla), no hay dónde ofrecer el botón "Descargar Excel" de la
+  /// solicitud de crédito. La pantalla principal (OsmMapScreen) escucha
+  /// esto para mostrar un aviso con la opción de descargar en cuanto
+  /// termina de sincronizar.
+  static final List<void Function(String clienteId)> _syncCompletionListeners = [];
+
+  static void addSyncCompletionListener(void Function(String clienteId) listener) {
+    _syncCompletionListeners.add(listener);
+  }
+
+  static void removeSyncCompletionListener(void Function(String clienteId) listener) {
+    _syncCompletionListeners.remove(listener);
+  }
+
+  /// Endpoints de encuesta/levantamiento para los que tiene sentido ofrecer
+  /// la descarga del Excel de "Solicitud de Crédito" una vez sincronizados.
+  static const Set<String> _endpointsConExcel = {
+    'guardar_cliente_encuesta.php',
+    'actualizar_encuesta_completa.php',
+  };
+
   static bool get isSyncing => _syncing;
 
   /// Inicia el auto-sync. Seguro de llamar varias veces (p. ej. en cada
@@ -167,6 +192,21 @@ class SyncService {
           if (resp.statusCode == 200 && data != null && data['status'] == 'success') {
             await OfflineQueueService.markSynced(clientUuid);
             syncedCount++;
+
+            // Si esta encuesta/levantamiento tenía cliente asociado, avisar
+            // para que se pueda ofrecer la descarga del Excel de la
+            // solicitud de crédito ahora que ya se subió. El cliente_id
+            // puede venir en la respuesta del servidor (encuesta nueva) o
+            // ya venir guardado en el body (edición de una tarea existente,
+            // ver NuevaEncuestaScreen._guardarEncuesta).
+            if (_endpointsConExcel.contains(endpoint)) {
+              final clienteId = (data['cliente_id']?.toString() ?? body['cliente_id'] ?? '').trim();
+              if (clienteId.isNotEmpty) {
+                for (final listener in List<void Function(String)>.from(_syncCompletionListeners)) {
+                  listener(clienteId);
+                }
+              }
+            }
           } else {
             // Error de negocio del servidor (no de conectividad): se cuenta
             // el intento pero se mantiene "pendiente" para no perder los

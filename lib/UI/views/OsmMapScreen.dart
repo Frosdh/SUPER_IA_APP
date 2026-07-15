@@ -16,6 +16,8 @@ import 'package:super_ia/Core/Preferences/RecentPlacesService.dart';
 import 'package:super_ia/Core/Services/OsmService.dart';
 import 'package:super_ia/Core/Services/SOSService.dart';
 import 'package:super_ia/Core/Services/ShareTripService.dart';
+import 'package:super_ia/Core/Services/SyncService.dart';
+import 'package:super_ia/Core/Services/ExcelSolicitudService.dart';
 import 'package:super_ia/UI/views/ChatScreen.dart';
 import 'package:super_ia/UI/views/MetasDiariasScreen.dart';
 import 'package:super_ia/UI/views/AgendaRecuperacionScreen.dart';
@@ -131,6 +133,14 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
         _cargarConductoresCercanos();
       }
     });
+
+    // Si una encuesta/levantamiento guardado SIN internet se sube solo en
+    // segundo plano (ver SyncService), ya no hay ningún diálogo de "guardado
+    // con éxito" en pantalla para ofrecer el Excel de la solicitud de
+    // crédito (el asesor salió de esa pantalla al guardar offline). Esta
+    // pantalla principal escucha ese evento para avisar y ofrecer la
+    // descarga en cuanto termina de sincronizar.
+    SyncService.addSyncCompletionListener(_onEncuestaSincronizadaEnSegundoPlano);
   }
 
   @override
@@ -142,7 +152,35 @@ class _OsmMapScreenState extends State<OsmMapScreen> {
     _pollingTimer?.cancel();
     _nearbyDriversTimer?.cancel();
     _searchController.dispose();
+    SyncService.removeSyncCompletionListener(_onEncuestaSincronizadaEnSegundoPlano);
     super.dispose();
+  }
+
+  /// Se llama cuando una encuesta guardada sin internet finalmente se sube
+  /// sola. Muestra un aviso con la opción de descargar el Excel de la
+  /// solicitud de crédito de ese cliente.
+  void _onEncuestaSincronizadaEnSegundoPlano(String clienteId) {
+    final ctx = _scaffoldKey.currentContext;
+    if (ctx == null || !mounted) return;
+    ScaffoldMessenger.of(ctx).showSnackBar(
+      SnackBar(
+        content: const Text('✅ Encuesta pendiente subida. ¿Descargar el Excel de la solicitud?'),
+        duration: const Duration(seconds: 10),
+        backgroundColor: const Color(0xFF16a34a),
+        action: SnackBarAction(
+          label: 'DESCARGAR',
+          textColor: Colors.white,
+          onPressed: () async {
+            try {
+              await ExcelSolicitudService.descargarYCompartir(clienteId);
+            } catch (e) {
+              if (!mounted) return;
+              _mostrarMensaje('No se pudo generar el Excel. ($e)', color: Colors.red);
+            }
+          },
+        ),
+      ),
+    );
   }
 
   void _mostrarMensaje(String msg, {Color color = Colors.black87}) {

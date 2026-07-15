@@ -2112,6 +2112,12 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           // ── Cerrar segmento de ruta actual e iniciar el siguiente ──
           final tareaId   = data['tarea_id']?.toString() ?? '';
           final clienteId = data['cliente_id']?.toString() ?? '';
+          // El servidor recién crea el cliente/prospecto en este guardado
+          // (encuesta nueva, no edición), así que _clienteId todavía no
+          // tenía valor. Sin esto, el botón "Descargar Excel" del diálogo
+          // de "Tarea Finalizada" (caso sin empresa) nunca aparecía porque
+          // dependía de _clienteId y quedaba vacío.
+          if (clienteId.isNotEmpty) _clienteId = clienteId;
           _cerrarYNuevoSegmento(tareaId: tareaId);
 
           // ── Si es levantamiento de empresa → dialog especial con "Aprobar Crédito" ──
@@ -2477,12 +2483,12 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       }
 
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/Solicitud_Credito_$clienteId.xls';
+      final path = '${dir.path}/Solicitud_Credito_$clienteId.xlsx';
       final file = File(path);
       await file.writeAsBytes(resp.bodyBytes, flush: true);
 
       await Share.shareXFiles(
-        [XFile(path, name: 'Solicitud_Credito.xls')],
+        [XFile(path, name: 'Solicitud_Credito.xlsx')],
         text: 'Solicitud de Crédito',
       );
     } catch (e) {
