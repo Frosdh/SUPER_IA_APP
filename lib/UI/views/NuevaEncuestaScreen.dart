@@ -151,6 +151,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   final _direccionCtrl = TextEditingController();
   final _ciudadCtrl = TextEditingController();
   String? _actividad;
+  String? _sexo; // 'M' | 'F'
   // Régimen tributario
   String? _regimenTributario;          // 'ruc' | 'rise' | 'no_registrado'
   final _numeroRucCtrl  = TextEditingController(); // número RUC (opcional)
@@ -692,6 +693,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
       final act = _s(cliente['actividad']);
       _actividad = act.isEmpty ? null : act;
+      final sx = _s(cliente['sexo']);
+      _sexo = (sx == 'M' || sx == 'F') ? sx : null;
 
       final ne = _s(cliente['nombre_empresa']);
       _empresaCtrl.text = ne;
@@ -1053,6 +1056,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     final act = _s(d['actividad']);
     if (act.isNotEmpty) _actividad = act;
+    final sx = _s(d['sexo']);
+    if (sx == 'M' || sx == 'F') _sexo = sx;
 
     final ne = _s(d['nombre_empresa']);
     if (ne.isNotEmpty) {
@@ -1235,6 +1240,8 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
 
     final act = _s(d['actividad']);
     if (act.isNotEmpty) _actividad = act;
+    final sx = _s(d['sexo']);
+    if (sx == 'M' || sx == 'F') _sexo = sx;
 
     // Negocio / Empresa
     final tieneE = _i(d['tiene_empresa']) == 1;
@@ -1722,6 +1729,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
       'email_cliente': _emailCtrl.text.trim(),
       'direccion': _direccionCtrl.text.trim(),
       'ciudad': _ciudadCtrl.text.trim(),
+      'sexo': _sexo ?? '',
       'actividad': _actividad ?? '',
       'tiene_ruc':  _tieneRuc  ? '1' : '0',
       'tiene_rise': _tieneRise ? '1' : '0',
@@ -3699,6 +3707,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
             label: 'Ciudad',
             icon: Icons.location_city_rounded,
           ),
+          _dropdownSexo(),
           const SizedBox(height: 20),
           _seccionTitulo('Actividad Económica'),
           _dropdownActividad(),
@@ -7373,6 +7382,43 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           const SizedBox(height: 4),
           Text(valor, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
         ],
+      ),
+    );
+  }
+
+  Widget _dropdownSexo() {
+    final opciones = [
+      ('M', 'Masculino'),
+      ('F', 'Femenino'),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: DropdownButtonFormField<String>(
+        value: _sexo,
+        hint: Text('Sexo',
+            style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 13)),
+        items: opciones
+            .map((o) => DropdownMenuItem(value: o.$1, child: Text(o.$2)))
+            .toList(),
+        onChanged: (v) => setState(() => _sexo = v),
+        dropdownColor: ConstantColors.grey100,
+        style: TextStyle(color: ConstantColors.textDark, fontSize: 14),
+        decoration: InputDecoration(
+          prefixIcon:
+              Icon(Icons.wc_rounded, color: ConstantColors.warning, size: 20),
+          filled: true,
+          fillColor: ConstantColors.grey100,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: ConstantColors.borderLight),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: ConstantColors.borderLight),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
       ),
     );
   }

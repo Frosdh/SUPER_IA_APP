@@ -163,6 +163,8 @@ $celular         = strOrNull($_POST['celular']        ?? '');
 $email_c         = strOrNull($_POST['email_cliente']  ?? '');
 $direccion       = strOrNull($_POST['direccion']      ?? '');
 $ciudad          = strOrNull($_POST['ciudad']         ?? '');
+$sexo            = strOrNull($_POST['sexo']           ?? '');
+if ($sexo !== null && !in_array($sexo, ['M', 'F'], true)) $sexo = null;
 $actividad       = strOrNull($_POST['actividad']      ?? '');
 $tiene_ruc       = (int)($_POST['tiene_ruc']          ?? 0);
 $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
@@ -537,6 +539,7 @@ try {
             'paga_cuota_rise'   => "TINYINT(1) DEFAULT NULL",
             'emite_notas_venta' => "TINYINT(1) DEFAULT NULL",
             'conoce_limite_rise'=> "TINYINT(1) DEFAULT NULL",
+            'sexo'              => "ENUM('M','F') DEFAULT NULL",
         ];
         foreach ($cols_cp as $col => $def) {
             $res = $conn->query("SHOW COLUMNS FROM cliente_prospecto LIKE '$col'");
@@ -545,18 +548,18 @@ try {
             }
         }
 
-        // Array de 23 valores → type string de 23 chars: 8s + 2i + 13s
+        // Array de 24 valores → type string de 24 chars: 9s + 2i + 13s
         $upd_vals = [
-            $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
-            $actividad, $nombre_empresa,                              // 8 strings
+            $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad, $sexo,
+            $actividad, $nombre_empresa,                              // 9 strings
             $tiene_ruc, $tiene_rise,                                  // 2 ints
             $ruc_val, $rise_val, $tipo_empresa, $regimen_tributario,
             $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
             $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise,
             $origen_prospecto, $cliente_id,                           // 13 strings
         ];
-        $upd_types = str_repeat('s', 8) . 'ii' . str_repeat('s', 13); // = "ssssssssiissssssssssss s" sin espacios = 23
-        $sql_upd   = "UPDATE cliente_prospecto SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?, actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, origen_prospecto=? WHERE id=?";
+        $upd_types = str_repeat('s', 9) . 'ii' . str_repeat('s', 13); // 9+2+13 = 24
+        $sql_upd   = "UPDATE cliente_prospecto SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?, sexo=?, actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, origen_prospecto=? WHERE id=?";
         $st = $conn->prepare($sql_upd);
         if (!$st) { throw new \RuntimeException("prepare UC: " . $conn->error); }
         $st->bind_param($upd_types, ...$upd_vals);

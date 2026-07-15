@@ -80,13 +80,16 @@ try {
     $cedula = (string)($cliente['cedula'] ?? '');
 
     // ── 2. Ficha de Crédito ────────────────────────────────────
+    // (TRIM en la comparación por si la cédula quedó con espacios en
+    // algún lado; cliente_cedula se guarda tal cual la escribió/tenía
+    // el asesor al llenar la encuesta de producto "crédito".)
     $ficha_credito = null;
     if ($cedula !== '') {
         $st = $conn->prepare("
             SELECT fc.*
             FROM ficha_credito fc
             INNER JOIN ficha_producto fp ON fp.id = fc.ficha_id
-            WHERE fp.cliente_cedula = ? AND fp.producto_tipo = 'credito'
+            WHERE TRIM(fp.cliente_cedula) = TRIM(?) AND fp.producto_tipo = 'credito'
             ORDER BY fp.created_at DESC LIMIT 1
         ");
         $st->bind_param('s', $cedula);
@@ -210,6 +213,13 @@ try {
     $celular = (string)($fc['solicitante_celular'] ?? $cliente['celular'] ?? $cliente['telefono2'] ?? '');
     $telefonoFijo = (string)($cliente['telefono'] ?? '');
 
+    // Cuotas = plazo en meses ya capturado en la encuesta de producto (crédito).
+    $cuotas = isset($fc['plazo_credito_meses']) && $fc['plazo_credito_meses'] !== ''
+        ? (string)((int)$fc['plazo_credito_meses'])
+        : null;
+    // Fecha de pago: el mes siguiente a la fecha en que se emite/descarga la solicitud.
+    $fechaPago = date('d/m/Y', strtotime('+1 month'));
+
     // ================================================================
     //  Mapa de valores reales -> coordenadas de la plantilla (celda
     //  superior-izquierda de cada casilla de INPUT identificada en la
@@ -218,15 +228,24 @@ try {
     // ================================================================
     $overrides = [
         // INFORMACIÓN DEL CRÉDITO (fila 12-15)
-        'C13' => $fc['monto_credito'] ?? null ? money($fc['monto_credito']) : null,
+        'C12' => 'Normal',
+        'C13' => (isset($fc['monto_credito']) && $fc['monto_credito'] !== '') ? money($fc['monto_credito']) : null,
+        'J12' => $cuotas,
+        'J14' => $fechaPago,
         'C15' => $destino ?: null,
 
         // INFORMACIÓN PERSONAL (fila 18-27)
         'A19' => $nomN ?: null, 'F19' => $nomP ?: null, 'J19' => $nomM ?: null,
         'M19' => $cliente['email'] ?? null,
         'A21' => $cedula ?: null,
-        'A23' => $cliente['estado_civil'] ?? null,
-        'G23' => isset($cliente['num_dependientes']) ? (string)$cliente['num_dependientes'] : null,
+        // Marca la casilla M/F correcta (D21/E21 son etiquetas fijas en la
+        // plantilla; se le agrega un check a la que corresponda).
+        'D21' => (($cliente['sexo'] ?? null) === 'M') ? 'M ✓' : null,
+        'E21' => (($cliente['sexo'] ?? null) === 'F') ? 'F ✓' : null,
+        // estado_civil se captura en la ficha de crédito (solicitante_estado_civil),
+        // no en cliente_prospecto (esa tabla no tiene esa columna).
+        'A23' => $fc['solicitante_estado_civil'] ?? null,
+        // num_dependientes: no se captura en ningún lado todavía (queda en blanco).
         'A25' => $cliente['direccion'] ?? null,
         'K25' => $telefonoFijo ?: null,
         'M25' => $celular ?: null,
@@ -314,11 +333,18 @@ try {
     $XF_LABEL    = $addXf(4, 4, 1, 'left', 'center', true);
     $XF_INPUT_W  = $addXf(5, 4, 1, 'left', 'center', false);
     $XF_INPUT_G  = $addXf(5, 3, 1, 'left', 'center', false);
+    $XF_PLAIN    = $addXf(6, 0, 0, 'left', 'top', true);
 
-    $styleFor = function ($fill, $bold, $hasText) use ($XF_RED, $XF_LABEL, $XF_INPUT_W, $XF_INPUT_G, $XF_DEFAULT) {
+    // La clasificación label/input se basa en si la plantilla ya traía TEXTO
+    // en esa celda (etiqueta de campo) o estaba en blanco (casilla a llenar),
+    // no en si estaba en negrita — la plantilla real mezcla ambos casos.
+    // Los párrafos largos (declaración legal, notas del croquis) usan un
+    // estilo aparte (sin el look de "etiqueta de campo").
+    $styleFor = function ($fill, $isLabel, $isParagraph = false) use ($XF_RED, $XF_LABEL, $XF_INPUT_W, $XF_INPUT_G, $XF_PLAIN, $XF_DEFAULT) {
+        if ($isParagraph) return $XF_PLAIN;
         if ($fill === 'RED') return $XF_RED;
-        if ($fill === 'WHITE') return ($bold && $hasText) ? $XF_LABEL : $XF_INPUT_W;
-        if ($fill === 'GRAY') return ($bold && $hasText) ? $XF_LABEL : $XF_INPUT_G;
+        if ($fill === 'WHITE') return $isLabel ? $XF_LABEL : $XF_INPUT_W;
+        if ($fill === 'GRAY') return $isLabel ? $XF_LABEL : $XF_INPUT_G;
         return $XF_DEFAULT;
     };
 
@@ -344,18 +370,45 @@ try {
         if ($fillsSet === ['RED']) $bannerRows[] = $r;
     }
 
+    // Rangos que YA vienen fusionados en la plantilla real (para no
+    // duplicar merges sobre celdas que ya son parte de uno).
+    $existingMergeStarts = [];
+    foreach ($mergesRaw as [$mr1, $mc1, $mr2, $mc2]) {
+        $existingMergeStarts[$mr1 . '_' . $mc1] = true;
+    }
+
     // ── Construir filas del sheet (9..142) ────────────────────
+    // Además de pintar cada celda, esta pasada:
+    //  1) Distingue etiqueta (texto propio de la plantilla) de casilla de
+    //     input (blanco a llenar) para aplicar el estilo correcto.
+    //  2) A las etiquetas de una sola columna que tienen espacio en blanco
+    //     a su derecha (antes de la siguiente celda con contenido) las
+    //     fusiona con ese espacio, para que el texto no se corte contra ni
+    //     se sobreponga a la celda vecina.
+    //  3) A los párrafos largos (declaración legal, notas del croquis) los
+    //     trata aparte (estilo plano) y fusiona toda la fila.
+    //  4) Calcula la altura de fila necesaria para que el texto envuelto
+    //     ("wrap") quepa completo sin invadir la fila de abajo.
     $maxRow = 142;
     $rowsXml = array_fill(1, $maxRow, '');
+    $dynamicMerges = [];
     for ($r = 9; $r <= $maxRow; $r++) {
         $rowCellsXml = '';
+        $neededHeight = 0.0;
+        $rowIsParagraph = false;
         if (isset($byRow[$r])) {
-            foreach ($byRow[$r] as [$c1, $c2, $text, $fill, $bold]) {
+            $items = $byRow[$r];
+            usort($items, fn($a, $b) => $a[0] <=> $b[0]);
+            $n = count($items);
+            foreach ($items as $idx => [$c1, $c2, $text, $fill, $bold]) {
                 $ref = colLetter($c1) . $r;
+                $isParagraph = ($fill === 'WHITE') && !empty($text) && mb_strlen($text) > 55;
+                $isLabel = !empty($text) && !$isParagraph;
+                if ($isParagraph) $rowIsParagraph = true;
+
                 $val = $overrides[$ref] ?? $text;
-                $hasText = $val !== null && $val !== '';
-                $sidx = $styleFor($fill, $bold, $hasText);
-                if (!$hasText) {
+                $sidx = $styleFor($fill, $isLabel, $isParagraph);
+                if ($val === null || $val === '') {
                     $rowCellsXml .= '<c r="' . $ref . '" s="' . $sidx . '"/>';
                 } else {
                     $sval = (string)$val;
@@ -365,9 +418,30 @@ try {
                         $rowCellsXml .= '<c r="' . $ref . '" s="' . $sidx . '" t="inlineStr"><is><t xml:space="preserve">' . xesc($sval) . '</t></is></c>';
                     }
                 }
+
+                $endCol = $c2;
+                if (($isLabel || $isParagraph) && $c1 === $c2 && !isset($existingMergeStarts[$r . '_' . $c1])) {
+                    $nextC1 = ($idx + 1 < $n) ? $items[$idx + 1][0] : 15;
+                    if ($nextC1 - 1 > $c1) {
+                        $dynamicMerges[] = [$r, $c1, $r, $nextC1 - 1];
+                        $endCol = $nextC1 - 1;
+                    }
+                }
+
+                if ($isLabel && $text) {
+                    $widthUnits = 0.0;
+                    for ($cc = $c1; $cc <= $endCol; $cc++) $widthUnits += $colWidths[colLetter($cc)] ?? 10.0;
+                    $charsPerLine = max((int)($widthUnits * 1.6), 8);
+                    $estLines = (int)ceil(mb_strlen($text) / $charsPerLine);
+                    if ($estLines > 1) {
+                        $neededHeight = max($neededHeight, $estLines * 12.0 + 6.0);
+                    }
+                }
             }
         }
         $h = $rowHeights[$r] ?? 15.0;
+        if ($rowIsParagraph) $h = max($h, 30.0);
+        if ($neededHeight > 0) $h = max($h, $neededHeight);
         $rowsXml[$r] = '<row r="' . $r . '" ht="' . $h . '" customHeight="1">' . $rowCellsXml . '</row>';
     }
 
@@ -391,6 +465,7 @@ try {
     $mergesAll = [[5, 4, 5, 11], [5, 13, 5, 14], [6, 13, 6, 14]];
     foreach ($mergesRaw as $m) $mergesAll[] = $m;
     foreach ($bannerRows as $r) $mergesAll[] = [$r, 1, $r, 14];
+    foreach ($dynamicMerges as $m) $mergesAll[] = $m;
     $mergeXml = '';
     foreach ($mergesAll as [$r1, $c1, $r2, $c2]) {
         $mergeXml .= '<mergeCell ref="' . colLetter($c1) . $r1 . ':' . colLetter($c2) . $r2 . '"/>';

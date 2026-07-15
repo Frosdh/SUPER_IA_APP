@@ -241,6 +241,8 @@ $celular         = strOrNull($_POST['celular']        ?? '');
 $email_c         = strOrNull($_POST['email_cliente']  ?? '');
 $direccion       = strOrNull($_POST['direccion']      ?? '');
 $ciudad          = strOrNull($_POST['ciudad']         ?? '');
+$sexo            = strOrNull($_POST['sexo']           ?? '');
+if ($sexo !== null && !in_array($sexo, ['M', 'F'], true)) $sexo = null;
 $actividad       = strOrNull($_POST['actividad']      ?? '');
 $tiene_ruc       = (int)($_POST['tiene_ruc']          ?? 0);
 $tiene_rise      = (int)($_POST['tiene_rise']         ?? 0);
@@ -731,6 +733,15 @@ try {
 
     $conn->begin_transaction();
 
+    // Migración segura: agrega la columna 'sexo' si todavía no existe
+    // (bases más antiguas no la tienen).
+    try {
+        $resSexoCol = $conn->query("SHOW COLUMNS FROM cliente_prospecto LIKE 'sexo'");
+        if ($resSexoCol && $resSexoCol->num_rows === 0) {
+            $conn->query("ALTER TABLE cliente_prospecto ADD COLUMN sexo ENUM('M','F') DEFAULT NULL AFTER actividad");
+        }
+    } catch (\Throwable $_) {}
+
     // ── 2. Crear o actualizar cliente_prospecto ──────────────
     $GLOBALS['phase'] = 'CLIENTE';
     $cliente_id = null;
@@ -751,23 +762,23 @@ try {
         // ── 1. Intentar INSERT completo ──
         $st = $conn->prepare(
             "INSERT INTO cliente_prospecto
-             (id, nombre, cedula, telefono, telefono2, email, direccion, ciudad,
+             (id, nombre, cedula, telefono, telefono2, email, direccion, ciudad, sexo,
               actividad, nombre_empresa, tiene_ruc, tiene_rise, ruc_val, rise_val, tipo_empresa,
               regimen_tributario, numero_ruc, declara_iva, emite_facturas, lleva_contabilidad,
               paga_cuota_rise, emite_notas_venta, conoce_limite_rise,
               asesor_id, latitud, longitud, origen_prospecto, estado)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prospecto')"
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prospecto')"
         );
 
         if ($st) {
             $ins_vals = [
-                $cliente_id, $nombre_completo, $cedula, $telefono, $celular, $email_c, $direccion, $ciudad,
+                $cliente_id, $nombre_completo, $cedula, $telefono, $celular, $email_c, $direccion, $ciudad, $sexo,
                 $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise, $ruc_val, $rise_val, $tipo_empresa,
                 $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
                 $paga_cuota_rise, $emite_notas_venta, $conoce_limite_rise, $asesor_id,
                 $lat_ini, $lng_ini, $origen_prospecto
             ];
-            $types = str_repeat('s', 10) . 'ii' . str_repeat('s', 5) . str_repeat('i', 6) . 's' . 'dd' . 's';
+            $types = str_repeat('s', 11) . 'ii' . str_repeat('s', 5) . str_repeat('i', 6) . 's' . 'dd' . 's';
             $st->bind_param($types, ...$ins_vals);
             $st->execute();
             $st->close();
@@ -793,17 +804,17 @@ try {
             // Actualizar columnas adicionales si existen
             try {
                 $upd_extra = $conn->prepare(
-                    "UPDATE cliente_prospecto 
-                     SET ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?, 
-                         declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?, 
-                         emite_notas_venta=?, conoce_limite_rise=?, tiene_empresa=?
+                    "UPDATE cliente_prospecto
+                     SET ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?,
+                         declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?,
+                         emite_notas_venta=?, conoce_limite_rise=?, tiene_empresa=?, sexo=?
                      WHERE id=?"
                 );
                 if ($upd_extra) {
-                    $upd_extra->bind_param('sssssiiiiiiiis', 
+                    $upd_extra->bind_param('sssssiiiiiiiss',
                         $ruc_val, $rise_val, $tipo_empresa, $regimen_tributario, $numero_ruc,
                         $declara_iva, $emite_facturas, $lleva_contabilidad, $paga_cuota_rise,
-                        $emite_notas_venta, $conoce_limite_rise, $tiene_empresa_post, $cliente_id
+                        $emite_notas_venta, $conoce_limite_rise, $tiene_empresa_post, $sexo, $cliente_id
                     );
                     $upd_extra->execute();
                     $upd_extra->close();
@@ -814,7 +825,7 @@ try {
         // ── 3. UPDATE cliente existente ──
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
-             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?,
+             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?, sexo=?,
                  actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
                  ruc_val=?, rise_val=?, tipo_empresa=?,
                  regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
@@ -823,9 +834,9 @@ try {
              WHERE id=?"
         );
         if ($st) {
-            $upd_types = str_repeat('s', 8) . 'ii' . str_repeat('s', 5) . str_repeat('i', 7) . str_repeat('s', 3);
+            $upd_types = str_repeat('s', 9) . 'ii' . str_repeat('s', 5) . str_repeat('i', 7) . str_repeat('s', 3);
             $st->bind_param($upd_types,
-                $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad,
+                $nombre_completo, $telefono, $celular, $email_c, $direccion, $ciudad, $sexo,
                 $actividad, $nombre_empresa, $tiene_ruc, $tiene_rise,
                 $ruc_val, $rise_val, $tipo_empresa,
                 $regimen_tributario, $numero_ruc, $declara_iva, $emite_facturas, $lleva_contabilidad,
