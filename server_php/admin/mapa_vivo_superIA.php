@@ -1081,7 +1081,7 @@ function restaurarTodaRuta() {
 }
 
 // ── Dibuja la trayectoria GPS entre dos datetimes ─────────
-function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
+function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre, anchorLat = null, anchorLng = null) {
     // Eliminar tramo anterior
     if (tramoLayer) { map.removeLayer(tramoLayer); tramoLayer = null; }
 
@@ -1090,9 +1090,14 @@ function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
         .then(r => r.json())
         .then(data => {
             if (data.status !== 'ok') {
-                // Si falla la API, al menos enfocar el cliente
-                map.flyTo([lat, lng], 16, { duration: 1.2 });
-                setTimeout(() => clienteMarker?.openPopup(), 900);
+                // Si falla la API: si tenemos un ancla (p.ej. el punto de
+                // inicio de sesión), igual trazamos una línea estimada.
+                if (isFinite(anchorLat) && isFinite(anchorLng)) {
+                    dibujarLineaEstimada(anchorLat, anchorLng, lat, lng);
+                } else {
+                    map.flyTo([lat, lng], 16, { duration: 1.2 });
+                    setTimeout(() => clienteMarker?.openPopup(), 900);
+                }
                 return;
             }
 
@@ -1128,8 +1133,14 @@ function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
 
                 const bounds = L.latLngBounds(latlngs);
                 map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+            } else if (isFinite(anchorLat) && isFinite(anchorLng)) {
+                // Sin ningún ping GPS en el rango (típico del primer tramo si
+                // el servicio de ubicación tardó en arrancar): igual trazamos
+                // una línea estimada entre el punto de inicio de sesión y el
+                // cliente, para que la ruta no desaparezca del mapa.
+                dibujarLineaEstimada(anchorLat, anchorLng, lat, lng);
             } else {
-                // Sin puntos GPS suficientes: volar al cliente
+                // Sin puntos GPS ni ancla: volar al cliente
                 map.flyTo([lat, lng], 16, { duration: 1.2 });
             }
 
@@ -1138,12 +1149,34 @@ function dibujarTramoGps(asesorId, desde, hasta, lat, lng, nombre) {
         })
         .catch(err => {
             console.warn('[tramo_gps]', err);
-            map.flyTo([lat, lng], 16, { duration: 1.2 });
+            if (isFinite(anchorLat) && isFinite(anchorLng)) {
+                dibujarLineaEstimada(anchorLat, anchorLng, lat, lng);
+            } else {
+                map.flyTo([lat, lng], 16, { duration: 1.2 });
+            }
             setTimeout(() => clienteMarker?.openPopup(), 1300);
         });
 }
 
-function renderClientes(clientes, fecha, sessionStart, asesorId) {
+// Línea punteada estimada entre un punto de anclaje conocido (p.ej. el
+// inicio de sesión) y el cliente, cuando no hay pings GPS intermedios.
+function dibujarLineaEstimada(aLat, aLng, bLat, bLng) {
+    const latlngs = [[aLat, aLng], [bLat, bLng]];
+    tramoLayer = L.polyline(latlngs, {
+        color: '#2563EB',
+        weight: 4,
+        opacity: 0.75,
+        dashArray: '4 10',
+        lineJoin: 'round',
+        lineCap: 'round',
+    }).addTo(map);
+    try {
+        const bounds = L.latLngBounds(latlngs);
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 17 });
+    } catch (e) {}
+}
+
+function renderClientes(clientes, fecha, sessionStart, asesorId, sessionStartLat = null, sessionStartLng = null) {
     const box  = document.getElementById('box-clientes');
     const list = document.getElementById('clientes-items');
     if (!box || !list) return;
@@ -1272,7 +1305,12 @@ function renderClientes(clientes, fecha, sessionStart, asesorId) {
                     Object.values(rutaLayers).forEach(layer => {
                         if (layer.polyline) layer.polyline.setStyle({ opacity: 0.12, weight: 2 });
                     });
-                    dibujarTramoGps(curAsesorId, desde, hasta, lat, lng, nombre);
+                    // Solo el primer tramo (login → primera actividad) tiene
+                    // ancla de inicio de sesión conocida; el resto se apoya
+                    // únicamente en los pings GPS reales entre actividades.
+                    const anchorLat = (idx === 0) ? parseFloat(sessionStartLat) : null;
+                    const anchorLng = (idx === 0) ? parseFloat(sessionStartLng) : null;
+                    dibujarTramoGps(curAsesorId, desde, hasta, lat, lng, nombre, anchorLat, anchorLng);
                 }
             } else {
                 // Sin datos suficientes: volar al punto
@@ -1300,7 +1338,9 @@ function cargarClientes(asesorId, fecha) {
                     data.clientes     || [],
                     data.fecha        || fecha,
                     data.session_start || null,
-                    asesorId
+                    asesorId,
+                    data.session_start_lat ?? null,
+                    data.session_start_lng ?? null
                 );
             } else {
                 throw new Error(data.message || 'Error');

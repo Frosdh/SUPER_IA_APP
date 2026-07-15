@@ -16,6 +16,7 @@
 //        en verde cuando no hay pendientes)
 // ============================================================
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:super_ia/Core/Constants/colorConstants.dart';
 import 'package:super_ia/Core/Services/OfflineQueueService.dart';
@@ -79,11 +80,31 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
       _pendientes = pendientes;
     });
 
-    final msg = synced > 0
-        ? '✅ $synced ${synced == 1 ? 'encuesta sincronizada' : 'encuestas sincronizadas'}'
-        : (pendientes > 0
-            ? '📵 Todavía sin conexión. $pendientes pendiente${pendientes == 1 ? '' : 's'}.'
-            : 'No hay encuestas pendientes por subir.');
+    String msg;
+    if (synced > 0) {
+      msg = '✅ $synced ${synced == 1 ? 'encuesta sincronizada' : 'encuestas sincronizadas'}';
+    } else if (pendientes > 0) {
+      // No asumir "sin conexión" a ciegas: si de verdad no hay internet lo
+      // decimos, pero si SÍ hay conexión y aun así no bajó el contador de
+      // pendientes, el servidor está rechazando el envío por algún motivo
+      // (dato inválido, sesión vencida, etc.) — mostramos ese motivo real
+      // (guardado en 'ultimo_error') en vez de culpar siempre a la señal,
+      // que confundía y ocultaba el problema real.
+      final conn = await Connectivity().checkConnectivity();
+      if (conn == ConnectivityResult.none) {
+        msg = '📵 Todavía sin conexión. $pendientes pendiente${pendientes == 1 ? '' : 's'}.';
+      } else {
+        final items = await OfflineQueueService.getPendientes();
+        final primerError = items.isNotEmpty
+            ? (items.first['ultimo_error'] as String?)?.trim()
+            : null;
+        msg = (primerError != null && primerError.isNotEmpty)
+            ? '⚠️ No se pudo subir: $primerError'
+            : '⚠️ Hay conexión pero el servidor no aceptó el envío ($pendientes pendiente${pendientes == 1 ? '' : 's'}). Toca y mantén presionado para ver el detalle.';
+      }
+    } else {
+      msg = 'No hay encuestas pendientes por subir.';
+    }
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -91,6 +112,63 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
         backgroundColor: synced > 0
             ? const Color(0xFF16a34a)
             : (pendientes > 0 ? ConstantColors.warning : ConstantColors.success),
+      ),
+    );
+  }
+
+  Future<void> _verDetallePendientes() async {
+    final items = await OfflineQueueService.getPendientes();
+    if (!mounted) return;
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay encuestas pendientes por subir.')),
+      );
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: ConstantColors.backgroundCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Pendientes por subir', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: items.length,
+            separatorBuilder: (_, __) => Divider(color: Colors.white.withOpacity(0.1)),
+            itemBuilder: (_, i) {
+              final it = items[i];
+              final tipo = (it['tipo_tarea'] as String?)?.trim();
+              final intentos = it['intentos']?.toString() ?? '0';
+              final error = (it['ultimo_error'] as String?)?.trim();
+              final creado = (it['creado_at'] as String?) ?? '';
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tipo != null && tipo.isNotEmpty ? tipo : 'Encuesta',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+                    ),
+                    const SizedBox(height: 2),
+                    Text('Guardado: $creado  ·  Intentos: $intentos',
+                        style: TextStyle(color: ConstantColors.textGrey, fontSize: 11.5)),
+                    if (error != null && error.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text('Motivo: $error',
+                          style: const TextStyle(color: Color(0xFFf87171), fontSize: 12)),
+                    ],
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cerrar')),
+        ],
       ),
     );
   }
@@ -105,6 +183,7 @@ class _PendingSyncBadgeState extends State<PendingSyncBadge> {
 
     return GestureDetector(
       onTap: _sincronizarAhora,
+      onLongPress: sinPendientes ? null : _verDetallePendientes,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(

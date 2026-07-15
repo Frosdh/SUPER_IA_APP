@@ -61,23 +61,59 @@ try {
         }
     }
 
-    // Obtener el primer punto GPS del asesor en el día (inicio de sesión)
-    $stFirst = $conn->prepare("
-        SELECT timestamp
-        FROM ubicacion_asesor
-        WHERE asesor_id = ?
-          AND DATE(timestamp) = ?
-        ORDER BY timestamp ASC
-        LIMIT 1
-    ");
-    $session_start = null;
-    if ($stFirst) {
-        $stFirst->bind_param('ss', $asesor_id, $fecha);
-        $stFirst->execute();
-        $rowFirst = $stFirst->get_result()->fetch_assoc();
-        $stFirst->close();
-        if ($rowFirst) {
-            $session_start = $rowFirst['timestamp'];
+    // Obtener el inicio real de sesión (login) del asesor ese día.
+    // Preferimos el segmento 1 de ruta_segmento (se crea justo al iniciar
+    // sesión con su propia coordenada GPS, ver api_iniciar_segmento.php),
+    // porque es más confiable que "el primer ping de ubicacion_asesor":
+    // si el servicio de ubicación en segundo plano tarda unos minutos en
+    // arrancar (o el asesor completa la primera actividad muy rápido),
+    // el primer ping GPS puede llegar DESPUÉS de la primera encuesta,
+    // lo que invertía el rango de tiempo y hacía desaparecer el tramo
+    // "login → primera actividad" en el mapa.
+    $session_start     = null;
+    $session_start_lat = null;
+    $session_start_lng = null;
+
+    try {
+        $stSeg1 = $conn->prepare("
+            SELECT inicio_at, inicio_lat, inicio_lng
+            FROM ruta_segmento
+            WHERE asesor_id = ? AND numero_segmento = 1 AND DATE(inicio_at) = ?
+            ORDER BY inicio_at ASC LIMIT 1
+        ");
+        if ($stSeg1) {
+            $stSeg1->bind_param('ss', $asesor_id, $fecha);
+            $stSeg1->execute();
+            $rowSeg1 = $stSeg1->get_result()->fetch_assoc();
+            $stSeg1->close();
+            if ($rowSeg1) {
+                $session_start     = $rowSeg1['inicio_at'];
+                $session_start_lat = $rowSeg1['inicio_lat'] !== null ? (float)$rowSeg1['inicio_lat'] : null;
+                $session_start_lng = $rowSeg1['inicio_lng'] !== null ? (float)$rowSeg1['inicio_lng'] : null;
+            }
+        }
+    } catch (\Throwable $eSeg1) { /* tabla puede no existir aún; seguimos con el fallback GPS */ }
+
+    if ($session_start === null) {
+        // Fallback: primer punto GPS del asesor en el día
+        $stFirst = $conn->prepare("
+            SELECT latitud, longitud, timestamp
+            FROM ubicacion_asesor
+            WHERE asesor_id = ?
+              AND DATE(timestamp) = ?
+            ORDER BY timestamp ASC
+            LIMIT 1
+        ");
+        if ($stFirst) {
+            $stFirst->bind_param('ss', $asesor_id, $fecha);
+            $stFirst->execute();
+            $rowFirst = $stFirst->get_result()->fetch_assoc();
+            $stFirst->close();
+            if ($rowFirst) {
+                $session_start     = $rowFirst['timestamp'];
+                $session_start_lat = (float)$rowFirst['latitud'];
+                $session_start_lng = (float)$rowFirst['longitud'];
+            }
         }
     }
 
@@ -129,13 +165,15 @@ try {
     $st->close();
 
     echo json_encode([
-        'status'        => 'ok',
-        'asesor_id'     => $asesor_id,
-        'fecha'         => $fecha,
-        'session_start' => $session_start,
-        'clientes'      => $clientes,
-        'total'         => count($clientes),
-        'ts'            => date('H:i:s'),
+        'status'            => 'ok',
+        'asesor_id'         => $asesor_id,
+        'fecha'             => $fecha,
+        'session_start'     => $session_start,
+        'session_start_lat' => $session_start_lat,
+        'session_start_lng' => $session_start_lng,
+        'clientes'          => $clientes,
+        'total'             => count($clientes),
+        'ts'                => date('H:i:s'),
     ], JSON_UNESCAPED_UNICODE);
 
 } catch (\Throwable $e) {

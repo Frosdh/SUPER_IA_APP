@@ -182,6 +182,46 @@ try {
             $puntos = [];
         }
 
+        // ── Anclar el tramo a las coordenadas reales de inicio/fin ──
+        // El GPS periódico (cada ~15s) puede llegar tarde o con huecos
+        // (arranque en frío del GPS, servicio en segundo plano recién
+        // iniciado, etc.). Si eso pasa, el tramo quedaba con 0-1 puntos
+        // y la línea de la ruta no se dibujaba, aunque el asesor sí se
+        // haya movido. Para evitarlo, siempre agregamos como extremos
+        // el punto de inicio de sesión/segmento y el punto donde se
+        // completó la actividad (ambos ya se guardan en ruta_segmento),
+        // así la línea siempre conecta login → actividad completada
+        // incluso si faltan puntos intermedios.
+        $inicioValido = $seg['inicio_lat'] !== null && $seg['inicio_lng'] !== null
+            && !(abs((float)$seg['inicio_lat']) < 1e-8 && abs((float)$seg['inicio_lng']) < 1e-8);
+        $finValido = $seg['fin_lat'] !== null && $seg['fin_lng'] !== null
+            && !(abs((float)$seg['fin_lat']) < 1e-8 && abs((float)$seg['fin_lng']) < 1e-8);
+
+        if ($inicioValido) {
+            $primerPto = $puntos[0] ?? null;
+            $esMismoPunto = $primerPto && abs($primerPto['lat'] - (float)$seg['inicio_lat']) < 1e-5
+                && abs($primerPto['lng'] - (float)$seg['inicio_lng']) < 1e-5;
+            if (!$esMismoPunto) {
+                array_unshift($puntos, [
+                    'lat' => (float)$seg['inicio_lat'],
+                    'lng' => (float)$seg['inicio_lng'],
+                    'ts'  => $seg['inicio_at'],
+                ]);
+            }
+        }
+        if ($finValido) {
+            $ultimoPto = $puntos[count($puntos) - 1] ?? null;
+            $esMismoPunto = $ultimoPto && abs($ultimoPto['lat'] - (float)$seg['fin_lat']) < 1e-5
+                && abs($ultimoPto['lng'] - (float)$seg['fin_lng']) < 1e-5;
+            if (!$esMismoPunto) {
+                $puntos[] = [
+                    'lat' => (float)$seg['fin_lat'],
+                    'lng' => (float)$seg['fin_lng'],
+                    'ts'  => $finAt,
+                ];
+            }
+        }
+
         $resultado[] = [
             'segmento_id'   => $seg['id'],
             'asesor_id'     => $asesor_id,
@@ -267,11 +307,18 @@ try {
             $ultimoGPS  = $todosGPS[count($todosGPS) - 1]['timestamp'];
 
             // Cortes: [inicio_session, tarea1, tarea2, ..., fin_dia]
+            // Nota: antes se excluían las tareas completadas ANTES del primer
+            // GPS del día (`> $primerGPS`), lo que hacía desaparecer por
+            // completo el tramo "login → primera actividad" cuando el GPS
+            // tardaba en arrancar y la primera encuesta se completaba antes
+            // de recibir el primer ping. Ahora se incluyen siempre; el corte
+            // se ordena junto con el resto y, si cae antes de $primerGPS,
+            // el segmento correspondiente simplemente no tendrá puntos GPS
+            // intermedios (se resuelve más abajo con el propio punto de la
+            // tarea como ancla).
             $cortes = [$primerGPS];
             foreach ($tareas as $t) {
-                if ($t['completada_at'] > $primerGPS) {
-                    $cortes[] = $t['completada_at'];
-                }
+                $cortes[] = $t['completada_at'];
             }
             // El último segmento cierra en el último GPS del día
             $cortes[] = $ultimoGPS;
@@ -291,11 +338,6 @@ try {
                 });
                 $puntosSegmento = array_values($puntosSegmento);
 
-                if (empty($puntosSegmento)) continue;
-
-                $numSeg++;
-                $color = $COLORES_FB[($numSeg - 1) % count($COLORES_FB)];
-
                 // ¿Qué tarea está asociada a este segmento? (la que cierra este tramo)
                 $tareaAsoc = null;
                 foreach ($tareas as $t) {
@@ -304,6 +346,26 @@ try {
                         break;
                     }
                 }
+
+                // Si no hay ningún ping GPS dentro de este tramo (por ejemplo,
+                // la actividad se completó antes de que arrancara el GPS del
+                // día), pero sí sabemos dónde se completó la tarea, igual
+                // generamos el segmento anclado a esa coordenada: así al
+                // menos se ve el marcador/tramo en vez de que desaparezca.
+                if (empty($puntosSegmento)) {
+                    if ($tareaAsoc && $tareaAsoc['latitud_fin'] !== null && $tareaAsoc['longitud_fin'] !== null) {
+                        $puntosSegmento = [[
+                            'latitud'   => $tareaAsoc['latitud_fin'],
+                            'longitud'  => $tareaAsoc['longitud_fin'],
+                            'timestamp' => $hasta,
+                        ]];
+                    } else {
+                        continue;
+                    }
+                }
+
+                $numSeg++;
+                $color = $COLORES_FB[($numSeg - 1) % count($COLORES_FB)];
 
                 $primerPunto = $puntosSegmento[0];
                 $ultimoPunto = $puntosSegmento[count($puntosSegmento) - 1];
