@@ -823,10 +823,21 @@ try {
         }
     } else {
         // ── 3. UPDATE cliente existente ──
+        // Campos personales con COALESCE(NULLIF(?,''), col): si esta encuesta
+        // llega sin re-llenarlos (p. ej. el Levantamiento de Empresa de un
+        // cliente que ya fue encuestado antes), no se borran los datos reales
+        // que ya existían.
         $st = $conn->prepare(
             "UPDATE cliente_prospecto
-             SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?, sexo=?,
-                 actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
+             SET nombre = COALESCE(NULLIF(?, ''), nombre),
+                 telefono = COALESCE(NULLIF(?, ''), telefono),
+                 telefono2 = COALESCE(NULLIF(?, ''), telefono2),
+                 email = COALESCE(NULLIF(?, ''), email),
+                 direccion = COALESCE(NULLIF(?, ''), direccion),
+                 ciudad = COALESCE(NULLIF(?, ''), ciudad),
+                 sexo = COALESCE(NULLIF(?, ''), sexo),
+                 actividad = COALESCE(NULLIF(?, ''), actividad),
+                 nombre_empresa=?, tiene_ruc=?, tiene_rise=?,
                  ruc_val=?, rise_val=?, tipo_empresa=?,
                  regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
                  paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, tiene_empresa=?,

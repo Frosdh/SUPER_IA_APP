@@ -559,7 +559,30 @@ try {
             $origen_prospecto, $cliente_id,                           // 13 strings
         ];
         $upd_types = str_repeat('s', 9) . 'ii' . str_repeat('s', 13); // 9+2+13 = 24
-        $sql_upd   = "UPDATE cliente_prospecto SET nombre=?, telefono=?, telefono2=?, email=?, direccion=?, ciudad=?, sexo=?, actividad=?, nombre_empresa=?, tiene_ruc=?, tiene_rise=?, ruc_val=?, rise_val=?, tipo_empresa=?, regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?, paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, origen_prospecto=? WHERE id=?";
+        // OJO: los campos PERSONALES (nombre, telefono, celular, email,
+        // direccion, ciudad, sexo, actividad) usan COALESCE(NULLIF(?,''), col)
+        // en vez de sobreescribir directo. Esta misma pantalla se reutiliza
+        // para el "Levantamiento de Empresa" de un cliente que YA fue
+        // encuestado antes — si esa pantalla no vuelve a mostrar/llenar los
+        // campos personales, llegarían vacíos aquí y sin esta protección se
+        // borrarían los datos reales ya capturados (nombre, cédula, teléfono,
+        // dirección, etc.), que es justo lo que le pasaba al Excel de
+        // Solicitud de Crédito: se generaba con los datos de empresa pero sin
+        // los datos personales. Los campos de EMPRESA/RUC sí se sobreescriben
+        // directo porque esta pantalla es precisamente donde se capturan.
+        $sql_upd   = "UPDATE cliente_prospecto SET
+            nombre = COALESCE(NULLIF(?, ''), nombre),
+            telefono = COALESCE(NULLIF(?, ''), telefono),
+            telefono2 = COALESCE(NULLIF(?, ''), telefono2),
+            email = COALESCE(NULLIF(?, ''), email),
+            direccion = COALESCE(NULLIF(?, ''), direccion),
+            ciudad = COALESCE(NULLIF(?, ''), ciudad),
+            sexo = COALESCE(NULLIF(?, ''), sexo),
+            actividad = COALESCE(NULLIF(?, ''), actividad),
+            nombre_empresa=?, tiene_ruc=?, tiene_rise=?, ruc_val=?, rise_val=?, tipo_empresa=?,
+            regimen_tributario=?, numero_ruc=?, declara_iva=?, emite_facturas=?, lleva_contabilidad=?,
+            paga_cuota_rise=?, emite_notas_venta=?, conoce_limite_rise=?, origen_prospecto=?
+            WHERE id=?";
         $st = $conn->prepare($sql_upd);
         if (!$st) { throw new \RuntimeException("prepare UC: " . $conn->error); }
         $st->bind_param($upd_types, ...$upd_vals);

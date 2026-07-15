@@ -2509,68 +2509,109 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
   /// correctamente. A diferencia del modo normal, no cerramos segmentos
   /// ni creamos nuevas tareas.
   void _mostrarDialogoModificacionOk() {
+    // Mismo criterio que en los demás diálogos: solo se ofrece el Excel si
+    // el cliente NO tiene empresa, o si esto es justo la edición del
+    // Levantamiento de Empresa (ahí sí ya están los datos financieros
+    // completos). Si tiene empresa y esto es la edición de otro tipo de
+    // tarea, todavía falta el levantamiento.
+    final puedeDescargar = (_clienteId ?? '').isNotEmpty &&
+        (!_tieneEmpresa || widget.tipoTarea == 'levantamiento');
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => Dialog(
-        backgroundColor: ConstantColors.grey100,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [
-                      ConstantColors.success,
-                      ConstantColors.primaryBlue,
-                    ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          bool descargando = false;
+          return Dialog(
+            backgroundColor: ConstantColors.grey100,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            child: Padding(
+              padding: const EdgeInsets.all(28),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [
+                          ConstantColors.success,
+                          ConstantColors.primaryBlue,
+                        ],
+                      ),
+                    ),
+                    child: const Icon(Icons.save_rounded, color: Colors.white, size: 34),
                   ),
-                ),
-                child: const Icon(Icons.save_rounded, color: Colors.white, size: 34),
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Cambios guardados',
-                style: TextStyle(
-                  color: ConstantColors.textDark,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Los datos de la encuesta se actualizaron correctamente.',
-                style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    Navigator.of(context).pop(true);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ConstantColors.warning,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 18),
+                  Text(
+                    'Cambios guardados',
+                    style: TextStyle(
+                      color: ConstantColors.textDark,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  child: const Text('Volver',
-                      style: TextStyle(fontWeight: FontWeight.w700)),
-                ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Los datos de la encuesta se actualizaron correctamente.',
+                    style: TextStyle(color: ConstantColors.textDarkGrey, fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  if (puedeDescargar)
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: descargando
+                            ? null
+                            : () async {
+                                setDialogState(() => descargando = true);
+                                await _descargarExcelSolicitud(_clienteId ?? '');
+                                setDialogState(() => descargando = false);
+                              },
+                        icon: descargando
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.file_download_rounded),
+                        label: Text(descargando ? 'Generando...' : 'Descargar Excel de Solicitud'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: ConstantColors.textDark,
+                          side: BorderSide(color: ConstantColors.warning),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  if (puedeDescargar) const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.of(context).pop(true);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: ConstantColors.warning,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      child: const Text('Volver',
+                          style: TextStyle(fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -2579,7 +2620,13 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     required bool fueEncuestado,
     String? seguimientoTexto,
   }) {
-    final clienteIdBtn = fueEncuestado ? (_clienteId ?? '') : '';
+    // El botón de descarga solo debe aparecer aquí cuando el cliente NO
+    // tiene empresa: si sí tiene, los datos financieros (ingresos, gastos,
+    // activos, pasivos) todavía no existen — se capturan en la tarea de
+    // "Levantamiento de Empresa" por separado, y el Excel se ofrece recién
+    // ahí (ver _mostrarDialogoLevantamientoOk) una vez que esos datos ya
+    // están guardados.
+    final clienteIdBtn = (fueEncuestado && !_tieneEmpresa) ? (_clienteId ?? '') : '';
     showDialog(
       context: context,
       barrierDismissible: false,

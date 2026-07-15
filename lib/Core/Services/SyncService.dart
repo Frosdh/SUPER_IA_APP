@@ -199,9 +199,19 @@ class SyncService {
             // puede venir en la respuesta del servidor (encuesta nueva) o
             // ya venir guardado en el body (edición de una tarea existente,
             // ver NuevaEncuestaScreen._guardarEncuesta).
+            //
+            // OJO: si el cliente SÍ tiene empresa y esto NO es el
+            // levantamiento (es la encuesta general que solo marcó "tiene
+            // empresa"), todavía faltan los datos financieros (ingresos,
+            // gastos, activos, pasivos) que se capturan en la tarea de
+            // Levantamiento de Empresa aparte — no hay que ofrecer el Excel
+            // todavía, se ofrece recién cuando ESE levantamiento sincronice.
             if (_endpointsConExcel.contains(endpoint)) {
+              final tipoTarea = (body['tipo_tarea'] ?? '').trim();
+              final tieneEmpresa = body['tiene_empresa'] == '1';
+              final faltaLevantamiento = tieneEmpresa && tipoTarea != 'levantamiento';
               final clienteId = (data['cliente_id']?.toString() ?? body['cliente_id'] ?? '').trim();
-              if (clienteId.isNotEmpty) {
+              if (clienteId.isNotEmpty && !faltaLevantamiento) {
                 for (final listener in List<void Function(String)>.from(_syncCompletionListeners)) {
                   listener(clienteId);
                 }
