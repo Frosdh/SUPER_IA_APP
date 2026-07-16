@@ -49,6 +49,96 @@ try {
     ");
 } catch (Throwable $e) {}
 
+// ============================================================
+// (SuperAdmin) Configurar Metas por Banco — fusionado aquí desde
+// configurar_metas_banco.php: el SuperAdmin elige un banco/cooperativa,
+// ve/edita qué tipos de meta puede asignar su supervisor, y el resto de
+// esta misma página (Estado de Metas del Equipo, Actividad del Equipo)
+// queda filtrado a ese banco.
+// ============================================================
+$bancos_metas = [];
+$banco_filtro = '';
+if ($is_super_admin) {
+    try {
+        $bancos_metas = $pdo->query("SELECT id, nombre FROM unidad_bancaria ORDER BY nombre ASC")->fetchAll();
+    } catch (Throwable $e) {
+        $bancos_metas = [];
+    }
+    $bancos_metas_ids = array_map(fn($b) => (string)$b['id'], $bancos_metas);
+
+    $banco_filtro = trim($_GET['banco_filtro'] ?? '');
+    if ($banco_filtro !== '' && !in_array($banco_filtro, $bancos_metas_ids, true)) {
+        $banco_filtro = '';
+    }
+
+    // Guardar configuración de tipos de meta habilitados para el banco elegido
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['accion'] ?? '') === 'guardar_config_metas_banco') {
+        $banco_id_post_cfg = trim($_POST['banco_id_cfg'] ?? '');
+        if ($banco_id_post_cfg === '' || !in_array($banco_id_post_cfg, $bancos_metas_ids, true)) {
+            $_SESSION['_cmb_mensaje']      = 'Selecciona un banco/cooperativa válido.';
+            $_SESSION['_cmb_mensaje_tipo'] = 'error';
+        } else {
+            $permite_diaria_cfg  = isset($_POST['permite_diaria'])  ? 1 : 0;
+            $permite_semanal_cfg = isset($_POST['permite_semanal']) ? 1 : 0;
+            $permite_mensual_cfg = isset($_POST['permite_mensual']) ? 1 : 0;
+            try {
+                $stCfg = $pdo->prepare("
+                    INSERT INTO config_metas_banco
+                        (id, unidad_bancaria_id, permite_diaria, permite_semanal, permite_mensual, dias_semana_habilitados, actualizado_por, actualizado_at)
+                    VALUES
+                        (UUID(), ?, ?, ?, ?, '1,2,3,4,5,6,7', ?, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        permite_diaria = VALUES(permite_diaria),
+                        permite_semanal = VALUES(permite_semanal),
+                        permite_mensual = VALUES(permite_mensual),
+                        actualizado_por = VALUES(actualizado_por),
+                        actualizado_at = NOW()
+                ");
+                $stCfg->execute([$banco_id_post_cfg, $permite_diaria_cfg, $permite_semanal_cfg, $permite_mensual_cfg, $_SESSION['super_admin_id'] ?? null]);
+                $_SESSION['_cmb_mensaje']      = 'Configuración guardada correctamente.';
+                $_SESSION['_cmb_mensaje_tipo'] = 'success';
+            } catch (Throwable $e) {
+                $_SESSION['_cmb_mensaje']      = 'Error al guardar: ' . $e->getMessage();
+                $_SESSION['_cmb_mensaje_tipo'] = 'error';
+            }
+        }
+        header('Location: metas.php?banco_filtro=' . urlencode($banco_id_post_cfg));
+        exit;
+    }
+}
+
+if (isset($_SESSION['_cmb_mensaje'])) {
+    $flash = ['type' => ($_SESSION['_cmb_mensaje_tipo'] ?? 'success'), 'msg' => $_SESSION['_cmb_mensaje']];
+    unset($_SESSION['_cmb_mensaje'], $_SESSION['_cmb_mensaje_tipo']);
+}
+
+// Configuración actual del banco seleccionado (para pintar los checkboxes)
+$config_sel_banco = ['permite_diaria' => 1, 'permite_semanal' => 0, 'permite_mensual' => 1];
+if ($is_super_admin && $banco_filtro !== '') {
+    try {
+        $stCS = $pdo->prepare("SELECT permite_diaria, permite_semanal, permite_mensual FROM config_metas_banco WHERE unidad_bancaria_id = ? LIMIT 1");
+        $stCS->execute([$banco_filtro]);
+        $rowCS = $stCS->fetch();
+        if ($rowCS) $config_sel_banco = $rowCS;
+    } catch (Throwable $e) {}
+}
+
+// Resumen de todos los bancos/cooperativas (tabla al estilo configurar_metas_banco.php)
+$resumen_bancos_metas = [];
+if ($is_super_admin) {
+    try {
+        $resumen_bancos_metas = $pdo->query("
+            SELECT ub.id, ub.nombre,
+                   c.permite_diaria, c.permite_semanal, c.permite_mensual, c.actualizado_at
+            FROM unidad_bancaria ub
+            LEFT JOIN config_metas_banco c ON c.unidad_bancaria_id = ub.id
+            ORDER BY ub.nombre
+        ")->fetchAll();
+    } catch (Throwable $e) {
+        $resumen_bancos_metas = [];
+    }
+}
+
 $banco_id_supervisor = null;
 if ($supervisor_table_id) {
     try {
@@ -91,7 +181,9 @@ $dias_habilitados_arr = [1, 2, 3, 4, 5, 6, 7];
 
 $dias_labels_meta = [1 => 'Lunes', 2 => 'Martes', 3 => 'Miércoles', 4 => 'Jueves', 5 => 'Viernes', 6 => 'Sábado', 7 => 'Domingo'];
 
-$flash = null;
+// OJO: no pisar el $flash que ya pudo haberse asignado arriba al restaurar
+// el mensaje de éxito/error tras guardar la config de metas por banco.
+$flash = $flash ?? null;
 
 // Sidebar vars
 $currentPage = 'metas';
@@ -604,7 +696,26 @@ if ($supervisor_table_id) {
     $asesores = $st->fetchAll();
 } elseif ($is_admin_gerente || $is_super_admin) {
     try {
-        $st = $pdo->query('SELECT a.id, u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE u.activo = 1 ORDER BY u.nombre');
+        // Se agregan los JOIN hacia unidad_bancaria para poder acotar la
+        // lista al banco/cooperativa elegido arriba (solo aplica para
+        // SuperAdmin, que es quien ve el selector de banco).
+        $sqlAse = "
+            SELECT a.id, u.nombre
+            FROM asesor a
+            JOIN usuario u ON u.id = a.usuario_id
+            LEFT JOIN supervisor sv_a ON sv_a.id = a.supervisor_id
+            LEFT JOIN jefe_agencia ja_a ON ja_a.id = sv_a.jefe_agencia_id
+            LEFT JOIN agencia ag_a ON ag_a.id = ja_a.agencia_id
+            WHERE u.activo = 1
+        ";
+        $paramsAse = [];
+        if ($is_super_admin && $banco_filtro !== '') {
+            $sqlAse .= " AND ag_a.unidad_bancaria_id = ?";
+            $paramsAse[] = $banco_filtro;
+        }
+        $sqlAse .= " ORDER BY u.nombre";
+        $st = $pdo->prepare($sqlAse);
+        $st->execute($paramsAse);
         $asesores = $st->fetchAll();
     } catch (Throwable $_) {}
 }
@@ -613,13 +724,23 @@ if ($supervisor_table_id) {
 $supervisores_filtro_list = [];
 if ($is_admin_gerente || $is_super_admin) {
     try {
-        $supervisores_filtro_list = $pdo->query("
+        $sqlSup = "
             SELECT sv.id, u.nombre
             FROM supervisor sv
             JOIN usuario u ON u.id = sv.usuario_id
+            LEFT JOIN jefe_agencia ja_s ON ja_s.id = sv.jefe_agencia_id
+            LEFT JOIN agencia ag_s ON ag_s.id = ja_s.agencia_id
             WHERE u.activo = 1
-            ORDER BY u.nombre
-        ")->fetchAll();
+        ";
+        $paramsSup = [];
+        if ($is_super_admin && $banco_filtro !== '') {
+            $sqlSup .= " AND ag_s.unidad_bancaria_id = ?";
+            $paramsSup[] = $banco_filtro;
+        }
+        $sqlSup .= " ORDER BY u.nombre";
+        $st = $pdo->prepare($sqlSup);
+        $st->execute($paramsSup);
+        $supervisores_filtro_list = $st->fetchAll();
     } catch (Throwable $_) {}
 }
 
@@ -658,7 +779,15 @@ if (($supervisor_table_id || $is_admin_gerente || $is_super_admin) && $metas_ins
         $meta_params[] = $asesor_filtro_meta;
     }
 
+    if ($is_super_admin && $banco_filtro !== '') {
+        $meta_where .= ' AND ag_m.unidad_bancaria_id = ?';
+        $meta_params[] = $banco_filtro;
+    }
+
     // Intentar con la vista de avances; si no existe, usar avances 0.
+    // Se agregan LEFT JOIN hacia unidad_bancaria (via supervisor/jefe_agencia/
+    // agencia) solo para poder filtrar por banco cuando el SuperAdmin elige
+    // uno en el selector de "Tipos de meta habilitados por banco/cooperativa".
     $sql = "SELECT m.*, u.nombre AS asesor_nombre,
                    v.avance_encuestas, v.avance_clientes_nuevos, v.avance_creditos,
                    v.avance_cuenta_ahorros, v.avance_cuenta_corriente, v.avance_inversiones,
@@ -669,6 +798,9 @@ if (($supervisor_table_id || $is_admin_gerente || $is_super_admin) && $metas_ins
             JOIN asesor a ON a.id = m.asesor_id
             JOIN usuario u ON u.id = a.usuario_id
             LEFT JOIN v_meta_asesor_avance v ON v.meta_id = m.id
+            LEFT JOIN supervisor sv_m ON sv_m.id = a.supervisor_id
+            LEFT JOIN jefe_agencia ja_m ON ja_m.id = sv_m.jefe_agencia_id
+            LEFT JOIN agencia ag_m ON ag_m.id = ja_m.agencia_id
             $meta_where
             ORDER BY u.nombre";
     try {
@@ -687,6 +819,9 @@ if (($supervisor_table_id || $is_admin_gerente || $is_super_admin) && $metas_ins
                      FROM meta_asesor_diaria m
                      JOIN asesor a ON a.id = m.asesor_id
                      JOIN usuario u ON u.id = a.usuario_id
+                     LEFT JOIN supervisor sv_m ON sv_m.id = a.supervisor_id
+                     LEFT JOIN jefe_agencia ja_m ON ja_m.id = sv_m.jefe_agencia_id
+                     LEFT JOIN agencia ag_m ON ag_m.id = ja_m.agencia_id
                      $meta_where
                      ORDER BY u.nombre";
             $st2 = $pdo->prepare($sql2);
@@ -1000,6 +1135,30 @@ if ($is_super_admin) {
 }
 ?>
 
+<?php if ($is_super_admin): ?>
+<!-- A diferencia de _sidebar_gerente.php y _sidebar_supervisor.php,
+     _sidebar_super_admin.php SOLO pinta el <div class="sidebar">...</div>
+     y espera que cada página abra su propio .main-content/.navbar-custom/
+     .content-area (así lo hacen usuarios.php, mapa_vivo.php, etc.). Esta
+     página no lo hacía, así que para el rol SuperAdmin todo el contenido
+     quedaba como hijo directo de <body> (que es flex por CSS), y por eso
+     las tarjetas se veían en fila horizontal en vez de apiladas. -->
+<div class="main-content">
+    <div class="navbar-custom">
+        <div class="nav-title-group"></div>
+        <div class="user-info">
+            <div>
+                <strong><?= htmlspecialchars($supervisor_nombre) ?></strong><br>
+                <small><?= htmlspecialchars($supervisor_rol) ?></small>
+            </div>
+            <a href="logout.php" style="background:rgba(239,68,68,.18);color:#fca5a5;border:1px solid rgba(239,68,68,.4);padding:7px 14px;border-radius:10px;text-decoration:none;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s;" onmouseover="this.style.background='rgba(239,68,68,.35)'" onmouseout="this.style.background='rgba(239,68,68,.18)'">
+                <i class="fas fa-sign-out-alt"></i> Cerrar Sesión
+            </a>
+        </div>
+    </div>
+    <div class="content-area">
+<?php endif; ?>
+
 <?php if ($flash): ?>
     <div class="flash flash-<?= htmlspecialchars($flash['type']) ?>"><?= $flash['msg'] ?></div>
 <?php endif; ?>
@@ -1026,6 +1185,94 @@ if ($is_super_admin) {
                 </a>
             </div>
         </div>
+
+        <?php if ($is_super_admin): ?>
+        <!-- CONFIGURAR METAS POR BANCO/COOPERATIVA (fusionado desde configurar_metas_banco.php) -->
+        <div class="section-card mb-4">
+            <div class="section-header" style="flex-wrap:wrap; row-gap:10px;">
+                <h5><i class="fas fa-sliders-h text-primary"></i> Tipos de meta habilitados por banco/cooperativa</h5>
+                <form method="get" class="d-flex align-items-center gap-2">
+                    <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-university"></i> Banco/Cooperativa:</label>
+                    <select name="banco_filtro" onchange="this.form.submit()" class="form-select form-select-sm shadow-sm" style="width:auto; min-width:260px; border-radius:8px;">
+                        <option value="">-- Selecciona --</option>
+                        <?php foreach ($bancos_metas as $b): ?>
+                            <option value="<?= htmlspecialchars($b['id']) ?>" <?= $banco_filtro === $b['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($b['nombre']) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+            </div>
+            <div class="section-body">
+                <p class="text-muted small mb-3">Elige un banco o cooperativa para definir qué tipos de meta puede asignar su supervisor (diaria, semanal, mensual). El resto de esta página (Estado de Metas del Equipo y Actividad del Equipo) quedará filtrado a ese banco.</p>
+
+                <?php if ($banco_filtro !== ''): ?>
+                    <?php
+                    $nombre_banco_sel_metas = '';
+                    foreach ($bancos_metas as $b) { if ($b['id'] === $banco_filtro) { $nombre_banco_sel_metas = $b['nombre']; break; } }
+                    ?>
+                    <form method="post" action="metas.php" class="p-3 mb-4" style="background:#f8fafc; border-radius:14px; border:1px solid #e2e8f0;">
+                        <input type="hidden" name="accion" value="guardar_config_metas_banco">
+                        <input type="hidden" name="banco_id_cfg" value="<?= htmlspecialchars($banco_filtro) ?>">
+                        <h6 class="fw-bold mb-3"><i class="fas fa-bullseye me-1"></i> Configuración para: <?= htmlspecialchars($nombre_banco_sel_metas) ?></h6>
+                        <div class="d-flex flex-wrap align-items-center gap-3">
+                            <label style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px; border:1.5px solid <?= $config_sel_banco['permite_diaria'] ? 'var(--brand-navy)' : '#e5e7eb' ?>; background:#fff; cursor:pointer;">
+                                <input type="checkbox" name="permite_diaria" value="1" <?= $config_sel_banco['permite_diaria'] ? 'checked' : '' ?> style="accent-color:var(--brand-navy);">
+                                <span class="fw-bold small"><i class="fas fa-calendar-day me-1"></i> Meta Diaria</span>
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px; border:1.5px solid <?= $config_sel_banco['permite_semanal'] ? 'var(--brand-navy)' : '#e5e7eb' ?>; background:#fff; cursor:pointer;">
+                                <input type="checkbox" name="permite_semanal" value="1" <?= $config_sel_banco['permite_semanal'] ? 'checked' : '' ?> style="accent-color:var(--brand-navy);">
+                                <span class="fw-bold small"><i class="fas fa-calendar-week me-1"></i> Meta Semanal</span>
+                            </label>
+                            <label style="display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:10px; border:1.5px solid <?= $config_sel_banco['permite_mensual'] ? 'var(--brand-navy)' : '#e5e7eb' ?>; background:#fff; cursor:pointer;">
+                                <input type="checkbox" name="permite_mensual" value="1" <?= $config_sel_banco['permite_mensual'] ? 'checked' : '' ?> style="accent-color:var(--brand-navy);">
+                                <span class="fw-bold small"><i class="fas fa-calendar-alt me-1"></i> Meta Mensual</span>
+                            </label>
+                            <button type="submit" class="btn-save px-4" style="border-radius:10px; height:42px;"><i class="fas fa-save me-1"></i> Guardar</button>
+                        </div>
+                    </form>
+                <?php endif; ?>
+
+                <?php if (empty($resumen_bancos_metas)): ?>
+                    <div class="empty-state">
+                        <i class="fas fa-inbox"></i>
+                        <p>No hay bancos/cooperativas registrados.</p>
+                    </div>
+                <?php else: ?>
+                <div class="table-premium-container">
+                    <table class="table-premium">
+                        <thead>
+                            <tr>
+                                <th>Banco / Cooperativa</th>
+                                <th class="text-center">Diaria</th>
+                                <th class="text-center">Semanal</th>
+                                <th class="text-center">Mensual</th>
+                                <th>Última actualización</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($resumen_bancos_metas as $r): ?>
+                                <?php
+                                $configurado_r = $r['permite_diaria'] !== null;
+                                $pd_r = $configurado_r ? (int)$r['permite_diaria']  : 1;
+                                $ps_r = $configurado_r ? (int)$r['permite_semanal'] : 0;
+                                $pm_r = $configurado_r ? (int)$r['permite_mensual'] : 1;
+                                ?>
+                                <tr style="<?= $r['id'] === $banco_filtro ? 'background:#f0f5ff;' : '' ?>">
+                                    <td><strong><?= htmlspecialchars($r['nombre']) ?></strong></td>
+                                    <td class="text-center"><span class="badge-premium <?= $pd_r ? 'badge-success-soft' : 'badge-navy-soft' ?>"><?= $pd_r ? 'Sí' : 'No' ?></span></td>
+                                    <td class="text-center"><span class="badge-premium <?= $ps_r ? 'badge-success-soft' : 'badge-navy-soft' ?>"><?= $ps_r ? 'Sí' : 'No' ?></span></td>
+                                    <td class="text-center"><span class="badge-premium <?= $pm_r ? 'badge-success-soft' : 'badge-navy-soft' ?>"><?= $pm_r ? 'Sí' : 'No' ?></span></td>
+                                    <td class="text-muted small"><?= $r['actualizado_at'] ? htmlspecialchars(date('d/m/Y H:i', strtotime($r['actualizado_at']))) : 'Sin configurar' ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <?php
         $modos_habilitados_ui = [];
@@ -1189,6 +1436,7 @@ if ($is_super_admin) {
             <div class="section-header" style="flex-wrap:wrap; row-gap:10px;">
                 <h5><i class="fas fa-list-check text-primary"></i> Estado de Metas del Equipo</h5>
                 <form method="get" class="d-flex align-items-center gap-3 flex-wrap">
+                    <input type="hidden" name="banco_filtro" value="<?= htmlspecialchars($banco_filtro) ?>">
                     <?php if ($is_admin_gerente || $is_super_admin): ?>
                     <div class="d-flex align-items-center gap-2">
                         <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-user-tie"></i> Supervisor:</label>

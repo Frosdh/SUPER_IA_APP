@@ -74,9 +74,6 @@ function _sa_active(string $page, string $current): string {
         <a href="metas.php" class="sidebar-link <?= _sa_active('metas', $currentPage) ?>">
             <i class="fas fa-bullseye"></i> Metas
         </a>
-        <a href="configurar_metas_banco.php" class="sidebar-link <?= _sa_active('config_metas', $currentPage) ?>">
-            <i class="fas fa-sliders-h"></i> Configurar Metas
-        </a>
         <a href="alertas.php" class="sidebar-link <?= _sa_active('alertas', $currentPage) ?>">
             <i class="fas fa-bell"></i> Alertas
         </a>
