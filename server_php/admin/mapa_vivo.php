@@ -32,6 +32,7 @@ $currentPage = 'mapa_vivo';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="js/cooperativa_buscador.js"></script>
     <style>
         :root {
             --brand-yellow: #ffdd00;
@@ -97,7 +98,88 @@ $currentPage = 'mapa_vivo';
             font-size: 13.5px; color: #64748B; box-shadow: 0 8px 20px rgba(0,0,0,.1); z-index: 500;
             pointer-events: none;
         }
-        .map-wrap { position: relative; }
+        .map-wrap { position: relative; flex: 1; min-width: 0; }
+        .map-row { display: flex; gap: 16px; align-items: stretch; }
+
+        /* ── Panel de asesores (derecha) ── */
+        .panel-asesores {
+            width: 270px; flex-shrink: 0; background: #fff; border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,.10); display: flex; flex-direction: column;
+            overflow: hidden; border: 1px solid #d7e0ea; max-height: 72vh;
+        }
+        .panel-header {
+            background: linear-gradient(135deg, var(--brand-navy-deep), var(--brand-navy));
+            color: #fff; padding: 14px 16px; display: flex;
+            justify-content: space-between; align-items: center; flex-shrink: 0;
+        }
+        .panel-header span:first-child { font-weight: 700; font-size: 14px; }
+        .panel-online-badge {
+            background: #10B981; color: #fff; font-size: 11px;
+            padding: 3px 9px; border-radius: 20px; font-weight: 700;
+        }
+        .panel-body { flex: 1; overflow-y: auto; padding: 8px; }
+        .panel-section-title {
+            font-size: 10px; font-weight: 700; letter-spacing: .6px;
+            text-transform: uppercase; padding: 8px 8px 4px;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .panel-section-title.online-title  { color: #059669; }
+        .panel-section-title.offline-title { color: #9CA3AF; margin-top: 6px; }
+        .panel-section-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .asesor-item {
+            padding: 9px 10px; margin-bottom: 5px; border-radius: 10px;
+            cursor: pointer; transition: all .18s; font-size: 13px;
+            border: 1px solid transparent;
+        }
+        .asesor-item.item-online  { background: #f0fdf4; border-color: #bbf7d0; }
+        .asesor-item.item-online:hover  { background: #dcfce7; border-color: #86efac; }
+        .asesor-item.item-offline { background: #f9fafb; border-color: #e5e7eb; }
+        .asesor-item.item-offline:hover { background: #f3f4f6; border-color: #d1d5db; }
+        .asesor-item.selected {
+            box-shadow: 0 0 0 2px var(--brand-yellow-deep);
+            border-color: var(--brand-yellow-deep) !important;
+        }
+        .asesor-item .item-name {
+            font-weight: 700; color: #1f2937; display: flex;
+            align-items: center; gap: 6px; margin-bottom: 3px;
+        }
+        .asesor-item .item-meta { color: #6b7280; font-size: 11px; }
+        .online-dot {
+            display: inline-block; width: 8px; height: 8px;
+            background: #10B981; border-radius: 50%; flex-shrink: 0;
+        }
+        .offline-dot {
+            display: inline-block; width: 8px; height: 8px;
+            background: #9CA3AF; border-radius: 50%; flex-shrink: 0;
+        }
+        .panel-empty { text-align: center; color: #9CA3AF; font-size: 12px; padding: 10px 8px; }
+        .panel-footer {
+            background: #f8f9fa; border-top: 1px solid #e5e7eb;
+            padding: 8px 12px; font-size: 11px; color: #9CA3AF;
+            flex-shrink: 0; text-align: center;
+        }
+
+        /* ── Combobox de búsqueda "Banco / Cooperativa" (misma lógica que
+           registro_admin/supervisor/asesor.php, vía js/cooperativa_buscador.js,
+           re-estilado para el tema claro de este panel) ── */
+        .coop-buscador-wrap { position: relative; }
+        .coop-buscador-clear {
+            position: absolute; right: 9px; top: 34px;
+            border: none; background: transparent; color: #94a3b8;
+            cursor: pointer; font-size: 13px; padding: 4px; display: none;
+        }
+        .coop-buscador-clear:hover { color: #ef4444; }
+        .coop-buscador-clear.show { display: block; }
+        .coop-buscador-list {
+            display: none; position: absolute; top: 100%; left: 0; right: 0;
+            z-index: 60; max-height: 260px; overflow-y: auto;
+            background: #fff; border: 1.5px solid #E2E8F0; border-radius: 10px;
+            margin-top: 6px; box-shadow: 0 12px 28px rgba(18,58,109,.16);
+        }
+        .coop-buscador-item { padding: 9px 14px; font-size: 13.5px; color: #0D1929; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(255,221,0,.16); }
+        .coop-buscador-empty { padding: 10px 14px; font-size: 12.5px; color: #94a3b8; font-style: italic; }
     </style>
 </head>
 <body>
@@ -158,11 +240,16 @@ $currentPage = 'mapa_vivo';
         </div>
 
         <div class="map-toolbar">
-            <div class="field">
-                <label>Banco / Cooperativa</label>
-                <select id="filtro-banco">
-                    <option value="">Todos los bancos</option>
-                </select>
+            <div class="field coop-buscador-wrap">
+                <label for="filtro-banco-buscar">Banco / Cooperativa</label>
+                <input type="text" class="form-control" id="filtro-banco-buscar"
+                       placeholder="Escribe para buscar…" autocomplete="off"
+                       style="padding:9px 30px 9px 12px;border-radius:9px;border:1.5px solid #E2E8F0;font-size:13.5px;font-family:'Inter',sans-serif;color:#0D1929;background:#fff;">
+                <input type="hidden" id="filtro-banco">
+                <button type="button" class="coop-buscador-clear" id="filtro-banco-clear" title="Quitar filtro">
+                    <i class="fas fa-times-circle"></i>
+                </button>
+                <div id="filtro-banco-lista" class="coop-buscador-list"></div>
             </div>
             <div class="field">
                 <label>Gerente</label>
@@ -188,8 +275,37 @@ $currentPage = 'mapa_vivo';
             </div>
         </div>
 
-        <div class="map-wrap">
-            <div id="map"></div>
+        <div class="map-row">
+            <div class="map-wrap">
+                <div id="map"></div>
+            </div>
+
+            <div class="panel-asesores">
+                <div class="panel-header">
+                    <span><i class="fas fa-users me-2"></i>Asesores</span>
+                    <span class="panel-online-badge" id="panel-badge">0 en línea</span>
+                </div>
+                <div class="panel-body" id="panel-body">
+                    <div class="panel-section-title online-title">
+                        <span class="panel-section-dot" style="background:#10B981;"></span>
+                        EN LÍNEA (<span id="count-online">0</span>)
+                    </div>
+                    <div id="panel-online">
+                        <div class="panel-empty">Sin asesores en línea</div>
+                    </div>
+
+                    <div class="panel-section-title offline-title">
+                        <span class="panel-section-dot" style="background:#9CA3AF;"></span>
+                        DESCONECTADOS (<span id="count-offline">0</span>)
+                    </div>
+                    <div id="panel-offline">
+                        <div class="panel-empty">Sin asesores desconectados</div>
+                    </div>
+                </div>
+                <div class="panel-footer">
+                    <i class="fas fa-sync-alt"></i> Actualiza cada 15s
+                </div>
+            </div>
         </div>
         <div class="map-legend" id="map-legend"></div>
     </div>
@@ -201,21 +317,49 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19
 }).addTo(map);
 
-let markers = [];
+const markerById = {};   // asesor_id -> L.circleMarker (solo los que tienen coordenadas)
 let emptyMsgEl = null;
 let allGerentes = [];     // [{id, nombre, banco_id}]
 let allSupervisores = []; // [{id, nombre, jefe_agencia_id}]
 let allAsesores = [];     // [{id, nombre, supervisor_id}]
 let firstLoad = true;
+let selectedAsesorId = null;
 
-const selBanco = document.getElementById('filtro-banco');
+const hiddenBanco = document.getElementById('filtro-banco');
+const bancoBuscarInput = document.getElementById('filtro-banco-buscar');
+const bancoClearBtn = document.getElementById('filtro-banco-clear');
 const selGerente = document.getElementById('filtro-gerente');
 const selSupervisor = document.getElementById('filtro-supervisor');
 const selAsesor = document.getElementById('filtro-asesor');
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const legendEl = document.getElementById('map-legend');
+const panelOnlineEl = document.getElementById('panel-online');
+const panelOfflineEl = document.getElementById('panel-offline');
+const panelBadgeEl = document.getElementById('panel-badge');
+const countOnlineEl = document.getElementById('count-online');
+const countOfflineEl = document.getElementById('count-offline');
 
+function fmtHora(ts) {
+    if (!ts) return '--:--';
+    const d = new Date(String(ts).replace(' ', 'T'));
+    return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+}
+
+function tiempoDesde(ts) {
+    if (!ts) return 'Sin datos';
+    const diff = Math.floor((Date.now() - new Date(String(ts).replace(' ', 'T')).getTime()) / 60000);
+    if (diff < 1) return 'Hace un momento';
+    if (diff < 60) return `Hace ${diff} min`;
+    const hrs = Math.floor(diff / 60);
+    if (hrs < 24) return `Hace ${hrs}h`;
+    return `Hace ${Math.floor(hrs / 24)}d`;
+}
+
+// Cascada banco -> gerente -> supervisor -> asesor. Cada nivel ahora
+// también sabe a qué banco pertenece (banco_id viene en los 3 arreglos),
+// así que elegir un banco filtra gerentes, supervisores Y asesores de una
+// vez, sin obligar a pasar primero por el gerente.
 function poblarGerentes(bancoId) {
     const actual = selGerente.value;
     selGerente.innerHTML = '<option value="">Todos los gerentes</option>';
@@ -234,11 +378,12 @@ function poblarGerentes(bancoId) {
     }
 }
 
-function poblarSupervisores(gerenteId) {
+function poblarSupervisores(bancoId, gerenteId) {
     const actual = selSupervisor.value;
     selSupervisor.innerHTML = '<option value="">Todos los supervisores</option>';
     allSupervisores
-        .filter(s => !gerenteId || String(s.jefe_agencia_id) === String(gerenteId))
+        .filter(s => (!bancoId   || String(s.banco_id)         === String(bancoId))
+                  && (!gerenteId || String(s.jefe_agencia_id)   === String(gerenteId)))
         .forEach(s => {
             const opt = document.createElement('option');
             opt.value = s.id;
@@ -253,11 +398,13 @@ function poblarSupervisores(gerenteId) {
     }
 }
 
-function poblarAsesores(supervisorId) {
+function poblarAsesores(bancoId, gerenteId, supervisorId) {
     const actual = selAsesor.value;
     selAsesor.innerHTML = '<option value="">Todos los asesores</option>';
     allAsesores
-        .filter(a => !supervisorId || String(a.supervisor_id) === String(supervisorId))
+        .filter(a => (!bancoId      || String(a.banco_id)      === String(bancoId))
+                  && (!gerenteId    || String(a.gerente_id)     === String(gerenteId))
+                  && (!supervisorId || String(a.supervisor_id)  === String(supervisorId)))
         .forEach(a => {
             const opt = document.createElement('option');
             opt.value = a.id;
@@ -271,18 +418,32 @@ function poblarAsesores(supervisorId) {
     }
 }
 
+// Recalcula los 3 combos dependientes a partir del banco/gerente/supervisor
+// actualmente seleccionados. Se llama cada vez que cambia cualquier filtro.
+function refrescarFiltros() {
+    const bancoId = hiddenBanco.value;
+    poblarGerentes(bancoId);
+    poblarSupervisores(bancoId, selGerente.value);
+    poblarAsesores(bancoId, selGerente.value, selSupervisor.value);
+}
+
 function limpiarMarcadores() {
-    markers.forEach(m => map.removeLayer(m));
-    markers = [];
+    Object.values(markerById).forEach(m => map.removeLayer(m));
+    Object.keys(markerById).forEach(k => delete markerById[k]);
     if (emptyMsgEl) { emptyMsgEl.remove(); emptyMsgEl = null; }
 }
 
-function mostrarVacio() {
-    if (emptyMsgEl) return;
-    emptyMsgEl = document.createElement('div');
-    emptyMsgEl.className = 'map-empty';
-    emptyMsgEl.textContent = 'No hay asesores en línea con este filtro en este momento.';
-    document.querySelector('.map-wrap').appendChild(emptyMsgEl);
+function mostrarVacio(mensaje) {
+    if (!emptyMsgEl) {
+        emptyMsgEl = document.createElement('div');
+        emptyMsgEl.className = 'map-empty';
+        document.querySelector('.map-wrap').appendChild(emptyMsgEl);
+    }
+    emptyMsgEl.textContent = mensaje || 'No hay asesores con este filtro.';
+}
+
+function ocultarVacio() {
+    if (emptyMsgEl) { emptyMsgEl.remove(); emptyMsgEl = null; }
 }
 
 function actualizarLeyenda(ubicaciones) {
@@ -294,7 +455,7 @@ function actualizarLeyenda(ubicaciones) {
     });
     legendEl.innerHTML = '';
     if (equipos.size === 0) {
-        legendEl.innerHTML = '<span style="color:#94a3b8;">Sin asesores conectados para mostrar leyenda.</span>';
+        legendEl.innerHTML = '<span style="color:#94a3b8;">Sin asesores para mostrar leyenda.</span>';
         return;
     }
     equipos.forEach(eq => {
@@ -305,15 +466,68 @@ function actualizarLeyenda(ubicaciones) {
     });
 }
 
-async function cargarUbicaciones() {
+// ── Centrar el mapa en un asesor desde el panel lateral ─────────
+function verAsesor(asesorId, lat, lng, hasLoc) {
+    selectedAsesorId = asesorId;
+    document.querySelectorAll('.asesor-item.selected').forEach(el => el.classList.remove('selected'));
+    const el = document.getElementById(`item-${asesorId}`);
+    if (el) el.classList.add('selected');
+
+    if (hasLoc && isFinite(lat) && isFinite(lng)) {
+        map.flyTo([lat, lng], 15, { duration: 1 });
+        const marker = markerById[asesorId];
+        if (marker) setTimeout(() => marker.openPopup(), 500);
+    }
+}
+
+// ── Panel lateral: asesores en línea / desconectados ─────────────
+function renderPanel(ubicaciones) {
+    const online  = ubicaciones.filter(u => u.online);
+    const offline = ubicaciones.filter(u => !u.online);
+
+    if (countOnlineEl)  countOnlineEl.textContent  = online.length;
+    if (countOfflineEl) countOfflineEl.textContent = offline.length;
+    if (panelBadgeEl) {
+        panelBadgeEl.textContent = online.length + ' en línea';
+        panelBadgeEl.style.background = online.length > 0 ? '#10B981' : '#9CA3AF';
+    }
+
+    const makeItem = (u) => {
+        const hasLoc = u.latitud !== null && u.longitud !== null;
+        const latJS  = hasLoc ? u.latitud : 'null';
+        const lngJS  = hasLoc ? u.longitud : 'null';
+        const meta   = u.online
+            ? `<i class="fas fa-location-dot"></i> En línea &nbsp;<i class="fas fa-clock"></i> ${fmtHora(u.ultima_vez)}`
+            : `<i class="fas fa-clock"></i> ${tiempoDesde(u.ultima_vez)}`;
+        return `<div class="asesor-item ${u.online ? 'item-online' : 'item-offline'}" id="item-${u.asesor_id}"
+                     onclick="verAsesor('${u.asesor_id}',${latJS},${lngJS},${hasLoc})"
+                     title="${u.banco_nombre || ''} · ${u.supervisor_nombre || ''}">
+            <div class="item-name">
+                <span class="${u.online ? 'online-dot' : 'offline-dot'}"></span>
+                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.asesor_nombre}</span>
+            </div>
+            <div class="item-meta">${meta}</div>
+        </div>`;
+    };
+
+    panelOnlineEl.innerHTML  = online.length  > 0 ? online.map(makeItem).join('')  : '<div class="panel-empty">Sin asesores en línea</div>';
+    panelOfflineEl.innerHTML = offline.length > 0 ? offline.map(makeItem).join('') : '<div class="panel-empty">Sin asesores desconectados</div>';
+
+    if (selectedAsesorId) {
+        const el = document.getElementById(`item-${selectedAsesorId}`);
+        if (el) el.classList.add('selected');
+    }
+}
+
+async function cargarUbicaciones(fitView = false) {
     const params = new URLSearchParams();
-    if (selBanco.value) params.set('banco_id', selBanco.value);
+    if (hiddenBanco.value) params.set('banco_id', hiddenBanco.value);
     if (selGerente.value) params.set('gerente_id', selGerente.value);
     if (selSupervisor.value) params.set('supervisor_id', selSupervisor.value);
     if (selAsesor.value) params.set('asesor_id', selAsesor.value);
 
     try {
-        const resp = await fetch('api_mapa_vivo_admin.php?' + params.toString(), { credentials: 'same-origin' });
+        const resp = await fetch('api_mapa_vivo_admin.php?' + params.toString(), { credentials: 'same-origin', cache: 'no-store' });
         const data = await resp.json();
 
         if (data.status !== 'ok') {
@@ -326,67 +540,114 @@ async function cargarUbicaciones() {
             allGerentes = data.gerentes || [];
             allSupervisores = data.supervisores || [];
             allAsesores = data.asesores || [];
-            selBanco.innerHTML = '<option value="">Todos los bancos</option>' +
-                (data.bancos || []).map(b => `<option value="${b.id}">${b.nombre}</option>`).join('');
-            poblarGerentes('');
-            poblarSupervisores('');
-            poblarAsesores('');
+
+            // Combobox de búsqueda por texto para Banco/Cooperativa, igual
+            // que en registro_admin/supervisor/asesor.php.
+            initCooperativaBuscador({
+                inputId:  'filtro-banco-buscar',
+                hiddenId: 'filtro-banco',
+                listId:   'filtro-banco-lista',
+                data: (data.bancos || []).map(b => ({ id: String(b.id), nombre: b.nombre })),
+                onSelect: function () {
+                    bancoClearBtn.classList.add('show');
+                    refrescarFiltros();
+                    cargarUbicaciones(true);
+                }
+            });
+
+            refrescarFiltros();
             firstLoad = false;
+            fitView = true;
         }
 
         limpiarMarcadores();
+        // Ahora la API devuelve TODOS los asesores que calzan con el filtro
+        // (en línea + desconectados), cada uno con su última ubicación
+        // conocida — igual que hace el mapa en vivo del supervisor.
         const ubicaciones = data.ubicaciones || [];
 
         if (ubicaciones.length === 0) {
-            mostrarVacio();
+            mostrarVacio('No hay asesores registrados con este filtro.');
         } else {
+            ocultarVacio();
+            const bounds = [];
+            let sinUbicacion = true;
+
             ubicaciones.forEach(u => {
-                const marker = L.circleMarker([parseFloat(u.latitud), parseFloat(u.longitud)], {
-                    radius: 9,
+                if (u.latitud === null || u.longitud === null) return;
+                sinUbicacion = false;
+
+                const lat = parseFloat(u.latitud);
+                const lng = parseFloat(u.longitud);
+                const marker = L.circleMarker([lat, lng], {
+                    radius: u.online ? 9 : 7,
                     color: '#fff',
                     weight: 2,
-                    fillColor: u.color,
-                    fillOpacity: 0.95
+                    fillColor: u.online ? u.color : '#9CA3AF',
+                    fillOpacity: u.online ? 0.95 : 0.6
                 }).addTo(map);
+
                 marker.bindPopup(
-                    `<strong>${u.asesor_nombre}</strong><br>` +
-                    `Supervisor: ${u.supervisor_nombre}<br>` +
-                    `Gerente: ${u.gerente_nombre}<br>` +
+                    `<strong>${u.asesor_nombre}</strong>` +
+                    `${u.online ? ' <span style="color:#10B981;">● En línea</span>' : ' <span style="color:#9CA3AF;">● Desconectado</span>'}<br>` +
+                    `Supervisor: ${u.supervisor_nombre || '—'}<br>` +
+                    `Gerente: ${u.gerente_nombre || '—'}<br>` +
                     `Banco/Cooperativa: ${u.banco_nombre || '—'}<br>` +
-                    `<small>Última actualización: ${u.timestamp}</small>`
+                    `<small>${u.online ? 'Actualizado' : 'Última ubicación conocida'}: ${fmtHora(u.ultima_vez)} (${tiempoDesde(u.ultima_vez)})</small>`
                 );
-                markers.push(marker);
+
+                markerById[u.asesor_id] = marker;
+                bounds.push([lat, lng]);
             });
+
+            if (sinUbicacion) {
+                mostrarVacio('Los asesores de este filtro aún no registran ninguna ubicación GPS.');
+            } else if (fitView && bounds.length > 0) {
+                if (bounds.length === 1) map.setView(bounds[0], 14);
+                else map.fitBounds(bounds, { padding: [50, 50], maxZoom: 14 });
+            }
         }
 
         actualizarLeyenda(ubicaciones);
+        renderPanel(ubicaciones);
+
         statusDot.style.background = '#22c55e';
-        statusText.textContent = `Actualizado ${data.ts} · ${data.total} asesor(es) en línea`;
+        statusText.textContent = `Actualizado ${data.ts} · ${data.total} en línea de ${data.total_asesores} asesor(es)`;
     } catch (err) {
         statusDot.style.background = '#ef4444';
         statusText.textContent = 'Sin conexión con el servidor';
     }
 }
 
-selBanco.addEventListener('change', () => {
-    poblarGerentes(selBanco.value);
-    poblarSupervisores(selGerente.value);
-    poblarAsesores(selSupervisor.value);
-    cargarUbicaciones();
+// Botón "×" para quitar el filtro de banco (el combobox de búsqueda solo
+// permite escoger de la lista, así que hace falta un control explícito
+// para volver a "Todos los bancos").
+bancoClearBtn.addEventListener('click', () => {
+    bancoBuscarInput.value = '';
+    hiddenBanco.value = '';
+    bancoClearBtn.classList.remove('show');
+    refrescarFiltros();
+    cargarUbicaciones(true);
 });
+bancoBuscarInput.addEventListener('input', () => {
+    // El buscador ya vacía el hidden en cada tecleo hasta que se elija una
+    // opción real de la lista; solo actualizamos la visibilidad del botón.
+    bancoClearBtn.classList.toggle('show', !!hiddenBanco.value);
+});
+
 selGerente.addEventListener('change', () => {
-    poblarSupervisores(selGerente.value);
-    poblarAsesores(selSupervisor.value);
-    cargarUbicaciones();
+    poblarSupervisores(hiddenBanco.value, selGerente.value);
+    poblarAsesores(hiddenBanco.value, selGerente.value, selSupervisor.value);
+    cargarUbicaciones(true);
 });
 selSupervisor.addEventListener('change', () => {
-    poblarAsesores(selSupervisor.value);
-    cargarUbicaciones();
+    poblarAsesores(hiddenBanco.value, selGerente.value, selSupervisor.value);
+    cargarUbicaciones(true);
 });
-selAsesor.addEventListener('change', cargarUbicaciones);
+selAsesor.addEventListener('change', () => cargarUbicaciones(true));
 
-cargarUbicaciones();
-setInterval(cargarUbicaciones, 15000);
+cargarUbicaciones(true);
+setInterval(() => cargarUbicaciones(false), 15000);
 
 map.whenReady(() => {
     setTimeout(() => map.invalidateSize(), 300);
