@@ -12,9 +12,10 @@ require_once '../db_config.php';
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-$is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
-if (!$is_supervisor && !$is_admin) {
+$is_supervisor  = isset($_SESSION['supervisor_logged_in'])   && $_SESSION['supervisor_logged_in']   === true;
+$is_admin       = isset($_SESSION['admin_logged_in'])        && $_SESSION['admin_logged_in']        === true;
+$is_super_admin = isset($_SESSION['super_admin_logged_in'])  && $_SESSION['super_admin_logged_in']  === true;
+if (!$is_supervisor && !$is_admin && !$is_super_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
@@ -118,33 +119,67 @@ try {
     }
 
     // Clientes encuestados = tareas completadas con registro en encuesta_comercial
-    $sql = "
-        SELECT
-            t.id            AS tarea_id,
-            t.tipo_tarea    AS tipo_tarea,
-            t.fecha_realizada,
-            t.hora_realizada,
-            CONCAT(t.fecha_realizada, ' ', t.hora_realizada) AS fecha_hora,
-            t.latitud_fin   AS latitud,
-            t.longitud_fin  AS longitud,
-            cp.id           AS cliente_id,
-            cp.nombre       AS cliente_nombre
-        FROM tarea t
-        JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
-        JOIN asesor a            ON a.id  = t.asesor_id
-        JOIN supervisor s        ON s.id  = a.supervisor_id
-        LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
-        WHERE t.asesor_id = ?
-          AND s.usuario_id = ?
-          AND t.estado = 'completada'
-          AND t.fecha_realizada = ?
-          AND ec.id IS NOT NULL
-        ORDER BY t.hora_realizada ASC, t.fecha_realizada ASC
-    ";
-
-    $st = $conn->prepare($sql);
-    if (!$st) throw new Exception('Prepare clientes: ' . $conn->error);
-    $st->bind_param('sss', $asesor_id, $supervisor_id, $fecha);
+    //
+    // OJO: antes esta consulta SIEMPRE filtraba por `s.usuario_id = ?`
+    // enlazando $supervisor_id, que es NULL para admin/super_admin
+    // (solo se llena cuando $is_supervisor es true). Una comparación
+    // `= NULL` en SQL nunca es verdadera, así que para cualquier sesión
+    // que no fuera de supervisor esto devolvía silenciosamente una
+    // lista vacía de clientes, sin importar el asesor. Ahora la
+    // restricción por supervisor solo se aplica cuando corresponde.
+    if ($is_supervisor) {
+        $sql = "
+            SELECT
+                t.id            AS tarea_id,
+                t.tipo_tarea    AS tipo_tarea,
+                t.fecha_realizada,
+                t.hora_realizada,
+                CONCAT(t.fecha_realizada, ' ', t.hora_realizada) AS fecha_hora,
+                t.latitud_fin   AS latitud,
+                t.longitud_fin  AS longitud,
+                cp.id           AS cliente_id,
+                cp.nombre       AS cliente_nombre
+            FROM tarea t
+            JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+            JOIN asesor a            ON a.id  = t.asesor_id
+            JOIN supervisor s        ON s.id  = a.supervisor_id
+            LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+            WHERE t.asesor_id = ?
+              AND s.usuario_id = ?
+              AND t.estado = 'completada'
+              AND t.fecha_realizada = ?
+              AND ec.id IS NOT NULL
+            ORDER BY t.hora_realizada ASC, t.fecha_realizada ASC
+        ";
+        $st = $conn->prepare($sql);
+        if (!$st) throw new Exception('Prepare clientes: ' . $conn->error);
+        $st->bind_param('sss', $asesor_id, $supervisor_id, $fecha);
+    } else {
+        // Admin / Super Admin: sin restricción de supervisor, solo el asesor.
+        $sql = "
+            SELECT
+                t.id            AS tarea_id,
+                t.tipo_tarea    AS tipo_tarea,
+                t.fecha_realizada,
+                t.hora_realizada,
+                CONCAT(t.fecha_realizada, ' ', t.hora_realizada) AS fecha_hora,
+                t.latitud_fin   AS latitud,
+                t.longitud_fin  AS longitud,
+                cp.id           AS cliente_id,
+                cp.nombre       AS cliente_nombre
+            FROM tarea t
+            JOIN cliente_prospecto cp ON cp.id = t.cliente_prospecto_id
+            LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+            WHERE t.asesor_id = ?
+              AND t.estado = 'completada'
+              AND t.fecha_realizada = ?
+              AND ec.id IS NOT NULL
+            ORDER BY t.hora_realizada ASC, t.fecha_realizada ASC
+        ";
+        $st = $conn->prepare($sql);
+        if (!$st) throw new Exception('Prepare clientes: ' . $conn->error);
+        $st->bind_param('ss', $asesor_id, $fecha);
+    }
     $st->execute();
     $res = $st->get_result();
 

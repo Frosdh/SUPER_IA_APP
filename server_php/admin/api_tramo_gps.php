@@ -14,9 +14,10 @@ require_once '../db_config.php';
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-$is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
-if (!$is_supervisor && !$is_admin) {
+$is_supervisor  = isset($_SESSION['supervisor_logged_in'])   && $_SESSION['supervisor_logged_in']   === true;
+$is_admin       = isset($_SESSION['admin_logged_in'])        && $_SESSION['admin_logged_in']        === true;
+$is_super_admin = isset($_SESSION['super_admin_logged_in'])  && $_SESSION['super_admin_logged_in']  === true;
+if (!$is_supervisor && !$is_admin && !$is_super_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
@@ -27,7 +28,11 @@ $asesor_id     = trim($_GET['asesor_id'] ?? '');
 $desde         = trim($_GET['desde'] ?? '');
 $hasta         = trim($_GET['hasta'] ?? '');
 
-if (!$supervisor_id) {
+// OJO: antes esta validación corría siempre, sin el `if ($is_supervisor)`,
+// así que cualquier sesión de admin/super_admin (para quienes
+// $supervisor_id es NULL a propósito) recibía un 400 "supervisor_id no
+// encontrado" y el trazo GPS nunca se dibujaba. Solo aplica a supervisores.
+if ($is_supervisor && !$supervisor_id) {
     http_response_code(400);
     echo json_encode(['status' => 'error', 'message' => 'supervisor_id no encontrado']);
     exit;

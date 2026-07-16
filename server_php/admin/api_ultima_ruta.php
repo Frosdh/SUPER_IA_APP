@@ -13,9 +13,10 @@ require_once '../db_config.php';
 
 if (session_status() === PHP_SESSION_NONE) session_start();
 
-$is_supervisor = isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true;
-$is_admin      = isset($_SESSION['admin_logged_in'])      && $_SESSION['admin_logged_in']      === true;
-if (!$is_supervisor && !$is_admin) {
+$is_supervisor  = isset($_SESSION['supervisor_logged_in'])   && $_SESSION['supervisor_logged_in']   === true;
+$is_admin       = isset($_SESSION['admin_logged_in'])        && $_SESSION['admin_logged_in']        === true;
+$is_super_admin = isset($_SESSION['super_admin_logged_in'])  && $_SESSION['super_admin_logged_in']  === true;
+if (!$is_supervisor && !$is_admin && !$is_super_admin) {
     http_response_code(401);
     echo json_encode(['status' => 'error', 'message' => 'No autorizado']);
     exit;
