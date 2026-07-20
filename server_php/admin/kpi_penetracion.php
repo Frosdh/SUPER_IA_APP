@@ -12,8 +12,10 @@ date_default_timezone_set('America/Guayaquil');
 
 require_once 'db_admin.php';   // PDO ($pdo)
 
-// Verificar rol (Supervisor o Gerente/Admin)
-$es_gerente    = (isset($_SESSION['admin_logged_in'])   && $_SESSION['admin_logged_in']   === true)
+// Verificar rol (SuperAdmin, Gerente/Admin o Supervisor)
+$es_super_admin = (isset($_SESSION['super_admin_logged_in']) && $_SESSION['super_admin_logged_in'] === true);
+$es_gerente    = $es_super_admin
+              || (isset($_SESSION['admin_logged_in'])   && $_SESSION['admin_logged_in']   === true)
               || (isset($_SESSION['gerente_logged_in']) && $_SESSION['gerente_logged_in'] === true);
 $es_supervisor = (isset($_SESSION['supervisor_logged_in']) && $_SESSION['supervisor_logged_in'] === true);
 
@@ -22,9 +24,36 @@ if (!$es_gerente && !$es_supervisor) {
     exit;
 }
 
-$user_id     = $_SESSION['admin_id']     ?? $_SESSION['gerente_id']     ?? $_SESSION['supervisor_id'];
-$user_nombre = $_SESSION['admin_nombre'] ?? $_SESSION['gerente_nombre'] ?? $_SESSION['supervisor_nombre'] ?? 'Usuario';
-$user_rol    = $_SESSION['admin_rol']    ?? $_SESSION['rol']             ?? 'Supervisor';
+// El SuperAdmin ve el sistema completo (todos los bancos/cooperativas), igual que
+// el gerente sin filtro de asesor — se resuelve más abajo al listar asesores.
+$user_id     = $_SESSION['super_admin_id']     ?? $_SESSION['admin_id']     ?? $_SESSION['gerente_id']     ?? $_SESSION['supervisor_id'];
+$user_nombre = $_SESSION['super_admin_nombre'] ?? $_SESSION['admin_nombre'] ?? $_SESSION['gerente_nombre'] ?? $_SESSION['supervisor_nombre'] ?? 'Usuario';
+$user_rol    = $es_super_admin ? 'Super Administrador' : ($_SESSION['admin_rol'] ?? $_SESSION['rol'] ?? 'Supervisor');
+
+// ── Filtro por Banco/Cooperativa (solo SuperAdmin) ───────────
+// Permite al SuperAdmin acotar todo el reporte de KPIs a un solo
+// banco/cooperativa, igual que el combobox del dashboard principal.
+$bancos_dash          = [];
+$banco_filtro         = '';
+$nombre_banco_filtro  = '';
+if ($es_super_admin) {
+    try {
+        $bancos_dash = $pdo->query("SELECT id, nombre FROM unidad_bancaria ORDER BY nombre ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $bancos_dash = [];
+    }
+    $bancos_dash_ids = array_map(fn($b) => (string) $b['id'], $bancos_dash);
+    $banco_filtro = trim((string) ($_GET['banco_filtro'] ?? ''));
+    if ($banco_filtro !== '' && !in_array($banco_filtro, $bancos_dash_ids, true)) {
+        $banco_filtro = '';
+    }
+    foreach ($bancos_dash as $b) {
+        if ((string) $b['id'] === $banco_filtro) {
+            $nombre_banco_filtro = $b['nombre'];
+            break;
+        }
+    }
+}
 
 // ── Subdivisiones Principales ───────────────────────────────
 $vistas_orden = ['actividad', 'mercado', 'interes', 'prospeccion', 'frio', 'evaluacion', 'eficiencia', 'postventa', 'recuperacion', 'operaciones'];
@@ -54,7 +83,8 @@ $filtros_query = '&frecuencia=' . urlencode($frecuencia)
     . '&trimestre=' . urlencode($trim_actual)
     . '&semana=' . urlencode($sem_actual)
     . '&dia=' . urlencode($dia_actual)
-    . ($asesor_filtro ? '&asesor_id=' . urlencode($asesor_filtro) : '');
+    . ($asesor_filtro ? '&asesor_id=' . urlencode($asesor_filtro) : '')
+    . ($banco_filtro ? '&banco_filtro=' . urlencode($banco_filtro) : '');
 
 $prev_url     = $prev_view ? "?view=$prev_view$filtros_query" : "#";
 $next_url     = $next_view ? "?view=$next_view$filtros_query" : "#";
@@ -85,13 +115,33 @@ if ($frecuencia === 'diario') {
 
 // ── Resolver Asesores ──────────────────────────────────────
 $asesores = [];
-if ($es_gerente) {
+if ($es_super_admin && $banco_filtro !== '') {
+    // SuperAdmin con banco/cooperativa elegido: solo asesores de esa unidad bancaria
+    $st = $pdo->prepare("SELECT a.id, u.nombre
+                          FROM asesor a
+                          JOIN usuario u ON u.id = a.usuario_id
+                          LEFT JOIN supervisor s2   ON s2.id = a.supervisor_id
+                          LEFT JOIN jefe_agencia ja2 ON ja2.id = s2.jefe_agencia_id
+                          LEFT JOIN agencia ag2      ON ag2.id = ja2.agencia_id
+                          WHERE u.activo = 1 AND ag2.unidad_bancaria_id = ?
+                          ORDER BY u.nombre");
+    $st->execute([$banco_filtro]);
+} elseif ($es_gerente) {
     $st = $pdo->query('SELECT a.id, u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id WHERE u.activo = 1 ORDER BY u.nombre');
 } else {
     $st = $pdo->prepare('SELECT a.id, u.nombre FROM asesor a JOIN usuario u ON u.id = a.usuario_id JOIN supervisor s ON s.id = a.supervisor_id WHERE s.usuario_id = ? AND u.activo = 1 ORDER BY u.nombre');
     $st->execute([$user_id]);
 }
 $asesores = $st->fetchAll(PDO::FETCH_ASSOC);
+
+// Si el asesor filtrado no pertenece al banco elegido, se descarta (evita fugas de datos de otro banco)
+if ($asesor_filtro !== '' && $es_super_admin && $banco_filtro !== '') {
+    $ids_validos = array_map(fn($a) => (string) $a['id'], $asesores);
+    if (!in_array((string) $asesor_filtro, $ids_validos, true)) {
+        $asesor_filtro = '';
+    }
+}
+
 $target_ids = $asesor_filtro ? [$asesor_filtro] : array_map(fn($a) => $a['id'], $asesores);
 $ph = !empty($target_ids) ? implode(',', array_fill(0, count($target_ids), '?')) : '0';
 
@@ -1162,7 +1212,38 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <?php if ($es_super_admin): ?>
+    <script src="js/cooperativa_buscador.js"></script>
+    <?php endif; ?>
     <style>
+        /* ── Filtro de Banco/Cooperativa (SuperAdmin) ────────────── */
+        .dash-banco-bar {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 16px;
+            padding: 14px 18px; margin-bottom: 18px; box-shadow: 0 2px 14px rgba(18,58,109,.07);
+            display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+        }
+        .dash-banco-bar label { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .4px; color: #123a6d; white-space: nowrap; }
+        .coop-buscador-wrap { position: relative; flex: 1; min-width: 260px; max-width: 420px; }
+        .coop-buscador-clear {
+            position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+            border: none; background: transparent; color: #94a3b8; cursor: pointer; font-size: 13px; padding: 4px; display: none;
+        }
+        .coop-buscador-clear:hover { color: #ef4444; }
+        .coop-buscador-clear.show { display: block; }
+        .coop-buscador-list {
+            display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+            max-height: 260px; overflow-y: auto; background: #fff; border: 1.5px solid #E2E8F0;
+            border-radius: 10px; margin-top: 6px; box-shadow: 0 12px 28px rgba(18,58,109,.16);
+        }
+        .coop-buscador-item { padding: 9px 14px; font-size: 13.5px; color: #0D1929; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(255,221,0,.16); }
+        .coop-buscador-empty { padding: 10px 14px; font-size: 12.5px; color: #94a3b8; font-style: italic; }
+        .dash-banco-tag {
+            display: inline-flex; align-items: center; gap: 6px; background: #fffbeb; color: #92400e;
+            border: 1px solid #fde68a; border-radius: 20px; padding: 4px 12px; font-size: 12px; font-weight: 700;
+        }
+        .dash-banco-tag.dash-banco-tag-all { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
         /* Layout heredado de supervisor_layout.css — no se necesitan overrides */
         .nav-arrow { width: 40px; height: 40px; min-width: 40px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 50%; color: #123a6d; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; border: 1px solid #e2e8f0; cursor: pointer; z-index: 10; }
         .nav-arrow:hover { background: #123a6d; color: white; border-color: #123a6d; }
@@ -1424,7 +1505,10 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
 <body>
 
     <?php
-    if ($es_gerente) {
+    if ($es_super_admin) {
+        $currentPage = 'reportes_penetracion';
+        require_once '_sidebar_super_admin.php';
+    } elseif ($es_gerente) {
         $currentPage = 'reportes_penetracion';
         require_once '_sidebar_gerente.php';
     } else {
@@ -1432,7 +1516,78 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
     }
     ?>
 
-    <?php if ($es_gerente): ?>
+    <?php if ($es_super_admin): ?>
+    <div class="main-content">
+        <div class="navbar-custom">
+            <div class="nav-title-group">
+                <h2><i class="fas fa-brain me-2" style="color:#ffdd00;"></i> Dashboard de Inteligencia</h2>
+                <div class="navbar-subtitle">Segmentación y Vectores de Interés — <?= $banco_filtro !== '' ? htmlspecialchars($nombre_banco_filtro) : 'Todos los bancos/cooperativas' ?></div>
+            </div>
+            <div class="user-info text-white">
+                <div class="text-end me-3">
+                    <div class="fw-bold"><?= htmlspecialchars($user_nombre) ?></div>
+                    <small class="opacity-75"><?= htmlspecialchars($user_rol) ?></small>
+                </div>
+                <a href="logout.php" class="btn-logout"><i class="fas fa-sign-out-alt"></i></a>
+            </div>
+        </div>
+
+        <div class="content-area">
+            <!-- ── FILTRO POR BANCO/COOPERATIVA (solo SuperAdmin) ── -->
+            <div class="dash-banco-bar">
+                <label><i class="fas fa-university me-1"></i>Banco/Cooperativa:</label>
+                <form method="get" id="formBancoKpi" style="flex:1;min-width:260px;max-width:420px;">
+                    <input type="hidden" name="view" value="<?= htmlspecialchars($view) ?>">
+                    <input type="hidden" name="frecuencia" value="<?= htmlspecialchars($frecuencia) ?>">
+                    <input type="hidden" name="anio" value="<?= htmlspecialchars($anio_actual) ?>">
+                    <input type="hidden" name="mes" value="<?= htmlspecialchars($mes_actual) ?>">
+                    <input type="hidden" name="trimestre" value="<?= htmlspecialchars($trim_actual) ?>">
+                    <input type="hidden" name="semana" value="<?= htmlspecialchars($sem_actual) ?>">
+                    <input type="hidden" name="dia" value="<?= htmlspecialchars($dia_actual) ?>">
+                    <div class="coop-buscador-wrap">
+                        <input type="text" id="banco-kpi-buscar" class="form-control" placeholder="Escribe para buscar…" autocomplete="off" value="<?= htmlspecialchars($nombre_banco_filtro) ?>" style="border-radius:9px;padding:9px 30px 9px 12px;">
+                        <input type="hidden" name="banco_filtro" id="banco-kpi-hidden" value="<?= htmlspecialchars($banco_filtro) ?>">
+                        <button type="button" class="coop-buscador-clear <?= $banco_filtro !== '' ? 'show' : '' ?>" id="banco-kpi-clear" title="Quitar filtro">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                        <div id="banco-kpi-lista" class="coop-buscador-list"></div>
+                    </div>
+                </form>
+                <?php if ($banco_filtro !== ''): ?>
+                    <span class="dash-banco-tag"><i class="fas fa-filter"></i> Viendo solo: <?= htmlspecialchars($nombre_banco_filtro) ?></span>
+                <?php else: ?>
+                    <span class="dash-banco-tag dash-banco-tag-all"><i class="fas fa-globe"></i> Viendo todos los bancos/cooperativas</span>
+                <?php endif; ?>
+            </div>
+            <script>
+            (function () {
+                var BANCOS_KPI = <?= json_encode(array_map(fn($b) => ['id' => (string) $b['id'], 'nombre' => $b['nombre']], $bancos_dash), JSON_UNESCAPED_UNICODE) ?>;
+                var input   = document.getElementById('banco-kpi-buscar');
+                var hidden  = document.getElementById('banco-kpi-hidden');
+                var clearBt = document.getElementById('banco-kpi-clear');
+                if (input && typeof initCooperativaBuscador === 'function') {
+                    initCooperativaBuscador({
+                        inputId:  'banco-kpi-buscar',
+                        hiddenId: 'banco-kpi-hidden',
+                        listId:   'banco-kpi-lista',
+                        data: BANCOS_KPI,
+                        onSelect: function () {
+                            clearBt.classList.add('show');
+                            document.getElementById('formBancoKpi').submit();
+                        }
+                    });
+                    clearBt.addEventListener('click', function () {
+                        input.value = '';
+                        hidden.value = '';
+                        document.getElementById('formBancoKpi').submit();
+                    });
+                    input.addEventListener('input', function () {
+                        clearBt.classList.toggle('show', !!hidden.value);
+                    });
+                }
+            })();
+            </script>
+    <?php elseif ($es_gerente): ?>
     <div class="main-content">
         <div class="navbar-custom">
             <div class="nav-title-group">
@@ -1454,6 +1609,9 @@ $navTitle = ''; $navIcon = ''; $navSubtitle = '';
             <div class="segment-card mb-4">
                 <form method="get" class="row g-2 align-items-end">
                     <input type="hidden" name="view" value="<?= $view ?>">
+                    <?php if ($es_super_admin && $banco_filtro !== ''): ?>
+                        <input type="hidden" name="banco_filtro" value="<?= htmlspecialchars($banco_filtro) ?>">
+                    <?php endif; ?>
                     <div class="col-md-2">
                         <span class="filter-label">Frecuencia</span>
                         <select name="frecuencia" class="form-select form-select-sm shadow-none"

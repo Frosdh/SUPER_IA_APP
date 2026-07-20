@@ -74,7 +74,16 @@ function initCooperativaBuscador(opts) {
     });
 
     input.addEventListener('focus', function () {
-        render(filtrar(input.value));
+        if (hidden.value) {
+            // Ya había una cooperativa elegida antes (el input trae su nombre
+            // escrito): al volver a hacer foco mostramos la lista COMPLETA en
+            // vez de filtrar por ese texto (si no, solo "matchea" consigo
+            // misma y las demás cooperativas/bancos parecen no existir).
+            render(data);
+            input.select();
+        } else {
+            render(filtrar(input.value));
+        }
     });
 
     input.addEventListener('blur', function () {

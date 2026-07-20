@@ -11,7 +11,7 @@
  *   - Definir $currentPage (string) con uno de estos valores:
  *       dashboard | mapa | mapa_calor | historial | usuarios |
  *       operaciones | metas | config_metas | alertas | tareas_descartadas |
- *       solicitudes | solicitudes_admin | crear_asesor |
+ *       reportes_penetracion | solicitudes | solicitudes_admin | crear_asesor |
  *       administrar_asesores
  *   - El <style> de cada página debe definir las clases .sidebar,
  *     .sidebar-brand, .sidebar-section, .sidebar-link (mismo navy en
@@ -79,6 +79,13 @@ function _sa_active(string $page, string $current): string {
         </a>
         <a href="tareas_descartadas.php" class="sidebar-link <?= _sa_active('tareas_descartadas', $currentPage) ?>">
             <i class="fas fa-ban"></i> Tareas Descartadas
+        </a>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Analisis</div>
+        <a href="kpi_penetracion.php" class="sidebar-link <?= _sa_active('reportes_penetracion', $currentPage) ?>">
+            <i class="fas fa-chart-bar"></i> Reportes KPIs
         </a>
     </div>
 

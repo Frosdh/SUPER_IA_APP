@@ -1116,8 +1116,27 @@ function metas_estado_tarea_badge($estado, $seleccionada_dia, $fecha_programada,
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="supervisor_layout.css?v=<?= time() ?>">
+    <script src="js/cooperativa_buscador.js"></script>
     <style>
         /* Layout heredado de supervisor_layout.css — no se necesitan overrides */
+
+        /* ── Combobox de búsqueda por escritura para el filtro de banco/cooperativa ── */
+        .coop-buscador-clear {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            border: none; background: transparent; color: #94a3b8;
+            cursor: pointer; font-size: 13px; padding: 4px; display: none;
+        }
+        .coop-buscador-clear:hover { color: #ef4444; }
+        .coop-buscador-clear.show { display: block; }
+        .coop-buscador-list {
+            display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+            max-height: 260px; overflow-y: auto; background: #fff; border: 1.5px solid #E2E8F0;
+            border-radius: 10px; margin-top: 6px; box-shadow: 0 12px 28px rgba(18,58,109,.16);
+        }
+        .coop-buscador-item { padding: 9px 14px; font-size: 13.5px; color: #0D1929; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(255,221,0,.16); }
+        .coop-buscador-empty { padding: 10px 14px; font-size: 12.5px; color: #94a3b8; font-style: italic; }
     </style>
 </head>
 <body>
@@ -1186,31 +1205,33 @@ if ($is_super_admin) {
             </div>
         </div>
 
+        <?php
+        $nombre_banco_actual_filtro = '';
+        foreach ($bancos_metas as $b) { if ($b['id'] === $banco_filtro) { $nombre_banco_actual_filtro = $b['nombre']; break; } }
+        ?>
         <?php if ($is_super_admin): ?>
         <!-- CONFIGURAR METAS POR BANCO/COOPERATIVA (fusionado desde configurar_metas_banco.php) -->
         <div class="section-card mb-4">
-            <div class="section-header" style="flex-wrap:wrap; row-gap:10px;">
+            <div class="section-header">
                 <h5><i class="fas fa-sliders-h text-primary"></i> Tipos de meta habilitados por banco/cooperativa</h5>
-                <form method="get" class="d-flex align-items-center gap-2">
-                    <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-university"></i> Banco/Cooperativa:</label>
-                    <select name="banco_filtro" onchange="this.form.submit()" class="form-select form-select-sm shadow-sm" style="width:auto; min-width:260px; border-radius:8px;">
-                        <option value="">-- Selecciona --</option>
-                        <?php foreach ($bancos_metas as $b): ?>
-                            <option value="<?= htmlspecialchars($b['id']) ?>" <?= $banco_filtro === $b['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($b['nombre']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </form>
             </div>
             <div class="section-body">
-                <p class="text-muted small mb-3">Elige un banco o cooperativa para definir qué tipos de meta puede asignar su supervisor (diaria, semanal, mensual). El resto de esta página (Estado de Metas del Equipo y Actividad del Equipo) quedará filtrado a ese banco.</p>
+                <p class="text-muted small mb-3 text-center">Elige un banco o cooperativa para definir qué tipos de meta puede asignar su supervisor (diaria, semanal, mensual). El resto de esta página (Estado de Metas del Equipo y Actividad del Equipo) quedará filtrado a ese banco.</p>
+
+                <form method="get" id="formBancoMetas" class="d-flex flex-column align-items-center gap-2 mb-4">
+                    <label class="small fw-bold text-muted text-nowrap m-0"><i class="fas fa-university"></i> Banco/Cooperativa:</label>
+                    <div class="coop-buscador-wrap" style="position:relative; width:100%; max-width:560px;">
+                        <input type="text" id="banco-metas-buscar" class="form-control shadow-sm text-center" placeholder="Escribe para buscar…" autocomplete="off" value="<?= htmlspecialchars($nombre_banco_actual_filtro) ?>" style="border-radius:10px; padding:12px 34px; font-size:15px; font-weight:600;" title="<?= htmlspecialchars($nombre_banco_actual_filtro) ?>">
+                        <input type="hidden" name="banco_filtro" id="banco-metas-hidden" value="<?= htmlspecialchars($banco_filtro) ?>">
+                        <button type="button" class="coop-buscador-clear" id="banco-metas-clear" title="Quitar filtro">
+                            <i class="fas fa-times-circle"></i>
+                        </button>
+                        <div id="banco-metas-lista" class="coop-buscador-list"></div>
+                    </div>
+                </form>
 
                 <?php if ($banco_filtro !== ''): ?>
-                    <?php
-                    $nombre_banco_sel_metas = '';
-                    foreach ($bancos_metas as $b) { if ($b['id'] === $banco_filtro) { $nombre_banco_sel_metas = $b['nombre']; break; } }
-                    ?>
+                    <?php $nombre_banco_sel_metas = $nombre_banco_actual_filtro; ?>
                     <form method="post" action="metas.php" class="p-3 mb-4" style="background:#f8fafc; border-radius:14px; border:1px solid #e2e8f0;">
                         <input type="hidden" name="accion" value="guardar_config_metas_banco">
                         <input type="hidden" name="banco_id_cfg" value="<?= htmlspecialchars($banco_filtro) ?>">
@@ -1681,6 +1702,37 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     cambiarModoMeta();
 });
+
+<?php if ($is_super_admin): ?>
+// ── Combobox de búsqueda por escritura para "Banco/Cooperativa" (Metas) ──
+const BANCOS_METAS = <?= json_encode(array_map(fn($b) => ['id' => (string)$b['id'], 'nombre' => $b['nombre']], $bancos_metas), JSON_UNESCAPED_UNICODE) ?>;
+
+const bancoMetasBuscarInput = document.getElementById('banco-metas-buscar');
+const bancoMetasHidden      = document.getElementById('banco-metas-hidden');
+const bancoMetasClearBtn    = document.getElementById('banco-metas-clear');
+
+if (bancoMetasBuscarInput && typeof initCooperativaBuscador === 'function') {
+    initCooperativaBuscador({
+        inputId:  'banco-metas-buscar',
+        hiddenId: 'banco-metas-hidden',
+        listId:   'banco-metas-lista',
+        data: BANCOS_METAS,
+        onSelect: function () {
+            bancoMetasClearBtn.classList.add('show');
+            document.getElementById('formBancoMetas').submit();
+        }
+    });
+
+    if (bancoMetasHidden.value) bancoMetasClearBtn.classList.add('show');
+
+    bancoMetasClearBtn.addEventListener('click', function () {
+        window.location.href = 'metas.php';
+    });
+    bancoMetasBuscarInput.addEventListener('input', function () {
+        bancoMetasClearBtn.classList.toggle('show', !!bancoMetasHidden.value);
+    });
+}
+<?php endif; ?>
 </script>
 
 </body>

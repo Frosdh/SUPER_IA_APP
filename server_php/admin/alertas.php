@@ -37,6 +37,8 @@ if ($user_role === 'asesor') {
 // 1. Alertas de modificaciones de tareas
 // ======================
 if ($user_role === 'super_admin' || $user_role === 'admin') {
+    // Se agregan los JOIN hacia unidad_bancaria (via supervisor/jefe_agencia/
+    // agencia) para poder filtrar el listado por banco/cooperativa en la UI.
     $sqlAlertas = "
         SELECT
             am.id as id_alerta,
@@ -48,12 +50,18 @@ if ($user_role === 'super_admin' || $user_role === 'admin') {
             cp.nombre as cliente_nombre,
             u_asesor.nombre as asesor_nombre,
             am.created_at as fecha,
-            CASE WHEN am.vista_supervisor = 0 THEN 'abierta' ELSE 'cerrada' END as estado
+            CASE WHEN am.vista_supervisor = 0 THEN 'abierta' ELSE 'cerrada' END as estado,
+            ub.id as banco_id,
+            ub.nombre as banco_nombre
         FROM alerta_modificacion am
         JOIN tarea t ON am.tarea_id = t.id
         LEFT JOIN cliente_prospecto cp ON t.cliente_prospecto_id = cp.id
         JOIN asesor a ON am.asesor_id = a.id
         JOIN usuario u_asesor ON a.usuario_id = u_asesor.id
+        LEFT JOIN supervisor sv_al ON sv_al.id = a.supervisor_id
+        LEFT JOIN jefe_agencia ja_al ON ja_al.id = sv_al.jefe_agencia_id
+        LEFT JOIN agencia ag_al ON ag_al.id = ja_al.agencia_id
+        LEFT JOIN unidad_bancaria ub ON ub.id = ag_al.unidad_bancaria_id
         ORDER BY am.created_at DESC
     ";
     $stmt = $pdo->query($sqlAlertas);
@@ -269,6 +277,17 @@ $currentPage        = 'alertas';
 $alertas_pendientes = 0;
 $supervisor_rol     = $_SESSION['supervisor_rol'] ?? 'Supervisor';
 $is_supervisor_ui = ($user_role === 'supervisor');
+$is_admin_role    = ($user_role === 'super_admin' || $user_role === 'admin');
+
+// Lista de bancos/cooperativas para el filtro por escritura (solo admin/super_admin)
+$bancos_alertas = [];
+if ($is_admin_role) {
+    try {
+        $bancos_alertas = $pdo->query("SELECT id, nombre FROM unidad_bancaria ORDER BY nombre ASC")->fetchAll();
+    } catch (Throwable $e) {
+        $bancos_alertas = [];
+    }
+}
 
 // Handler: marcar alerta como revisada (acepta POST normal o AJAX)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) && isset($_POST['id'])) {
@@ -294,6 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
     <title>Super_IA - Alertas</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="js/cooperativa_buscador.js"></script>
     <style>
 <?php if ($is_supervisor_ui || $user_role === 'super_admin'): ?>
         :root {
@@ -466,6 +486,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['marcar_revisada']) &&
             border-color: var(--brand-navy, #123a6d);
             box-shadow: 0 4px 10px rgba(18, 58, 109, 0.15);
         }
+
+        /* ── Combobox de búsqueda por escritura para el filtro de Empresa/Banco ── */
+        .coop-buscador-list {
+            display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+            max-height: 260px; overflow-y: auto; background: #fff; border: 1.5px solid #E2E8F0;
+            border-radius: 10px; margin-top: 6px; box-shadow: 0 12px 28px rgba(18,58,109,.16);
+        }
+        .coop-buscador-item { padding: 9px 14px; font-size: 13.5px; color: #0D1929; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+        .coop-buscador-item:last-child { border-bottom: none; }
+        .coop-buscador-item:hover { background: rgba(255,221,0,.16); }
+        .coop-buscador-empty { padding: 10px 14px; font-size: 12.5px; color: #94a3b8; font-style: italic; }
     </style>
 
     <!-- ================================================================
@@ -694,22 +725,39 @@ if ($user_role === 'supervisor') {
         <div class="search-container-premium">
             <div class="row g-3 align-items-center">
                 <!-- Título -->
-                <div class="col-12 col-md-4">
+                <div class="col-12 <?php echo $is_admin_role ? 'col-md-3' : 'col-md-4'; ?>">
                     <h5 class="mb-0 fw-800 text-navy"><i class="fas fa-list-ul me-2 text-primary"></i> Registro de Modificaciones</h5>
                     <small class="text-muted">Gestiona y revisa los cambios realizados por tu equipo</small>
                 </div>
-                
+
+                <!-- Filtro por Banco/Cooperativa (búsqueda por escritura, solo admin/super_admin) — primero -->
+                <?php if ($is_admin_role): ?>
+                <div class="col-12 col-sm-6 col-md-3">
+                    <div class="coop-buscador-wrap" style="position:relative;">
+                        <div class="input-group" style="box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
+                            <span class="input-group-text bg-white border-end-0"><i class="fas fa-university text-muted"></i></span>
+                            <input type="text" id="filterEmpresaBuscar" class="form-control border-start-0" style="padding: 10px;" placeholder="Filtrar por banco..." autocomplete="off">
+                            <button type="button" id="filterEmpresaClear" class="btn btn-outline-secondary border-start-0" style="display:none;" title="Quitar filtro">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <input type="hidden" id="filterEmpresaHidden">
+                        <div id="filterEmpresaLista" class="coop-buscador-list"></div>
+                    </div>
+                </div>
+                <?php endif; ?>
+
                 <!-- Buscador por nombre o cédula -->
-                <div class="col-12 col-sm-6 <?php echo $col_asesor ? 'col-md-4' : 'col-md-8'; ?>">
+                <div class="col-12 col-sm-6 <?php echo $is_admin_role ? 'col-md-3' : ($col_asesor ? 'col-md-4' : 'col-md-8'); ?>">
                     <div class="input-group" style="box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
                         <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
                         <input type="text" id="alertSearch" class="form-control border-start-0" style="padding: 10px;" placeholder="Buscar por cliente o cédula...">
                     </div>
                 </div>
-                
+
                 <!-- Filtro por Asesor (si aplica) -->
                 <?php if ($col_asesor): ?>
-                <div class="col-12 col-sm-6 col-md-4">
+                <div class="col-12 col-sm-6 <?php echo $is_admin_role ? 'col-md-3' : 'col-md-4'; ?>">
                     <div class="input-group" style="box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 10px; overflow: hidden;">
                         <span class="input-group-text bg-white border-end-0"><i class="fas fa-user-tie text-muted"></i></span>
                         <select id="filterAsesor" class="form-select border-start-0" style="padding: 10px;">
@@ -812,6 +860,7 @@ if ($user_role === 'supervisor') {
                             data-search-id="<?php echo strtolower(htmlspecialchars($alerta['cliente_cedula_display'])); ?>"
                             data-estado="<?php echo htmlspecialchars($alerta['estado']); ?>"
                             data-asesor="<?php echo strtolower(htmlspecialchars($alerta['asesor_nombre'] ?? '')); ?>"
+                            data-banco-id="<?php echo htmlspecialchars($alerta['banco_id'] ?? ''); ?>"
                             data-fecha="<?php echo strtotime($alerta['fecha']); ?>">
                             
                             <td>
@@ -921,6 +970,9 @@ if ($user_role === 'supervisor') {
 (function(){
     'use strict';
 
+    // Bancos/cooperativas para el combobox de búsqueda del filtro "Empresa" (solo admin/super_admin)
+    var BANCOS_ALERTAS = <?= json_encode(array_map(fn($b) => ['id' => (string)$b['id'], 'nombre' => $b['nombre']], $bancos_alertas), JSON_UNESCAPED_UNICODE) ?>;
+
     var _currentId  = null;
     var _currentEstado = null;
 
@@ -1018,6 +1070,7 @@ if ($user_role === 'supervisor') {
     // ── BUSCADOR Y FILTROS EN TIEMPO REAL ──────────────────────────
     var alertSearch = document.getElementById('alertSearch');
     var filterAsesor = document.getElementById('filterAsesor');
+    var filterEmpresaHidden = document.getElementById('filterEmpresaHidden');
     var sortAlerts = document.getElementById('sortAlerts');
     var statusButtons = document.querySelectorAll('.btn-premium-filter');
     var alphabetButtons = document.querySelectorAll('.btn-alphabet');
@@ -1027,6 +1080,7 @@ if ($user_role === 'supervisor') {
         var activeBtn = document.querySelector('.btn-premium-filter.active');
         var activeStatus = activeBtn ? activeBtn.getAttribute('data-filter-status') : 'todos';
         var activeAsesor = filterAsesor ? filterAsesor.value : '';
+        var activeBancoId = filterEmpresaHidden ? filterEmpresaHidden.value : '';
         var sortValue = sortAlerts ? sortAlerts.value : 'fecha-desc';
         
         var activeLetterBtn = document.querySelector('.btn-alphabet.active');
@@ -1055,11 +1109,19 @@ if ($user_role === 'supervisor') {
 
         // 2. Filtrar y re-añadir filas ordenadas
         var visibleCount = 0;
+        // Contadores de las tarjetas superiores (Total/Pendientes/Revisadas):
+        // reflejan el alcance actual (texto, asesor, empresa, letra) SIN
+        // aplicar el filtro de estado, para que las 3 tarjetas muestren el
+        // desglose completo de lo que hay dentro de ese alcance (por
+        // ejemplo, al filtrar por un banco, "Total" pasa a ser el total de
+        // ESE banco, no el total global).
+        var scopeTotal = 0, scopePend = 0, scopeRev = 0;
         rows.forEach(function(row) {
             var name = row.getAttribute('data-search-name') || '';
             var id   = row.getAttribute('data-search-id') || '';
             var status = row.getAttribute('data-estado') || '';
             var advisor = row.getAttribute('data-asesor') || '';
+            var bancoId = row.getAttribute('data-banco-id') || '';
 
             // Filtro de texto (nombre o cédula)
             var matchesText = !val || name.includes(val) || id.includes(val);
@@ -1070,10 +1132,20 @@ if ($user_role === 'supervisor') {
             // Filtro de asesor
             var matchesAsesor = !activeAsesor || (advisor === activeAsesor);
 
+            // Filtro de empresa/banco (solo admin/super_admin)
+            var matchesEmpresa = !activeBancoId || (bancoId === activeBancoId);
+
             // Filtro de letra (A-Z)
             var matchesLetter = (activeLetter === 'todos') || name.startsWith(activeLetter);
 
-            if (matchesText && matchesStatus && matchesAsesor && matchesLetter) {
+            // Alcance para las tarjetas de arriba: todo menos el filtro de estado
+            var matchesScope = matchesText && matchesAsesor && matchesEmpresa && matchesLetter;
+            if (matchesScope) {
+                scopeTotal++;
+                if (status === 'abierta') scopePend++; else scopeRev++;
+            }
+
+            if (matchesText && matchesStatus && matchesAsesor && matchesEmpresa && matchesLetter) {
                 row.style.display = '';
                 visibleCount++;
             } else {
@@ -1083,6 +1155,14 @@ if ($user_role === 'supervisor') {
             // Mueve la fila en el DOM
             tbody.appendChild(row);
         });
+
+        // Actualizar las tarjetas de Total/Pendientes/Revisadas según el alcance actual
+        var elTotalCard = document.getElementById('alertas-total');
+        var elPendCard  = document.getElementById('alertas-pendientes');
+        var elRevCard   = document.getElementById('alertas-revisadas');
+        if (elTotalCard) elTotalCard.textContent = scopeTotal;
+        if (elPendCard)  elPendCard.textContent  = scopePend;
+        if (elRevCard)   elRevCard.textContent   = scopeRev;
 
         // Manejo de la fila de "sin resultados"
         var placeholderRow = document.getElementById('no-alerts-placeholder');
@@ -1136,6 +1216,34 @@ if ($user_role === 'supervisor') {
         });
     });
 
+    // ── Filtro por Empresa/Banco (búsqueda por escritura) ──────────
+    var filterEmpresaBuscarInput = document.getElementById('filterEmpresaBuscar');
+    var filterEmpresaClearBtn    = document.getElementById('filterEmpresaClear');
+    if (filterEmpresaBuscarInput && typeof initCooperativaBuscador === 'function') {
+        initCooperativaBuscador({
+            inputId:  'filterEmpresaBuscar',
+            hiddenId: 'filterEmpresaHidden',
+            listId:   'filterEmpresaLista',
+            data: BANCOS_ALERTAS,
+            onSelect: function () {
+                filterEmpresaClearBtn.style.display = 'inline-block';
+                applyFiltersAndSort();
+            }
+        });
+        filterEmpresaClearBtn.addEventListener('click', function () {
+            filterEmpresaBuscarInput.value = '';
+            filterEmpresaHidden.value = '';
+            filterEmpresaClearBtn.style.display = 'none';
+            applyFiltersAndSort();
+        });
+        filterEmpresaBuscarInput.addEventListener('input', function () {
+            if (!filterEmpresaHidden.value) {
+                filterEmpresaClearBtn.style.display = 'none';
+                applyFiltersAndSort();
+            }
+        });
+    }
+
     // Ejecutar ordenamiento y filtrado inicial
     applyFiltersAndSort();
 
@@ -1171,21 +1279,13 @@ if ($user_role === 'supervisor') {
                     var btnRow = tr.querySelector('.open-alert-detail');
                     if (btnRow) btnRow.setAttribute('data-estado', 'cerrada');
                     
-                    // Volver a aplicar filtros para refrescar la lista de inmediato
+                    // Volver a aplicar filtros para refrescar la lista de inmediato;
+                    // esto también recalcula Total/Pendientes/Revisadas según el
+                    // alcance actual (texto/asesor/empresa/letra), así que no hace
+                    // falta ajustarlos manualmente aquí aparte.
                     applyFiltersAndSort();
                 }
-                // 2. Actualizar contadores en el encabezado
-                var elPend = document.getElementById('alertas-pendientes');
-                var elRev  = document.getElementById('alertas-revisadas');
-                if (elPend) {
-                    var p = parseInt(elPend.textContent, 10);
-                    if (!isNaN(p) && p > 0) elPend.textContent = (p - 1);
-                }
-                if (elRev) {
-                    var r = parseInt(elRev.textContent, 10);
-                    if (!isNaN(r)) elRev.textContent = (r + 1);
-                }
-                // 3. Feedback visual y cerrar modal
+                // 2. Feedback visual y cerrar modal
                 btnMark.innerHTML = '<i class="fas fa-check-double"></i> ¡Revisada!';
                 setTimeout(closeModal, 700);
             } else {
