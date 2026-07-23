@@ -76,11 +76,11 @@ function _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, array $
                 'allow_self_signed' => true,
             ],
         ];
-        // Anti-spam headers
+        // Nota: antes se agregaban headers X-Priority/Importance/Precedence:bulk
+        // como "anti-spam", pero eran contradictorios (marcaban el correo como
+        // urgente Y como masivo a la vez), lo que activaba el filtro estricto
+        // de Gmail y causaba rechazos DMARC (550-5.7.26) en vez de solo spam.
         $mail->addCustomHeader('X-Mailer', 'Super_IA-Mailer');
-        $mail->addCustomHeader('X-Priority', '1');
-        $mail->addCustomHeader('Importance', 'High');
-        $mail->addCustomHeader('Precedence', 'bulk');
         $mail->addAddress($toEmail);
         $mail->isHTML(true);
         $mail->Subject = $subject;

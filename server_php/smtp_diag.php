@@ -31,8 +31,16 @@ $tests = [
     ],
 ];
 
-$username   = 'edwinchoez83@gmail.com';
-$password   = 'abzudapfzcsjkeoz';   // App Password actualizada 2026-06-08
+// Se lee siempre de email_config.php para no volver a quedar con una
+// contraseña vieja/hardcodeada aquí si se actualiza la App Password.
+require_once $serverPhpDir . '/email_helper.php';
+list($emailCfg, $cfgErr) = loadEmailConfig();
+if ($emailCfg === null) {
+    die('No se pudo cargar email_config.php: ' . htmlspecialchars($cfgErr ?? ''));
+}
+
+$username   = $emailCfg['username'];
+$password   = $emailCfg['password'];
 $toEmail    = $_GET['to'] ?? 'edwinchoez25@gmail.com';
 
 echo '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
