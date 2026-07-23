@@ -22,26 +22,30 @@ if (empty($cooperativa_id)) {
 }
 
 try {
-    // Obtener todos los supervisores de la base
-    // Nota: En SUPER_IA LOGAN, los supervisores no tienen relación directa con cooperativa
-    // Aquí obtenemos todos los supervisores activos
-    // Si en el futuro hay una relación, esta query puede actualizarse
-    
+    // Filtra por la cooperativa/banco realmente elegida, siguiendo la
+    // cadena supervisor -> jefe_agencia -> agencia -> unidad_bancaria.
+    // Antes esta consulta devolvía TODOS los supervisores activos del
+    // sistema sin importar el banco seleccionado (bug: el filtro por
+    // banco no existía de verdad, solo el <select> lo aparentaba).
     $stmt = $conn->prepare("
         SELECT u.id, u.nombre, u.email, u.rol
         FROM usuario u
-        WHERE u.rol = 'supervisor' AND u.activo = 1 AND u.estado_aprobacion = 'aprobado'
+        JOIN supervisor sv ON sv.usuario_id = u.id
+        JOIN jefe_agencia ja ON ja.id = sv.jefe_agencia_id
+        JOIN agencia ag ON ag.id = ja.agencia_id
+        WHERE ag.unidad_bancaria_id = ?
+          AND u.activo = 1 AND u.estado_aprobacion = 'aprobado'
         ORDER BY u.nombre ASC
     ");
-    
+    $stmt->bind_param('s', $cooperativa_id);
     $stmt->execute();
     $supervisores = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
+
     echo json_encode([
         'status' => 'success',
         'supervisores' => $supervisores
     ]);
-    
+
 } catch (Exception $e) {
     http_response_code(500);
     echo json_encode(['status' => 'error', 'message' => $e->getMessage()]);

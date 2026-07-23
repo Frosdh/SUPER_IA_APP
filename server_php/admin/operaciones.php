@@ -367,7 +367,7 @@ try {
         throw new Exception('skip');
     }
     if ($user_role === 'super_admin' || $user_role === 'admin') {
-        $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+        $q = "SELECT cp.id as id_credito, cl.id as cliente_prospecto_id, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
                      cp.monto_aprobado as cantidad, cp.estado_credito as estado,
                      cp.created_at as fecha_creacion, u.nombre as asesor_nombre, 'proceso' as origen
               FROM credito_proceso cp
@@ -382,7 +382,7 @@ try {
         $st = $pdo->prepare($q);
         $st->execute($banco_id_filtro !== '' ? [$banco_id_filtro] : []);
     } elseif ($user_role === 'supervisor') {
-        $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+        $q = "SELECT cp.id as id_credito, cl.id as cliente_prospecto_id, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
                      cp.monto_aprobado as cantidad, cp.estado_credito as estado,
                      cp.created_at as fecha_creacion, u.nombre as asesor_nombre, 'proceso' as origen
               FROM credito_proceso cp
@@ -394,7 +394,7 @@ try {
         $st = $pdo->prepare($q);
         $st->execute([$supervisor_table_id]);
     } else {
-        $q = "SELECT cp.id as id_credito, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
+        $q = "SELECT cp.id as id_credito, cl.id as cliente_prospecto_id, cl.nombre as cliente_nombre, cl.cedula as cliente_cedula,
                      cp.monto_aprobado as cantidad, cp.estado_credito as estado,
                      cp.created_at as fecha_creacion, NULL as asesor_nombre, 'proceso' as origen
               FROM credito_proceso cp
@@ -441,6 +441,7 @@ try {
                      END";
 
      $select_base = "SELECT fp.id as id_ficha,
+                     cp.id as cliente_prospecto_id,
                      COALESCE(cp.nombre, fp.cliente_nombre) as cliente_nombre,
                      COALESCE(cp.cedula, fp.cliente_cedula) as cliente_cedula,
                             $detail_alias.$amount_col as cantidad,
@@ -1214,7 +1215,12 @@ if ($user_role === 'supervisor') {
                                 <?php endif; ?>
                             </td>
                             <?php if (in_array($user_role, ['super_admin','admin','supervisor'])): ?>
+                            <?php
+                                $cpId = $op['cliente_prospecto_id'] ?? '';
+                                $excelUrl = $cpId !== '' ? '../generar_solicitud_credito_excel.php?cliente_id=' . urlencode($cpId) : '';
+                            ?>
                             <td>
+                                <div class="d-flex gap-1" style="flex-wrap:nowrap">
                                 <?php if ($origen === 'ficha' && $estado === 'solicitud_ficha' && $user_role !== 'admin'): ?>
                                 <form method="POST" class="d-flex gap-1" style="flex-wrap:nowrap">
                                     <input type="hidden" name="csrf_token"  value="<?= htmlspecialchars($csrf_token) ?>">
@@ -1237,6 +1243,15 @@ if ($user_role === 'supervisor') {
                                 <?php else: ?>
                                     <span class="text-muted small">—</span>
                                 <?php endif; ?>
+                                <?php if ($excelUrl !== ''): ?>
+                                    <a href="<?= htmlspecialchars($excelUrl) ?>"
+                                        class="btn btn-sm btn-outline-success"
+                                        title="Descargar solicitud de crédito en Excel"
+                                        target="_blank" rel="noopener">
+                                        <i class="fas fa-file-excel"></i>
+                                    </a>
+                                <?php endif; ?>
+                                </div>
                             </td>
                             <?php endif; ?>
                         </tr>

@@ -830,7 +830,7 @@ require_once '_sidebar_super_admin.php';
               <h5>Acceso Rápido</h5>
             </div>
             <div class="qk-grid">
-              <a href="crear_asesor_admin.php"  class="qk qk-y"><i class="fas fa-user-plus"></i>Crear Asesor</a>
+              <a href="crear_asesor_admin.php"  class="qk qk-y"><i class="fas fa-user-plus"></i>Crear Cuenta</a>
               <a href="clientes.php"            class="qk qk-n"><i class="fas fa-address-book"></i>Clientes</a>
               <a href="operaciones.php"         class="qk qk-g"><i class="fas fa-handshake"></i>Operaciones</a>
               <a href="mapa_vivo.php"           class="qk qk-b"><i class="fas fa-map-marked-alt"></i>Mapa Vivo</a>

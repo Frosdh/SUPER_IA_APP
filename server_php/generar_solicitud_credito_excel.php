@@ -212,6 +212,24 @@ try {
 
     $celular = (string)($fc['solicitante_celular'] ?? $cliente['celular'] ?? $cliente['telefono2'] ?? '');
     $telefonoFijo = (string)($cliente['telefono'] ?? '');
+    $telefonoDisponible = $celular !== '' ? $celular : $telefonoFijo;
+
+    // "Lugar de trabajo" del deudor (sección DEPENDIENTE): no se captura el
+    // nombre del empleador para empleados en relación de dependencia, así
+    // que se usa el sector/zona georeferenciado del domicilio como referencia.
+    $sectorTrabajoDep = (string)($cliente['zona'] ?? '');
+    if ($sectorTrabajoDep === '') $sectorTrabajoDep = (string)($cliente['subzona'] ?? '');
+
+    // "Profesión" del deudor: no hay un campo de título/profesión propio,
+    // se usa la actividad económica capturada en la encuesta (empleado
+    // privado/público/negocio propio/profesional) como mejor aproximación.
+    $actividadLabels = [
+        'negocio_propio'   => 'Negocio propio',
+        'empleado_privado' => 'Empleado privado',
+        'empleado_publico' => 'Empleado público',
+        'profesional'      => 'Profesional',
+    ];
+    $profesionDep = $actividadLabels[$cliente['actividad'] ?? ''] ?? null;
 
     // Cuotas = plazo en meses ya capturado en la encuesta de producto (crédito).
     $cuotas = isset($fc['plazo_credito_meses']) && $fc['plazo_credito_meses'] !== ''
@@ -251,6 +269,20 @@ try {
         'M25' => $celular ?: null,
         'A27' => $cliente['ciudad'] ?? null,
         'C27' => $cliente['zona'] ?? null,
+
+        // ACTIVIDAD ECONÓMICA DEUDOR (DEPENDIENTE) (fila 29-35)
+        // Lugar de trabajo actual: se usa sector/zona (georeferenciado) porque
+        // no se captura el nombre del empleador para empleados en relación
+        // de dependencia. Dirección de trabajo: dirección georeferenciada del
+        // domicilio (única dirección geo-capturada hoy para este perfil).
+        'A31' => $sectorTrabajoDep ?: null,
+        'E31' => $cliente['direccion'] ?? null,
+        'L31' => $telefonoDisponible ?: null,
+        'A33' => $profesionDep,
+        // Antigüedad, cargo que desempeña y actividad de la empresa: no se
+        // capturan todavía en la encuesta -> quedan en blanco.
+        // Lugar de trabajo anterior / cargo anterior / antigüedad anterior /
+        // teléfono anterior: no se captura -> quedan en blanco.
 
         // ACTIVIDAD ECONÓMICA (INDEPENDIENTE) (fila 38-45)
         'A39' => $cliente['nombre_empresa'] ?? null,

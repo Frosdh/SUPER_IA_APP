@@ -11,7 +11,7 @@
  *   - Definir $currentPage (string) con uno de estos valores:
  *       dashboard | mapa | mapa_calor | historial | usuarios |
  *       operaciones | metas | config_metas | alertas | tareas_descartadas |
- *       reportes_penetracion | solicitudes | solicitudes_admin | crear_asesor |
+ *       reportes_penetracion | solicitudes_admin | crear_asesor |
  *       administrar_asesores
  *   - El <style> de cada página debe definir las clases .sidebar,
  *     .sidebar-brand, .sidebar-section, .sidebar-link (mismo navy en
@@ -22,22 +22,25 @@ if (!isset($pdo)) require_once 'db_admin.php';
 
 $currentPage = trim((string)($currentPage ?? ''));
 
-$solicitudes_pendientes_sa = 0;
+// Cuenta pendientes de las 3 tablas legacy (gerente/supervisor/asesor) MÁS
+// las de la app móvil (solicitud_registro) — todas se ven y procesan juntas
+// en administrar_solicitudes_admin.php, así que un solo badge las suma todas.
+$solicitudes_admin_pendientes_sa = 0;
+foreach (['solicitudes_admin', 'solicitudes_supervisor', 'solicitudes_asesor'] as $_tabla) {
+    try {
+        $solicitudes_admin_pendientes_sa += (int)$pdo->query(
+            "SELECT COUNT(*) FROM `$_tabla` WHERE estado = 'pendiente'"
+        )->fetchColumn();
+    } catch (Throwable $e) {
+        // tabla no existe todavía en este entorno; se ignora
+    }
+}
 try {
-    $solicitudes_pendientes_sa = (int)$pdo->query(
+    $solicitudes_admin_pendientes_sa += (int)$pdo->query(
         "SELECT COUNT(*) FROM solicitud_registro WHERE estado = 'pendiente'"
     )->fetchColumn();
 } catch (Throwable $e) {
-    $solicitudes_pendientes_sa = 0;
-}
-
-$solicitudes_admin_pendientes_sa = 0;
-try {
-    $solicitudes_admin_pendientes_sa = (int)$pdo->query(
-        "SELECT COUNT(*) FROM solicitudes_admin WHERE estado = 'pendiente'"
-    )->fetchColumn();
-} catch (Throwable $e) {
-    $solicitudes_admin_pendientes_sa = 0;
+    // se ignora
 }
 
 function _sa_active(string $page, string $current): string {
@@ -91,20 +94,14 @@ function _sa_active(string $page, string $current): string {
 
     <div class="sidebar-section">
         <div class="sidebar-section-title">Super Administracion</div>
-        <a href="administrar_solicitudes_global.php" class="sidebar-link <?= _sa_active('solicitudes', $currentPage) ?>">
-            <i class="fas fa-file-signature"></i> Solicitudes Pendientes
-            <?php if ($solicitudes_pendientes_sa > 0): ?>
-                <span class="badge bg-danger ms-auto" style="font-size:10px;padding:3px 7px;border-radius:10px;"><?= $solicitudes_pendientes_sa ?></span>
-            <?php endif; ?>
-        </a>
         <a href="administrar_solicitudes_admin.php" class="sidebar-link <?= _sa_active('solicitudes_admin', $currentPage) ?>">
-            <i class="fas fa-file-alt"></i> Solicitudes de Gerente/Admin
+            <i class="fas fa-file-alt"></i> Solicitudes Gerente/Sup./Asesor
             <?php if ($solicitudes_admin_pendientes_sa > 0): ?>
                 <span class="badge bg-danger ms-auto" style="font-size:10px;padding:3px 7px;border-radius:10px;"><?= $solicitudes_admin_pendientes_sa ?></span>
             <?php endif; ?>
         </a>
         <a href="crear_asesor_admin.php" class="sidebar-link <?= _sa_active('crear_asesor', $currentPage) ?>">
-            <i class="fas fa-user-plus"></i> Crear Asesor
+            <i class="fas fa-user-plus"></i> Crear Cuenta
         </a>
         <a href="administrar_asesores.php" class="sidebar-link <?= _sa_active('administrar_asesores', $currentPage) ?>">
             <i class="fas fa-users-cog"></i> Administrar Asesores
