@@ -588,6 +588,12 @@ class ApiProvider {
   // ── Recuperación de contraseña para asesores (móvil) ────────
 
   /// Envía un OTP de 6 dígitos al email del asesor.
+  ///
+  /// Nota: el backend intenta varios servidores SMTP en cadena antes de
+  /// rendirse (Gmail 587 → Gmail 465 → respaldo), lo que puede tardar
+  /// ~20s en el peor caso. El timeout debe ser mayor a eso; si no, la
+  /// app se rinde antes de recibir el código de emergencia que el
+  /// backend devuelve cuando el envío de email falla.
   Future<Map<String, dynamic>> enviarOtpAsesor({
     required String email,
   }) async {
@@ -597,7 +603,7 @@ class ApiProvider {
       final response = await http.post(
         Uri.parse(url),
         body: {'action': 'enviar_otp', 'email': email},
-      ).timeout(const Duration(seconds: 12));
+      ).timeout(const Duration(seconds: 40));
 
       if (response.statusCode == 200) {
         return json.decode(response.body) as Map<String, dynamic>;

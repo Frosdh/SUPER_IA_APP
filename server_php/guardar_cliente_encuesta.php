@@ -278,6 +278,11 @@ $lng_ini = floatOrNull($_POST['longitud_inicio'] ?? '');
 $lat_fin = floatOrNull($_POST['latitud_fin']     ?? '');
 $lng_fin = floatOrNull($_POST['longitud_fin']    ?? '');
 
+// Ubicación del negocio/empresa (puede diferir del domicilio del cliente; viene del
+// mapa+buscador de dirección en levantamiento_empresa.php)
+$lat_negocio = floatOrNull($_POST['latitud_negocio']  ?? '');
+$lng_negocio = floatOrNull($_POST['longitud_negocio'] ?? '');
+
 // Encuesta
 $mantiene_ahorro    = (int)($_POST['mantiene_cuenta_ahorro']    ?? 0);
 $mantiene_corriente = (int)($_POST['mantiene_cuenta_corriente'] ?? 0);
@@ -1447,27 +1452,44 @@ try {
             $stcr->close();
 
             if ($rcr) {
-                // Actualizar estado a 'levantamiento' si estaba en etapa anterior
+                // Actualizar estado a 'levantamiento' si estaba en etapa anterior,
+                // y guardar/actualizar la georreferencia del negocio si se envió.
                 $upd = $conn->prepare(
                     "UPDATE credito_proceso
                      SET estado_credito = 'levantamiento',
                          fecha_levantamiento = CURDATE(),
+                         latitud_georef = COALESCE(?, latitud_georef),
+                         longitud_georef = COALESCE(?, longitud_georef),
                          updated_at = NOW()
                      WHERE id = ?
                        AND estado_credito IN ('prospectado','entrevista_venta')"
                 );
-                $upd->bind_param('s', $rcr['id']);
+                $upd->bind_param('dds', $lat_negocio, $lng_negocio, $rcr['id']);
                 $upd->execute();
                 $upd->close();
+
+                // Si el proceso ya estaba en 'levantamiento' (o más avanzado) igual
+                // permitimos actualizar la georreferencia si llegó una nueva.
+                if (($lat_negocio !== null && $lng_negocio !== null)) {
+                    $updGeo = $conn->prepare(
+                        "UPDATE credito_proceso
+                         SET latitud_georef = ?, longitud_georef = ?, updated_at = NOW()
+                         WHERE id = ?"
+                    );
+                    $updGeo->bind_param('dds', $lat_negocio, $lng_negocio, $rcr['id']);
+                    $updGeo->execute();
+                    $updGeo->close();
+                }
             } else {
                 // No existe proceso aún: crear uno en estado 'levantamiento'
                 $nuevo_cp_id = genUUID();
                 $ins = $conn->prepare(
                     "INSERT INTO credito_proceso
-                     (id, cliente_prospecto_id, asesor_id, estado_credito, fecha_levantamiento, created_at)
-                     VALUES (?, ?, ?, 'levantamiento', CURDATE(), NOW())"
+                     (id, cliente_prospecto_id, asesor_id, estado_credito, fecha_levantamiento,
+                      latitud_georef, longitud_georef, created_at)
+                     VALUES (?, ?, ?, 'levantamiento', CURDATE(), ?, ?, NOW())"
                 );
-                $ins->bind_param('sss', $nuevo_cp_id, $cliente_id, $asesor_id);
+                $ins->bind_param('sssdd', $nuevo_cp_id, $cliente_id, $asesor_id, $lat_negocio, $lng_negocio);
                 $ins->execute();
                 $ins->close();
             }

@@ -33,6 +33,7 @@ $currentPage = 'levantamiento';
 <title>Levantamiento de Empresa — Asesor</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{
     --brand-yellow:#ffdd00; --brand-yellow-deep:#f4c400;
@@ -116,6 +117,10 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 .fld input,.fld select,.fld textarea{padding:10px 12px;border:1.5px solid var(--brand-border);border-radius:10px;font-size:14px;font-family:inherit;background:#fff;transition:.2s;}
 .fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--brand-yellow-deep);box-shadow:0 0 0 3px rgba(255,221,0,.15);}
 .fld.full{grid-column:1/-1;}
+.resultado-direccion{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--brand-border);}
+.resultado-direccion:last-child{border-bottom:none;}
+.resultado-direccion:hover{background:var(--brand-bg);}
+.resultado-direccion i{color:var(--brand-navy);margin-right:4px;}
 
 /* TABLES */
 .table-responsive{margin-top:14px;border:1px solid var(--brand-border);border-radius:12px;overflow:hidden;}
@@ -471,6 +476,24 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                             <option value="comercio">Comercio</option>
                                         </select>
                                     </div>
+                                    <div class="fld full">
+                                        <label>Dirección del negocio</label>
+                                        <input type="text" name="direccion_negocio" id="f-direccion_negocio" placeholder="Calle, número, referencias (si es distinta al domicilio)">
+                                    </div>
+                                </div>
+                                <input type="hidden" name="latitud_negocio" id="latitud_negocio">
+                                <input type="hidden" name="longitud_negocio" id="longitud_negocio">
+                                <div class="fld full" style="margin-top:10px;">
+                                    <label><i class="fas fa-map-marker-alt"></i> Ubicación del negocio</label>
+                                    <p class="sub" style="margin-bottom:8px;">Puede ser diferente al domicilio del cliente. Busca la calle/sector o arrastra el pin sobre el mapa.</p>
+                                    <div style="display:flex; gap:8px; position:relative;">
+                                        <input type="text" id="buscador-direccion-negocio" placeholder="Ej: Av. Ordóñez Lasso y ..., Cuenca" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarDireccionNegocio();}">
+                                        <button type="button" id="btn-buscar-direccion-negocio" class="btn btn-outline-secondary" style="white-space:nowrap;" onclick="buscarDireccionNegocio()"><i class="fas fa-search"></i> Buscar</button>
+                                        <button type="button" class="btn btn-outline-secondary" style="white-space:nowrap;" onclick="usarMiUbicacionNegocio()" title="Usar mi ubicación GPS"><i class="fas fa-crosshairs"></i></button>
+                                        <div id="resultados-busqueda-negocio" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--brand-border); border-radius:8px; box-shadow:0 4px 12px rgba(18,58,109,.06); z-index:1000; max-height:220px; overflow-y:auto;"></div>
+                                    </div>
+                                    <div id="mapa-ubicacion-negocio" style="height:260px; border-radius:10px; margin-top:10px; border:1px solid var(--brand-border);"></div>
+                                    <div id="ubicacion-negocio-info" style="margin-top:6px; font-size:12px; color:var(--brand-gray);">Sin ubicación confirmada aún.</div>
                                 </div>
                             </div>
 
@@ -1107,6 +1130,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 let currentStep = 0;
 const totalSteps = 8;
@@ -1274,7 +1298,11 @@ document.addEventListener('click', function(e) {
             const hasEmp = input.value === '1';
             document.getElementById('extras-empresa').classList.toggle('show', hasEmp);
             document.getElementById('aviso-sin-empresa').style.display = hasEmp ? 'none' : 'block';
-            
+            if (hasEmp) {
+                initMapaUbicacionNegocio();
+                setTimeout(function(){ if (mapaUbicacionNegocio) mapaUbicacionNegocio.invalidateSize(); }, 250);
+            }
+
             // Set required attributes dynamically
             const fNombre = document.getElementById('f-nombre_empresa');
             const fTipo = document.getElementById('f-tipo_empresa');
@@ -1888,6 +1916,114 @@ function goToStep(stepIndex) {
     currentStep = stepIndex;
     showStep(currentStep);
 }
+
+/* ── MAPA UBICACIÓN DEL NEGOCIO (puede diferir del domicilio) ── */
+var mapaUbicacionNegocio = null, marcadorUbicacionNegocio = null;
+var UBIC_NEG_DEFAULT_LAT = -2.1894, UBIC_NEG_DEFAULT_LNG = -78.9233; // centro aprox. Ecuador
+
+function initMapaUbicacionNegocio() {
+    if (mapaUbicacionNegocio || typeof L === 'undefined') return;
+    var mapEl = document.getElementById('mapa-ubicacion-negocio');
+    if (!mapEl) return;
+    var latVal = parseFloat(document.getElementById('latitud_negocio').value);
+    var lngVal = parseFloat(document.getElementById('longitud_negocio').value);
+    var tieneUbic = !isNaN(latVal) && !isNaN(lngVal);
+    var lat = tieneUbic ? latVal : UBIC_NEG_DEFAULT_LAT;
+    var lng = tieneUbic ? lngVal : UBIC_NEG_DEFAULT_LNG;
+
+    mapaUbicacionNegocio = L.map('mapa-ubicacion-negocio').setView([lat, lng], tieneUbic ? 17 : 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(mapaUbicacionNegocio);
+
+    marcadorUbicacionNegocio = L.marker([lat, lng], {draggable:true}).addTo(mapaUbicacionNegocio);
+    marcadorUbicacionNegocio.on('dragend', function(e){
+        var pos = e.target.getLatLng();
+        setUbicacionNegocio(pos.lat, pos.lng, false);
+    });
+    mapaUbicacionNegocio.on('click', function(e){
+        setUbicacionNegocio(e.latlng.lat, e.latlng.lng, false);
+    });
+
+    if (tieneUbic) actualizarUbicacionNegocioInfo(lat, lng);
+}
+
+function actualizarUbicacionNegocioInfo(lat, lng) {
+    var info = document.getElementById('ubicacion-negocio-info');
+    if (info) info.innerHTML = '<i class="fas fa-check-circle" style="color:#059669;"></i> Ubicación confirmada: ' + lat.toFixed(6) + ', ' + lng.toFixed(6);
+}
+
+function setUbicacionNegocio(lat, lng, centrarMapa) {
+    document.getElementById('latitud_negocio').value = lat;
+    document.getElementById('longitud_negocio').value = lng;
+    actualizarUbicacionNegocioInfo(lat, lng);
+    if (!mapaUbicacionNegocio) return;
+    if (marcadorUbicacionNegocio) marcadorUbicacionNegocio.setLatLng([lat, lng]);
+    if (centrarMapa) mapaUbicacionNegocio.setView([lat, lng], Math.max(mapaUbicacionNegocio.getZoom(), 16));
+}
+
+function usarMiUbicacionNegocio() {
+    if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
+    navigator.geolocation.getCurrentPosition(
+        function(p){ setUbicacionNegocio(p.coords.latitude, p.coords.longitude, true); },
+        function(){ alert('No se pudo obtener tu ubicación GPS. Usa el buscador de dirección o marca el punto en el mapa.'); },
+        {timeout:8000, enableHighAccuracy:true}
+    );
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function buscarDireccionNegocio() {
+    var input = document.getElementById('buscador-direccion-negocio');
+    var q = input ? input.value.trim() : '';
+    var resultsEl = document.getElementById('resultados-busqueda-negocio');
+    if (!q) return;
+    var btn = document.getElementById('btn-buscar-direccion-negocio');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ec&addressdetails=0&q=' + encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Buscar'; }
+            if (!resultsEl) return;
+            if (!data || !data.length) {
+                resultsEl.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--brand-gray);">Sin resultados. Prueba con más detalle (calle, sector, ciudad).</div>';
+                resultsEl.style.display = 'block';
+                return;
+            }
+            resultsEl.innerHTML = data.map(function(r){
+                return '<div class="resultado-direccion" data-lat="'+r.lat+'" data-lng="'+r.lon+'"><i class="fas fa-map-marker-alt"></i>' + escHtml(r.display_name) + '</div>';
+            }).join('');
+            resultsEl.style.display = 'block';
+        })
+        .catch(function(){
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Buscar'; }
+            if (resultsEl) { resultsEl.innerHTML = '<div style="padding:10px;font-size:13px;color:#991b1b;">Error al buscar. Intenta de nuevo.</div>'; resultsEl.style.display='block'; }
+        });
+}
+
+document.addEventListener('click', function(e){
+    var item = e.target.closest && e.target.closest('#resultados-busqueda-negocio .resultado-direccion');
+    if (item) {
+        var lat = parseFloat(item.dataset.lat), lng = parseFloat(item.dataset.lng);
+        setUbicacionNegocio(lat, lng, true);
+        var resultsEl = document.getElementById('resultados-busqueda-negocio');
+        if (resultsEl) resultsEl.style.display = 'none';
+        return;
+    }
+    var resultsEl2 = document.getElementById('resultados-busqueda-negocio');
+    var buscador = document.getElementById('buscador-direccion-negocio');
+    if (resultsEl2 && resultsEl2.style.display === 'block' && e.target !== buscador && !e.target.closest('#resultados-busqueda-negocio')) {
+        resultsEl2.style.display = 'none';
+    }
+});
+
+document.addEventListener('DOMContentLoaded', function(){
+    if (document.getElementById('extras-empresa') && document.getElementById('extras-empresa').classList.contains('show')) {
+        initMapaUbicacionNegocio();
+    }
+});
 
 function cancelSurvey() {
     if (confirm('¿Estás seguro de cancelar el levantamiento? Se perderán los cambios no guardados.')) {

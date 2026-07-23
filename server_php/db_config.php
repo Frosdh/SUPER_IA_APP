@@ -26,10 +26,12 @@ if (!function_exists('http_response_code')) {
     }
 }
 
-$db_host     = "localhost";
-$db_name     = "corporat_base_super_ia";
-$db_user     = "corporat_coac_user";
-$db_password = '*6LuhePgy=9?Zy-&';
+// Si existen variables de entorno (p. ej. definidas por docker-compose), se usan
+// esas; si no, se mantiene la configuración de producción actual sin cambios.
+$db_host     = getenv('DB_HOST')     ?: "localhost";
+$db_name     = getenv('DB_NAME')     ?: "corporat_base_super_ia";
+$db_user     = getenv('DB_USER')     ?: "corporat_coac_user";
+$db_password = getenv('DB_PASSWORD') ?: '*6LuhePgy=9?Zy-&';
 
 $conn = null;
 

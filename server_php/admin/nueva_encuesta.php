@@ -99,6 +99,7 @@ function ynBlock(string $label, string $name, $value = null): string {
 <title>Nueva Encuesta — Asesor</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{
     --brand-yellow:#ffdd00; --brand-yellow-deep:#f4c400;
@@ -279,6 +280,12 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
 
 .step-pane{display:none;}
 .step-pane.active{display:block;animation:fadein .22s ease;}
+
+.resultado-direccion{padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--brand-border);}
+.resultado-direccion:last-child{border-bottom:none;}
+.resultado-direccion:hover{background:var(--brand-bg);}
+.resultado-direccion i{color:var(--brand-navy);margin-right:4px;}
+#mapa-ubicacion{cursor:pointer;}
 @keyframes fadein{from{opacity:0;transform:translateY(5px);}to{opacity:1;transform:none;}}
 
 @media(max-width:768px){
@@ -435,8 +442,8 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
             <input type="hidden" name="actividad"      id="hid-actividad">
             <input type="hidden" name="nivel_interes"  id="hid-nivel_interes">
             <input type="hidden" name="prod_interes"   id="hid-prod_interes">
-            <input type="hidden" name="lat" id="lat">
-            <input type="hidden" name="lng" id="lng">
+            <input type="hidden" name="latitud_inicio" id="latitud_inicio">
+            <input type="hidden" name="longitud_inicio" id="longitud_inicio">
             <input type="hidden" name="asesor_id"  value="<?= $asesor_table_id ?>">
             <input type="hidden" name="usuario_id" value="<?= $asesor_usuario_id ?>">
             <!-- campos q-card ocultos -->
@@ -603,6 +610,18 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                         <div class="fld full">
                             <label>Dirección</label>
                             <input type="text" name="direccion" id="f-direccion" placeholder="Calle, número, referencias">
+                        </div>
+                        <div class="fld fld-full" style="grid-column:1/-1;">
+                            <label><i class="fas fa-map-marker-alt"></i> Ubicación de la vivienda / negocio</label>
+                            <p class="sub" style="margin-bottom:8px;">Busca la calle o sector, o arrastra el pin sobre el mapa para marcar el punto exacto.</p>
+                            <div style="display:flex; gap:8px; position:relative;">
+                                <input type="text" id="buscador-direccion-mapa" placeholder="Ej: Av. Ordóñez Lasso y ..., Cuenca" style="flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarDireccionMapa();}">
+                                <button type="button" id="btn-buscar-direccion" class="btn-skip" style="white-space:nowrap;" onclick="buscarDireccionMapa()"><i class="fas fa-search"></i> Buscar</button>
+                                <button type="button" class="btn-skip" style="white-space:nowrap;" onclick="usarMiUbicacion()" title="Usar mi ubicación GPS"><i class="fas fa-crosshairs"></i></button>
+                                <div id="resultados-busqueda-direccion" style="display:none; position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid var(--brand-border); border-radius:8px; box-shadow:var(--brand-shadow-sm); z-index:1000; max-height:220px; overflow-y:auto;"></div>
+                            </div>
+                            <div id="mapa-ubicacion" style="height:260px; border-radius:10px; margin-top:10px; border:1px solid var(--brand-border);"></div>
+                            <div id="ubicacion-info" style="margin-top:6px; font-size:12px; color:var(--brand-gray);">Sin ubicación confirmada aún.</div>
                         </div>
                         <div class="fld">
                             <label>Ciudad</label>
@@ -1709,6 +1728,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
     </div><!-- /content-area -->
 </div><!-- /main-content -->
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* ──────────────────────────────────────────────────────
    SOPORTE PARA EDITAR ENCUESTAS EXISTENTES
@@ -2742,6 +2762,10 @@ function show(i) {
     document.getElementById('btn-next').style.display = isLast ? 'none'        : 'inline-flex';
     document.getElementById('btn-save').style.display = isLast ? 'inline-flex' : 'none';
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (cur === 2) {
+        initMapaUbicacion();
+        setTimeout(function(){ if (mapaUbicacion) mapaUbicacion.invalidateSize(); }, 250);
+    }
 }
 document.getElementById('btn-prev').onclick = () => show(cur - 1);
 document.getElementById('btn-next').onclick = () => {
@@ -2982,10 +3006,111 @@ function selectLevel(el){
 /* GEO */
 if(navigator.geolocation){
     navigator.geolocation.getCurrentPosition(
-        function(p){ setVal('lat',p.coords.latitude); setVal('lng',p.coords.longitude); },
+        function(p){ setUbicacion(p.coords.latitude, p.coords.longitude, true); },
         function(){}, {timeout:5000}
     );
 }
+
+/* MAPA UBICACIÓN (dirección del cliente) */
+var mapaUbicacion = null, marcadorUbicacion = null;
+var UBIC_DEFAULT_LAT = -2.1894, UBIC_DEFAULT_LNG = -78.9233; // centro aprox. Ecuador
+
+function initMapaUbicacion() {
+    if (mapaUbicacion || typeof L === 'undefined') return;
+    var mapEl = document.getElementById('mapa-ubicacion');
+    if (!mapEl) return;
+    var latVal = parseFloat(document.getElementById('latitud_inicio').value);
+    var lngVal = parseFloat(document.getElementById('longitud_inicio').value);
+    var tieneUbic = !isNaN(latVal) && !isNaN(lngVal);
+    var lat = tieneUbic ? latVal : UBIC_DEFAULT_LAT;
+    var lng = tieneUbic ? lngVal : UBIC_DEFAULT_LNG;
+
+    mapaUbicacion = L.map('mapa-ubicacion').setView([lat, lng], tieneUbic ? 17 : 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(mapaUbicacion);
+
+    marcadorUbicacion = L.marker([lat, lng], {draggable:true}).addTo(mapaUbicacion);
+    marcadorUbicacion.on('dragend', function(e){
+        var pos = e.target.getLatLng();
+        setUbicacion(pos.lat, pos.lng, false);
+    });
+    mapaUbicacion.on('click', function(e){
+        setUbicacion(e.latlng.lat, e.latlng.lng, false);
+    });
+
+    if (tieneUbic) actualizarUbicacionInfo(lat, lng);
+}
+
+function actualizarUbicacionInfo(lat, lng) {
+    var info = document.getElementById('ubicacion-info');
+    if (info) info.innerHTML = '<i class="fas fa-check-circle" style="color:#059669;"></i> Ubicación confirmada: ' + lat.toFixed(6) + ', ' + lng.toFixed(6);
+}
+
+function setUbicacion(lat, lng, centrarMapa) {
+    setVal('latitud_inicio', lat);
+    setVal('longitud_inicio', lng);
+    actualizarUbicacionInfo(lat, lng);
+    if (!mapaUbicacion) return;
+    if (marcadorUbicacion) marcadorUbicacion.setLatLng([lat, lng]);
+    if (centrarMapa) mapaUbicacion.setView([lat, lng], Math.max(mapaUbicacion.getZoom(), 16));
+}
+
+function usarMiUbicacion() {
+    if (!navigator.geolocation) { alert('Tu navegador no soporta geolocalización.'); return; }
+    navigator.geolocation.getCurrentPosition(
+        function(p){ setUbicacion(p.coords.latitude, p.coords.longitude, true); },
+        function(){ alert('No se pudo obtener tu ubicación GPS. Usa el buscador de dirección o marca el punto en el mapa.'); },
+        {timeout:8000, enableHighAccuracy:true}
+    );
+}
+
+function buscarDireccionMapa() {
+    var input = document.getElementById('buscador-direccion-mapa');
+    var q = input ? input.value.trim() : '';
+    var resultsEl = document.getElementById('resultados-busqueda-direccion');
+    if (!q) return;
+    var btn = document.getElementById('btn-buscar-direccion');
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=ec&addressdetails=0&q=' + encodeURIComponent(q))
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Buscar'; }
+            if (!resultsEl) return;
+            if (!data || !data.length) {
+                resultsEl.innerHTML = '<div style="padding:10px;font-size:13px;color:var(--brand-gray);">Sin resultados. Prueba con más detalle (calle, sector, ciudad).</div>';
+                resultsEl.style.display = 'block';
+                return;
+            }
+            resultsEl.innerHTML = data.map(function(r){
+                return '<div class="resultado-direccion" data-lat="'+r.lat+'" data-lng="'+r.lon+'"><i class="fas fa-map-marker-alt"></i>' + esc(r.display_name) + '</div>';
+            }).join('');
+            resultsEl.style.display = 'block';
+        })
+        .catch(function(){
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Buscar'; }
+            if (resultsEl) { resultsEl.innerHTML = '<div style="padding:10px;font-size:13px;color:#991b1b;">Error al buscar. Intenta de nuevo.</div>'; resultsEl.style.display='block'; }
+        });
+}
+
+document.addEventListener('click', function(e){
+    var item = e.target.closest && e.target.closest('.resultado-direccion');
+    if (item) {
+        var lat = parseFloat(item.dataset.lat), lng = parseFloat(item.dataset.lng);
+        setUbicacion(lat, lng, true);
+        var resultsEl = document.getElementById('resultados-busqueda-direccion');
+        if (resultsEl) resultsEl.style.display = 'none';
+        var input = document.getElementById('buscador-direccion-mapa');
+        return;
+    }
+    var resultsEl2 = document.getElementById('resultados-busqueda-direccion');
+    var buscador = document.getElementById('buscador-direccion-mapa');
+    if (resultsEl2 && resultsEl2.style.display === 'block' && e.target !== buscador && !e.target.closest('#resultados-busqueda-direccion')) {
+        resultsEl2.style.display = 'none';
+    }
+});
 
 /* ── DOC CHECKLIST ── */
 function toggleDoc(el){
