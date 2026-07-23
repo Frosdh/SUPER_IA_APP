@@ -11,8 +11,7 @@
  *   - Definir $currentPage (string) con uno de estos valores:
  *       dashboard | mapa | mapa_calor | historial | usuarios |
  *       operaciones | metas | config_metas | alertas | tareas_descartadas |
- *       reportes_penetracion | solicitudes_admin | crear_asesor |
- *       administrar_asesores
+ *       reportes_penetracion | solicitudes_admin | crear_asesor
  *   - El <style> de cada página debe definir las clases .sidebar,
  *     .sidebar-brand, .sidebar-section, .sidebar-link (mismo navy en
  *     todas las páginas: --brand-navy / --brand-navy-deep / --brand-yellow).
@@ -102,9 +101,6 @@ function _sa_active(string $page, string $current): string {
         </a>
         <a href="crear_asesor_admin.php" class="sidebar-link <?= _sa_active('crear_asesor', $currentPage) ?>">
             <i class="fas fa-user-plus"></i> Crear Cuenta
-        </a>
-        <a href="administrar_asesores.php" class="sidebar-link <?= _sa_active('administrar_asesores', $currentPage) ?>">
-            <i class="fas fa-users-cog"></i> Administrar Asesores
         </a>
     </div>
 </div>

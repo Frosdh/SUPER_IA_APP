@@ -399,10 +399,7 @@ $usuariosPorRol = $pdo->query("
             <i class="fas fa-file-alt"></i> Solicitudes de Supervisor
         </a>
         <a href="crear_asesor_admin.php" class="sidebar-link">
-            <i class="fas fa-user-plus"></i> Crear Asesor
-        </a>
-        <a href="administrar_asesores.php" class="sidebar-link">
-            <i class="fas fa-users-cog"></i> Administrar Asesores
+            <i class="fas fa-user-plus"></i> Crear Cuenta
         </a>
     </div>
     

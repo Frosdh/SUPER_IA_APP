@@ -216,20 +216,27 @@ try {
 
     // "Lugar de trabajo" del deudor (sección DEPENDIENTE): no se captura el
     // nombre del empleador para empleados en relación de dependencia, así
-    // que se usa el sector/zona georeferenciado del domicilio como referencia.
+    // que se usa el sector/zona (campo libre "Sector o barrio" de la
+    // encuesta) como referencia; si el asesor no lo llenó, se cae a la
+    // ciudad del cliente (sí se captura siempre) para no dejar la celda vacía.
     $sectorTrabajoDep = (string)($cliente['zona'] ?? '');
-    if ($sectorTrabajoDep === '') $sectorTrabajoDep = (string)($cliente['subzona'] ?? '');
+    if ($sectorTrabajoDep === '') $sectorTrabajoDep = (string)($cliente['ciudad'] ?? '');
 
     // "Profesión" del deudor: no hay un campo de título/profesión propio,
     // se usa la actividad económica capturada en la encuesta (empleado
     // privado/público/negocio propio/profesional) como mejor aproximación.
+    // Si el valor no coincide con ninguna de las opciones conocidas del
+    // formulario (p. ej. "otro" o un valor futuro), se muestra tal cual en
+    // vez de dejar la celda vacía.
     $actividadLabels = [
         'negocio_propio'   => 'Negocio propio',
         'empleado_privado' => 'Empleado privado',
         'empleado_publico' => 'Empleado público',
         'profesional'      => 'Profesional',
     ];
-    $profesionDep = $actividadLabels[$cliente['actividad'] ?? ''] ?? null;
+    $actividadRaw = (string)($cliente['actividad'] ?? '');
+    $profesionDep = $actividadLabels[$actividadRaw]
+        ?? ($actividadRaw !== '' ? ucfirst(str_replace('_', ' ', $actividadRaw)) : null);
 
     // Cuotas = plazo en meses ya capturado en la encuesta de producto (crédito).
     $cuotas = isset($fc['plazo_credito_meses']) && $fc['plazo_credito_meses'] !== ''
@@ -362,7 +369,14 @@ try {
     $XF_TITLE    = $addXf(1, 0, 0, 'center', 'center', true);
     $XF_HDRLABEL = $addXf(4, 4, 0, 'left', 'center', false);
     $XF_RED      = $addXf(2, 2, 1, 'left', 'center', false);
-    $XF_LABEL    = $addXf(4, 4, 1, 'left', 'center', true);
+    // Sin wrap: las etiquetas largas (p. ej. "LUGAR DE TRABAJO (NOMBRE DE
+    // EMPRESA O EMPLEADOR)") viven en una sola celda angosta sin fusionar,
+    // con la altura de fila real de la plantilla (pensada para una sola
+    // línea). Con wrapText=true el texto se partía en varias líneas dentro
+    // de esa altura fija y se veía cortado/superpuesto con la fila de abajo.
+    // Sin wrap, el texto sobreflota visualmente sobre las celdas vacías de
+    // la derecha (comportamiento normal de Excel), igual que en la plantilla real.
+    $XF_LABEL    = $addXf(4, 4, 1, 'left', 'center', false);
     $XF_INPUT_W  = $addXf(5, 4, 1, 'left', 'center', false);
     $XF_INPUT_G  = $addXf(5, 3, 1, 'left', 'center', false);
     $XF_PLAIN    = $addXf(6, 0, 0, 'left', 'top', true);

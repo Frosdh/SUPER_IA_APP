@@ -73,8 +73,8 @@ try {
         .btn-logout { background: var(--brand-yellow); color: var(--brand-navy-deep); border: 1px solid var(--brand-yellow-deep); padding: 8px 15px; border-radius: 5px; cursor: pointer; text-decoration: none; font-weight: 700; }
         .btn-logout:hover { opacity: .9; }
         .content-area { flex: 1; overflow-y: auto; padding: 30px; }
-        .form-card { background: white; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); padding: 30px; max-width: 700px; margin: 0 auto; }
-        .page-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        .form-card { background: white; border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.06); padding: 34px; max-width: 100%; margin: 0; }
+        .page-header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 22px; max-width: 100%; }
         .page-header .btn-back { margin-bottom: 0; }
         .page-header-text h1 { margin: 0 0 4px; font-size: 24px; font-weight: 800; color: #1f2937; }
         .page-header-text p { margin: 0; color: #6b7280; font-size: 13.5px; }
@@ -91,7 +91,9 @@ try {
         .section-title span { font-weight: 800; font-size: 14.5px; color: #1f2937; }
         .row-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
         .row-cols .form-group { margin-bottom: 0; }
-        .role-tabs { display: flex; gap: 10px; margin-bottom: 22px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        .row-cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        .row-cols-3 .form-group { margin-bottom: 0; }
+        .role-tabs { display: flex; gap: 10px; margin-bottom: 22px; max-width: 100%; }
         .role-tab { flex: 1; text-align: center; padding: 16px 10px; border-radius: 14px; border: 2px solid #e2eaf4; background: #fff; cursor: pointer; font-weight: 700; font-size: 13.5px; color: #6b7280; transition: all .2s ease; box-shadow: 0 2px 6px rgba(10,39,72,.04); }
         .role-tab:hover { border-color: #cbd5e1; transform: translateY(-1px); }
         .role-tab .role-ic { width: 38px; height: 38px; border-radius: 11px; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px; font-size: 16px; background: #f3f4f6; color: #6b7280; transition: all .2s ease; }
@@ -119,7 +121,8 @@ try {
         .alert-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
         #credencial { display: none; }
         input[type="file"] { display: none; }
-        @media (max-width: 600px) { .row-cols { grid-template-columns: 1fr; } .form-card { padding: 20px; } .role-tabs { flex-direction: column; } }
+        @media (max-width: 900px) { .row-cols-3 { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 600px) { .row-cols, .row-cols-3 { grid-template-columns: 1fr; } .form-card { padding: 20px; } .role-tabs { flex-direction: column; } }
     </style>
 </head>
 <body>
@@ -166,7 +169,7 @@ try {
     <!-- CONTENT -->
     <div class="content-area">
 
-        <div class="page-header-text" style="max-width:700px;margin:0 auto 22px;">
+        <div class="page-header-text" style="margin:0 0 22px;">
             <a href="index.php" class="btn-back">
                 <i class="fas fa-arrow-left"></i> Volver
             </a>
@@ -256,7 +259,7 @@ try {
                 <!-- DATOS PERSONALES -->
                 <div class="section-title"><div class="ic"><i class="fas fa-user"></i></div><span>Datos Personales</span></div>
 
-                <div class="row-cols">
+                <div class="row-cols-3">
                     <div class="form-group">
                         <label><i class="fas fa-user me-2"></i>Nombres</label>
                         <input type="text" name="nombres" placeholder="Ej: Juan Carlos" required>
@@ -265,14 +268,13 @@ try {
                         <label><i class="fas fa-user me-2"></i>Apellidos</label>
                         <input type="text" name="apellidos" placeholder="Ej: García López" required>
                     </div>
+                    <div class="form-group">
+                        <label><i class="fas fa-id-card me-2"></i>Cédula de Identidad</label>
+                        <input type="text" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label><i class="fas fa-id-card me-2"></i>Cédula de Identidad</label>
-                    <input type="text" name="cedula" placeholder="Ej: 1712345678" maxlength="13" required>
-                </div>
-
-                <div class="row-cols">
+                <div class="row-cols" style="margin-top:20px;">
                     <div class="form-group">
                         <label><i class="fas fa-envelope me-2"></i>Correo Electrónico</label>
                         <input type="email" name="email" placeholder="Ej: correo@ejemplo.com" required>
