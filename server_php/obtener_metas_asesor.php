@@ -106,15 +106,23 @@ try {
             }
         };
 
+        // Cuenta tareas completadas ese día que SON una encuesta: el
+        // "Prospecto Nuevo" (tipo_tarea='prospecto_nuevo', pantalla
+        // NuevaEncuestaScreen) o cualquier tarea que ya tenga una encuesta
+        // comercial/crediticia asociada. Antes solo se contaban las filas de
+        // encuesta_comercial/encuesta_crediticia, así que un "Prospecto
+        // Nuevo" completado sin la encuesta comercial completa (cliente no
+        // quiso o no aplicaba) nunca sumaba al avance, aunque sí apareciera
+        // como "Completada" en el listado de Encuestas.
         $meta['avance_encuestas'] = $avance(
-            "SELECT
-                (SELECT COUNT(*) FROM encuesta_comercial ec
-                    INNER JOIN tarea t ON t.id = ec.tarea_id
-                    WHERE t.asesor_id = ? AND IFNULL(t.fecha_realizada, t.fecha_programada) = ?)
-              + (SELECT COUNT(*) FROM encuesta_crediticia ecr
-                    INNER JOIN tarea t2 ON t2.id = ecr.tarea_id
-                    WHERE t2.asesor_id = ? AND IFNULL(t2.fecha_realizada, t2.fecha_programada) = ?) AS n",
-            [$asesor_id, $fecha, $asesor_id, $fecha],
+            "SELECT COUNT(DISTINCT t.id) AS n
+                FROM tarea t
+                LEFT JOIN encuesta_comercial ec ON ec.tarea_id = t.id
+                LEFT JOIN encuesta_crediticia ecr ON ecr.tarea_id = t.id
+                WHERE t.asesor_id = ? AND t.estado = 'completada'
+                  AND IFNULL(t.fecha_realizada, t.fecha_programada) = ?
+                  AND (t.tipo_tarea = 'prospecto_nuevo' OR ec.id IS NOT NULL OR ecr.id IS NOT NULL)",
+            [$asesor_id, $fecha],
             'encuestas'
         );
 

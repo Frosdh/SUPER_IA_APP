@@ -347,6 +347,48 @@ if ($metas_instaladas) {
 ");
                 $viewCols[] = 'avance_visitas';
             }
+
+            // ── Corrige avance_encuestas ────────────────────────────────
+            // Antes solo contaba filas en encuesta_comercial/encuesta_crediticia
+            // (la encuesta "profunda" ligada a una tarea de seguimiento). El
+            // "Prospecto Nuevo" (pantalla NuevaEncuestaScreen / nueva_encuesta.php,
+            // tipo_tarea='prospecto_nuevo') queda como tarea completada pero NO
+            // siempre crea esa fila (solo si el asesor marcó que el cliente sí
+            // aceptó la encuesta comercial completa) — por eso una encuesta que
+            // ya aparecía como "Completada" en el listado de Encuestas no sumaba
+            // nada al avance de la meta. Se corrige contando también las tareas
+            // de tipo prospecto_nuevo completadas ese día, sin duplicar las que
+            // ya tienen encuesta_comercial/crediticia asociada.
+            try {
+                $createRowEnc = $pdo->query("SHOW CREATE VIEW v_meta_asesor_avance")->fetch(PDO::FETCH_ASSOC);
+                $createSqlEnc = $createRowEnc['Create View'] ?? '';
+                if ($createSqlEnc && preg_match('/\bAS\s+(select.*)$/is', $createSqlEnc, $mSelEnc)) {
+                    $selectBodyEnc = $mSelEnc[1];
+                    $patternFromEnc = '/\bFROM\s+(?:`[^`]+`\.)?`meta_asesor_diaria`(?:\s+(?:AS\s+)?`(\w+)`)?/i';
+                    if (preg_match($patternFromEnc, $selectBodyEnc, $mFromEnc)) {
+                        $aliasEnc = (!empty($mFromEnc[1])) ? $mFromEnc[1] : 'meta_asesor_diaria';
+                        $aEnc = "`$aliasEnc`";
+
+                        $oldEncPattern = '/\(select count\(0\)\s*from\s*\(`encuesta_comercial`.*?\)\s*AS\s*`avance_encuestas`/is';
+
+                        if (preg_match($oldEncPattern, $selectBodyEnc)) {
+                            $newEncFormula =
+                                "(select count(distinct `t`.`id`) from ((`tarea` `t` " .
+                                "left join `encuesta_comercial` `ec` on(`ec`.`tarea_id` = `t`.`id`)) " .
+                                "left join `encuesta_crediticia` `ecr` on(`ecr`.`tarea_id` = `t`.`id`)) " .
+                                "where `t`.`asesor_id` = {$aEnc}.`asesor_id` and `t`.`estado` = 'completada' " .
+                                "and ifnull(`t`.`fecha_realizada`,`t`.`fecha_programada`) = {$aEnc}.`fecha` " .
+                                "and (`t`.`tipo_tarea` = 'prospecto_nuevo' or `ec`.`id` is not null or `ecr`.`id` is not null)) " .
+                                "AS `avance_encuestas`";
+
+                            $selectBodyEnc2 = preg_replace($oldEncPattern, $newEncFormula, $selectBodyEnc, 1, $cntEnc);
+                            if ($cntEnc > 0) {
+                                $pdo->exec("CREATE OR REPLACE VIEW v_meta_asesor_avance AS " . $selectBodyEnc2);
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable $e) {}
         }
     } catch (PDOException $e) {}
 }
