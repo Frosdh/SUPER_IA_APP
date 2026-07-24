@@ -139,16 +139,7 @@ function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
 
     $log("[START] Enviando a: $toEmail | From: $fromEmail | Asunto: $subject");
 
-    // 0️⃣  Localhost SMTP (hosting cPanel/Plesk — sin autenticación, solo Linux)
-    if (!_isWindows()) {
-        $log("[TRY] localhost:25 (sin auth)");
-        list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
-        if ($ok) { $log("[OK] localhost:25 exitoso"); return [true, null]; }
-        $log("[FAIL] localhost:25: $err");
-        $errors[] = "localhost:25 → $err";
-    }
-
-    // 1️⃣  Gmail SMTP puerto 587 (TLS)
+    // 1️⃣  Gmail SMTP puerto 587 (TLS) (PRIORIDAD 1 para evitar DMARC fail)
     if (!empty($cfg['password']) && $cfg['password'] !== 'CAMBIA_ESTA_PASSWORD') {
         $log("[TRY] Gmail {$cfg['host']}:{$cfg['port']} ({$cfg['secure']})");
         list($ok, $err) = _sendViaExternalSmtp($toEmail, $subject, $htmlBody, $plainBody, $cfg);
@@ -183,7 +174,17 @@ function sendEmailMessage($toEmail, $subject, $htmlBody, $plainBody)
         $errors[] = "{$fallbackCfg['host']} → $err";
     }
 
-    // 3️⃣  PHP mail() nativo — último recurso (puede ser lento)
+    // 3️⃣  Localhost SMTP (hosting cPanel/Plesk — sin autenticación, solo Linux)
+    // Se intenta solo si los SMTP externos fallaron, ya que si usamos @gmail.com fallará DMARC.
+    if (!_isWindows()) {
+        $log("[TRY] localhost:25 (sin auth)");
+        list($ok, $err) = _sendViaLocalhostSmtp($toEmail, $subject, $htmlBody, $plainBody, $fromEmail, $fromName);
+        if ($ok) { $log("[OK] localhost:25 exitoso"); return [true, null]; }
+        $log("[FAIL] localhost:25: $err");
+        $errors[] = "localhost:25 → $err";
+    }
+
+    // 4️⃣  PHP mail() nativo — último recurso (puede ser lento)
     if (!_isWindows()) {
         $log("[TRY] PHP mail()");
         list($ok, $err) = _sendViaNativeMail($toEmail, $subject, $plainBody, 'noreply@corporativoqbank.com', $fromName);

@@ -100,10 +100,9 @@ if ($action === 'enviar_otp') {
                 ]);
             }
         } else {
-            // Por seguridad respondemos igual aunque no exista el usuario
             echo json_encode([
-                'status'  => 'success',
-                'message' => 'Si el correo está registrado, recibirás el código.',
+                'status'  => 'error',
+                'message' => 'El correo ingresado no está registrado o la cuenta está inactiva.',
                 'email'   => $email,
             ]);
         }

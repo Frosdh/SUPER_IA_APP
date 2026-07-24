@@ -54,12 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         session_write_close();
 
         if (!$user) {
-            $log("[INFO] Usuario NO encontrado para $email — redirigiendo igualmente");
-            header('Location: verificar_otp_recovery.php');
-            exit;
-        }
-
-        $log("[INFO] Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre']);
+            $log("[INFO] Usuario NO encontrado para $email — mostrando error");
+            $error = 'El correo electrónico no está registrado o la cuenta está inactiva.';
+        } else {
+            $log("[INFO] Usuario encontrado: id=" . $user['id'] . ", nombre=" . $user['nombre']);
 
         // ─── Enviar el código por email ───────────────────────────
         // Usar realpath() para resolver la ruta de forma robusta en Windows/XAMPP
@@ -95,6 +93,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $smtpError     = $mailError; // para mostrar en pantalla
         $error = 'No se pudo enviar el correo electrónico.';
     }
+}
 }
 ?>
 <!DOCTYPE html>
