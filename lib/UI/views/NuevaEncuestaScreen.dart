@@ -6872,6 +6872,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
     if (!_validarCedulaParaProducto()) return;
     final cedula = _cedulaCtrl.text.trim();
     final nombre = '${_nombreCtrl.text.trim()} ${_apellidosCtrl.text.trim()}'.trim();
+    final celular = _celularCtrl.text.trim();
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -6879,6 +6880,7 @@ class _NuevaEncuestaScreenState extends State<NuevaEncuestaScreen> {
           tipo: tipo,
           clienteCedula: cedula,
           clienteNombre: nombre,
+          clienteCelular: celular,
         ),
       ),
     );

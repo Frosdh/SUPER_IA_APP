@@ -60,12 +60,14 @@ class EncuestaProductoScreen extends StatefulWidget {
   final ProductoTipo tipo;
   final String clienteCedula;
   final String clienteNombre;
+  final String clienteCelular;
 
   const EncuestaProductoScreen({
     Key? key,
     required this.tipo,
     required this.clienteCedula,
     required this.clienteNombre,
+    this.clienteCelular = '',
   }) : super(key: key);
 
   @override
@@ -214,6 +216,34 @@ class _EncuestaProductoScreenState extends State<EncuestaProductoScreen> {
     _clientUuid = OfflineQueueService.generateUuid();
     _obtenerGPS();
     _cargarInstituciones();
+    _precargarDatosCliente();
+  }
+
+  // Precarga nombre/cédula/celular del cliente/prospecto ya capturados en
+  // el paso anterior (NuevaEncuestaScreen) en los campos de Solicitante
+  // (Crédito) y Titular (Cuenta Corriente / Cuenta de Ahorros), para que el
+  // asesor no tenga que volver a escribirlos si es el mismo cliente. Siguen
+  // siendo editables por si el titular/solicitante es otra persona.
+  void _precargarDatosCliente() {
+    final nombre = widget.clienteNombre.trim();
+    final cedula = widget.clienteCedula.trim();
+    final celular = widget.clienteCelular.trim();
+    if (nombre.isEmpty && cedula.isEmpty && celular.isEmpty) return;
+
+    // Crédito → Solicitante (deudor)
+    if (_solNombreCtrl.text.isEmpty) _solNombreCtrl.text = nombre;
+    if (_solCedulaCtrl.text.isEmpty) _solCedulaCtrl.text = cedula;
+    if (_solCelularCtrl.text.isEmpty) _solCelularCtrl.text = celular;
+
+    // Cuenta Corriente → Titular
+    if (_ccNombreCtrl.text.isEmpty) _ccNombreCtrl.text = nombre;
+    if (_ccCedulaCtrl.text.isEmpty) _ccCedulaCtrl.text = cedula;
+    if (_ccCelularCtrl.text.isEmpty) _ccCelularCtrl.text = celular;
+
+    // Cuenta de Ahorros → Titular
+    if (_ahNombreCtrl.text.isEmpty) _ahNombreCtrl.text = nombre;
+    if (_ahCedulaCtrl.text.isEmpty) _ahCedulaCtrl.text = cedula;
+    if (_ahCelularCtrl.text.isEmpty) _ahCelularCtrl.text = celular;
   }
 
   @override

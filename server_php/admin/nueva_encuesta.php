@@ -1295,7 +1295,7 @@ body{font-family:'Inter','Segoe UI',sans-serif;background:var(--brand-bg);displa
                                 <div class="fld-grid" style="margin-bottom:8px;">
                                     <div class="fld fld-full"><label>Nombre completo</label><input type="text" name="fk_sol_nombre" id="fk-sol-nombre" placeholder="Nombre del solicitante"></div>
                                     <div class="fld"><label>C&eacute;dula</label><input type="text" name="fk_sol_cedula" id="fk-sol-cedula" placeholder="C&eacute;dula" inputmode="numeric"></div>
-                                    <div class="fld"><label>Celular</label><input type="tel" name="fk_sol_celular" placeholder="09XXXXXXXX"></div>
+                                    <div class="fld"><label>Celular</label><input type="tel" name="fk_sol_celular" id="fk-sol-celular" placeholder="09XXXXXXXX"></div>
                                 </div>
                                 <div style="font-size:.82rem;font-weight:600;color:#374151;margin-bottom:6px;">Estado civil del solicitante</div>
                                                                 <div class="chip-grid" style="margin-bottom:10px;">
@@ -2933,18 +2933,39 @@ function toggleProd(el){
         var fp = document.getElementById(fichaId);
         if(fp){
             fp.style.display = isOn ? 'block':'none';
-            /* autofill titular if opening */
-            if(isOn && window._prospectoData){
-                var d = window._prospectoData;
+            /* Autocompletar nombre/cédula/celular del titular o solicitante
+               con los datos del prospecto ya capturados arriba (f-nombre,
+               f-cedula, f-celular), o los del prospecto cargado
+               (window._prospectoData) si venimos de una tarea existente.
+               Solo se rellena si el campo destino está vacío, para no pisar
+               algo que el asesor ya haya editado a mano; el campo sigue
+               siendo editable normalmente. */
+            if(isOn){
+                var base = window._prospectoData || {};
+                var elNombre  = document.getElementById('f-nombre');
+                var elCedula  = document.getElementById('f-cedula');
+                var elCelular = document.getElementById('f-celular');
+                var bNombre  = (elNombre  && elNombre.value)  || base.nombre  || '';
+                var bCedula  = (elCedula  && elCedula.value)  || base.cedula  || '';
+                var bCelular = (elCelular && elCelular.value) || base.celular || base.telefono || '';
+                var fillIfEmpty = function(id, val){
+                    var f = document.getElementById(id);
+                    if(f && !f.value) f.value = val;
+                };
                 if(prod === 'ahorro'){
-                    var fn_ = document.getElementById('fa-nombre'); if(fn_) fn_.value = d.nombre||'';
-                    var fc_ = document.getElementById('fa-cedula'); if(fc_) fc_.value = d.cedula||'';
-                    var fl_ = document.getElementById('fa-celular'); if(fl_) fl_.value = d.celular||d.telefono||'';
+                    fillIfEmpty('fa-nombre', bNombre);
+                    fillIfEmpty('fa-cedula', bCedula);
+                    fillIfEmpty('fa-celular', bCelular);
                 }
                 if(prod === 'corriente'){
-                    var fn2 = document.getElementById('fc-nombre'); if(fn2) fn2.value = d.nombre||'';
-                    var fc2 = document.getElementById('fc-cedula'); if(fc2) fc2.value = d.cedula||'';
-                    var fl2 = document.getElementById('fc-celular'); if(fl2) fl2.value = d.celular||d.telefono||'';
+                    fillIfEmpty('fc-nombre', bNombre);
+                    fillIfEmpty('fc-cedula', bCedula);
+                    fillIfEmpty('fc-celular', bCelular);
+                }
+                if(prod === 'credito'){
+                    fillIfEmpty('fk-sol-nombre', bNombre);
+                    fillIfEmpty('fk-sol-cedula', bCedula);
+                    fillIfEmpty('fk-sol-celular', bCelular);
                 }
             }
         }

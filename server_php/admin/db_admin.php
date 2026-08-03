@@ -18,12 +18,10 @@ if (!file_exists($configPath)) {
     die("Error: no se encontró db_config.php");
 }
 
-// Leer las variables del archivo central sin ejecutar la conexión MySQLi
-$raw = file_get_contents($configPath);
-preg_match('/\$db_host\s*=\s*["\']([^"\']+)["\']/',     $raw, $m); $db_host     = $m[1] ?? 'localhost';
-preg_match('/\$db_name\s*=\s*["\']([^"\']+)["\']/',     $raw, $m); $db_name     = $m[1] ?? '';
-preg_match('/\$db_user\s*=\s*["\']([^"\']+)["\']/',     $raw, $m); $db_user     = $m[1] ?? '';
-preg_match('/\$db_password\s*=\s*[\'"]([^\'"]+)[\'"]/', $raw, $m); $db_password = $m[1] ?? '';
+$db_host     = getenv('DB_HOST') ?: "localhost";
+$db_name     = getenv('DB_NAME') ?: "corporat_base_super_ia";
+$db_user     = getenv('DB_USER') ?: "corporat_coac_user";
+$db_password = getenv('DB_PASS') ?: '*6LuhePgy=9?Zy-&';
 
 try {
     $pdo = new PDO(
